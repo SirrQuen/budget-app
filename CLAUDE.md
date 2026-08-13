@@ -40,6 +40,14 @@ Read `../../DATABASE.md` before writing any query or signup flow:
   `v_goal_progress`), never balance columns.
 - Signup must pass `first_name`/`last_name`/`username`/`phone` via
   `auth.signUp()`'s `options.data`.
+- On signup, the `on_auth_user_created` trigger calls `handle_new_user()`
+  (`AFTER INSERT ON auth.users`), which creates the `profiles` row, the
+  `settings` row, and default `category_groups`/`categories`. App code must
+  never insert into `profiles`/`settings`/`category_groups`/`categories`
+  directly — the trigger owns them.
+- `subscriptions` is service_role-only: client code may `SELECT` it, never
+  write to it (no INSERT/UPDATE/DELETE policy exists, and the grants are
+  revoked for `authenticated`).
 - Username login resolves server-side only (`email_for_username()` is
   `service_role`-only).
 - Only `Income`/`Expense` transaction types exist — transfers unsupported.
