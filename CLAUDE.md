@@ -24,6 +24,17 @@ scaffold — no data layer built yet. Path alias `@/*` -> project root.
 - All database access goes through functions in `lib/` — pages and components
   never call Supabase directly.
 - Money is stored as integer cents, never floats.
+- Foreign key columns in this schema have no underscore: `userid`, `accountid`,
+  `categoryid`, `goalid`, `recurringid`. Never write `user_id`.
+- `amount` is Postgres `numeric` (exact). Never do money arithmetic in
+  JavaScript floats — aggregate in SQL, or use a decimal library. Display
+  formatting only on the client.
+- `transactions.amount` is always positive (`CHECK amount >= 0`). Direction
+  comes from `transaction_type`, which is exactly `'Income'` or `'Expense'`
+  (capitalized). Never sum `amount` directly.
+- Use `signed_amount(amount, transaction_type)` for any signed money math —
+  never hand-roll the Income/Expense `CASE`. It's `IMMUTABLE PARALLEL SAFE`,
+  so it's safe in aggregates, indexes, and generated columns.
 
 ## Repo layout
 
