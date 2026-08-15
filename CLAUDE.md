@@ -63,15 +63,27 @@ Read `../../DATABASE.md` before writing any query or signup flow:
   `service_role`-only).
 - Only `Income`/`Expense` transaction types exist — transfers unsupported.
 - Accounts/categories are soft-deleted (`is_active`), never hard-deleted.
-- Regenerate `../../src/types/database.ts` after every migration.
+- Regenerate `lib/database.types.ts` after every migration (see "After any
+  migration" below).
+
+## After any migration
+
+1. `npx supabase@latest db push`
+2. `npx supabase@latest gen types --linked --lang typescript --schema public > lib/database.types.ts`
+3. Commit both together
 
 ## Data layer rules
 
 - All database access goes through `lib/db/*.ts`. Pages and components never
   call Supabase directly.
 - FK columns have no underscore: userid, accountid, categoryid, goalid, recurringid.
-- Do NOT filter by userid for security. RLS already scopes every query to the
-  current user. Hand-filtering creates the illusion that RLS is optional.
+- RLS scopes every query to the current user. Never add a userid filter as a
+  security measure — it creates the illusion RLS is optional.
+- But PostgREST requires an explicit filter on UPDATE and DELETE (error 21000).
+  Always target the rows you mean, normally by primary key. Filter for intent,
+  never for security.
+- Use .maybeSingle() for any read that can legitimately return nothing. Reserve
+  .single() for fetches by primary key where absence is genuinely an error.
 - On INSERT, userid must be set explicitly from the server session
   (getClaims), never from client input.
 - transactions.amount is always positive. Direction is transaction_type,
@@ -84,3 +96,6 @@ Read `../../DATABASE.md` before writing any query or signup flow:
   phone, lastlogin, updated_at. Nothing else is writable.
 - subscriptions: read-only for users. Billing state is service_role only.
 - Never use the service role key in application code.
+- The data layer test harness lives in git history — recover with
+  `git checkout <commit> -- app/db-test`. Re-run it as two different users
+  after any change to `lib/db/`.
