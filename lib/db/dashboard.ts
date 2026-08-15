@@ -32,10 +32,14 @@ export async function getDashboardKpis(): Promise<DbResult<DashboardKpisRow>> {
 }
 
 // Point-in-time snapshot, one row per user -- no date range applies.
-export async function getNetWorth(): Promise<DbResult<NetWorthRow>> {
+//
+// maybeSingle(), not single(): v_net_worth is `group by userid` over active
+// accounts, so a user with zero active accounts gets zero rows, not a
+// zero-valued row. That's a normal state, not an error.
+export async function getNetWorth(): Promise<DbResult<NetWorthRow | null>> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.from("v_net_worth").select("*").single();
+  const { data, error } = await supabase.from("v_net_worth").select("*").maybeSingle();
 
   if (error) {
     return { data: null, error: error.message };
@@ -160,10 +164,14 @@ export async function getGoalProgress(): Promise<DbResult<GoalProgressRow[]>> {
 }
 
 // One row per user, aggregating active goals -- no date range applies.
-export async function getGoalsSummary(): Promise<DbResult<GoalsSummaryRow>> {
+//
+// maybeSingle(), not single(): v_goals_summary is `group by userid` over
+// v_goal_progress, so a user with no goals yet gets zero rows, not a
+// zero-valued row. That's a normal state, not an error.
+export async function getGoalsSummary(): Promise<DbResult<GoalsSummaryRow | null>> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.from("v_goals_summary").select("*").single();
+  const { data, error } = await supabase.from("v_goals_summary").select("*").maybeSingle();
 
   if (error) {
     return { data: null, error: error.message };

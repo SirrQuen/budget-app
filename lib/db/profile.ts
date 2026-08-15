@@ -39,9 +39,20 @@ export async function updateProfile(
 ): Promise<DbResult<ProfileRow>> {
   const supabase = await createClient();
 
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  const userid = claimsData?.claims?.sub;
+
+  if (claimsError || !userid) {
+    return { data: null, error: "No authenticated user session." };
+  }
+
+  // PostgREST rejects an UPDATE with no filter (error 21000), so this .eq
+  // is required even though RLS already scopes the row -- filtering here
+  // is for PostgREST's benefit, not security.
   const { data, error } = await supabase
     .from("profiles")
     .update(patch)
+    .eq("id", userid)
     .select()
     .single();
 
@@ -75,10 +86,13 @@ export async function checkUsernameAvailable(
 // for `authenticated`, and those grants are revoked -- billing state is
 // written only by the service-role webhook handler. Do not add a write
 // function here.
-export async function getSubscription(): Promise<DbResult<SubscriptionRow>> {
+//
+// maybeSingle(), not single(): a user with no billing row yet is a normal
+// state, not an error -- .single() would throw PGRST116 for it.
+export async function getSubscription(): Promise<DbResult<SubscriptionRow | null>> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.from("subscriptions").select("*").single();
+  const { data, error } = await supabase.from("subscriptions").select("*").maybeSingle();
 
   if (error) {
     return { data: null, error: error.message };
