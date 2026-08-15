@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import type { Database } from "@/lib/database.types";
 
 // Paths reachable without a session. Everything else (including every route
 // under app/(app)/) requires auth. /auth/confirm is the email-link callback;
@@ -28,7 +29,7 @@ function redirectTo(request: NextRequest, pathname: string, supabaseResponse: Ne
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(
+  const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {

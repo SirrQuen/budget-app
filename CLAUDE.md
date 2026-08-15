@@ -64,3 +64,23 @@ Read `../../DATABASE.md` before writing any query or signup flow:
 - Only `Income`/`Expense` transaction types exist — transfers unsupported.
 - Accounts/categories are soft-deleted (`is_active`), never hard-deleted.
 - Regenerate `../../src/types/database.ts` after every migration.
+
+## Data layer rules
+
+- All database access goes through `lib/db/*.ts`. Pages and components never
+  call Supabase directly.
+- FK columns have no underscore: userid, accountid, categoryid, goalid, recurringid.
+- Do NOT filter by userid for security. RLS already scopes every query to the
+  current user. Hand-filtering creates the illusion that RLS is optional.
+- On INSERT, userid must be set explicitly from the server session
+  (getClaims), never from client input.
+- transactions.amount is always positive. Direction is transaction_type,
+  exactly 'Income' or 'Expense'.
+- A trigger requires transaction_type to match the category's category_type.
+  Category pickers must filter by the selected type.
+- Never aggregate money in JavaScript. Use the v_* views, or sum
+  signed_amount(amount, transaction_type) in SQL.
+- profiles: SELECT plus UPDATE on only first_name, last_name, username,
+  phone, lastlogin, updated_at. Nothing else is writable.
+- subscriptions: read-only for users. Billing state is service_role only.
+- Never use the service role key in application code.
