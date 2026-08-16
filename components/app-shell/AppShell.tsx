@@ -26,7 +26,7 @@ export function AppShell({
 
   return (
     <div className="min-h-dvh bg-page text-ink md:flex">
-      <header className="flex items-center justify-between border-b border-gridline bg-page px-4 py-3 md:hidden">
+      <header className="flex items-center justify-between border-b border-hairline bg-page px-4 py-3 md:hidden">
         <span className="text-lg font-semibold">EverNest Finance</span>
         <button
           type="button"
@@ -40,7 +40,7 @@ export function AppShell({
       </header>
 
       <aside
-        className={`${open ? "flex" : "hidden"} flex-col gap-6 border-b border-gridline bg-page px-4 pb-4 md:sticky md:top-0 md:flex md:h-dvh md:w-60 md:shrink-0 md:border-b-0 md:border-r md:py-6`}
+        className={`${open ? "flex" : "hidden"} flex-col gap-6 border-b border-hairline bg-page px-4 pb-4 md:sticky md:top-0 md:flex md:h-dvh md:w-60 md:shrink-0 md:border-b-0 md:border-r md:py-6`}
       >
         <div className="flex flex-col gap-6">
           <span className="hidden px-2 text-lg font-semibold text-ink md:block">
@@ -70,7 +70,7 @@ export function AppShell({
           </nav>
         </div>
 
-        <div className="mt-auto flex flex-col gap-1 border-t border-gridline pt-4">
+        <div className="mt-auto flex flex-col gap-1 border-t border-hairline pt-4">
           <p className="truncate px-3 text-sm text-ink-secondary">{userEmail}</p>
           <form action={logout}>
             <button

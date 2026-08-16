@@ -3,9 +3,19 @@
 :root {
   color-scheme: dark;
 
-  /* surface plane */
-  --page: #0d0d0d;
-  --surface: #1a1a19;
+  /* brand -- chrome only: logo, nav, primary buttons, splash. Never a data
+     colour, a meter fill, or a status indicator. */
+  --gold: #e9b949;
+  --gold-hover: #f2c866;
+  --gold-pressed: #d4a32f;
+  /* Text on gold is ALWAYS dark ink -- white on gold fails at 1.83:1. */
+  --gold-ink: #0b0b0b;
+
+  /* surfaces -- navy family, matching the logo */
+  --page: #131322;
+  --surface: #1b1b2f;
+  --surface-raised: #23233a;
+  --hairline: rgba(255, 255, 255, 0.1);
 
   /* ink */
   --ink: #ffffff;
@@ -13,10 +23,11 @@
   --ink-muted: #898781;
 
   /* structure */
-  --gridline: #2c2c2a;
-  --baseline: #383835;
+  --gridline: #2c2c42;
+  --baseline: #383850;
 
-  /* categorical data series -- fixed order, never cycled or reassigned */
+  /* categorical data series -- fixed order, never cycled or reassigned.
+     Re-validated against --surface (#1b1b2f); do not re-step. */
   --cat-1: #3987e5; /* blue */
   --cat-2: #d95926; /* orange */
   --cat-3: #199e70; /* aqua */
@@ -31,16 +42,18 @@
   --warning: #fab219;
   --serious: #ec835a;
   --critical: #d03b3b;
-
-  /* UI brand accent -- separate system from data colour above; loud is fine.
-     Placeholder until brand picks a final hue -- swap here, nowhere else. */
-  --accent: #635bff;
-  --accent-ink: #ffffff;
 }
 
 @theme inline {
+  --color-gold: var(--gold);
+  --color-gold-hover: var(--gold-hover);
+  --color-gold-pressed: var(--gold-pressed);
+  --color-gold-ink: var(--gold-ink);
+
   --color-page: var(--page);
   --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-hairline: var(--hairline);
 
   --color-ink: var(--ink);
   --color-ink-secondary: var(--ink-secondary);
@@ -62,9 +75,6 @@
   --color-warning: var(--warning);
   --color-serious: var(--serious);
   --color-critical: var(--critical);
-
-  --color-accent: var(--accent);
-  --color-accent-ink: var(--accent-ink);
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);

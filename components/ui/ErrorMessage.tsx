@@ -23,7 +23,7 @@ export function ErrorMessage({
         <button
           type="button"
           onClick={onRetry}
-          className="shrink-0 text-sm font-medium text-accent hover:underline"
+          className="shrink-0 text-sm font-medium text-gold hover:text-gold-hover hover:underline"
         >
           Try again
         </button>

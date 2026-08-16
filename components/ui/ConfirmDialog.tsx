@@ -37,7 +37,7 @@ export function ConfirmDialog({
         e.preventDefault();
         onCancel();
       }}
-      className="w-full max-w-sm rounded-2xl border border-gridline bg-surface p-0 text-ink backdrop:bg-black/60"
+      className="w-full max-w-sm rounded-2xl border border-hairline bg-surface p-0 text-ink backdrop:bg-black/60"
     >
       <div className="p-5">
         <h2 className="text-base font-semibold text-ink">{title}</h2>
@@ -54,7 +54,9 @@ export function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             className={`rounded-full px-4 py-2 text-sm font-semibold ${
-              tone === "critical" ? "bg-critical text-white" : "bg-accent text-accent-ink"
+              tone === "critical"
+                ? "bg-critical text-white"
+                : "bg-gold text-gold-ink hover:bg-gold-hover active:bg-gold-pressed"
             }`}
           >
             {confirmLabel}

@@ -46,10 +46,22 @@ streak-driven (Duolingo). Playful in framing, precise in figures.
 **UI colour** — brand personality. Loud is fine.
 **Data colour** — charts, meters, category dots. Validated, never ad hoc.
 
-Data tokens (dark surface):
-  surface        #1a1a19      page plane   #0d0d0d
-  ink primary    #ffffff      secondary    #c3c2b7    muted #898781
-  gridline       #2c2c2a      baseline     #383835
+### Brand (chrome only — never in charts, meters, or status)
+
+  brand gold        #E9B949    hover #F2C866    pressed #D4A32F
+  Text on gold is ALWAYS dark ink (#0B0B0B). White on gold fails at 1.83:1.
+
+### Surfaces (navy family, matching the logo)
+
+  page plane        #131322
+  card surface      #1B1B2F
+  raised surface    #23233A
+  hairline border   rgba(255,255,255,0.10)
+  ink primary       #ffffff     secondary #c3c2b7     muted #898781
+  gridline          #2C2C42     baseline  #383850
+
+The eight categorical data colours are re-validated against #1B1B2F and pass
+all six checks unchanged. Do not re-step them.
 
 Categorical slots, in this fixed order, never cycled:
   1 blue #3987e5   2 orange #d95926   3 aqua #199e70   4 yellow #c98500
@@ -59,6 +71,13 @@ Status (reserved — never used as a series colour):
   good #0ca30c   warning #fab219   serious #ec835a   critical #d03b3b
 
 Sequential (magnitude): one hue, blue, light to dark. Never a rainbow.
+
+### The hard rule
+
+Gold is brand chrome: logo, nav, primary buttons, splash. It never appears as
+a data colour, a meter fill, or a status indicator — status warning #fab219 is
+the same hue family, and separation depends entirely on gold staying out of
+data contexts.
 
 ### Hard rules
 

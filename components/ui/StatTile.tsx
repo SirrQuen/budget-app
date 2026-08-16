@@ -22,7 +22,7 @@ export function StatTile({
   const deltaParts = delta ? formatDelta(delta.value, { format: delta.format }) : null;
 
   return (
-    <div className="rounded-2xl border border-gridline bg-surface p-4">
+    <div className="rounded-2xl border border-hairline bg-surface p-4">
       <p className="text-sm font-medium text-ink-secondary">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-ink">{displayValue}</p>
       {deltaParts ? (
