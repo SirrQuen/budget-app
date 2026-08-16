@@ -12,10 +12,10 @@ export default async function ResetPasswordPage() {
   if (!user) {
     return (
       <>
-        <h1 className="mb-4 text-xl font-semibold">Link expired</h1>
-        <p className="text-sm text-zinc-700 dark:text-zinc-300">
+        <h1 className="mb-4 text-2xl font-semibold text-ink">Link expired</h1>
+        <p className="text-sm text-ink-secondary">
           This password reset link is invalid or has expired.{" "}
-          <Link href="/forgot-password" className="underline">
+          <Link href="/forgot-password" className="text-ink hover:text-gold">
             Request a new one
           </Link>
           .
@@ -26,7 +26,7 @@ export default async function ResetPasswordPage() {
 
   return (
     <>
-      <h1 className="mb-6 text-xl font-semibold">Set a new password</h1>
+      <h1 className="mb-6 text-2xl font-semibold text-ink">Set a new password</h1>
       <ResetPasswordForm />
     </>
   );

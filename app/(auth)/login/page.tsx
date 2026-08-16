@@ -9,7 +9,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
 
   return (
     <>
-      <h1 className="mb-6 text-xl font-semibold">Log in</h1>
+      <h1 className="mb-6 text-2xl font-semibold text-ink">Log in</h1>
       <LoginForm initialError={initialError} />
     </>
   );

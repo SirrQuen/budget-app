@@ -15,6 +15,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "EverNest Finance",
   description: "Your wealth, your legacy.",
+  icons: {
+    icon: "/logo.svg",
+  },
+  openGraph: {
+    title: "EverNest Finance",
+    description: "Your wealth, your legacy.",
+    type: "website",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

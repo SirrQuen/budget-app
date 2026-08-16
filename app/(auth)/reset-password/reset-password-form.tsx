@@ -2,51 +2,41 @@
 
 import { useActionState } from "react";
 import { updatePassword } from "@/lib/auth/actions";
+import { FormField } from "@/components/ui/FormField";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
 export function ResetPasswordForm() {
   const [state, action, pending] = useActionState(updatePassword, undefined);
 
   return (
     <form action={action} className="flex flex-col gap-4">
-      <div>
-        <label htmlFor="password" className="block text-sm font-medium">
-          New password
-        </label>
-        <input
+      <FormField label="New password" htmlFor="password" required>
+        <Input
           id="password"
           name="password"
           type="password"
           autoComplete="new-password"
           required
-          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
         />
-      </div>
+      </FormField>
 
-      <div>
-        <label htmlFor="confirmPassword" className="block text-sm font-medium">
-          Confirm new password
-        </label>
-        <input
+      <FormField label="Confirm new password" htmlFor="confirmPassword" required>
+        <Input
           id="confirmPassword"
           name="confirmPassword"
           type="password"
           autoComplete="new-password"
           required
-          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
         />
-      </div>
+      </FormField>
 
-      {state?.error && (
-        <p className="text-sm text-red-600 dark:text-red-400">{state.error}</p>
-      )}
+      {state?.error ? <ErrorMessage message={state.error} /> : null}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="mt-2 w-full rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
-      >
+      <Button type="submit" disabled={pending} className="mt-2 w-full">
         {pending ? "Updating…" : "Update password"}
-      </button>
+      </Button>
     </form>
   );
 }

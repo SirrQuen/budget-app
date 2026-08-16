@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { Button } from "@/components/ui/Button";
 
 export function ConfirmDialog({
   open,
@@ -50,17 +51,13 @@ export function ConfirmDialog({
           >
             {cancelLabel}
           </button>
-          <button
+          <Button
             type="button"
+            variant={tone === "critical" ? "critical" : "primary"}
             onClick={onConfirm}
-            className={`rounded-full px-4 py-2 text-sm font-semibold ${
-              tone === "critical"
-                ? "bg-critical text-white"
-                : "bg-gold text-gold-ink hover:bg-gold-hover active:bg-gold-pressed"
-            }`}
           >
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </dialog>

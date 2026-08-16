@@ -1,8 +1,11 @@
+import { AuthBrandPanel } from "@/components/auth/AuthBrandPanel";
+
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-1 items-center justify-center bg-zinc-50 px-4 py-16 dark:bg-black">
-      <div className="w-full max-w-sm rounded-lg border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-        {children}
+    <div className="flex min-h-dvh flex-col md:flex-row">
+      <AuthBrandPanel />
+      <div className="flex flex-1 items-center justify-center bg-surface px-4 py-12 md:px-12">
+        <div className="w-full max-w-sm">{children}</div>
       </div>
     </div>
   );
