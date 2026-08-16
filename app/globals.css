@@ -1,26 +1,92 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+
+  /* surface plane */
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+
+  /* ink */
+  --ink: #ffffff;
+  --ink-secondary: #c3c2b7;
+  --ink-muted: #898781;
+
+  /* structure */
+  --gridline: #2c2c2a;
+  --baseline: #383835;
+
+  /* categorical data series -- fixed order, never cycled or reassigned */
+  --cat-1: #3987e5; /* blue */
+  --cat-2: #d95926; /* orange */
+  --cat-3: #199e70; /* aqua */
+  --cat-4: #c98500; /* yellow */
+  --cat-5: #d55181; /* magenta */
+  --cat-6: #008300; /* green */
+  --cat-7: #9085e9; /* violet */
+  --cat-8: #e66767; /* red */
+
+  /* status -- reserved, never used as a series colour */
+  --good: #0ca30c;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+
+  /* UI brand accent -- separate system from data colour above; loud is fine.
+     Placeholder until brand picks a final hue -- swap here, nowhere else. */
+  --accent: #635bff;
+  --accent-ink: #ffffff;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+
+  --color-ink: var(--ink);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-muted: var(--ink-muted);
+
+  --color-gridline: var(--gridline);
+  --color-baseline: var(--baseline);
+
+  --color-cat-1: var(--cat-1);
+  --color-cat-2: var(--cat-2);
+  --color-cat-3: var(--cat-3);
+  --color-cat-4: var(--cat-4);
+  --color-cat-5: var(--cat-5);
+  --color-cat-6: var(--cat-6);
+  --color-cat-7: var(--cat-7);
+  --color-cat-8: var(--cat-8);
+
+  --color-good: var(--good);
+  --color-warning: var(--warning);
+  --color-serious: var(--serious);
+  --color-critical: var(--critical);
+
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@keyframes celebrate-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }

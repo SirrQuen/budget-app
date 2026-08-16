@@ -36,6 +36,49 @@ scaffold — no data layer built yet. Path alias `@/*` -> project root.
   never hand-roll the Income/Expense `CASE`. It's `IMMUTABLE PARALLEL SAFE`,
   so it's safe in aggregates, indexes, and generated columns.
 
+## Design language
+
+Dark-first. Bold and confident (Cash App / Monzo), encouraging and
+streak-driven (Duolingo). Playful in framing, precise in figures.
+
+### Two colour systems, kept separate
+
+**UI colour** — brand personality. Loud is fine.
+**Data colour** — charts, meters, category dots. Validated, never ad hoc.
+
+Data tokens (dark surface):
+  surface        #1a1a19      page plane   #0d0d0d
+  ink primary    #ffffff      secondary    #c3c2b7    muted #898781
+  gridline       #2c2c2a      baseline     #383835
+
+Categorical slots, in this fixed order, never cycled:
+  1 blue #3987e5   2 orange #d95926   3 aqua #199e70   4 yellow #c98500
+  5 magenta #d55181   6 green #008300   7 violet #9085e9   8 red #e66767
+
+Status (reserved — never used as a series colour):
+  good #0ca30c   warning #fab219   serious #ec835a   critical #d03b3b
+
+Sequential (magnitude): one hue, blue, light to dark. Never a rainbow.
+
+### Hard rules
+
+- Text never wears a data colour. Values, labels and legends use ink tokens;
+  a coloured dot beside the text carries identity.
+- Status colour never appears alone — always icon + label too.
+- Big standalone numbers use proportional figures. `tabular-nums` only in
+  columns that must align vertically (table rows).
+- Exactly one hero figure per view, >= 48px, same sans as everything else.
+- Meters: fill carries severity (accent -> warning -> critical); the unfilled
+  track is a lighter step of the same hue, so state reads across the whole bar.
+- Every animation respects `prefers-reduced-motion`.
+
+### Voice
+
+Second person, present tense, short. Encouraging, never scolding — over
+budget is "let's look at this", not a red alarm. Celebrate specifics
+("$240 toward Japan") not generics ("Great job!"). Never shame a user for
+spending. Never use exclamation marks in anything showing a figure.
+
 ## Repo layout
 
 Not its own git repo — nested two levels inside `evernest/`, the actual git
