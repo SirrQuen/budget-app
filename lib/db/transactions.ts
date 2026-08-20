@@ -10,10 +10,13 @@ export type TransactionType = "Income" | "Expense";
 
 export type TransactionWithRelations = TransactionRow & {
   category_name: string | null;
+  category_color: string | null;
   account_name: string | null;
 };
 
 export type DbResult<T> = { data: T; error: null } | { data: null; error: string };
+
+export const TRANSACTIONS_PAGE_SIZE = 50;
 
 export type ListTransactionsOptions = {
   dateFrom?: string;
@@ -21,16 +24,23 @@ export type ListTransactionsOptions = {
   categoryid?: string;
   accountid?: string;
   transaction_type?: TransactionType;
+  /** 1-indexed. Defaults to 1. */
+  page?: number;
+};
+
+export type TransactionsPage = {
+  transactions: TransactionWithRelations[];
+  totalCount: number;
 };
 
 // categoryid has FK relationships to several relations (categories, plus a
 // couple of reporting views) -- naming "categories"/"accounts" explicitly
 // picks the base-table relationship, not the views.
 const TRANSACTION_SELECT =
-  "*, category:categories(category_name), account:accounts(account_name)";
+  "*, category:categories(category_name, color), account:accounts(account_name)";
 
 type RawTransactionRow = TransactionRow & {
-  category: { category_name: string } | null;
+  category: { category_name: string; color: string | null } | null;
   account: { account_name: string } | null;
 };
 
@@ -39,18 +49,27 @@ function flatten(row: RawTransactionRow): TransactionWithRelations {
   return {
     ...rest,
     category_name: category?.category_name ?? null,
+    category_color: category?.color ?? null,
     account_name: account?.account_name ?? null,
   };
 }
 
+// Filters live in the caller's URL search params (see the transactions
+// page), not component state -- this stays a plain data-layer read with no
+// notion of "current" filters, so every filtered view is a linkable,
+// server-rendered URL.
 export async function listTransactions(
   opts: ListTransactionsOptions = {},
-): Promise<DbResult<TransactionWithRelations[]>> {
+): Promise<DbResult<TransactionsPage>> {
   const supabase = await createClient();
+
+  const page = opts.page && opts.page > 0 ? opts.page : 1;
+  const from = (page - 1) * TRANSACTIONS_PAGE_SIZE;
+  const to = from + TRANSACTIONS_PAGE_SIZE - 1;
 
   let query = supabase
     .from("transactions")
-    .select(TRANSACTION_SELECT)
+    .select(TRANSACTION_SELECT, { count: "exact" })
     .order("transaction_date", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -70,13 +89,47 @@ export async function listTransactions(
     query = query.eq("transaction_type", opts.transaction_type);
   }
 
-  const { data, error } = await query.returns<RawTransactionRow[]>();
+  const { data, error, count } = await query.range(from, to).returns<RawTransactionRow[]>();
 
   if (error) {
+    // A page past the last one isn't a real error -- PostgREST answers a
+    // range starting beyond the row count with 416 Range Not Satisfiable.
+    // Reachable just by editing ?page= or a stale bookmark after rows are
+    // deleted, so fall back to a fresh, identically-filtered count-only
+    // query (a Postgrest builder mutates itself as it's chained, so the
+    // already-executed `query` above can't be reused for a second request)
+    // and report zero rows instead of surfacing a raw DB error.
+    if (/range not satisfiable/i.test(error.message)) {
+      let countQuery = supabase
+        .from("transactions")
+        .select("id", { count: "exact", head: true });
+
+      if (opts.dateFrom) {
+        countQuery = countQuery.gte("transaction_date", opts.dateFrom);
+      }
+      if (opts.dateTo) {
+        countQuery = countQuery.lte("transaction_date", opts.dateTo);
+      }
+      if (opts.categoryid) {
+        countQuery = countQuery.eq("categoryid", opts.categoryid);
+      }
+      if (opts.accountid) {
+        countQuery = countQuery.eq("accountid", opts.accountid);
+      }
+      if (opts.transaction_type) {
+        countQuery = countQuery.eq("transaction_type", opts.transaction_type);
+      }
+
+      const { count: totalCount, error: countError } = await countQuery;
+      if (countError) {
+        return { data: null, error: countError.message };
+      }
+      return { data: { transactions: [], totalCount: totalCount ?? 0 }, error: null };
+    }
     return { data: null, error: error.message };
   }
 
-  return { data: data.map(flatten), error: null };
+  return { data: { transactions: data.map(flatten), totalCount: count ?? 0 }, error: null };
 }
 
 export async function getTransaction(

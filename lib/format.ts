@@ -17,10 +17,18 @@ const compactNumber = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
 });
 
+// timeZone: "UTC" is deliberate -- Postgres `date` columns (transaction_date,
+// etc.) have no time component, but a plain "2026-08-19" string is still
+// parsed by `new Date()` as UTC midnight. Without pinning the formatter to
+// UTC too, any viewer west of Greenwich would see that calendar date roll
+// back a day (e.g. today, entered and stored as "2026-08-19", displaying as
+// "Aug 18"). Pinning both sides to UTC makes the displayed day match the
+// stored day regardless of the viewer's local timezone.
 const mediumDate = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
   year: "numeric",
+  timeZone: "UTC",
 });
 
 /** Full-precision currency for a single figure -- a transaction row, a line item. */

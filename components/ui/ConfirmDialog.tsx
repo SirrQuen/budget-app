@@ -8,6 +8,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = "Confirm",
+  confirmIcon,
   cancelLabel = "Cancel",
   tone = "default",
   onConfirm,
@@ -17,6 +18,8 @@ export function ConfirmDialog({
   title: string;
   description: string;
   confirmLabel?: string;
+  /** Status colour must never stand alone -- pair a critical tone with an icon here, not just the label. */
+  confirmIcon?: React.ReactNode;
   cancelLabel?: string;
   tone?: "default" | "critical";
   onConfirm: () => void;
@@ -55,7 +58,9 @@ export function ConfirmDialog({
             type="button"
             variant={tone === "critical" ? "critical" : "primary"}
             onClick={onConfirm}
+            className="inline-flex items-center gap-1.5"
           >
+            {confirmIcon}
             {confirmLabel}
           </Button>
         </div>
