@@ -1,24 +1,14 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
+import type { AccountType } from "@/lib/accountOptions";
+
+export { ACCOUNT_TYPES, type AccountType } from "@/lib/accountOptions";
 
 type AccountRow = Database["public"]["Tables"]["accounts"]["Row"];
 type AccountInsert = Database["public"]["Tables"]["accounts"]["Insert"];
 type AccountUpdate = Database["public"]["Tables"]["accounts"]["Update"];
 type AccountBalanceRow = Database["public"]["Views"]["v_account_balances"]["Row"];
-
-// Mirrors accounts_account_type_check (20260805000004_04_hardening.sql).
-// Keep in sync if that constraint ever changes.
-export const ACCOUNT_TYPES = [
-  "Checking",
-  "Savings",
-  "Credit Card",
-  "Loan",
-  "Investment",
-  "Cash",
-] as const;
-
-export type AccountType = (typeof ACCOUNT_TYPES)[number];
 
 export type DbResult<T> = { data: T; error: null } | { data: null; error: string };
 
@@ -129,15 +119,27 @@ export async function archiveAccount(id: string): Promise<DbResult<AccountRow>> 
   return updateAccount(id, { is_active: false });
 }
 
+export type ListAccountBalancesOptions = {
+  is_active?: boolean;
+};
+
 // Balances are computed (opening_balance + net of transactions), never
 // stored -- read from the view instead of summing transactions in JS.
-export async function listAccountBalances(): Promise<DbResult<AccountBalanceRow[]>> {
+export async function listAccountBalances(
+  opts: ListAccountBalancesOptions = {},
+): Promise<DbResult<AccountBalanceRow[]>> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("v_account_balances")
     .select("*")
     .order("account_name", { ascending: true });
+
+  if (opts.is_active !== undefined) {
+    query = query.eq("is_active", opts.is_active);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     return { data: null, error: error.message };
