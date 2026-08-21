@@ -17,7 +17,14 @@ export function Meter({
 }) {
   const pct = Math.min(100, Math.max(0, (value / max) * 100));
   const tone = pct >= criticalAt ? "critical" : pct >= warningAt ? "warning" : "good";
-  const fillVar = `var(--color-${tone})`;
+  // Reference the raw :root custom properties (--good/--warning/--critical),
+  // not the Tailwind-generated --color-* aliases -- with `@theme inline`,
+  // Tailwind only emits a --color-x variable for names it can find as a
+  // literal string during content scanning, and `--color-${tone}` is built
+  // from a template literal so it's invisible to that scan. The --good etc.
+  // names are written directly in globals.css's plain :root block, so they
+  // always exist regardless of what Tailwind decides to keep.
+  const fillVar = `var(--${tone})`;
 
   return (
     <div className="w-full">
@@ -34,7 +41,7 @@ export function Meter({
         aria-valuemax={100}
         aria-label={label ? undefined : (ariaLabel ?? "Progress")}
         className="h-2 w-full overflow-hidden rounded-full"
-        style={{ backgroundColor: `color-mix(in srgb, ${fillVar} 22%, var(--color-page))` }}
+        style={{ backgroundColor: `color-mix(in srgb, ${fillVar} 22%, var(--page))` }}
       >
         <div
           className="h-full rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none"
