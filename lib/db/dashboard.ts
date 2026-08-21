@@ -211,6 +211,77 @@ export async function getUpcomingRecurring(
   return { data, error: null };
 }
 
+export type LoggingStreak = {
+  /** Consecutive days ending today or yesterday -- 0 once a day is missed. */
+  current: number;
+  /** Longest consecutive run found in the 90-day window, current included. */
+  best: number;
+};
+
+function localISODate(d: Date): string {
+  // Local calendar day, not UTC -- see AddTransactionForm's todayISO for why
+  // the offset adjustment matters near midnight.
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+// True when b is exactly the calendar day after a ("YYYY-MM-DD" strings).
+// Epoch-math on Date.UTC is safe here since these are date-only values with
+// no time-of-day or DST to account for.
+function isNextCalendarDay(a: string, b: string): boolean {
+  const [ay, am, ad] = a.split("-").map(Number);
+  const [by, bm, bd] = b.split("-").map(Number);
+  return Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad) === 86_400_000;
+}
+
+// Dates only, no money -- streaks are computed in JS from distinct
+// transaction_date values rather than a view, unlike every money figure
+// elsewhere in this file.
+export async function getLoggingStreak(): Promise<DbResult<LoggingStreak>> {
+  const supabase = await createClient();
+
+  const today = new Date();
+  const since = new Date(today);
+  since.setDate(since.getDate() - 90);
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("transaction_date")
+    .gte("transaction_date", localISODate(since))
+    .order("transaction_date", { ascending: true });
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  const dates = [...new Set(data.map((row) => row.transaction_date))].sort();
+
+  let best = 0;
+  let run = 0;
+  for (let i = 0; i < dates.length; i++) {
+    run = i > 0 && isNextCalendarDay(dates[i - 1], dates[i]) ? run + 1 : 1;
+    best = Math.max(best, run);
+  }
+
+  const todayISO = localISODate(today);
+  const yesterdayISO = localISODate(new Date(today.getTime() - 86_400_000));
+  const last = dates[dates.length - 1];
+
+  let current = 0;
+  if (last === todayISO || last === yesterdayISO) {
+    current = 1;
+    for (let i = dates.length - 1; i > 0; i--) {
+      if (isNextCalendarDay(dates[i - 1], dates[i])) {
+        current += 1;
+      } else {
+        break;
+      }
+    }
+  }
+
+  return { data: { current, best }, error: null };
+}
+
 // Ops-only (see DATABASE.md) -- no user-facing screen reads this.
 export async function getIntegrityIssues(): Promise<DbResult<IntegrityIssueRow[]>> {
   const supabase = await createClient();

@@ -109,8 +109,16 @@ function CategoryGroups({
     return (
       <EmptyState
         icon={<TagIcon className="h-10 w-10" />}
-        heading="No categories found"
-        message="Nothing matches this filter yet. Categories you create will show up here, grouped and ready to assign to transactions."
+        heading="Nothing matches this filter"
+        message="Try a different type, or clear filters to see your full set of categories again."
+        action={
+          <Link
+            href="/categories"
+            className="text-sm font-medium text-gold hover:text-gold-hover hover:underline"
+          >
+            Clear filters
+          </Link>
+        }
       />
     );
   }

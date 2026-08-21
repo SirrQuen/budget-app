@@ -92,8 +92,8 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
       {budgets.length === 0 ? (
         <EmptyState
           icon={<PieIcon className="h-10 w-10" />}
-          heading="No budgets yet for this month"
-          message="Add a category budget above to start tracking spend against a plan."
+          heading={`Nothing budgeted for ${formatMonthLabel(month)}`}
+          message="Pick a category above and give it a number -- that's the whole system. The meter fills in as you spend."
         />
       ) : (
         <ul className="divide-y divide-hairline rounded-2xl border border-hairline bg-surface">

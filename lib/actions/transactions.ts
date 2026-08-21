@@ -6,11 +6,35 @@ import {
   createTransaction,
   updateTransaction,
   deleteTransaction,
+  getTransactionCount,
   type CreateTransactionInput,
   type TransactionType,
 } from "@/lib/db/transactions";
+import { getLoggingStreak } from "@/lib/db/dashboard";
 
-export type ActionState = { error?: string } | undefined;
+// "kind" is a plain string, not the icon itself -- Server Action results
+// cross the server/client boundary as serialized data, so the client picks
+// the icon from this discriminator rather than receiving a React node.
+export type Milestone = { kind: "first-transaction" | "streak-7"; message: string };
+
+export type ActionState = { error?: string; milestone?: Milestone } | undefined;
+
+// Checked after every successful create, in priority order -- a first-ever
+// transaction can't also be a 7-day streak, so there's no real conflict, but
+// the order still reads as "most foundational achievement first."
+async function detectTransactionMilestone(): Promise<Milestone | undefined> {
+  const countResult = await getTransactionCount();
+  if (countResult.data === 1) {
+    return { kind: "first-transaction", message: "First transaction logged" };
+  }
+
+  const streakResult = await getLoggingStreak();
+  if (streakResult.data?.current === 7) {
+    return { kind: "streak-7", message: "7-day streak" };
+  }
+
+  return undefined;
+}
 
 // The UI already makes an Income/Expense + category mismatch unreachable
 // (the category picker only ever offers options for the selected type,
@@ -81,6 +105,9 @@ export async function createTransactionAction(
   }
 
   revalidatePath("/transactions");
+
+  const milestone = await detectTransactionMilestone();
+  return milestone ? { milestone } : undefined;
 }
 
 export async function updateTransactionAction(

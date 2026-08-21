@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { logout } from "@/lib/auth/actions";
-import { HomeIcon, ListIcon, WalletIcon, TagIcon, PieIcon, MenuIcon, CloseIcon, type IconProps } from "@/components/ui/icons";
+import { StreakBadge } from "@/components/ui/StreakBadge";
+import { HomeIcon, ListIcon, WalletIcon, TagIcon, PieIcon, TargetIcon, MenuIcon, CloseIcon, type IconProps } from "@/components/ui/icons";
 
 const NAV_ITEMS: { href: string; label: string; icon: (props: IconProps) => React.ReactNode }[] = [
   { href: "/dashboard", label: "Dashboard", icon: HomeIcon },
@@ -12,13 +13,17 @@ const NAV_ITEMS: { href: string; label: string; icon: (props: IconProps) => Reac
   { href: "/accounts", label: "Accounts", icon: WalletIcon },
   { href: "/categories", label: "Categories", icon: TagIcon },
   { href: "/budgets", label: "Budgets", icon: PieIcon },
+  { href: "/goals", label: "Goals", icon: TargetIcon },
 ];
 
 export function AppShell({
   userEmail,
+  streak,
   children,
 }: {
   userEmail: string;
+  /** null once a user has never logged a transaction -- nothing to show yet. */
+  streak: { current: number; best: number } | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -46,6 +51,9 @@ export function AppShell({
           <span className="hidden px-2 text-lg font-semibold text-ink md:block">
             EverNest Finance
           </span>
+          {streak ? (
+            <StreakBadge days={streak.current} best={streak.best} />
+          ) : null}
           <nav className="flex flex-col gap-1">
             {NAV_ITEMS.map((item) => {
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);

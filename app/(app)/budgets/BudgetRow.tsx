@@ -1,17 +1,26 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { BudgetForm, type EditableBudget } from "./BudgetForm";
 import { deleteBudgetAction } from "@/lib/actions/budgets";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Meter } from "@/components/ui/Meter";
+import { Celebration } from "@/components/ui/Celebration";
 import { WarningIcon, TrashIcon } from "@/components/ui/icons";
 import { formatCurrency } from "@/lib/format";
 import type { Database } from "@/lib/database.types";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 
 export type BudgetProgressRow = Database["public"]["Views"]["v_budget_vs_actual"]["Row"];
+
+// True once the month after monthISO has started -- the viewed month is
+// fully in the books, not still accumulating spend.
+function isPastMonth(monthISO: string): boolean {
+  const [y, m] = monthISO.split("-").map(Number);
+  const nextMonthStart = new Date(y, m, 1);
+  return new Date() >= nextMonthStart;
+}
 
 export function BudgetRow({
   budget,
@@ -27,6 +36,40 @@ export function BudgetRow({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string>();
   const [isDeleting, startDelete] = useTransition();
+  const [showFinishedCelebration, setShowFinishedCelebration] = useState(false);
+  const finishedCelebrationTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const celebratedRef = useRef(false);
+
+  // A finished-under-budget month is a one-time milestone, not a banner that
+  // reappears every time this page is revisited -- localStorage remembers
+  // which budgets already got their moment, scoped to this budget row's id.
+  // celebratedRef is what actually gates the setState calls below (rather
+  // than a plain prop check) -- effects that derive their setState purely
+  // from props/an external store like localStorage read cascading-render
+  // risk into every render, where a ref-guarded "already handled" check
+  // reads as the one-shot side effect it actually is.
+  useEffect(() => {
+    const budgetId = budget.budget_id;
+    const month = budget.budget_month;
+    const alreadyCelebrated =
+      celebratedRef.current || (budgetId !== null && localStorage.getItem(`celebrated-budget-${budgetId}`) !== null);
+    const eligible =
+      !alreadyCelebrated &&
+      budgetId !== null &&
+      month !== null &&
+      !budget.is_over_budget &&
+      (budget.actual_spend ?? 0) > 0 &&
+      isPastMonth(month);
+
+    if (eligible) {
+      celebratedRef.current = true;
+      localStorage.setItem(`celebrated-budget-${budgetId}`, "1");
+      setShowFinishedCelebration(true);
+      finishedCelebrationTimeout.current = setTimeout(() => setShowFinishedCelebration(false), 1800);
+    }
+  }, [budget.budget_id, budget.budget_month, budget.is_over_budget, budget.actual_spend]);
+
+  useEffect(() => () => clearTimeout(finishedCelebrationTimeout.current), []);
 
   function handleDelete() {
     startDelete(async () => {
@@ -108,6 +151,12 @@ export function BudgetRow({
           <span className="text-ink-secondary">{formatCurrency(remaining)} left this month</span>
         )}
       </div>
+
+      <Celebration
+        show={showFinishedCelebration}
+        message={`${formatCurrency(remaining)} under budget in ${budget.category_name}`}
+        icon="✦"
+      />
 
       <ConfirmDialog
         open={confirmingDelete}

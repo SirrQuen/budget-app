@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { Celebration } from "@/components/ui/Celebration";
+import { FlameIcon } from "@/components/ui/icons";
 
 const fieldClassName =
   "w-full rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-gold focus:ring-2 focus:ring-gold/40";
@@ -97,6 +98,8 @@ export function AddTransactionForm({
   const [amount, setAmount] = useState(initialValues ? String(initialValues.amount) : "");
   const [clientError, setClientError] = useState<string>();
   const [celebrate, setCelebrate] = useState(false);
+  const [celebrateMessage, setCelebrateMessage] = useState("Logged");
+  const [celebrateIcon, setCelebrateIcon] = useState<React.ReactNode>("✓");
   const formRef = useRef<HTMLFormElement>(null);
   const wasPending = useRef(false);
   const celebrateTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -114,6 +117,9 @@ export function AddTransactionForm({
       setCategoryid("");
       setAmount("");
       setClientError(undefined);
+      const milestone = state?.milestone;
+      setCelebrateMessage(milestone?.message ?? "Logged");
+      setCelebrateIcon(milestone?.kind === "streak-7" ? <FlameIcon className="h-4 w-4" /> : "✓");
       setCelebrate(true);
       clearTimeout(celebrateTimeout.current);
       celebrateTimeout.current = setTimeout(() => setCelebrate(false), 1600);
@@ -349,7 +355,9 @@ export function AddTransactionForm({
         </Button>
       </form>
 
-      {isEdit ? null : <Celebration show={celebrate} message="Logged" icon="✓" />}
+      {isEdit ? null : (
+        <Celebration show={celebrate} message={celebrateMessage} icon={celebrateIcon} />
+      )}
     </div>
   );
 }

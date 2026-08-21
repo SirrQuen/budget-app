@@ -272,11 +272,21 @@ export default async function TransactionsPage({
       ) : transactions.length === 0 ? (
         <EmptyState
           icon={<ListIcon className="h-10 w-10" />}
-          heading={hasFilters ? "No transactions match" : "No transactions yet"}
+          heading={hasFilters ? "Nothing matches these filters" : "This is where it all shows up"}
           message={
             hasFilters
-              ? "Try a wider date range or clear a filter to see more."
-              : "Once you log transactions, they'll show up here, newest first."
+              ? "Try a wider date range, or clear a filter to see more."
+              : "Log your first transaction above and this list becomes the real story of where your money's going."
+          }
+          action={
+            hasFilters ? (
+              <Link
+                href="/transactions"
+                className="text-sm font-medium text-gold hover:text-gold-hover hover:underline"
+              >
+                Clear filters
+              </Link>
+            ) : undefined
           }
         />
       ) : (

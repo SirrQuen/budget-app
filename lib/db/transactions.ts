@@ -132,6 +132,23 @@ export async function listTransactions(
   return { data: { transactions: data.map(flatten), totalCount: count ?? 0 }, error: null };
 }
 
+// head:true means no rows come back over the wire -- just the count, cheap
+// enough to call after every create to check for the first-transaction
+// milestone.
+export async function getTransactionCount(): Promise<DbResult<number>> {
+  const supabase = await createClient();
+
+  const { count, error } = await supabase
+    .from("transactions")
+    .select("id", { count: "exact", head: true });
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data: count ?? 0, error: null };
+}
+
 export async function getTransaction(
   id: string,
 ): Promise<DbResult<TransactionWithRelations>> {

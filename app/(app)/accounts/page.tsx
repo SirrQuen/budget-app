@@ -87,8 +87,16 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
       {visibleAccounts.length === 0 ? (
         <EmptyState
           icon={<WalletIcon className="h-10 w-10" />}
-          heading="No active accounts"
-          message="Everything you've added is archived. Show archived accounts to bring one back, or add a new one."
+          heading="Everything here is archived"
+          message="Bring an old account back, or start fresh with a new one -- either way, you're a click from having something to track."
+          action={
+            <Link
+              href={buildHref(true)}
+              className="text-sm font-medium text-gold hover:text-gold-hover hover:underline"
+            >
+              Show archived accounts
+            </Link>
+          }
         />
       ) : (
         <ul className="divide-y divide-hairline rounded-2xl border border-hairline bg-surface">
