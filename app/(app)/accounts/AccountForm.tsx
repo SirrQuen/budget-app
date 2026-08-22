@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
 import {
   createAccountAction,
   updateAccountAction,
   type ActionState,
 } from "@/lib/actions/accounts";
-import { ACCOUNT_TYPES } from "@/lib/accountOptions";
+import { ACCOUNT_TYPES, isLiabilityAccountType } from "@/lib/accountOptions";
 import type { Database } from "@/lib/database.types";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
@@ -34,6 +34,16 @@ export function AccountForm({
     undefined,
   );
   const wasPending = useRef(false);
+  const [accountType, setAccountType] = useState(account?.account_type ?? "");
+  const isLiability = isLiabilityAccountType(accountType);
+  // The stored opening_balance is already negative for a liability -- the
+  // field always shows what the user owes as a positive number, so the
+  // initial value (fixed to the account's type as loaded, not the live
+  // select) needs to be un-negated once here.
+  const initialOpeningBalance =
+    account?.opening_balance != null && isLiabilityAccountType(account.account_type ?? "")
+      ? Math.abs(account.opening_balance)
+      : (account?.opening_balance ?? undefined);
 
   useEffect(() => {
     if (wasPending.current && !pending && !state?.error) {
@@ -78,7 +88,8 @@ export function AccountForm({
           id="account_type"
           name="account_type"
           required
-          defaultValue={account?.account_type ?? ""}
+          value={accountType}
+          onChange={(e) => setAccountType(e.target.value)}
           className="w-full rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-gold focus:ring-2 focus:ring-gold/40"
         >
           <option value="" disabled>
@@ -103,12 +114,14 @@ export function AccountForm({
       </FormField>
 
       <FormField
-        label="Starting balance"
+        label={isLiability ? "How much do you currently owe?" : "Starting balance"}
         htmlFor="opening_balance"
         hint={
           isEdit
             ? "Changing this shifts every balance calculated from it."
-            : "What this account holds right now. You can enter 0 and log transactions from here."
+            : isLiability
+              ? "Enter a positive number -- we'll track it as debt from here."
+              : "What this account holds right now. You can enter 0 and log transactions from here."
         }
       >
         <Input
@@ -116,9 +129,10 @@ export function AccountForm({
           name="opening_balance"
           type="number"
           step="0.01"
+          min={isLiability ? 0 : undefined}
           inputMode="decimal"
           placeholder="0.00"
-          defaultValue={account?.opening_balance ?? undefined}
+          defaultValue={initialOpeningBalance}
         />
       </FormField>
 

@@ -1,3 +1,5 @@
+import { isLiabilityAccountType } from "@/lib/accountOptions";
+
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -34,6 +36,18 @@ const mediumDate = new Intl.DateTimeFormat("en-US", {
 /** Full-precision currency for a single figure -- a transaction row, a line item. */
 export function formatCurrency(amount: number): string {
   return currency.format(amount);
+}
+
+/**
+ * An account balance for display. Credit Card and Loan balances are stored
+ * negative (accounts_liability_sign) -- the math stays negative, but this
+ * reads as a plain positive amount + "owed", never a minus sign.
+ */
+export function formatAccountBalance(balance: number, accountType: string): string {
+  if (isLiabilityAccountType(accountType)) {
+    return `${formatCurrency(Math.abs(balance))} owed`;
+  }
+  return formatCurrency(balance);
 }
 
 /** "Aug 16, 2026" for an ISO date string or a Date. */

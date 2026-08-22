@@ -8,6 +8,7 @@ import {
   ACCOUNT_TYPES,
   type AccountType,
 } from "@/lib/db/accounts";
+import { isLiabilityAccountType } from "@/lib/accountOptions";
 
 export type ActionState = { error?: string } | undefined;
 
@@ -34,9 +35,19 @@ function parseAccountFields(formData: FormData): ParsedAccountFields | { error: 
     return { error: "Choose an account type." };
   }
 
-  const opening_balance = opening_balance_raw === "" ? 0 : Number(opening_balance_raw);
+  let opening_balance = opening_balance_raw === "" ? 0 : Number(opening_balance_raw);
   if (!Number.isFinite(opening_balance)) {
     return { error: "Starting balance must be a number." };
+  }
+
+  // Credit Card and Loan balances are stored negative (accounts_liability_sign).
+  // The form collects "how much do you owe" as a positive number and this is
+  // the one place that flips its sign for storage.
+  if (isLiabilityAccountType(account_type)) {
+    if (opening_balance < 0) {
+      return { error: "Enter what you owe as a positive number." };
+    }
+    opening_balance = -opening_balance;
   }
 
   return {

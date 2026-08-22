@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { AccountForm } from "./AccountForm";
 import { archiveAccountAction } from "@/lib/actions/accounts";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { formatCurrency } from "@/lib/format";
+import { formatAccountBalance } from "@/lib/format";
 import type { Database } from "@/lib/database.types";
 
 type AccountBalanceRow = Database["public"]["Views"]["v_account_balances"]["Row"];
@@ -60,7 +60,7 @@ export function AccountRow({ account }: { account: AccountBalanceRow }) {
       </div>
 
       <span className="shrink-0 text-sm font-medium tabular-nums text-ink">
-        {formatCurrency(account.balance ?? 0)}
+        {formatAccountBalance(account.balance ?? 0, account.account_type ?? "")}
       </span>
 
       {archiveError ? <span className="shrink-0 text-sm text-critical">{archiveError}</span> : null}

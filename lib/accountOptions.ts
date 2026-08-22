@@ -14,3 +14,10 @@ export const ACCOUNT_TYPES = [
 ] as const;
 
 export type AccountType = (typeof ACCOUNT_TYPES)[number];
+
+// Mirrors accounts_liability_sign (20260822000006_06_liability_sign.sql):
+// Credit Card and Loan balances are stored negative. Every place that reads
+// or writes opening_balance needs to know which types those are.
+export function isLiabilityAccountType(type: string): boolean {
+  return type === "Credit Card" || type === "Loan";
+}

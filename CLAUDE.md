@@ -35,6 +35,10 @@ scaffold — no data layer built yet. Path alias `@/*` -> project root.
 - Use `signed_amount(amount, transaction_type)` for any signed money math —
   never hand-roll the Income/Expense `CASE`. It's `IMMUTABLE PARALLEL SAFE`,
   so it's safe in aggregates, indexes, and generated columns.
+- Liability accounts (Credit Card, Loan) carry negative balances. `v_net_worth`
+  depends on this. Collect a positive number from users and negate on write;
+  display the absolute value with "owed". Never sum account balances as
+  absolute values.
 
 ## Design language
 
