@@ -262,3 +262,114 @@ export async function deleteTransaction(id: string): Promise<DbResult<{ id: stri
 
   return { data, error: null };
 }
+
+export type MerchantCategorySuggestion = {
+  categoryid: string;
+  category_name: string;
+  color: string | null;
+};
+
+type MerchantMatchRow = {
+  categoryid: string;
+  category: { category_name: string; color: string | null } | null;
+};
+
+// Postgres's default LIKE/ILIKE escape character is backslash -- without
+// escaping, a merchant string containing literal "%" or "_" would corrupt
+// the wildcard pattern instead of matching those characters literally.
+function escapeLikePattern(value: string): string {
+  return value.replace(/[%_\\]/g, (c) => `\\${c}`);
+}
+
+// Looks at this user's own past transactions only -- RLS scopes both
+// queries, no manual userid filter needed. Searches merchant and
+// description separately (merchant is optional on the full form, so older
+// rows may only carry the text in description) and picks whichever
+// category shows up most often across the two, most recent history first.
+export async function suggestCategoryForMerchant(
+  merchant: string,
+  transactionType: TransactionType,
+): Promise<DbResult<MerchantCategorySuggestion | null>> {
+  const supabase = await createClient();
+
+  const trimmed = merchant.trim();
+  if (!trimmed) {
+    return { data: null, error: null };
+  }
+
+  const pattern = `%${escapeLikePattern(trimmed)}%`;
+  const select = "categoryid, category:categories(category_name, color)";
+
+  const [byMerchant, byDescription] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select(select)
+      .eq("transaction_type", transactionType)
+      .ilike("merchant", pattern)
+      .order("transaction_date", { ascending: false })
+      .limit(50)
+      .returns<MerchantMatchRow[]>(),
+    supabase
+      .from("transactions")
+      .select(select)
+      .eq("transaction_type", transactionType)
+      .ilike("description", pattern)
+      .order("transaction_date", { ascending: false })
+      .limit(50)
+      .returns<MerchantMatchRow[]>(),
+  ]);
+
+  if (byMerchant.error) {
+    return { data: null, error: byMerchant.error.message };
+  }
+  if (byDescription.error) {
+    return { data: null, error: byDescription.error.message };
+  }
+
+  const counts = new Map<string, { count: number; category_name: string; color: string | null }>();
+  for (const row of [...byMerchant.data, ...byDescription.data]) {
+    if (!row.category) continue;
+    const existing = counts.get(row.categoryid);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      counts.set(row.categoryid, {
+        count: 1,
+        category_name: row.category.category_name,
+        color: row.category.color,
+      });
+    }
+  }
+
+  let best: (MerchantCategorySuggestion & { count: number }) | null = null;
+  for (const [categoryid, entry] of counts) {
+    if (!best || entry.count > best.count) {
+      best = { categoryid, count: entry.count, category_name: entry.category_name, color: entry.color };
+    }
+  }
+
+  return {
+    data: best ? { categoryid: best.categoryid, category_name: best.category_name, color: best.color } : null,
+    error: null,
+  };
+}
+
+// Quick-add's account prefill -- the account behind whichever transaction
+// was logged most recently, not necessarily most recently created.
+export async function getMostRecentTransactionAccountId(): Promise<DbResult<string | null>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("accountid")
+    .order("transaction_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data: data?.accountid ?? null, error: null };
+}

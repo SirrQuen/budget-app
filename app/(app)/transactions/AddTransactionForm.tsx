@@ -9,6 +9,7 @@ import {
 } from "@/lib/actions/transactions";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { TransactionType } from "@/lib/db/transactions";
+import { todayISO } from "@/lib/date";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -30,6 +31,16 @@ export type TransactionAccountOption = {
 
 export type TransactionFormMode = "create" | "edit";
 
+// Seeds the create-mode fields from a quick-add parse instead of blank
+// defaults -- only meaningful when mode is "create" (edit mode always seeds
+// from initialValues).
+export type AddTransactionPrefill = {
+  transaction_date?: string;
+  description?: string;
+  amount?: string;
+  merchant?: string;
+};
+
 export type TransactionInitialValues = {
   id: string;
   transaction_date: string;
@@ -42,14 +53,6 @@ export type TransactionInitialValues = {
   notes: string | null;
   payment_method: string | null;
 };
-
-function todayISO() {
-  // Local calendar day, not UTC -- toISOString() alone can land on
-  // yesterday or tomorrow depending on the user's timezone offset.
-  const d = new Date();
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 10);
-}
 
 // Groups an already type-filtered category list by its category group for
 // the <select>, preserving the order listCategoriesForType returned (group
@@ -80,22 +83,37 @@ export function AddTransactionForm({
   incomeCategories,
   expenseCategories,
   accounts,
+  prefill,
+  embedded = false,
+  onClose,
+  onSaved,
 }: {
   mode?: TransactionFormMode;
   initialValues?: TransactionInitialValues;
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
   accounts: TransactionAccountOption[];
+  /** Create mode only -- seeds fields from a quick-add parse. */
+  prefill?: AddTransactionPrefill;
+  /** Always renders the full form, skipping the collapsed "Add transaction"
+   * button -- for mounting inside an overlay that's already the toggle. */
+  embedded?: boolean;
+  /** Embedded mode only: called instead of collapsing when Close is clicked. */
+  onClose?: () => void;
+  /** Embedded mode only: called once the create-success celebration finishes. */
+  onSaved?: () => void;
 }) {
   const isEdit = mode === "edit";
-  const [open, setOpen] = useState(isEdit);
+  const [open, setOpen] = useState(isEdit || embedded);
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     isEdit ? updateTransactionAction : createTransactionAction,
     undefined,
   );
   const [type, setType] = useState<TransactionType>(initialValues?.transaction_type ?? "Expense");
   const [categoryid, setCategoryid] = useState(initialValues?.categoryid ?? "");
-  const [amount, setAmount] = useState(initialValues ? String(initialValues.amount) : "");
+  const [amount, setAmount] = useState(
+    initialValues ? String(initialValues.amount) : (prefill?.amount ?? ""),
+  );
   const [clientError, setClientError] = useState<string>();
   const [celebrate, setCelebrate] = useState(false);
   const [celebrateMessage, setCelebrateMessage] = useState("Logged");
@@ -122,10 +140,13 @@ export function AddTransactionForm({
       setCelebrateIcon(milestone?.kind === "streak-7" ? <FlameIcon className="h-4 w-4" /> : "✓");
       setCelebrate(true);
       clearTimeout(celebrateTimeout.current);
-      celebrateTimeout.current = setTimeout(() => setCelebrate(false), 1600);
+      celebrateTimeout.current = setTimeout(() => {
+        setCelebrate(false);
+        onSaved?.();
+      }, 1600);
     }
     wasPending.current = pending;
-  }, [pending, state, isEdit]);
+  }, [pending, state, isEdit, onSaved]);
 
   useEffect(() => {
     return () => clearTimeout(celebrateTimeout.current);
@@ -163,7 +184,7 @@ export function AddTransactionForm({
     setClientError(undefined);
   }
 
-  if (!isEdit && !open) {
+  if (!isEdit && !embedded && !open) {
     return (
       <Button type="button" onClick={() => setOpen(true)} className="self-start">
         Add transaction
@@ -197,7 +218,7 @@ export function AddTransactionForm({
           ) : (
             <button
               type="button"
-              onClick={() => setOpen(false)}
+              onClick={() => (embedded ? onClose?.() : setOpen(false))}
               className="text-sm font-medium text-ink-secondary hover:text-ink"
             >
               Close
@@ -212,7 +233,7 @@ export function AddTransactionForm({
               name="transaction_date"
               type="date"
               required
-              defaultValue={initialValues?.transaction_date ?? todayISO()}
+              defaultValue={initialValues?.transaction_date ?? prefill?.transaction_date ?? todayISO()}
               className={fieldClassName}
             />
           </FormField>
@@ -242,7 +263,7 @@ export function AddTransactionForm({
             required
             maxLength={120}
             placeholder="e.g. Groceries"
-            defaultValue={initialValues?.description}
+            defaultValue={initialValues?.description ?? prefill?.description}
           />
         </FormField>
 
@@ -322,7 +343,7 @@ export function AddTransactionForm({
               name="merchant"
               maxLength={80}
               placeholder="e.g. Trader Joe's"
-              defaultValue={initialValues?.merchant ?? undefined}
+              defaultValue={initialValues?.merchant ?? prefill?.merchant}
             />
           </FormField>
 

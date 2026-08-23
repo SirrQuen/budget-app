@@ -6,6 +6,16 @@ import { useState } from "react";
 import { logout } from "@/lib/auth/actions";
 import { StreakBadge } from "@/components/ui/StreakBadge";
 import { HomeIcon, ListIcon, WalletIcon, TagIcon, PieIcon, TargetIcon, MenuIcon, CloseIcon, type IconProps } from "@/components/ui/icons";
+import { QuickAddBar } from "@/components/quick-add/QuickAddBar";
+import type { TransactionAccountOption } from "@/app/(app)/transactions/AddTransactionForm";
+import type { CategoryWithGroup } from "@/lib/db/categories";
+
+export type QuickAddData = {
+  accounts: TransactionAccountOption[];
+  incomeCategories: CategoryWithGroup[];
+  expenseCategories: CategoryWithGroup[];
+  defaultAccountId: string | null;
+};
 
 const NAV_ITEMS: { href: string; label: string; icon: (props: IconProps) => React.ReactNode }[] = [
   { href: "/dashboard", label: "Dashboard", icon: HomeIcon },
@@ -19,11 +29,14 @@ const NAV_ITEMS: { href: string; label: string; icon: (props: IconProps) => Reac
 export function AppShell({
   userEmail,
   streak,
+  quickAdd,
   children,
 }: {
   userEmail: string;
   /** null once a user has never logged a transaction -- nothing to show yet. */
   streak: { current: number; best: number } | null;
+  /** null if any of its data failed to load -- the page still renders without it. */
+  quickAdd: QuickAddData | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -91,7 +104,17 @@ export function AppShell({
         </div>
       </aside>
 
-      <main className="flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+      <main className="flex-1 px-4 py-6 md:px-8 md:py-8">
+        {quickAdd ? (
+          <QuickAddBar
+            accounts={quickAdd.accounts}
+            incomeCategories={quickAdd.incomeCategories}
+            expenseCategories={quickAdd.expenseCategories}
+            defaultAccountId={quickAdd.defaultAccountId}
+          />
+        ) : null}
+        {children}
+      </main>
     </div>
   );
 }

@@ -7,8 +7,10 @@ import {
   updateTransaction,
   deleteTransaction,
   getTransactionCount,
+  suggestCategoryForMerchant,
   type CreateTransactionInput,
   type TransactionType,
+  type MerchantCategorySuggestion,
 } from "@/lib/db/transactions";
 import { getLoggingStreak } from "@/lib/db/dashboard";
 
@@ -87,6 +89,16 @@ function parseTransactionFields(formData: FormData): CreateTransactionInput | { 
     notes: notes || null,
     payment_method: payment_method || null,
   };
+}
+
+// Called directly as a function from the quick-add bar (not through
+// useActionState) -- it's a lookup for the inline preview, not a mutation.
+export async function suggestCategoryAction(
+  merchant: string,
+  transactionType: TransactionType,
+): Promise<MerchantCategorySuggestion | null> {
+  const result = await suggestCategoryForMerchant(merchant, transactionType);
+  return result.data;
 }
 
 export async function createTransactionAction(
