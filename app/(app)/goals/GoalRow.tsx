@@ -79,9 +79,9 @@ export function GoalRow({ goal }: { goal: GoalProgressRow }) {
       </div>
 
       {/* Goal progress has no bad zone -- unlike a budget meter, more filled
-          is never worse, so the warning/critical thresholds are pushed past
-          100 to keep this a single accent hue throughout. */}
-      <Meter value={pct} max={100} warningAt={101} criticalAt={101} label={goal.goal_name ?? undefined} />
+          is never worse, so toneFrom/toneTo match: a single accent hue
+          throughout, never shifting toward warning. */}
+      <Meter value={pct} toneFrom="good" toneTo="good" label={goal.goal_name ?? undefined} />
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span className="text-ink-secondary">

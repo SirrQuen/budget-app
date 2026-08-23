@@ -5,7 +5,7 @@ import type { Database } from "@/lib/database.types";
 type BudgetRow = Database["public"]["Tables"]["budgets"]["Row"];
 type BudgetInsert = Database["public"]["Tables"]["budgets"]["Insert"];
 type BudgetUpdate = Database["public"]["Tables"]["budgets"]["Update"];
-type BudgetVsActualRow = Database["public"]["Views"]["v_budget_vs_actual"]["Row"];
+export type BudgetProgressRow = Database["public"]["Views"]["v_budget_vs_actual"]["Row"];
 
 export type DbResult<T> = { data: T; error: null } | { data: null; error: string };
 
@@ -138,7 +138,7 @@ export type GetBudgetProgressOptions = {
 // transactions in JS.
 export async function getBudgetProgress(
   opts: GetBudgetProgressOptions = {},
-): Promise<DbResult<BudgetVsActualRow[]>> {
+): Promise<DbResult<BudgetProgressRow[]>> {
   const supabase = await createClient();
 
   let query = supabase

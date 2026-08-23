@@ -7,12 +7,11 @@ import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Meter } from "@/components/ui/Meter";
 import { Celebration } from "@/components/ui/Celebration";
-import { WarningIcon, TrashIcon } from "@/components/ui/icons";
+import { TrashIcon } from "@/components/ui/icons";
 import { formatCurrency } from "@/lib/format";
-import type { Database } from "@/lib/database.types";
+import type { BudgetProgressRow } from "@/lib/db/budgets";
+import type { ChronicOverBudget } from "@/lib/budgetInsights";
 import type { CategoryWithGroup } from "@/lib/db/categories";
-
-export type BudgetProgressRow = Database["public"]["Views"]["v_budget_vs_actual"]["Row"];
 
 // True once the month after monthISO has started -- the viewed month is
 // fully in the books, not still accumulating spend.
@@ -25,14 +24,22 @@ function isPastMonth(monthISO: string): boolean {
 export function BudgetRow({
   budget,
   categories,
+  insight,
 }: {
   // Callers only ever pass rows with budget_id set (see the filter in
   // page.tsx) -- this is still the view's row type since the view itself
   // leaves every column nullable.
   budget: BudgetProgressRow;
   categories: CategoryWithGroup[];
+  /** Non-null when this category has run over budget in most of the last
+   * few months -- see getChronicOverBudgetInsight. */
+  insight: ChronicOverBudget | null;
 }) {
   const [editing, setEditing] = useState(false);
+  // Set only when editing was opened via "Adjust budget" -- overrides the
+  // form's default of the current budgeted amount with the insight's
+  // suggestion, still just a starting point the user can change or ignore.
+  const [adjustAmount, setAdjustAmount] = useState<number | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string>();
   const [isDeleting, startDelete] = useTransition();
@@ -82,12 +89,17 @@ export function BudgetRow({
     });
   }
 
+  function closeForm() {
+    setEditing(false);
+    setAdjustAmount(null);
+  }
+
   if (editing) {
     const editable: EditableBudget = {
       id: budget.budget_id!,
       categoryid: budget.category_id!,
       budget_month: budget.budget_month!,
-      budget_amount: budget.budget_amount ?? 0,
+      budget_amount: adjustAmount ?? budget.budget_amount ?? 0,
     };
     return (
       <li className="p-4">
@@ -95,8 +107,8 @@ export function BudgetRow({
           budget={editable}
           categories={categories}
           month={budget.budget_month!}
-          onSuccess={() => setEditing(false)}
-          onCancel={() => setEditing(false)}
+          onSuccess={closeForm}
+          onCancel={closeForm}
         />
       </li>
     );
@@ -114,6 +126,7 @@ export function BudgetRow({
         <CategoryIcon icon={budget.category_icon} className="h-4 w-4 shrink-0 text-ink-secondary" />
         <span className="flex-1 text-sm font-medium text-ink">{budget.category_name}</span>
         {deleteError ? <span className="shrink-0 text-sm text-critical">{deleteError}</span> : null}
+        <span className="shrink-0 text-base font-semibold tabular-nums text-ink">{Math.round(pctUsed)}%</span>
         <button
           type="button"
           onClick={() => setEditing(true)}
@@ -130,27 +143,37 @@ export function BudgetRow({
         </button>
       </div>
 
-      <Meter
-        value={pctUsed}
-        max={100}
-        warningAt={80}
-        criticalAt={100}
-        label={budget.category_name ?? undefined}
-      />
+      <Meter value={pctUsed} ariaLabel={`${budget.category_name ?? "Category"} budget used`} />
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-        <span className="text-ink-secondary">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-ink-secondary">
+        <span>
           {formatCurrency(spent)} of {formatCurrency(budgeted)}
         </span>
-        {isOver ? (
-          <span className="inline-flex items-center gap-1.5 font-medium text-critical">
-            <WarningIcon className="h-4 w-4" aria-hidden="true" />
-            {formatCurrency(Math.abs(remaining))} over — worth a look
-          </span>
-        ) : (
-          <span className="text-ink-secondary">{formatCurrency(remaining)} left this month</span>
-        )}
+        <span>
+          {isOver
+            ? `${formatCurrency(Math.abs(remaining))} over this month`
+            : `${formatCurrency(remaining)} left this month`}
+        </span>
       </div>
+
+      {insight ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-hairline bg-surface-raised px-3 py-2 text-sm">
+          <span className="text-ink-secondary">
+            Over budget {insight.overCount} of the last {insight.monthsConsidered} months, averaging{" "}
+            {formatCurrency(insight.suggestedAmount)}.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setAdjustAmount(insight.suggestedAmount);
+              setEditing(true);
+            }}
+            className="shrink-0 text-sm font-medium text-gold hover:text-gold-hover hover:underline"
+          >
+            Adjust to {formatCurrency(insight.suggestedAmount)}
+          </button>
+        </div>
+      ) : null}
 
       <Celebration
         show={showFinishedCelebration}

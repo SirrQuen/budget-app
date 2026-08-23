@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getBudgetProgress } from "@/lib/db/budgets";
 import { listCategoriesForType } from "@/lib/db/categories";
+import { getChronicOverBudgetInsight } from "@/lib/budgetInsights";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
@@ -40,12 +41,15 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
       ? params.month
       : currentMonthISO();
 
-  const [progressResult, categoriesResult] = await Promise.all([
+  const [progressResult, historyResult, categoriesResult] = await Promise.all([
     getBudgetProgress({ budget_month: month }),
+    // Unfiltered: every month, every category, for the "runs over most
+    // months" check below -- one query instead of one per budget row.
+    getBudgetProgress({}),
     listCategoriesForType("Expense"),
   ]);
 
-  if (progressResult.error !== null || categoriesResult.error !== null) {
+  if (progressResult.error !== null || historyResult.error !== null || categoriesResult.error !== null) {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader
@@ -53,7 +57,9 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
           description="Set a monthly envelope for each category and watch it fill."
         />
         <ErrorMessage
-          message={progressResult.error ?? categoriesResult.error ?? "Failed to load budgets."}
+          message={
+            progressResult.error ?? historyResult.error ?? categoriesResult.error ?? "Failed to load budgets."
+          }
         />
       </div>
     );
@@ -63,6 +69,17 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
   // (status "Unbudgeted", budget_id null) -- this page only manages actual
   // budgets, so those rows are filtered out.
   const budgets = progressResult.data.filter((row) => row.budget_id !== null);
+
+  const historyByCategory = new Map<string, typeof historyResult.data>();
+  for (const row of historyResult.data) {
+    if (row.category_id === null) continue;
+    const existing = historyByCategory.get(row.category_id);
+    if (existing) {
+      existing.push(row);
+    } else {
+      historyByCategory.set(row.category_id, [row]);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -97,9 +114,19 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
         />
       ) : (
         <ul className="divide-y divide-hairline rounded-2xl border border-hairline bg-surface">
-          {budgets.map((budget) => (
-            <BudgetRow key={budget.budget_id} budget={budget} categories={categoriesResult.data} />
-          ))}
+          {budgets.map((budget) => {
+            const insight = budget.category_id
+              ? getChronicOverBudgetInsight(historyByCategory.get(budget.category_id) ?? [], month)
+              : null;
+            return (
+              <BudgetRow
+                key={budget.budget_id}
+                budget={budget}
+                categories={categoriesResult.data}
+                insight={insight}
+              />
+            );
+          })}
         </ul>
       )}
     </div>
