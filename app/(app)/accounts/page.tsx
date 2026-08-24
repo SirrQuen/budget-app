@@ -62,6 +62,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
       <PageHeader title="Accounts" description="Every place your money lives, in one list." />
 
       <StatTile
+        id="accounts-net-worth"
         label="Total across accounts"
         value={netWorthResult.data?.net_worth ?? 0}
         format="currency"

@@ -58,6 +58,7 @@ export default async function GoalsPage() {
 
       {summaryResult.data ? (
         <StatTile
+          id="goals-total-saved"
           label="Saved toward your goals"
           value={summaryResult.data.total_saved ?? 0}
           format="currency"
