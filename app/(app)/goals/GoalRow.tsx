@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
 import { contributeToGoalAction, type ContributeActionState } from "@/lib/actions/goals";
-import { Meter } from "@/components/ui/Meter";
+import { GoalMeter } from "@/components/ui/GoalMeter";
 import { Celebration } from "@/components/ui/Celebration";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -33,9 +33,12 @@ export function GoalRow({ goal }: { goal: GoalProgressRow }) {
   );
   const [celebrate, setCelebrate] = useState(false);
   const [celebrateMessage, setCelebrateMessage] = useState("");
+  const [milestoneCelebrate, setMilestoneCelebrate] = useState(false);
+  const [milestoneMessage, setMilestoneMessage] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const wasPending = useRef(false);
   const celebrateTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const milestoneTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     const succeeded = wasPending.current && !pending && !state?.error;
@@ -55,6 +58,14 @@ export function GoalRow({ goal }: { goal: GoalProgressRow }) {
   }, [pending, state]);
 
   useEffect(() => () => clearTimeout(celebrateTimeout.current), []);
+  useEffect(() => () => clearTimeout(milestoneTimeout.current), []);
+
+  function handleMilestone(milestone: { pct: number; message: string }) {
+    setMilestoneMessage(milestone.message);
+    setMilestoneCelebrate(true);
+    clearTimeout(milestoneTimeout.current);
+    milestoneTimeout.current = setTimeout(() => setMilestoneCelebrate(false), 1800);
+  }
 
   const target = goal.target_amount ?? 0;
   const contributed = goal.contributed_amount ?? 0;
@@ -78,10 +89,12 @@ export function GoalRow({ goal }: { goal: GoalProgressRow }) {
         </button>
       </div>
 
-      {/* Goal progress has no bad zone -- unlike a budget meter, more filled
-          is never worse, so toneFrom/toneTo match: a single accent hue
-          throughout, never shifting toward warning. */}
-      <Meter value={pct} toneFrom="good" toneTo="good" label={goal.goal_name ?? undefined} />
+      <GoalMeter
+        goalId={goal.goal_id ?? ""}
+        goalName={goal.goal_name ?? "This goal"}
+        value={pct}
+        onMilestone={handleMilestone}
+      />
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span className="text-ink-secondary">
@@ -129,6 +142,7 @@ export function GoalRow({ goal }: { goal: GoalProgressRow }) {
       ) : null}
 
       <Celebration show={celebrate} message={celebrateMessage} icon="✦" />
+      <Celebration show={milestoneCelebrate} message={milestoneMessage} icon="✦" />
     </li>
   );
 }

@@ -95,6 +95,34 @@
   }
 }
 
+/* Goal meter milestone pulse -- a single ring expanding out from the fill
+   and fading, one cycle (no infinite iteration count). */
+@keyframes goal-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 14px color-mix(in srgb, var(--good) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 0%, transparent);
+  }
+}
+
+/* Goal meter 100% confetti -- the only place in the app this fires. Each
+   piece supplies --x/--r via inline style so the burst reads as scattered,
+   not mechanical. */
+@keyframes goal-confetti {
+  0% {
+    transform: translate(-50%, 0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--x, 0px)), -42px) rotate(var(--r, 180deg));
+    opacity: 0;
+  }
+}
+
 /* A freshly-added row's one-time entrance -- relies on React reusing the
    DOM node for rows it already knew about (same key) and only mounting
    fresh for a genuinely new one, so this can be applied unconditionally to
