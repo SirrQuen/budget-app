@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# supabase CLI local link-state (pooler URL, project ref -- machine-specific)
+supabase/.temp/
+
+# claude code -- local-only overrides, not shared config
+.claude/settings.local.json
