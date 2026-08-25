@@ -7,19 +7,15 @@ import {
 } from "@/app/(app)/transactions/AddTransactionForm";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import { createTransactionAction, suggestCategoryAction, type ActionState } from "@/lib/actions/transactions";
+import { useOptimisticTransactions } from "@/components/quick-add/OptimisticTransactionsContext";
 import { parseQuickAdd } from "@/lib/quickAdd/parseQuickAdd";
 import { todayISO } from "@/lib/date";
-import { formatCurrency, formatSignedAmount, type Tone } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import { PlusIcon, FlameIcon } from "@/components/ui/icons";
+import { Amount } from "@/components/ui/Amount";
 import { Celebration } from "@/components/ui/Celebration";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { FullFormOverlay } from "@/components/quick-add/FullFormOverlay";
-
-const toneClass: Record<Tone, string> = {
-  good: "text-good",
-  critical: "text-critical",
-  neutral: "text-ink-muted",
-};
 
 export function QuickAddBar({
   accounts,
@@ -52,6 +48,9 @@ export function QuickAddBar({
   const requestTokenRef = useRef(0);
   const wasPendingRef = useRef(false);
   const celebrateTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const pendingClientIdRef = useRef<string | null>(null);
+
+  const { addPending, settlePending, failPending } = useOptimisticTransactions();
 
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     createTransactionAction,
@@ -103,7 +102,16 @@ export function QuickAddBar({
   }, [parseKey]);
 
   useEffect(() => {
+    if (wasPendingRef.current && !pending && state?.error) {
+      const clientId = pendingClientIdRef.current;
+      pendingClientIdRef.current = null;
+      if (clientId) failPending(clientId);
+    }
     if (wasPendingRef.current && !pending && !state?.error) {
+      const clientId = pendingClientIdRef.current;
+      pendingClientIdRef.current = null;
+      if (clientId) settlePending(clientId);
+
       const milestone = state?.milestone;
       const verb = parsed.ok && parsed.transaction_type === "Income" ? "from" : "at";
       const message = milestone
@@ -186,10 +194,23 @@ export function QuickAddBar({
     if (!accountid) {
       e.preventDefault();
       accountSelectRef.current?.focus();
+      return;
     }
-  }
 
-  const signed = parsed.ok ? formatSignedAmount(parsed.amount, parsed.transaction_type) : null;
+    const category = categoryOptions.find((c) => c.id === categoryid);
+    const account = accounts.find((a) => a.id === accountid);
+    pendingClientIdRef.current = addPending({
+      transaction_date: parsed.transaction_date,
+      description: parsed.merchant,
+      amount: parsed.amount,
+      transaction_type: parsed.transaction_type,
+      categoryid,
+      category_name: category?.category_name ?? null,
+      category_color: category?.color ?? null,
+      accountid,
+      account_name: account?.account_name ?? null,
+    });
+  }
 
   const panel = (
     <form
@@ -222,7 +243,7 @@ export function QuickAddBar({
         <button
           type="button"
           onClick={openFullForm}
-          className="shrink-0 text-sm font-medium text-ink-secondary hover:text-ink"
+          className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           Full form
         </button>
@@ -230,11 +251,9 @@ export function QuickAddBar({
 
       {text.trim() ? (
         <div className="flex flex-wrap items-center gap-2 px-1 text-sm">
-          {parsed.ok && signed ? (
+          {parsed.ok ? (
             <>
-              <span className={`font-medium tabular-nums ${toneClass[signed.tone]}`}>
-                <span aria-hidden="true">{signed.arrow}</span> {signed.text}
-              </span>
+              <Amount amount={parsed.amount} type={parsed.transaction_type} />
               <span className="text-ink-muted">·</span>
               <span className="text-ink">{parsed.merchant}</span>
               <span className="text-ink-muted">·</span>
@@ -247,7 +266,7 @@ export function QuickAddBar({
                   categoryTouchedRef.current = true;
                   setCategoryid(e.target.value);
                 }}
-                className="rounded-lg border border-hairline bg-surface-raised px-2 py-1 text-xs text-ink outline-none focus:border-gold"
+                className="rounded-lg border border-hairline bg-surface-raised px-2 py-1 text-xs text-ink outline-none transition-colors duration-150 focus:border-gold focus:ring-2 focus:ring-gold/40"
               >
                 <option value="" disabled>
                   Category
@@ -263,7 +282,7 @@ export function QuickAddBar({
                 name="accountid"
                 value={accountid}
                 onChange={(e) => setAccountid(e.target.value)}
-                className="rounded-lg border border-hairline bg-surface-raised px-2 py-1 text-xs text-ink-secondary outline-none focus:border-gold"
+                className="rounded-lg border border-hairline bg-surface-raised px-2 py-1 text-xs text-ink-secondary outline-none transition-colors duration-150 focus:border-gold focus:ring-2 focus:ring-gold/40"
               >
                 <option value="" disabled>
                   Account
@@ -312,7 +331,7 @@ export function QuickAddBar({
           inputRef.current?.focus();
         }}
         aria-label="Quick add transaction"
-        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gold text-gold-ink shadow-lg transition-colors hover:bg-gold-hover active:bg-gold-pressed md:hidden"
+        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gold text-gold-ink shadow-lg transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-gold-hover hover:shadow-xl active:translate-y-0 active:scale-95 active:bg-gold-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-page md:hidden"
       >
         <PlusIcon className="h-6 w-6" />
       </button>

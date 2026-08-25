@@ -75,7 +75,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
         <Link
           href={buildHref(!showArchived)}
           aria-pressed={showArchived}
-          className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+          className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all duration-150 ease-out hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-page ${
             showArchived
               ? "border-gold/40 bg-gold/10 text-gold"
               : "border-hairline bg-surface text-ink-secondary hover:text-ink"
@@ -93,7 +93,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
           action={
             <Link
               href={buildHref(true)}
-              className="text-sm font-medium text-gold hover:text-gold-hover hover:underline"
+              className="rounded text-sm font-medium text-gold transition-colors duration-150 hover:text-gold-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
             >
               Show archived accounts
             </Link>

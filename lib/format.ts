@@ -71,19 +71,19 @@ export function formatCompactNumber(value: number, opts: { currency?: boolean } 
 export type Tone = "good" | "critical" | "neutral";
 
 /**
- * Income renders with a leading + and an up arrow, Expense with a minus and
- * a down arrow, so direction is legible from the glyphs alone -- colour is
- * a bonus, never the only signal.
+ * Income renders with a leading + and Expense with a minus, so direction is
+ * legible from the sign alone. Only income gets a tone -- an expense is a
+ * plain, ordinary value, not a warning, so it stays neutral rather than
+ * critical.
  */
 export function formatSignedAmount(
   amount: number,
   type: "Income" | "Expense",
-): { text: string; arrow: "↑" | "↓"; tone: Tone } {
+): { text: string; tone: Tone } {
   const isIncome = type === "Income";
   return {
     text: `${isIncome ? "+" : "−"}${formatCurrency(Math.abs(amount))}`,
-    arrow: isIncome ? "↑" : "↓",
-    tone: isIncome ? "good" : "critical",
+    tone: isIncome ? "good" : "neutral",
   };
 }
 

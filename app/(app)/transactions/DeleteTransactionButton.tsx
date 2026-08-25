@@ -17,7 +17,7 @@ export function DeleteTransactionButton({
   transactionType,
   transactionDate,
   redirectToList,
-  className = "text-sm font-medium text-ink-secondary hover:text-critical",
+  className = "rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-critical focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
   label = "Delete",
 }: {
   id: string;

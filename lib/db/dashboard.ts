@@ -216,6 +216,8 @@ export type LoggingStreak = {
   current: number;
   /** Longest consecutive run found in the 90-day window, current included. */
   best: number;
+  /** Whether today already has a logged transaction. */
+  loggedToday: boolean;
 };
 
 function localISODate(d: Date): string {
@@ -279,7 +281,7 @@ export async function getLoggingStreak(): Promise<DbResult<LoggingStreak>> {
     }
   }
 
-  return { data: { current, best }, error: null };
+  return { data: { current, best, loggedToday: last === todayISO }, error: null };
 }
 
 // Ops-only (see DATABASE.md) -- no user-facing screen reads this.

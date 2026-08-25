@@ -121,7 +121,7 @@ export function BudgetRow({
   const isOver = budget.is_over_budget ?? false;
 
   return (
-    <li className="flex flex-col gap-3 px-4 py-4">
+    <li className="flex flex-col gap-3 px-4 py-4 transition-colors duration-150 hover:bg-surface-raised">
       <div className="flex items-center gap-3">
         <CategoryIcon icon={budget.category_icon} className="h-4 w-4 shrink-0 text-ink-secondary" />
         <span className="flex-1 text-sm font-medium text-ink">{budget.category_name}</span>
@@ -130,14 +130,14 @@ export function BudgetRow({
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="shrink-0 text-sm font-medium text-ink-secondary hover:text-ink"
+          className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           Edit
         </button>
         <button
           type="button"
           onClick={() => setConfirmingDelete(true)}
-          className="shrink-0 text-sm font-medium text-ink-secondary hover:text-ink"
+          className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           Delete
         </button>
@@ -168,7 +168,7 @@ export function BudgetRow({
               setAdjustAmount(insight.suggestedAmount);
               setEditing(true);
             }}
-            className="shrink-0 text-sm font-medium text-gold hover:text-gold-hover hover:underline"
+            className="shrink-0 rounded text-sm font-medium text-gold transition-colors duration-150 hover:text-gold-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised"
           >
             Adjust to {formatCurrency(insight.suggestedAmount)}
           </button>

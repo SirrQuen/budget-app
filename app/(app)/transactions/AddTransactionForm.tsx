@@ -211,7 +211,7 @@ export function AddTransactionForm({
           {isEdit ? (
             <Link
               href="/transactions"
-              className="text-sm font-medium text-ink-secondary hover:text-ink"
+              className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
             >
               Cancel
             </Link>
@@ -219,7 +219,7 @@ export function AddTransactionForm({
             <button
               type="button"
               onClick={() => (embedded ? onClose?.() : setOpen(false))}
-              className="text-sm font-medium text-ink-secondary hover:text-ink"
+              className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
             >
               Close
             </button>
@@ -273,7 +273,7 @@ export function AddTransactionForm({
             {(["Expense", "Income"] as const).map((value) => (
               <label
                 key={value}
-                className="cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium text-ink-secondary transition-colors has-[:checked]:bg-surface has-[:checked]:text-ink"
+                className="cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink has-[:checked]:bg-surface has-[:checked]:text-ink has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-surface-raised"
               >
                 <input
                   type="radio"

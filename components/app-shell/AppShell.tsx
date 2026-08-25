@@ -7,6 +7,7 @@ import { logout } from "@/lib/auth/actions";
 import { StreakBadge } from "@/components/ui/StreakBadge";
 import { HomeIcon, ListIcon, WalletIcon, TagIcon, PieIcon, TargetIcon, MenuIcon, CloseIcon, type IconProps } from "@/components/ui/icons";
 import { QuickAddBar } from "@/components/quick-add/QuickAddBar";
+import { OptimisticTransactionsProvider } from "@/components/quick-add/OptimisticTransactionsContext";
 import type { TransactionAccountOption } from "@/app/(app)/transactions/AddTransactionForm";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 
@@ -34,7 +35,7 @@ export function AppShell({
 }: {
   userEmail: string;
   /** null once a user has never logged a transaction -- nothing to show yet. */
-  streak: { current: number; best: number } | null;
+  streak: { current: number; best: number; loggedToday: boolean } | null;
   /** null if any of its data failed to load -- the page still renders without it. */
   quickAdd: QuickAddData | null;
   children: React.ReactNode;
@@ -51,7 +52,7 @@ export function AppShell({
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-label={open ? "Close menu" : "Open menu"}
-          className="rounded-lg p-2 text-ink-secondary hover:bg-surface hover:text-ink"
+          className="rounded-lg p-2 text-ink-secondary transition-colors duration-150 hover:bg-surface hover:text-ink active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-page"
         >
           {open ? <CloseIcon className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
         </button>
@@ -65,7 +66,7 @@ export function AppShell({
             EverNest Finance
           </span>
           {streak ? (
-            <StreakBadge days={streak.current} best={streak.best} />
+            <StreakBadge days={streak.current} best={streak.best} loggedToday={streak.loggedToday} />
           ) : null}
           <nav className="flex flex-col gap-1">
             {NAV_ITEMS.map((item) => {
@@ -77,7 +78,7 @@ export function AppShell({
                   href={item.href}
                   onClick={() => setOpen(false)}
                   aria-current={active ? "page" : undefined}
-                  className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-page ${
                     active
                       ? "bg-surface text-ink"
                       : "text-ink-secondary hover:bg-surface hover:text-ink"
@@ -96,7 +97,7 @@ export function AppShell({
           <form action={logout}>
             <button
               type="submit"
-              className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-secondary hover:bg-surface hover:text-ink"
+              className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-secondary transition-colors duration-150 hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-page"
             >
               Log out
             </button>
@@ -105,15 +106,17 @@ export function AppShell({
       </aside>
 
       <main className="flex-1 px-4 py-6 md:px-8 md:py-8">
-        {quickAdd ? (
-          <QuickAddBar
-            accounts={quickAdd.accounts}
-            incomeCategories={quickAdd.incomeCategories}
-            expenseCategories={quickAdd.expenseCategories}
-            defaultAccountId={quickAdd.defaultAccountId}
-          />
-        ) : null}
-        {children}
+        <OptimisticTransactionsProvider>
+          {quickAdd ? (
+            <QuickAddBar
+              accounts={quickAdd.accounts}
+              incomeCategories={quickAdd.incomeCategories}
+              expenseCategories={quickAdd.expenseCategories}
+              defaultAccountId={quickAdd.defaultAccountId}
+            />
+          ) : null}
+          {children}
+        </OptimisticTransactionsProvider>
       </main>
     </div>
   );

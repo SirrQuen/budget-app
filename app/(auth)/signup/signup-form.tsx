@@ -49,7 +49,10 @@ export function SignupForm() {
 
       <p className="text-center text-sm text-ink-secondary">
         Already have an account?{" "}
-        <Link href="/login" className="text-ink hover:text-gold">
+        <Link
+          href="/login"
+          className="rounded text-ink transition-colors duration-150 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        >
           Log in
         </Link>
       </p>

@@ -73,7 +73,7 @@ export function GoalRow({ goal }: { goal: GoalProgressRow }) {
   const pct = goal.pct_complete ?? 0;
 
   return (
-    <li className="flex flex-col gap-3 px-4 py-4">
+    <li className="flex flex-col gap-3 px-4 py-4 transition-colors duration-150 hover:bg-surface-raised">
       <div className="flex items-center gap-3">
         <TargetIcon className="h-4 w-4 shrink-0 text-ink-secondary" aria-hidden="true" />
         <span className="flex-1 text-sm font-medium text-ink">{goal.goal_name}</span>
@@ -83,7 +83,7 @@ export function GoalRow({ goal }: { goal: GoalProgressRow }) {
         <button
           type="button"
           onClick={() => setContributing((v) => !v)}
-          className="shrink-0 text-sm font-medium text-ink-secondary hover:text-ink"
+          className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           {contributing ? "Cancel" : "Add contribution"}
         </button>

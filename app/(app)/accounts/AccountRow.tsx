@@ -40,7 +40,7 @@ export function AccountRow({ account }: { account: AccountBalanceRow }) {
 
   return (
     <li
-      className={`flex items-center gap-3 px-4 py-3 ${account.is_active ? "" : "opacity-60"}`}
+      className={`flex items-center gap-3 px-4 py-3 transition-colors duration-150 hover:bg-surface-raised ${account.is_active ? "" : "opacity-60"}`}
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -67,7 +67,7 @@ export function AccountRow({ account }: { account: AccountBalanceRow }) {
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="shrink-0 text-sm font-medium text-ink-secondary hover:text-ink"
+        className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
       >
         Edit
       </button>
@@ -75,7 +75,7 @@ export function AccountRow({ account }: { account: AccountBalanceRow }) {
         <button
           type="button"
           onClick={() => setConfirmingArchive(true)}
-          className="shrink-0 text-sm font-medium text-ink-secondary hover:text-ink"
+          className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           Archive
         </button>

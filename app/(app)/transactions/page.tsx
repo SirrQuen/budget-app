@@ -7,45 +7,13 @@ import {
 import { listCategories, listCategoriesForType } from "@/lib/db/categories";
 import { listAccounts } from "@/lib/db/accounts";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
-import { ListIcon } from "@/components/ui/icons";
-import { formatDate, formatSignedAmount, type Tone } from "@/lib/format";
 import { AddTransactionForm } from "./AddTransactionForm";
-import { DeleteTransactionButton } from "./DeleteTransactionButton";
-
-type SearchParams = Awaited<PageProps<"/transactions">["searchParams"]>;
+import { TransactionsList } from "./TransactionsList";
 
 function first(value: string | string[] | undefined): string {
   return typeof value === "string" ? value : "";
 }
-
-// Builds a /transactions?... href from the current filters plus overrides
-// (e.g. a new page number) -- every filtered, paginated view is just a URL,
-// so this stays the only place query strings get assembled.
-function buildHref(params: SearchParams, overrides: Record<string, string>) {
-  const usp = new URLSearchParams();
-  const merged = {
-    dateFrom: first(params.dateFrom),
-    dateTo: first(params.dateTo),
-    categoryid: first(params.categoryid),
-    accountid: first(params.accountid),
-    type: first(params.type),
-    page: first(params.page),
-    ...overrides,
-  };
-  for (const [key, value] of Object.entries(merged)) {
-    if (value) usp.set(key, value);
-  }
-  const qs = usp.toString();
-  return `/transactions${qs ? `?${qs}` : ""}`;
-}
-
-const toneClass: Record<Tone, string> = {
-  good: "text-good",
-  critical: "text-critical",
-  neutral: "text-ink-muted",
-};
 
 export default async function TransactionsPage({
   searchParams,
@@ -127,7 +95,7 @@ export default async function TransactionsPage({
           </p>
           <Link
             href="/accounts"
-            className="text-sm font-medium text-gold hover:text-gold-hover hover:underline"
+            className="rounded text-sm font-medium text-gold transition-colors duration-150 hover:text-gold-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
           >
             Add your first account
           </Link>
@@ -240,7 +208,7 @@ export default async function TransactionsPage({
 
         <button
           type="submit"
-          className="inline-flex items-center justify-center rounded-full bg-gold px-4 py-2 text-sm font-semibold text-gold-ink transition-colors hover:bg-gold-hover active:bg-gold-pressed"
+          className="inline-flex items-center justify-center rounded-full bg-gold px-4 py-2 text-sm font-semibold text-gold-ink transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-gold-hover hover:shadow-md active:translate-y-0 active:scale-[0.97] active:bg-gold-pressed active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           Filter
         </button>
@@ -248,153 +216,22 @@ export default async function TransactionsPage({
         {hasFilters ? (
           <Link
             href="/transactions"
-            className="text-sm font-medium text-ink-secondary hover:text-ink"
+            className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
           >
             Clear filters
           </Link>
         ) : null}
       </form>
 
-      {transactions.length === 0 && page > 1 && totalCount > 0 ? (
-        <EmptyState
-          icon={<ListIcon className="h-10 w-10" />}
-          heading="You've gone past the last page"
-          message={`These filters only match ${totalCount} transaction${totalCount === 1 ? "" : "s"}.`}
-          action={
-            <Link
-              href={buildHref(params, { page: "1" })}
-              className="text-sm font-medium text-gold hover:text-gold-hover hover:underline"
-            >
-              Back to page 1
-            </Link>
-          }
-        />
-      ) : transactions.length === 0 ? (
-        <EmptyState
-          icon={<ListIcon className="h-10 w-10" />}
-          heading={hasFilters ? "Nothing matches these filters" : "This is where it all shows up"}
-          message={
-            hasFilters
-              ? "Try a wider date range, or clear a filter to see more."
-              : "Log your first transaction above and this list becomes the real story of where your money's going."
-          }
-          action={
-            hasFilters ? (
-              <Link
-                href="/transactions"
-                className="text-sm font-medium text-gold hover:text-gold-hover hover:underline"
-              >
-                Clear filters
-              </Link>
-            ) : undefined
-          }
-        />
-      ) : (
-        <>
-          <div className="overflow-x-auto rounded-2xl border border-hairline bg-surface">
-            <table className="w-full min-w-[720px] border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-hairline text-left text-xs font-medium uppercase tracking-wide text-ink-muted">
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Description</th>
-                  <th className="px-4 py-3 font-medium">Category</th>
-                  <th className="px-4 py-3 font-medium">Account</th>
-                  <th className="px-4 py-3 text-right font-medium">Amount</th>
-                  <th className="px-4 py-3">
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-hairline">
-                {transactions.map((tx) => {
-                  const signed = formatSignedAmount(
-                    Number(tx.amount),
-                    tx.transaction_type as TransactionType,
-                  );
-                  return (
-                    <tr key={tx.id} className="motion-safe:animate-[row-in_600ms_ease-out]">
-                      <td className="whitespace-nowrap px-4 py-3 text-ink-secondary">
-                        {formatDate(tx.transaction_date)}
-                      </td>
-                      <td className="px-4 py-3 text-ink">{tx.description}</td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-2 text-ink-secondary">
-                          <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-full"
-                            style={{
-                              backgroundColor: tx.category_color ?? "var(--color-ink-muted)",
-                            }}
-                            aria-hidden="true"
-                          />
-                          {tx.category_name ?? "Uncategorized"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-ink-secondary">
-                        {tx.account_name ?? "—"}
-                      </td>
-                      <td
-                        className={`px-4 py-3 text-right font-medium tabular-nums ${toneClass[signed.tone]}`}
-                      >
-                        <span aria-hidden="true">{signed.arrow}</span> {signed.text}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="inline-flex items-center gap-3">
-                          <Link
-                            href={`/transactions/${tx.id}/edit`}
-                            className="text-sm font-medium text-ink-secondary hover:text-ink"
-                          >
-                            Edit
-                          </Link>
-                          <DeleteTransactionButton
-                            id={tx.id}
-                            description={tx.description}
-                            amount={tx.amount}
-                            transactionType={tx.transaction_type as TransactionType}
-                            transactionDate={tx.transaction_date}
-                            redirectToList={false}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-ink-secondary">
-            <p>
-              Showing {(page - 1) * TRANSACTIONS_PAGE_SIZE + 1}–
-              {Math.min(page * TRANSACTIONS_PAGE_SIZE, totalCount)} of {totalCount}
-            </p>
-            <div className="flex items-center gap-3">
-              {page > 1 ? (
-                <Link
-                  href={buildHref(params, { page: String(page - 1) })}
-                  className="font-medium text-ink-secondary hover:text-ink"
-                >
-                  Previous
-                </Link>
-              ) : (
-                <span className="font-medium text-ink-muted opacity-50">Previous</span>
-              )}
-              <span className="text-ink-muted">
-                Page {page} of {totalPages}
-              </span>
-              {page < totalPages ? (
-                <Link
-                  href={buildHref(params, { page: String(page + 1) })}
-                  className="font-medium text-ink-secondary hover:text-ink"
-                >
-                  Next
-                </Link>
-              ) : (
-                <span className="font-medium text-ink-muted opacity-50">Next</span>
-              )}
-            </div>
-          </div>
-        </>
-      )}
+      <TransactionsList
+        transactions={transactions}
+        totalCount={totalCount}
+        page={page}
+        totalPages={totalPages}
+        pageSize={TRANSACTIONS_PAGE_SIZE}
+        params={params}
+        hasFilters={hasFilters}
+      />
     </div>
   );
 }

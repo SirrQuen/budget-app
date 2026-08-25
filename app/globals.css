@@ -109,6 +109,20 @@
   }
 }
 
+/* StreakBadge's afternoon nudge -- an invitation, not an alarm, so it's a
+   slow, low-contrast breathing glow behind the flame rather than the sharp
+   one-shot ring goal-pulse uses. Loops for as long as the nudge condition
+   holds; gold reads fine here since this is chrome, not a data mark. */
+@keyframes streak-nudge {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold) 22%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--gold) 0%, transparent);
+  }
+}
+
 /* Goal meter 100% confetti -- the only place in the app this fires. Each
    piece supplies --x/--r via inline style so the burst reads as scattered,
    not mechanical. */
@@ -141,6 +155,33 @@
     opacity: 1;
     transform: translateY(0);
     background-color: transparent;
+  }
+}
+
+/* A quick-add row that failed to save leaving the list -- the mirror image
+   of row-in. Pairs with the "error" ghost styling, which pulses red for a
+   beat before this runs, so the row visibly rejects rather than just
+   vanishing. */
+@keyframes row-out {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* Subtle "not committed yet" breathing for an optimistic quick-add row --
+   low-amplitude so it reads as provisional, not alarming. */
+@keyframes row-pending-pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.85;
   }
 }
 

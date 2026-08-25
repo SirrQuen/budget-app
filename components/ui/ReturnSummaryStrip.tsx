@@ -79,7 +79,7 @@ export function ReturnSummaryStrip() {
         type="button"
         onClick={() => setDismissed(true)}
         aria-label="Dismiss"
-        className="shrink-0 text-ink-muted hover:text-ink"
+        className="shrink-0 rounded p-0.5 text-ink-muted transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised"
       >
         <CloseIcon className="h-4 w-4" aria-hidden="true" />
       </button>

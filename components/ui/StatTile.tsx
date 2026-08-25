@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { formatCompactNumber, formatDelta, type Tone } from "@/lib/format";
+import { formatCompactNumber, formatDelta } from "@/lib/format";
+import { toneClassName } from "@/components/ui/Amount";
 
 const STORAGE_PREFIX = "stat-tile-";
 const DURATION_MS = 600;
@@ -35,12 +36,6 @@ function prefersReducedMotion(): boolean {
 function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
 }
-
-const toneClass: Record<Tone, string> = {
-  good: "text-good",
-  critical: "text-critical",
-  neutral: "text-ink-muted",
-};
 
 export function StatTile({
   id,
@@ -150,7 +145,7 @@ export function StatTile({
         {displayText}
       </p>
       {deltaParts ? (
-        <p className={`mt-1 flex items-center gap-1 text-sm ${toneClass[deltaParts.tone]}`}>
+        <p className={`mt-1 flex items-center gap-1 text-sm ${toneClassName(deltaParts.tone)}`}>
           <span aria-hidden="true">{deltaParts.arrow}</span>
           <span>{deltaParts.text}</span>
           <span className="text-ink-muted">vs {delta!.periodLabel}</span>

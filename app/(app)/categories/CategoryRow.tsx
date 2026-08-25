@@ -45,7 +45,7 @@ export function CategoryRow({
 
   return (
     <li
-      className={`flex items-center gap-3 px-4 py-3 ${category.is_active ? "" : "opacity-60"}`}
+      className={`flex items-center gap-3 px-4 py-3 transition-colors duration-150 hover:bg-surface-raised ${category.is_active ? "" : "opacity-60"}`}
     >
       <span
         className="h-2.5 w-2.5 shrink-0 rounded-full"
@@ -63,7 +63,7 @@ export function CategoryRow({
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="shrink-0 text-sm font-medium text-ink-secondary hover:text-ink"
+        className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
       >
         Edit
       </button>
@@ -71,7 +71,7 @@ export function CategoryRow({
         <button
           type="button"
           onClick={() => setConfirmingArchive(true)}
-          className="shrink-0 text-sm font-medium text-ink-secondary hover:text-ink"
+          className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           Archive
         </button>
