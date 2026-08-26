@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { deleteTransactionAction, deleteTransferAction } from "@/lib/actions/transactions";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { TrashIcon } from "@/components/ui/icons";
-import { formatDate, formatSignedAmount } from "@/lib/format";
+import { formatCurrency, formatDate, formatSignedAmount } from "@/lib/format";
 import type { TransactionType } from "@/lib/db/transactions";
 
 // Shared by the transactions list row and the edit page -- same dialog,
@@ -37,8 +37,9 @@ export function DeleteTransactionButton({
   const [error, setError] = useState<string>();
   const [isDeleting, startDelete] = useTransition();
 
-  const signed = formatSignedAmount(amount, transactionType);
   const isTransfer = transferGroupId !== null;
+  // A transfer is neither income nor expense -- no sign, same as the list row.
+  const amountText = isTransfer ? formatCurrency(amount) : formatSignedAmount(amount, transactionType).text;
 
   function handleDelete() {
     startDelete(async () => {
@@ -63,7 +64,7 @@ export function DeleteTransactionButton({
 
       <ConfirmDialog
         open={confirming}
-        title={`Delete ${description}, ${signed.text}, ${formatDate(transactionDate)}?`}
+        title={`Delete ${description}, ${amountText}, ${formatDate(transactionDate)}?`}
         description={
           isTransfer
             ? "This can't be undone -- both legs of this transfer will be permanently removed."

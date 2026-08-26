@@ -31,14 +31,19 @@ export type TransactionAccountOption = {
 
 export type TransactionFormMode = "create" | "edit";
 
-// Seeds the create-mode fields from a quick-add parse instead of blank
-// defaults -- only meaningful when mode is "create" (edit mode always seeds
-// from initialValues).
+// Seeds the create-mode fields from a quick-add parse, or from a "Make a
+// payment" shortcut -- only meaningful when mode is "create" (edit mode
+// always seeds from initialValues). transaction_type/fromAccountId/
+// toAccountId only make sense together, for opening straight into Transfer
+// mode with both accounts already chosen.
 export type AddTransactionPrefill = {
   transaction_date?: string;
   description?: string;
   amount?: string;
   merchant?: string;
+  transaction_type?: "Transfer";
+  fromAccountId?: string;
+  toAccountId?: string;
 };
 
 export type TransactionInitialValues = {
@@ -109,8 +114,16 @@ export function AddTransactionForm({
     isEdit ? updateTransactionAction : createTransactionAction,
     undefined,
   );
-  const [type, setType] = useState<TransactionType>(initialValues?.transaction_type ?? "Expense");
+  // Edit mode never offers Transfer -- the edit page already redirects a
+  // transfer leg away from this form before it can render, and there's no
+  // update-transfer wiring here to switch an existing row into one.
+  const typeOptions = isEdit ? (["Expense", "Income"] as const) : (["Expense", "Income", "Transfer"] as const);
+  const [type, setType] = useState<TransactionType | "Transfer">(
+    initialValues?.transaction_type ?? prefill?.transaction_type ?? "Expense",
+  );
   const [categoryid, setCategoryid] = useState(initialValues?.categoryid ?? "");
+  const [fromAccountId, setFromAccountId] = useState(prefill?.fromAccountId ?? "");
+  const [toAccountId, setToAccountId] = useState(prefill?.toAccountId ?? "");
   const [amount, setAmount] = useState(
     initialValues ? String(initialValues.amount) : (prefill?.amount ?? ""),
   );
@@ -122,7 +135,9 @@ export function AddTransactionForm({
   const wasPending = useRef(false);
   const celebrateTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const categoryGroups = groupByCategoryGroup(type === "Income" ? incomeCategories : expenseCategories);
+  const categoryGroups =
+    type === "Transfer" ? [] : groupByCategoryGroup(type === "Income" ? incomeCategories : expenseCategories);
+  const accountsMismatch = type === "Transfer" && fromAccountId !== "" && fromAccountId === toAccountId;
 
   // Success is "was pending, now isn't, and the server didn't hand back an
   // error" -- create-only. An edit's success redirects server side (see
@@ -133,6 +148,8 @@ export function AddTransactionForm({
       formRef.current?.reset();
       setType("Expense");
       setCategoryid("");
+      setFromAccountId("");
+      setToAccountId("");
       setAmount("");
       setClientError(undefined);
       const milestone = state?.milestone;
@@ -152,12 +169,16 @@ export function AddTransactionForm({
     return () => clearTimeout(celebrateTimeout.current);
   }, []);
 
-  function handleTypeChange(next: TransactionType) {
+  function handleTypeChange(next: TransactionType | "Transfer") {
     setType(next);
     // The previous type's category id has no meaning for the new type's
     // list -- clearing it is what keeps a mismatched pair unreachable,
     // rather than leaving a stale selection the picker no longer shows.
     setCategoryid("");
+    if (next === "Transfer") {
+      setFromAccountId("");
+      setToAccountId("");
+    }
   }
 
   function handleAmountKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -179,6 +200,11 @@ export function AddTransactionForm({
     if (!Number.isFinite(amountValue) || amountValue <= 0) {
       e.preventDefault();
       setClientError("Enter an amount greater than zero.");
+      return;
+    }
+    if (type === "Transfer" && fromAccountId === toAccountId) {
+      e.preventDefault();
+      setClientError("From and to accounts must be different.");
       return;
     }
     setClientError(undefined);
@@ -270,7 +296,7 @@ export function AddTransactionForm({
         <fieldset className="flex flex-col gap-1.5">
           <legend className="text-sm font-medium text-ink-secondary">Type</legend>
           <div className="inline-flex w-fit rounded-full border border-hairline bg-surface-raised p-1">
-            {(["Expense", "Income"] as const).map((value) => (
+            {typeOptions.map((value) => (
               <label
                 key={value}
                 className="cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink has-[:checked]:bg-surface has-[:checked]:text-ink has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-surface-raised"
@@ -289,74 +315,127 @@ export function AddTransactionForm({
           </div>
         </fieldset>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="Category" htmlFor="categoryid" required>
-            <select
-              id="categoryid"
-              name="categoryid"
-              required
-              value={categoryid}
-              onChange={(e) => setCategoryid(e.target.value)}
-              className={fieldClassName}
-            >
-              <option value="" disabled>
-                Select a category
-              </option>
-              {categoryGroups.map((group) => (
-                <optgroup key={group.name} label={group.name}>
-                  {group.categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.category_name}
-                      {category.is_active ? "" : " (archived)"}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </FormField>
-
-          <FormField label="Account" htmlFor="accountid" required>
-            <select
-              id="accountid"
-              name="accountid"
-              required
-              defaultValue={initialValues?.accountid ?? ""}
-              className={fieldClassName}
-            >
-              <option value="" disabled>
-                Select an account
-              </option>
-              {accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.account_name}
-                  {account.is_active ? "" : " (archived)"}
+        {type === "Transfer" ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="From account" htmlFor="fromAccountId" required>
+              <select
+                id="fromAccountId"
+                name="fromAccountId"
+                required
+                value={fromAccountId}
+                onChange={(e) => setFromAccountId(e.target.value)}
+                className={fieldClassName}
+              >
+                <option value="" disabled>
+                  Select an account
                 </option>
-              ))}
-            </select>
-          </FormField>
-        </div>
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.account_name}
+                    {account.is_active ? "" : " (archived)"}
+                  </option>
+                ))}
+              </select>
+            </FormField>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="Merchant" htmlFor="merchant" hint="Optional">
-            <Input
-              id="merchant"
-              name="merchant"
-              maxLength={80}
-              placeholder="e.g. Trader Joe's"
-              defaultValue={initialValues?.merchant ?? prefill?.merchant}
-            />
-          </FormField>
+            <FormField
+              label="To account"
+              htmlFor="toAccountId"
+              required
+              error={accountsMismatch ? "From and to accounts must be different." : undefined}
+            >
+              <select
+                id="toAccountId"
+                name="toAccountId"
+                required
+                value={toAccountId}
+                onChange={(e) => setToAccountId(e.target.value)}
+                className={fieldClassName}
+              >
+                <option value="" disabled>
+                  Select an account
+                </option>
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.account_name}
+                    {account.is_active ? "" : " (archived)"}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="Category" htmlFor="categoryid" required>
+              <select
+                id="categoryid"
+                name="categoryid"
+                required
+                value={categoryid}
+                onChange={(e) => setCategoryid(e.target.value)}
+                className={fieldClassName}
+              >
+                <option value="" disabled>
+                  Select a category
+                </option>
+                {categoryGroups.map((group) => (
+                  <optgroup key={group.name} label={group.name}>
+                    {group.categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.category_name}
+                        {category.is_active ? "" : " (archived)"}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </FormField>
 
-          <FormField label="Payment method" htmlFor="payment_method" hint="Optional">
-            <Input
-              id="payment_method"
-              name="payment_method"
-              maxLength={40}
-              placeholder="e.g. Debit card"
-              defaultValue={initialValues?.payment_method ?? undefined}
-            />
-          </FormField>
-        </div>
+            <FormField label="Account" htmlFor="accountid" required>
+              <select
+                id="accountid"
+                name="accountid"
+                required
+                defaultValue={initialValues?.accountid ?? ""}
+                className={fieldClassName}
+              >
+                <option value="" disabled>
+                  Select an account
+                </option>
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.account_name}
+                    {account.is_active ? "" : " (archived)"}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+        )}
+
+        {type === "Transfer" ? null : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="Merchant" htmlFor="merchant" hint="Optional">
+              <Input
+                id="merchant"
+                name="merchant"
+                maxLength={80}
+                placeholder="e.g. Trader Joe's"
+                defaultValue={initialValues?.merchant ?? prefill?.merchant}
+              />
+            </FormField>
+
+            <FormField label="Payment method" htmlFor="payment_method" hint="Optional">
+              <Input
+                id="payment_method"
+                name="payment_method"
+                maxLength={40}
+                placeholder="e.g. Debit card"
+                defaultValue={initialValues?.payment_method ?? undefined}
+              />
+            </FormField>
+          </div>
+        )}
 
         <FormField label="Notes" htmlFor="notes" hint="Optional">
           <textarea

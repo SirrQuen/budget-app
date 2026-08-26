@@ -3,8 +3,8 @@
 import Link from "next/link";
 import type { TransactionType, TransactionWithRelations } from "@/lib/db/transactions";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { ListIcon } from "@/components/ui/icons";
-import { formatDate } from "@/lib/format";
+import { ListIcon, TransferIcon } from "@/components/ui/icons";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { Amount } from "@/components/ui/Amount";
 import { DeleteTransactionButton } from "./DeleteTransactionButton";
 import { useOptimisticTransactions, type PendingTransaction } from "@/components/quick-add/OptimisticTransactionsContext";
@@ -49,6 +49,61 @@ function matchesFilters(
   if (filters.dateFrom && tx.transaction_date < filters.dateFrom) return false;
   if (filters.dateTo && tx.transaction_date > filters.dateTo) return false;
   return true;
+}
+
+// A transfer is two rows sharing transfer_group_id -- the raw legs are what
+// the server paginates and counts, but showing both would read as the same
+// money moving twice (once as income, once as spending). This collapses
+// each group into one merged row before render.
+type TransferDisplayRow = {
+  kind: "transfer";
+  transferGroupId: string;
+  id: string;
+  transaction_date: string;
+  description: string;
+  amount: number;
+  fromAccountName: string | null;
+  toAccountName: string | null;
+};
+
+type SingleDisplayRow = { kind: "single"; tx: TransactionWithRelations };
+
+type DisplayRow = TransferDisplayRow | SingleDisplayRow;
+
+// Both legs are inserted in the same statement and normally land on the same
+// page, but they also carry identical transaction_date/created_at -- ties
+// PostgREST's range-based pagination doesn't guarantee stay together across
+// a page boundary. If a leg's pair isn't in this page's data, the missing
+// side falls back to "…" rather than guessing a direction.
+function buildDisplayRows(transactions: TransactionWithRelations[]): DisplayRow[] {
+  const rows: DisplayRow[] = [];
+  const seenGroups = new Set<string>();
+
+  for (const tx of transactions) {
+    if (!tx.transfer_group_id) {
+      rows.push({ kind: "single", tx });
+      continue;
+    }
+    if (seenGroups.has(tx.transfer_group_id)) continue;
+    seenGroups.add(tx.transfer_group_id);
+
+    const legs = transactions.filter((t) => t.transfer_group_id === tx.transfer_group_id);
+    const fromLeg = legs.find((t) => t.transaction_type === "Expense");
+    const toLeg = legs.find((t) => t.transaction_type === "Income");
+
+    rows.push({
+      kind: "transfer",
+      transferGroupId: tx.transfer_group_id,
+      id: tx.id,
+      transaction_date: tx.transaction_date,
+      description: tx.description,
+      amount: Number(tx.amount),
+      fromAccountName: fromLeg?.account_name ?? null,
+      toAccountName: toLeg?.account_name ?? null,
+    });
+  }
+
+  return rows;
 }
 
 export function TransactionsList({
@@ -174,7 +229,53 @@ export function TransactionsList({
                 </tr>
               );
             })}
-            {transactions.map((tx) => {
+            {buildDisplayRows(transactions).map((row) => {
+              if (row.kind === "transfer") {
+                return (
+                  <tr
+                    key={`transfer-${row.transferGroupId}`}
+                    className="transition-colors duration-150 hover:bg-surface-raised motion-safe:animate-[row-in_600ms_ease-out]"
+                  >
+                    <td className="whitespace-nowrap px-4 py-3 text-ink-secondary">
+                      {formatDate(row.transaction_date)}
+                    </td>
+                    <td className="px-4 py-3 text-ink">{row.description}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-2 text-ink-secondary">
+                        <TransferIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        Transfer
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-ink-secondary">
+                      {row.fromAccountName ?? "…"} → {row.toAccountName ?? "…"}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="font-medium tabular-nums text-ink">{formatCurrency(row.amount)}</span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="inline-flex items-center gap-3">
+                        <Link
+                          href={`/transactions/${row.id}/edit`}
+                          className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                        >
+                          Edit
+                        </Link>
+                        <DeleteTransactionButton
+                          id={row.id}
+                          description={row.description}
+                          amount={row.amount}
+                          transactionType="Expense"
+                          transactionDate={row.transaction_date}
+                          transferGroupId={row.transferGroupId}
+                          redirectToList={false}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              }
+
+              const tx = row.tx;
               return (
                 <tr
                   key={tx.id}
@@ -185,18 +286,14 @@ export function TransactionsList({
                   </td>
                   <td className="px-4 py-3 text-ink">{tx.description}</td>
                   <td className="px-4 py-3">
-                    {tx.transfer_group_id ? (
-                      <span className="text-ink-secondary">Transfer</span>
-                    ) : (
-                      <span className="inline-flex items-center gap-2 text-ink-secondary">
-                        <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: tx.category_color ?? "var(--color-ink-muted)" }}
-                          aria-hidden="true"
-                        />
-                        {tx.category_name ?? "Uncategorized"}
-                      </span>
-                    )}
+                    <span className="inline-flex items-center gap-2 text-ink-secondary">
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: tx.category_color ?? "var(--color-ink-muted)" }}
+                        aria-hidden="true"
+                      />
+                      {tx.category_name ?? "Uncategorized"}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-ink-secondary">{tx.account_name ?? "—"}</td>
                   <td className="px-4 py-3 text-right">

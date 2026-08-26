@@ -125,6 +125,17 @@ export function PlusIcon(props: IconProps) {
   );
 }
 
+export function TransferIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3 8h14.5" />
+      <path d="M14 4.5 17.5 8 14 11.5" />
+      <path d="M21 16H6.5" />
+      <path d="M10 12.5 6.5 16 10 19.5" />
+    </svg>
+  );
+}
+
 export function TrashIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

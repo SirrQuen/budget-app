@@ -6,10 +6,12 @@ import {
   createTransaction,
   updateTransaction,
   deleteTransaction,
+  createTransfer,
   deleteTransfer,
   getTransactionCount,
   suggestCategoryForMerchant,
   type CreateTransactionInput,
+  type CreateTransferInput,
   type TransactionType,
   type MerchantCategorySuggestion,
 } from "@/lib/db/transactions";
@@ -92,6 +94,60 @@ function parseTransactionFields(formData: FormData): CreateTransactionInput | { 
   };
 }
 
+// Mirrors parseTransactionFields -- the "From and to must differ" check is
+// already unreachable from AddTransactionForm's inline validation, but this
+// is a public endpoint regardless of what the form in front of it allows.
+function parseTransferFields(formData: FormData): CreateTransferInput | { error: string } {
+  const transaction_date = String(formData.get("transaction_date") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const amountRaw = String(formData.get("amount") ?? "").trim();
+  const fromAccountId = String(formData.get("fromAccountId") ?? "");
+  const toAccountId = String(formData.get("toAccountId") ?? "");
+  const notes = String(formData.get("notes") ?? "").trim();
+
+  if (!transaction_date || Number.isNaN(Date.parse(transaction_date))) {
+    return { error: "Enter a valid date." };
+  }
+  if (!description) {
+    return { error: "Description is required." };
+  }
+
+  const amount = Number(amountRaw);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { error: "Enter an amount greater than zero." };
+  }
+  if (!fromAccountId) {
+    return { error: "Choose a from account." };
+  }
+  if (!toAccountId) {
+    return { error: "Choose a to account." };
+  }
+  if (fromAccountId === toAccountId) {
+    return { error: "From and to accounts must be different." };
+  }
+
+  return {
+    fromAccountId,
+    toAccountId,
+    amount,
+    date: transaction_date,
+    description,
+    notes: notes || null,
+  };
+}
+
+// Shared by both branches of createTransactionAction -- revalidate, then
+// check for a milestone on whatever just got created.
+async function afterTransactionCreated(): Promise<ActionState> {
+  revalidatePath("/transactions");
+  // Every create can move an account balance (a transfer always moves two)
+  // -- "Make a payment" opens straight from /accounts, so that page needs to
+  // reflect it without a manual refresh.
+  revalidatePath("/accounts");
+  const milestone = await detectTransactionMilestone();
+  return milestone ? { milestone } : undefined;
+}
+
 // Called directly as a function from the quick-add bar (not through
 // useActionState) -- it's a lookup for the inline preview, not a mutation.
 export async function suggestCategoryAction(
@@ -106,6 +162,23 @@ export async function createTransactionAction(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  // The type toggle's third option -- Transfer -- shares this action rather
+  // than getting its own, since AddTransactionForm's useActionState binds a
+  // single action for the life of the form.
+  if (formData.get("transaction_type") === "Transfer") {
+    const parsed = parseTransferFields(formData);
+    if ("error" in parsed) {
+      return parsed;
+    }
+
+    const { error } = await createTransfer(parsed);
+    if (error) {
+      return { error };
+    }
+
+    return afterTransactionCreated();
+  }
+
   const parsed = parseTransactionFields(formData);
   if ("error" in parsed) {
     return parsed;
@@ -117,10 +190,7 @@ export async function createTransactionAction(
     return { error };
   }
 
-  revalidatePath("/transactions");
-
-  const milestone = await detectTransactionMilestone();
-  return milestone ? { milestone } : undefined;
+  return afterTransactionCreated();
 }
 
 export async function updateTransactionAction(
@@ -145,6 +215,9 @@ export async function updateTransactionAction(
   }
 
   revalidatePath("/transactions");
+  // An edit can change the amount, type, or account -- any of which moves a
+  // balance.
+  revalidatePath("/accounts");
   redirect("/transactions");
 }
 
@@ -170,6 +243,8 @@ export async function deleteTransactionAction(
   }
 
   revalidatePath("/transactions");
+  // Removing a transaction moves whatever balance it was part of.
+  revalidatePath("/accounts");
 
   if (redirectToList) {
     redirect("/transactions");
@@ -194,6 +269,8 @@ export async function deleteTransferAction(
   }
 
   revalidatePath("/transactions");
+  // A transfer touches two balances -- both need to drop the removed amount.
+  revalidatePath("/accounts");
 
   if (redirectToList) {
     redirect("/transactions");

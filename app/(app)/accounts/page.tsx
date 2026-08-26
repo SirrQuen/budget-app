@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { listAccountBalances } from "@/lib/db/accounts";
+import { listAccountBalances, getMostUsedAssetAccountId } from "@/lib/db/accounts";
 import { getNetWorth } from "@/lib/db/dashboard";
+import { listCategoriesForType } from "@/lib/db/categories";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
@@ -8,6 +9,16 @@ import { StatTile } from "@/components/ui/StatTile";
 import { WalletIcon } from "@/components/ui/icons";
 import { CreateAccountForm } from "./CreateAccountForm";
 import { AccountRow } from "./AccountRow";
+import type { Database } from "@/lib/database.types";
+import type { TransactionAccountOption } from "../transactions/AddTransactionForm";
+
+type AccountBalanceRow = Database["public"]["Views"]["v_account_balances"]["Row"];
+
+function isNamedAccount(
+  a: AccountBalanceRow,
+): a is AccountBalanceRow & { account_id: string; account_name: string } {
+  return a.account_id !== null && a.account_name !== null;
+}
 
 function buildHref(archived: boolean) {
   return archived ? "/accounts?archived=1" : "/accounts";
@@ -17,10 +28,17 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
   const params = await searchParams;
   const showArchived = params.archived === "1";
 
-  const [accountsResult, netWorthResult] = await Promise.all([
-    listAccountBalances(),
-    getNetWorth(),
-  ]);
+  const [accountsResult, netWorthResult, mostUsedAssetResult, incomeCategoriesResult, expenseCategoriesResult] =
+    await Promise.all([
+      listAccountBalances(),
+      getNetWorth(),
+      // These three only feed the "Make a payment" shortcut's pre-fill --
+      // a failure there shouldn't take down the whole accounts page, so
+      // they're deliberately left out of the error check below.
+      getMostUsedAssetAccountId(),
+      listCategoriesForType("Income"),
+      listCategoriesForType("Expense"),
+    ]);
 
   if (accountsResult.error !== null || netWorthResult.error !== null) {
     return (
@@ -56,6 +74,17 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
   const visibleAccounts = showArchived
     ? allAccounts
     : allAccounts.filter((account) => account.is_active);
+
+  // "Make a payment" reuses AddTransactionForm's Transfer mode -- it needs
+  // the same account/category props that form always needs, not just the
+  // one row it's launched from.
+  const transactionAccounts: TransactionAccountOption[] = allAccounts
+    .filter((a) => a.is_active)
+    .filter(isNamedAccount)
+    .map((a) => ({ id: a.account_id, account_name: a.account_name, is_active: true }));
+  const defaultFromAccountId = mostUsedAssetResult.data ?? null;
+  const incomeCategories = incomeCategoriesResult.data ?? [];
+  const expenseCategories = expenseCategoriesResult.data ?? [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -102,7 +131,14 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
       ) : (
         <ul className="divide-y divide-hairline rounded-2xl border border-hairline bg-surface">
           {visibleAccounts.map((account) => (
-            <AccountRow key={account.account_id} account={account} />
+            <AccountRow
+              key={account.account_id}
+              account={account}
+              transactionAccounts={transactionAccounts}
+              defaultFromAccountId={defaultFromAccountId}
+              incomeCategories={incomeCategories}
+              expenseCategories={expenseCategories}
+            />
           ))}
         </ul>
       )}

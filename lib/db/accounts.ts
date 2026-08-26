@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
-import type { AccountType } from "@/lib/accountOptions";
+import { isLiabilityAccountType, type AccountType } from "@/lib/accountOptions";
 
 export { ACCOUNT_TYPES, type AccountType } from "@/lib/accountOptions";
 
@@ -117,6 +117,62 @@ export async function updateAccount(
 // database anyway -- this is the only supported way to retire one.
 export async function archiveAccount(id: string): Promise<DbResult<AccountRow>> {
   return updateAccount(id, { is_active: false });
+}
+
+// The default "From" account for a credit-card/loan payment transfer --
+// whichever active asset account (everything but Credit Card/Loan) shows up
+// on the most transactions. Falls back to the first asset account by name
+// when there's no usage history yet to rank by (a brand-new account, or one
+// that's never been spent from).
+export async function getMostUsedAssetAccountId(): Promise<DbResult<string | null>> {
+  const supabase = await createClient();
+
+  const { data: accounts, error: accountsError } = await supabase
+    .from("accounts")
+    .select("id, account_type")
+    .eq("is_active", true)
+    .order("account_name", { ascending: true });
+
+  if (accountsError) {
+    return { data: null, error: accountsError.message };
+  }
+
+  const assetAccountIds = accounts
+    .filter((a) => !isLiabilityAccountType(a.account_type))
+    .map((a) => a.id);
+
+  if (assetAccountIds.length === 0) {
+    return { data: null, error: null };
+  }
+
+  const { data: legs, error: legsError } = await supabase
+    .from("transactions")
+    .select("accountid")
+    .in("accountid", assetAccountIds);
+
+  if (legsError) {
+    return { data: null, error: legsError.message };
+  }
+
+  const counts = new Map<string, number>();
+  for (const leg of legs) {
+    counts.set(leg.accountid, (counts.get(leg.accountid) ?? 0) + 1);
+  }
+
+  // assetAccountIds is already ordered by account_name -- iterating it in
+  // that order, rather than the counts map, means a tie (including the
+  // all-zero case) resolves to the alphabetically-first account.
+  let best = assetAccountIds[0];
+  let bestCount = -1;
+  for (const id of assetAccountIds) {
+    const count = counts.get(id) ?? 0;
+    if (count > bestCount) {
+      best = id;
+      bestCount = count;
+    }
+  }
+
+  return { data: best, error: null };
 }
 
 export type ListAccountBalancesOptions = {

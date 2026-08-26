@@ -58,6 +58,34 @@ function flatten(row: RawTransactionRow): TransactionWithRelations {
   };
 }
 
+type UnitKeyRow = {
+  id: string;
+  transaction_date: string;
+  created_at: string;
+  transfer_group_id: string | null;
+};
+
+// A transfer is two rows sharing transfer_group_id, but must count and page
+// as one unit -- otherwise totalCount double-counts every transfer, and
+// row-based range() pagination can split a transfer's two legs across a
+// page boundary. This groups by coalesce(transfer_group_id, id), in the
+// same order the page renders, and returns each unit's row ids.
+function groupIntoUnits(rows: UnitKeyRow[]): { unitKeys: string[]; idsByUnit: Map<string, string[]> } {
+  const unitKeys: string[] = [];
+  const idsByUnit = new Map<string, string[]>();
+  for (const row of rows) {
+    const unitKey = row.transfer_group_id ?? row.id;
+    let ids = idsByUnit.get(unitKey);
+    if (!ids) {
+      ids = [];
+      idsByUnit.set(unitKey, ids);
+      unitKeys.push(unitKey);
+    }
+    ids.push(row.id);
+  }
+  return { unitKeys, idsByUnit };
+}
+
 // Filters live in the caller's URL search params (see the transactions
 // page), not component state -- this stays a plain data-layer read with no
 // notion of "current" filters, so every filtered view is a linkable,
@@ -68,84 +96,72 @@ export async function listTransactions(
   const supabase = await createClient();
 
   const page = opts.page && opts.page > 0 ? opts.page : 1;
-  const from = (page - 1) * TRANSACTIONS_PAGE_SIZE;
-  const to = from + TRANSACTIONS_PAGE_SIZE - 1;
 
-  let query = supabase
+  // Pass 1: just enough columns to determine unit order and grouping for
+  // every row matching the filters -- not the full page's worth of data,
+  // since a transfer's pair might sit outside whatever raw range() would've
+  // covered. PostgREST's own count is a raw-row count, so it can't answer
+  // "how many units" either; counting is done in JS below instead.
+  let keyQuery = supabase
     .from("transactions")
-    .select(TRANSACTION_SELECT, { count: "exact" })
+    .select("id, transaction_date, created_at, transfer_group_id")
     .order("transaction_date", { ascending: false })
     .order("created_at", { ascending: false });
 
   if (opts.dateFrom) {
-    query = query.gte("transaction_date", opts.dateFrom);
+    keyQuery = keyQuery.gte("transaction_date", opts.dateFrom);
   }
   if (opts.dateTo) {
-    query = query.lte("transaction_date", opts.dateTo);
+    keyQuery = keyQuery.lte("transaction_date", opts.dateTo);
   }
   if (opts.categoryid) {
-    query = query.eq("categoryid", opts.categoryid);
+    keyQuery = keyQuery.eq("categoryid", opts.categoryid);
   }
   if (opts.accountid) {
-    query = query.eq("accountid", opts.accountid);
+    keyQuery = keyQuery.eq("accountid", opts.accountid);
   }
   if (opts.transaction_type) {
-    query = query.eq("transaction_type", opts.transaction_type);
+    keyQuery = keyQuery.eq("transaction_type", opts.transaction_type);
   }
   if (opts.transfersOnly) {
-    query = query.not("transfer_group_id", "is", null);
+    keyQuery = keyQuery.not("transfer_group_id", "is", null);
   }
   if (opts.excludeTransfers) {
-    query = query.is("transfer_group_id", null);
+    keyQuery = keyQuery.is("transfer_group_id", null);
   }
 
-  const { data, error, count } = await query.range(from, to).returns<RawTransactionRow[]>();
+  const { data: keyRows, error: keyError } = await keyQuery.returns<UnitKeyRow[]>();
+  if (keyError) {
+    return { data: null, error: keyError.message };
+  }
+
+  const { unitKeys, idsByUnit } = groupIntoUnits(keyRows);
+  const totalCount = unitKeys.length;
+
+  const from = (page - 1) * TRANSACTIONS_PAGE_SIZE;
+  const pageIds = unitKeys.slice(from, from + TRANSACTIONS_PAGE_SIZE).flatMap((key) => idsByUnit.get(key)!);
+
+  // Past the last page (a stale bookmark, or rows deleted since) -- nothing
+  // to fetch, but still a real totalCount rather than a DB error.
+  if (pageIds.length === 0) {
+    return { data: { transactions: [], totalCount }, error: null };
+  }
+
+  // Pass 2: full data for exactly the rows this page needs -- both legs of
+  // every transfer unit on it, one row for everything else.
+  const { data, error } = await supabase
+    .from("transactions")
+    .select(TRANSACTION_SELECT)
+    .in("id", pageIds)
+    .order("transaction_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .returns<RawTransactionRow[]>();
 
   if (error) {
-    // A page past the last one isn't a real error -- PostgREST answers a
-    // range starting beyond the row count with 416 Range Not Satisfiable.
-    // Reachable just by editing ?page= or a stale bookmark after rows are
-    // deleted, so fall back to a fresh, identically-filtered count-only
-    // query (a Postgrest builder mutates itself as it's chained, so the
-    // already-executed `query` above can't be reused for a second request)
-    // and report zero rows instead of surfacing a raw DB error.
-    if (/range not satisfiable/i.test(error.message)) {
-      let countQuery = supabase
-        .from("transactions")
-        .select("id", { count: "exact", head: true });
-
-      if (opts.dateFrom) {
-        countQuery = countQuery.gte("transaction_date", opts.dateFrom);
-      }
-      if (opts.dateTo) {
-        countQuery = countQuery.lte("transaction_date", opts.dateTo);
-      }
-      if (opts.categoryid) {
-        countQuery = countQuery.eq("categoryid", opts.categoryid);
-      }
-      if (opts.accountid) {
-        countQuery = countQuery.eq("accountid", opts.accountid);
-      }
-      if (opts.transaction_type) {
-        countQuery = countQuery.eq("transaction_type", opts.transaction_type);
-      }
-      if (opts.transfersOnly) {
-        countQuery = countQuery.not("transfer_group_id", "is", null);
-      }
-      if (opts.excludeTransfers) {
-        countQuery = countQuery.is("transfer_group_id", null);
-      }
-
-      const { count: totalCount, error: countError } = await countQuery;
-      if (countError) {
-        return { data: null, error: countError.message };
-      }
-      return { data: { transactions: [], totalCount: totalCount ?? 0 }, error: null };
-    }
     return { data: null, error: error.message };
   }
 
-  return { data: { transactions: data.map(flatten), totalCount: count ?? 0 }, error: null };
+  return { data: { transactions: data.map(flatten), totalCount }, error: null };
 }
 
 // head:true means no rows come back over the wire -- just the count, cheap
