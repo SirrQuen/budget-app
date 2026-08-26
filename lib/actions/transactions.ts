@@ -6,6 +6,7 @@ import {
   createTransaction,
   updateTransaction,
   deleteTransaction,
+  deleteTransfer,
   getTransactionCount,
   suggestCategoryForMerchant,
   type CreateTransactionInput,
@@ -163,6 +164,30 @@ export async function deleteTransactionAction(
   }
 
   const { error } = await deleteTransaction(id);
+
+  if (error) {
+    return { error };
+  }
+
+  revalidatePath("/transactions");
+
+  if (redirectToList) {
+    redirect("/transactions");
+  }
+}
+
+// A transfer is two rows sharing transfer_group_id -- deleteTransfer removes
+// both in one statement. Never route a transfer leg's id through
+// deleteTransactionAction, or the other leg is orphaned.
+export async function deleteTransferAction(
+  transferGroupId: string,
+  redirectToList: boolean,
+): Promise<ActionState> {
+  if (!transferGroupId) {
+    return { error: "Missing transfer group id." };
+  }
+
+  const { error } = await deleteTransfer(transferGroupId);
 
   if (error) {
     return { error };

@@ -1,11 +1,24 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getTransaction, type TransactionType } from "@/lib/db/transactions";
+import { getTransaction, type TransactionType, type TransactionWithRelations } from "@/lib/db/transactions";
 import { listCategoriesForType, getCategory } from "@/lib/db/categories";
 import { listAccounts, getAccount } from "@/lib/db/accounts";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { WalletIcon } from "@/components/ui/icons";
 import { AddTransactionForm } from "../../AddTransactionForm";
 import { DeleteTransactionButton } from "../../DeleteTransactionButton";
+
+// transactions_category_required (see 07_transfers.sql) guarantees categoryid
+// is non-null whenever transfer_group_id is null. Narrowing on that basis
+// here means every downstream read of tx.categoryid is checked by the
+// compiler instead of relying on a one-off assertion.
+function isNonTransfer(
+  tx: TransactionWithRelations,
+): tx is TransactionWithRelations & { categoryid: string; transfer_group_id: null } {
+  return tx.transfer_group_id === null;
+}
 
 export default async function EditTransactionPage({
   params,
@@ -20,6 +33,30 @@ export default async function EditTransactionPage({
     notFound();
   }
   const tx = transactionResult.data;
+
+  // A transfer is two linked legs, not one transaction -- there's no
+  // per-leg edit flow yet, so point back at the list instead of rendering a
+  // form that would only ever touch one side of the pair.
+  if (!isNonTransfer(tx)) {
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader title="Edit transaction" />
+        <EmptyState
+          icon={<WalletIcon className="h-10 w-10" />}
+          heading="This is a transfer"
+          message="Transfers move money between two accounts as a linked pair, so there's nothing to edit here yet. Delete it and re-log the transfer if the details were wrong."
+          action={
+            <Link
+              href="/transactions"
+              className="rounded text-sm font-medium text-gold transition-colors duration-150 hover:text-gold-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            >
+              Back to transactions
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
 
   const [incomeCategoriesResult, expenseCategoriesResult, accountsResult] = await Promise.all([
     listCategoriesForType("Income"),

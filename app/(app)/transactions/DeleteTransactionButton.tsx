@@ -1,21 +1,24 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { deleteTransactionAction } from "@/lib/actions/transactions";
+import { deleteTransactionAction, deleteTransferAction } from "@/lib/actions/transactions";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { TrashIcon } from "@/components/ui/icons";
 import { formatDate, formatSignedAmount } from "@/lib/format";
 import type { TransactionType } from "@/lib/db/transactions";
 
 // Shared by the transactions list row and the edit page -- same dialog,
-// same action, only where "after delete" lands differs (see
-// deleteTransactionAction for why that's an explicit flag, not inferred).
+// only where "after delete" lands (redirectToList) and which action fires
+// differ. A transfer leg carries transferGroupId, which routes the confirm
+// to deleteTransferAction so both legs go together -- never deleteTransactionAction
+// on a single leg, or the other leg is orphaned.
 export function DeleteTransactionButton({
   id,
   description,
   amount,
   transactionType,
   transactionDate,
+  transferGroupId = null,
   redirectToList,
   className = "rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-critical focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
   label = "Delete",
@@ -25,6 +28,7 @@ export function DeleteTransactionButton({
   amount: number;
   transactionType: TransactionType;
   transactionDate: string;
+  transferGroupId?: string | null;
   redirectToList: boolean;
   className?: string;
   label?: string;
@@ -34,10 +38,14 @@ export function DeleteTransactionButton({
   const [isDeleting, startDelete] = useTransition();
 
   const signed = formatSignedAmount(amount, transactionType);
+  const isTransfer = transferGroupId !== null;
 
   function handleDelete() {
     startDelete(async () => {
-      const result = await deleteTransactionAction(id, redirectToList);
+      const result =
+        transferGroupId !== null
+          ? await deleteTransferAction(transferGroupId, redirectToList)
+          : await deleteTransactionAction(id, redirectToList);
       if (result?.error) {
         setError(result.error);
         return;
@@ -56,7 +64,11 @@ export function DeleteTransactionButton({
       <ConfirmDialog
         open={confirming}
         title={`Delete ${description}, ${signed.text}, ${formatDate(transactionDate)}?`}
-        description="This can't be undone -- the transaction will be permanently removed."
+        description={
+          isTransfer
+            ? "This can't be undone -- both legs of this transfer will be permanently removed."
+            : "This can't be undone -- the transaction will be permanently removed."
+        }
         confirmLabel={isDeleting ? "Deleting…" : "Delete"}
         confirmIcon={<TrashIcon className="h-4 w-4" />}
         cancelLabel="Cancel"

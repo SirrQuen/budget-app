@@ -60,6 +60,7 @@ export async function getActivitySince(sinceISO: string): Promise<DbResult<Activ
       .from("transactions")
       .select("categoryid")
       .eq("transaction_type", "Expense")
+      .is("transfer_group_id", null)
       .gte("created_at", sinceISO)
       .gte("transaction_date", start)
       .lt("transaction_date", end),

@@ -24,6 +24,10 @@ export type ListTransactionsOptions = {
   categoryid?: string;
   accountid?: string;
   transaction_type?: TransactionType;
+  /** Only rows that belong to a transfer group. */
+  transfersOnly?: boolean;
+  /** Only rows that don't belong to a transfer group. */
+  excludeTransfers?: boolean;
   /** 1-indexed. Defaults to 1. */
   page?: number;
 };
@@ -88,6 +92,12 @@ export async function listTransactions(
   if (opts.transaction_type) {
     query = query.eq("transaction_type", opts.transaction_type);
   }
+  if (opts.transfersOnly) {
+    query = query.not("transfer_group_id", "is", null);
+  }
+  if (opts.excludeTransfers) {
+    query = query.is("transfer_group_id", null);
+  }
 
   const { data, error, count } = await query.range(from, to).returns<RawTransactionRow[]>();
 
@@ -118,6 +128,12 @@ export async function listTransactions(
       }
       if (opts.transaction_type) {
         countQuery = countQuery.eq("transaction_type", opts.transaction_type);
+      }
+      if (opts.transfersOnly) {
+        countQuery = countQuery.not("transfer_group_id", "is", null);
+      }
+      if (opts.excludeTransfers) {
+        countQuery = countQuery.is("transfer_group_id", null);
       }
 
       const { count: totalCount, error: countError } = await countQuery;
@@ -352,6 +368,116 @@ export async function suggestCategoryForMerchant(
     data: best ? { categoryid: best.categoryid, category_name: best.category_name, color: best.color } : null,
     error: null,
   };
+}
+
+export type CreateTransferInput = {
+  fromAccountId: string;
+  toAccountId: string;
+  amount: number;
+  date: string;
+  description: string;
+  notes?: string | null;
+};
+
+// A transfer is two legs sharing a transfer_group_id: an Expense on the
+// source account, an Income on the destination, no category on either.
+// Inserted together in a single call so a failure can't leave a half-transfer
+// -- two separate inserts would risk exactly that.
+export async function createTransfer(
+  input: CreateTransferInput,
+): Promise<DbResult<TransactionRow[]>> {
+  if (input.fromAccountId === input.toAccountId) {
+    return { data: null, error: "Transfer source and destination accounts must differ." };
+  }
+
+  const supabase = await createClient();
+
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  const userid = claimsData?.claims?.sub;
+
+  if (claimsError || !userid) {
+    return { data: null, error: "No authenticated user session." };
+  }
+
+  const transfer_group_id = crypto.randomUUID();
+
+  const legOut: TransactionInsert = {
+    userid,
+    accountid: input.fromAccountId,
+    categoryid: null,
+    amount: input.amount,
+    transaction_type: "Expense",
+    transaction_date: input.date,
+    description: input.description,
+    notes: input.notes ?? null,
+    transfer_group_id,
+  };
+
+  const legIn: TransactionInsert = {
+    userid,
+    accountid: input.toAccountId,
+    categoryid: null,
+    amount: input.amount,
+    transaction_type: "Income",
+    transaction_date: input.date,
+    description: input.description,
+    notes: input.notes ?? null,
+    transfer_group_id,
+  };
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .insert([legOut, legIn])
+    .select();
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data, error: null };
+}
+
+export type UpdateTransferPatch = Pick<
+  TransactionUpdate,
+  "amount" | "transaction_date" | "description" | "notes"
+>;
+
+// Both legs share everything but accountid/transaction_type, so the patch
+// applies identically to both -- never target a single leg.
+export async function updateTransfer(
+  groupId: string,
+  patch: UpdateTransferPatch,
+): Promise<DbResult<TransactionRow[]>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .update(patch)
+    .eq("transfer_group_id", groupId)
+    .select();
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data, error: null };
+}
+
+// One statement targeting the whole group -- never delete a single leg.
+export async function deleteTransfer(groupId: string): Promise<DbResult<{ id: string }[]>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .delete()
+    .eq("transfer_group_id", groupId)
+    .select("id");
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data, error: null };
 }
 
 // Quick-add's account prefill -- the account behind whichever transaction

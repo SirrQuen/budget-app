@@ -185,14 +185,18 @@ export function TransactionsList({
                   </td>
                   <td className="px-4 py-3 text-ink">{tx.description}</td>
                   <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-2 text-ink-secondary">
-                      <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: tx.category_color ?? "var(--color-ink-muted)" }}
-                        aria-hidden="true"
-                      />
-                      {tx.category_name ?? "Uncategorized"}
-                    </span>
+                    {tx.transfer_group_id ? (
+                      <span className="text-ink-secondary">Transfer</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-2 text-ink-secondary">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: tx.category_color ?? "var(--color-ink-muted)" }}
+                          aria-hidden="true"
+                        />
+                        {tx.category_name ?? "Uncategorized"}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-ink-secondary">{tx.account_name ?? "—"}</td>
                   <td className="px-4 py-3 text-right">
@@ -212,6 +216,7 @@ export function TransactionsList({
                         amount={tx.amount}
                         transactionType={tx.transaction_type as TransactionType}
                         transactionDate={tx.transaction_date}
+                        transferGroupId={tx.transfer_group_id}
                         redirectToList={false}
                       />
                     </div>
