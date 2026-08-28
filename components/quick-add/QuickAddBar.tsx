@@ -13,6 +13,7 @@ import { todayISO } from "@/lib/date";
 import { formatCurrency } from "@/lib/format";
 import { PlusIcon, FlameIcon } from "@/components/ui/icons";
 import { Amount } from "@/components/ui/Amount";
+import { Button } from "@/components/ui/Button";
 import { Celebration } from "@/components/ui/Celebration";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { FullFormOverlay } from "@/components/quick-add/FullFormOverlay";
@@ -49,6 +50,19 @@ export function QuickAddBar({
   const wasPendingRef = useRef(false);
   const celebrateTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const pendingClientIdRef = useRef<string | null>(null);
+  // Guards against a second Enter-triggered submit landing before React has
+  // re-rendered with pending=true -- useActionState's `pending` is only
+  // current as of the last commit, so a same-tick double Enter can race it.
+  // This ref is set synchronously inside handleSubmit instead.
+  const submittingRef = useRef(false);
+  // One key per fill of the form: minted once on mount, reused on every
+  // retry of the same submission, replaced only once the server has
+  // confirmed the row exists. This makes two submissions that carry it
+  // resolve to one row (see createTransaction's 23505 handling) rather than
+  // relying on the button/Enter guards never letting a duplicate through.
+  // State, not a ref -- the hidden input below reads it during render, and
+  // refs can't be read there (only in effects/handlers).
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   const { addPending, settlePending, failPending } = useOptimisticTransactions();
 
@@ -102,12 +116,21 @@ export function QuickAddBar({
   }, [parseKey]);
 
   useEffect(() => {
+    // Failure: leave text, category, account and the idempotency key
+    // exactly as entered, so pressing Add/Enter again retries the same
+    // submission instead of risking a second row.
     if (wasPendingRef.current && !pending && state?.error) {
+      submittingRef.current = false;
       const clientId = pendingClientIdRef.current;
       pendingClientIdRef.current = null;
       if (clientId) failPending(clientId);
     }
     if (wasPendingRef.current && !pending && !state?.error) {
+      submittingRef.current = false;
+      // A fresh key for the next transaction -- reusing this one across an
+      // unrelated future submission would make the server treat it as a
+      // retry of this one and silently drop it.
+      setIdempotencyKey(crypto.randomUUID());
       const clientId = pendingClientIdRef.current;
       pendingClientIdRef.current = null;
       if (clientId) settlePending(clientId);
@@ -181,6 +204,14 @@ export function QuickAddBar({
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    // Blocks a second Enter (or a stray click) from resubmitting before
+    // React commits pending=true and the button's disabled attribute takes
+    // over -- see submittingRef's declaration for why pending alone isn't
+    // enough here.
+    if (submittingRef.current) {
+      e.preventDefault();
+      return;
+    }
     if (!parsed.ok) {
       e.preventDefault();
       openFullForm();
@@ -196,6 +227,8 @@ export function QuickAddBar({
       accountSelectRef.current?.focus();
       return;
     }
+
+    submittingRef.current = true;
 
     const category = categoryOptions.find((c) => c.id === categoryid);
     const account = accounts.find((a) => a.id === accountid);
@@ -228,6 +261,7 @@ export function QuickAddBar({
         value={parsed.ok ? parsed.transaction_type : ""}
         readOnly
       />
+      <input type="hidden" name="idempotency_key" value={idempotencyKey} readOnly />
 
       <div className="flex items-center gap-3">
         <input
@@ -247,6 +281,9 @@ export function QuickAddBar({
         >
           Full form
         </button>
+        <Button type="submit" disabled={pending} className="shrink-0 px-4 py-2 text-sm">
+          {pending ? "Saving…" : "Add"}
+        </Button>
       </div>
 
       {text.trim() ? (

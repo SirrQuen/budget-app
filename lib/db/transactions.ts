@@ -247,6 +247,24 @@ export async function createTransaction(
     .single();
 
   if (error) {
+    // 23505 on transactions_userid_idempotency_key_key means this exact
+    // idempotency_key was already inserted -- a retry of a request that
+    // already succeeded, not a new transaction. Return the original row
+    // instead of surfacing a "duplicate" error the user didn't cause.
+    if (error.code === "23505" && input.idempotency_key) {
+      const { data: existing, error: existingError } = await supabase
+        .from("transactions")
+        .select()
+        .eq("userid", userid)
+        .eq("idempotency_key", input.idempotency_key)
+        .single();
+
+      if (existingError) {
+        return { data: null, error: existingError.message };
+      }
+      return { data: existing, error: null };
+    }
+
     return { data: null, error: error.message };
   }
 
