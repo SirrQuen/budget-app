@@ -17,3 +17,24 @@ export function addDaysISO(dateISO: string, delta: number): string {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
+
+// Last calendar day of the month that `dateISO` ("YYYY-MM-DD") falls in.
+// Day 0 of the following month is that month's last day; local-calendar
+// terms throughout, matching addDaysISO.
+export function endOfMonthISO(dateISO: string): string {
+  const [year, month] = dateISO.split("-").map(Number);
+  const d = new Date(year, month, 0);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+// Whole calendar days from `fromISO` through `toISO`, counting both ends --
+// so daysBetweenInclusive("2026-08-29", "2026-08-31") is 3. Both inputs are
+// plain calendar dates with no time-of-day, so UTC-epoch math is exact and
+// DST-safe (same approach as dashboard.ts's isNextCalendarDay).
+export function daysBetweenInclusive(fromISO: string, toISO: string): number {
+  const [fy, fm, fd] = fromISO.split("-").map(Number);
+  const [ty, tm, td] = toISO.split("-").map(Number);
+  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86_400_000) + 1;
+}

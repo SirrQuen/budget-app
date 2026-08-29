@@ -102,6 +102,91 @@ budget is "let's look at this", not a red alarm. Celebrate specifics
 ("$240 toward Japan") not generics ("Great job!"). Never shame a user for
 spending. Never use exclamation marks in anything showing a figure.
 
+## Charts
+
+Pick the form from the data's job, before any colour decision.
+
+| The data is | Use | Never |
+|---|---|---|
+| One current value | Stat tile (value + delta + sparkline) | A one-bar bar chart |
+| The number the page leads with | Hero figure, >=48px, exactly one per view | — |
+| One ratio against a limit | Meter | A two-slice pie |
+| Magnitude, low to high | Bar/column, sequential one hue | Categorical colour |
+| Trend over time | Line; area for a single series | — |
+| "This one moved" | Emphasis: one accent hue, rest grey | Categorical |
+| More than ~7 classes | A table | More colours |
+
+### Categories in charts (EverNest-specific)
+
+- Category charts aggregate by **category group** (11), not by category (57).
+  Drilling into a group shows its categories.
+- Use a sequential single hue for magnitude. `categories.color` is drawn from
+  eight shared slots, so several categories carry the same colour -- stored
+  colour is unusable as chart identity. It stays an identity dot in lists only.
+- Exclude `is_active = false` categories from every chart. Business categories
+  are off by default and shouldn't appear in a spending breakdown unless the
+  user has enabled them.
+  
+### Theming
+Charts read colours from CSS custom properties only -- never a hex literal in
+a component. Both palettes are defined in globals.css; a chart written against
+tokens themes itself.
+
+Dark mode is a SELECTED palette, not an inverted one. Both are validated
+against their own surface:
+
+  Categorical -- dark      Categorical -- light
+  1 blue     #3987E5       1 blue     #2A78D6
+  2 orange   #D95926       2 orange   #EB6834
+  3 aqua     #199E70       3 aqua     #1BAF7A
+  4 yellow   #C98500       4 yellow   #EDA100
+  5 magenta  #D55181       5 magenta  #E87BA4
+  6 green    #008300       6 green    #008300
+  7 violet   #9085E9       7 violet   #4A3AA7
+  8 red      #E66767       8 red      #E34948
+
+  Chart chrome            dark            light
+  surface                 #1B1B2F         #FBFAF7
+  gridline                #2C2C42         #E1E0D9
+  baseline                #383850         #C3C2B7
+  axis/label ink          #898781         #52514E   <-- NOT #898781 in light;
+                                                        it only reaches 3.44:1
+
+Status colours are identical in both modes:
+  good #0CA30C · warning #FAB219 · serious #EC835A · critical #D03B3B
+
+In LIGHT mode, aqua, yellow and magenta fall below 3:1 on the surface. The
+relief rule applies: those series MUST carry visible direct labels or a table
+view. Same for warning and serious, which always ship with icon + label.
+
+### Hard rules
+- NEVER a dual-axis chart. Two measures of different scale = two charts.
+- Categorical hues in fixed slot order, never cycled. A 9th series folds into
+  "Other" -- never a generated hue.
+- Sequential = one hue, light to dark. Diverging = two hues + grey midpoint.
+- Status colours are reserved. Never a series.
+- Text never wears a data colour. Values and labels use ink tokens; a coloured
+  mark beside them carries identity.
+- Bars <=24px thick, 4px rounded data-end, square at the baseline. Lines 2px.
+  Markers >=8px. Area fill ~10% opacity. Gridlines hairline, solid, recessive.
+- 2px surface-colour gap between touching marks; 2px surface ring on dots.
+  Never a border around a mark.
+- Legend for >=2 series; none for one.
+- Label selectively -- endpoint or extreme, never every point.
+- All money renders through the shared <Amount> component.
+
+### Interaction (not optional)
+- Line/area: vertical crosshair snapping to nearest X, one tooltip listing
+  every series at that X.
+- Bar/cell: the mark is the hit target, it lifts on hover, its own tooltip.
+- Hit targets larger than the mark. Keyboard focus shows the same tooltip.
+- Tooltips enhance, never gate: every value also reachable via direct label
+  or table view.
+- Insert series/category names with `textContent`, never innerHTML.
+- Filters in ONE row above everything, date range first, presets before custom.
+  They scope every chart on the page. On refetch, charts hold their previous
+  render at reduced opacity -- no skeleton, no layout jump.
+
 ## Repo layout
 
 Not its own git repo — nested two levels inside `evernest/`, the actual git

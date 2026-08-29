@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
+import { todayISO, endOfMonthISO, daysBetweenInclusive } from "@/lib/date";
 
 type DashboardKpisRow = Database["public"]["Views"]["v_dashboard_kpis"]["Row"];
 type NetWorthRow = Database["public"]["Views"]["v_net_worth"]["Row"];
@@ -306,6 +307,229 @@ export async function getLoggingStreak(): Promise<DbResult<LoggingStreak>> {
   );
 
   return { data: streak, error: null };
+}
+
+export type SafeToSpendCommitment = {
+  recurringId: string;
+  /** The recurring template's own description, shown verbatim in the breakdown. */
+  name: string;
+  /** Positive outflow amount, in dollars. */
+  amount: number;
+  /** next_run_date -- the day this commitment falls due. */
+  dueDate: string;
+};
+
+export type SafeToSpend = {
+  /**
+   * Balance across asset accounts only -- Checking, Savings, Investment,
+   * Cash. Never Credit Card or Loan. This is v_net_worth.total_assets,
+   * which sums exactly those active account balances in SQL.
+   */
+  cashOnHand: number;
+  /**
+   * Recurring expense outflows whose next run falls between today and the
+   * end of the current calendar month, inclusive, earliest first.
+   */
+  commitments: SafeToSpendCommitment[];
+  /** Sum of every commitment amount. */
+  committed: number;
+  /**
+   * cashOnHand minus committed. Negative when commitments outrun cash --
+   * a plain fact, rendered without alarm. No budget is subtracted: a
+   * category that is both budgeted and funded by a recurring transaction
+   * would otherwise be counted twice.
+   */
+  safeToSpend: number;
+  /**
+   * safeToSpend spread across daysRemaining. null only when safeToSpend is
+   * negative -- there's no daily allowance to show when you're already short
+   * (the UI states the shortfall instead). Zero is a real $0/day.
+   */
+  perDay: number | null;
+  /** Calendar days from today through periodEnd, inclusive. Always >= 1. */
+  daysRemaining: number;
+  /** Last day of the current calendar month, "YYYY-MM-DD". */
+  periodEnd: string;
+};
+
+type RawRecurringRow = {
+  id: string;
+  description: string;
+  amount: number;
+  next_run_date: string;
+  end_date: string | null;
+  category: { category_type: string };
+};
+
+// "Safe to spend" = asset-account cash, minus the recurring bills still to
+// land this month. Deliberately no budget term -- see SafeToSpend.safeToSpend.
+//
+// cash comes from v_net_worth (SQL-summed); the recurring side is read from
+// the base table, not v_upcoming_recurring, because that view drops the
+// column that carries Income/Expense direction. A recurring template's
+// direction is its category's category_type.
+//
+// The one subtraction and the commitment sum run in integer cents, never JS
+// floats -- amount is exact `numeric` and this figure is shown to the cent
+// (same rule TransactionsList's selected-total already follows).
+export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
+  const supabase = await createClient();
+
+  const today = todayISO();
+  const periodEnd = endOfMonthISO(today);
+  const daysRemaining = daysBetweenInclusive(today, periodEnd);
+
+  const [assetsRes, recurringRes] = await Promise.all([
+    supabase.from("v_net_worth").select("total_assets").maybeSingle(),
+    supabase
+      .from("recurring_transactions")
+      .select(
+        "id, description, amount, next_run_date, end_date, category:categories!inner(category_type)",
+      )
+      .eq("is_active", true)
+      .gte("next_run_date", today)
+      .lte("next_run_date", periodEnd)
+      .order("next_run_date", { ascending: true })
+      .returns<RawRecurringRow[]>(),
+  ]);
+
+  if (assetsRes.error) {
+    return { data: null, error: assetsRes.error.message };
+  }
+  if (recurringRes.error) {
+    return { data: null, error: recurringRes.error.message };
+  }
+
+  const commitments: SafeToSpendCommitment[] = recurringRes.data
+    // Outflows only. An Income recurring template funds the account, it
+    // doesn't draw it down.
+    .filter((row) => row.category.category_type === "Expense")
+    // Mirror v_upcoming_recurring's own end-date guard: a template that has
+    // already ended isn't due again even if next_run_date wasn't advanced.
+    .filter((row) => row.end_date === null || row.end_date >= today)
+    .map((row) => ({
+      recurringId: row.id,
+      name: row.description,
+      amount: row.amount,
+      dueDate: row.next_run_date,
+    }));
+
+  const cashCents = Math.round((assetsRes.data?.total_assets ?? 0) * 100);
+  const committedCents = commitments.reduce(
+    (cents, c) => cents + Math.round(c.amount * 100),
+    0,
+  );
+  const safeCents = cashCents - committedCents;
+
+  return {
+    data: {
+      cashOnHand: cashCents / 100,
+      commitments,
+      committed: committedCents / 100,
+      safeToSpend: safeCents / 100,
+      perDay: safeCents >= 0 ? safeCents / daysRemaining / 100 : null,
+      daysRemaining,
+      periodEnd,
+    },
+    error: null,
+  };
+}
+
+export type DashboardStat = {
+  /** The current (this-month, or as-of-now) figure. */
+  value: number;
+  /**
+   * 12 monthly points, oldest first, the last being the current month.
+   * Dollars.
+   */
+  points: number[];
+  /** Current month minus the prior month. Dollars, signed. */
+  delta: number;
+};
+
+export type DashboardStats = {
+  netWorth: DashboardStat;
+  income: DashboardStat;
+  spending: DashboardStat;
+};
+
+// First-of-month ISO strings for the last 12 calendar months, oldest first,
+// ending with the current month -- the x-axis for every stat-tile sparkline.
+// Local calendar months, matching v_monthly_cashflow.month (date_trunc to
+// the 1st) and the rest of this file's local-day handling.
+function last12MonthStartsISO(): string[] {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const out: string[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(y, m - i, 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`);
+  }
+  return out;
+}
+
+// The three trend tiles under the dashboard hero. Income and spending come
+// straight off v_monthly_cashflow. Net worth is back-cast: v_net_worth gives
+// today's figure, and every earlier month-end is that figure minus the
+// net cashflow that has landed since -- exact here because in this schema
+// net worth only moves through transactions (opening balances are fixed,
+// investments are carried at cost, transfers net to zero). The one blind
+// spot is a soft-deleted account with past activity: v_net_worth counts
+// only active accounts while v_monthly_cashflow counts all, which can skew
+// the older sparkline points but never today's value.
+//
+// All arithmetic is in integer cents -- amount is exact `numeric` and these
+// figures show to the cent (same rule as getSafeToSpend / TransactionsList).
+export async function getDashboardStats(): Promise<DbResult<DashboardStats>> {
+  const supabase = await createClient();
+
+  const months = last12MonthStartsISO();
+
+  const [netWorthRes, cashflowRes] = await Promise.all([
+    supabase.from("v_net_worth").select("net_worth").maybeSingle(),
+    supabase
+      .from("v_monthly_cashflow")
+      .select("month, income, expenses")
+      .gte("month", months[0])
+      .order("month", { ascending: true }),
+  ]);
+
+  if (netWorthRes.error) {
+    return { data: null, error: netWorthRes.error.message };
+  }
+  if (cashflowRes.error) {
+    return { data: null, error: cashflowRes.error.message };
+  }
+
+  const byMonth = new Map(cashflowRes.data.map((row) => [row.month, row]));
+  const toCents = (n: number | null | undefined) => Math.round((n ?? 0) * 100);
+
+  const incomeCents = months.map((m) => toCents(byMonth.get(m)?.income));
+  const expenseCents = months.map((m) => toCents(byMonth.get(m)?.expenses));
+  const netCashflowCents = months.map((_, i) => incomeCents[i] - expenseCents[i]);
+
+  const netWorthCents = new Array<number>(12);
+  netWorthCents[11] = toCents(netWorthRes.data?.net_worth);
+  for (let k = 10; k >= 0; k--) {
+    netWorthCents[k] = netWorthCents[k + 1] - netCashflowCents[k + 1];
+  }
+
+  const toDollars = (cents: number[]) => cents.map((c) => c / 100);
+  const stat = (cents: number[]): DashboardStat => ({
+    value: cents[11] / 100,
+    points: toDollars(cents),
+    delta: (cents[11] - cents[10]) / 100,
+  });
+
+  return {
+    data: {
+      netWorth: stat(netWorthCents),
+      income: stat(incomeCents),
+      spending: stat(expenseCents),
+    },
+    error: null,
+  };
 }
 
 // Ops-only (see DATABASE.md) -- no user-facing screen reads this.
