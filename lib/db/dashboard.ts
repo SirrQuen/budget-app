@@ -236,9 +236,54 @@ function isNextCalendarDay(a: string, b: string): boolean {
   return Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad) === 86_400_000;
 }
 
+// Calendar day before `dateISO` ("YYYY-MM-DD"). Same UTC-epoch approach as
+// isNextCalendarDay -- dateISO is already a plain calendar date with no
+// time-of-day, so this stays pure and doesn't need to reason about DST.
+function previousCalendarDay(dateISO: string): string {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d) - 86_400_000).toISOString().slice(0, 10);
+}
+
+// Pure so it's testable without a DB round trip. dates need not be sorted
+// or deduped -- both happen here -- so callers can pass raw query results
+// straight through. Multiple transactions on one day collapse to one day
+// via the Set; a day with none simply isn't in `dates`, which is what
+// breaks a run (isNextCalendarDay only holds for actual next-day pairs).
+export function computeLoggingStreak(dates: string[], todayISO: string): LoggingStreak {
+  const sorted = [...new Set(dates)].sort();
+
+  let best = 0;
+  let run = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    run = i > 0 && isNextCalendarDay(sorted[i - 1], sorted[i]) ? run + 1 : 1;
+    best = Math.max(best, run);
+  }
+
+  // Yesterday still counts as "current" so the streak doesn't visibly
+  // break at 12:00am before the user has had a chance to log today.
+  const yesterdayISO = previousCalendarDay(todayISO);
+  const last = sorted[sorted.length - 1];
+
+  let current = 0;
+  if (last === todayISO || last === yesterdayISO) {
+    current = 1;
+    for (let i = sorted.length - 1; i > 0; i--) {
+      if (isNextCalendarDay(sorted[i - 1], sorted[i])) {
+        current += 1;
+      } else {
+        break;
+      }
+    }
+  }
+
+  return { current, best, loggedToday: last === todayISO };
+}
+
 // Dates only, no money -- streaks are computed in JS from distinct
 // transaction_date values rather than a view, unlike every money figure
-// elsewhere in this file.
+// elsewhere in this file. Never stored or incremented: recomputed from
+// the transactions table on every read, so there's no counter to drift
+// out of sync with reality.
 export async function getLoggingStreak(): Promise<DbResult<LoggingStreak>> {
   const supabase = await createClient();
 
@@ -249,39 +294,18 @@ export async function getLoggingStreak(): Promise<DbResult<LoggingStreak>> {
   const { data, error } = await supabase
     .from("transactions")
     .select("transaction_date")
-    .gte("transaction_date", localISODate(since))
-    .order("transaction_date", { ascending: true });
+    .gte("transaction_date", localISODate(since));
 
   if (error) {
     return { data: null, error: error.message };
   }
 
-  const dates = [...new Set(data.map((row) => row.transaction_date))].sort();
+  const streak = computeLoggingStreak(
+    data.map((row) => row.transaction_date),
+    localISODate(today),
+  );
 
-  let best = 0;
-  let run = 0;
-  for (let i = 0; i < dates.length; i++) {
-    run = i > 0 && isNextCalendarDay(dates[i - 1], dates[i]) ? run + 1 : 1;
-    best = Math.max(best, run);
-  }
-
-  const todayISO = localISODate(today);
-  const yesterdayISO = localISODate(new Date(today.getTime() - 86_400_000));
-  const last = dates[dates.length - 1];
-
-  let current = 0;
-  if (last === todayISO || last === yesterdayISO) {
-    current = 1;
-    for (let i = dates.length - 1; i > 0; i--) {
-      if (isNextCalendarDay(dates[i - 1], dates[i])) {
-        current += 1;
-      } else {
-        break;
-      }
-    }
-  }
-
-  return { data: { current, best, loggedToday: last === todayISO }, error: null };
+  return { data: streak, error: null };
 }
 
 // Ops-only (see DATABASE.md) -- no user-facing screen reads this.
