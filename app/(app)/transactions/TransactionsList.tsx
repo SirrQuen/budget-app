@@ -1,13 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { useState, useTransition } from "react";
 import type { TransactionType, TransactionWithRelations } from "@/lib/db/transactions";
+import { bulkDeleteTransactionsAction } from "@/lib/actions/transactions";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { ListIcon, TransferIcon } from "@/components/ui/icons";
+import { ListIcon, TransferIcon, TrashIcon } from "@/components/ui/icons";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Amount } from "@/components/ui/Amount";
+import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DeleteTransactionButton } from "./DeleteTransactionButton";
 import { useOptimisticTransactions, type PendingTransaction } from "@/components/quick-add/OptimisticTransactionsContext";
+
+const checkboxClassName =
+  "h-4 w-4 cursor-pointer rounded border-hairline bg-surface-raised accent-gold outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -106,6 +113,31 @@ function buildDisplayRows(transactions: TransactionWithRelations[]): DisplayRow[
   return rows;
 }
 
+// What the selection bar and bulk delete need from a display row -- a stable
+// key for the checkbox/shift-click order, the magnitude to add to the
+// confirmation total, and either the raw id (single) or the transfer group id
+// (transfer, so both legs go together).
+type SelectionInfo =
+  | { key: string; amount: number; transactionId: string; transferGroupId: null }
+  | { key: string; amount: number; transactionId: null; transferGroupId: string };
+
+function selectionInfoFor(row: DisplayRow): SelectionInfo {
+  if (row.kind === "transfer") {
+    return {
+      key: `transfer:${row.transferGroupId}`,
+      amount: row.amount,
+      transactionId: null,
+      transferGroupId: row.transferGroupId,
+    };
+  }
+  return {
+    key: `tx:${row.tx.id}`,
+    amount: Number(row.tx.amount),
+    transactionId: row.tx.id,
+    transferGroupId: null,
+  };
+}
+
 export function TransactionsList({
   transactions,
   totalCount,
@@ -125,6 +157,19 @@ export function TransactionsList({
 }) {
   const { pending } = useOptimisticTransactions();
 
+  // Selection state -- keyed by selectionInfoFor's key, not raw ids, so a
+  // transfer's single checkbox tracks as one entry regardless of how many
+  // legs deleting it will actually remove. Reset only happens implicitly:
+  // a filter/page change re-renders this component with a new `transactions`
+  // prop from the server, which remounts nothing but leaves stale keys
+  // harmless since selectionInfoFor is recomputed fresh from the new rows
+  // and stale keys just won't match anything rendered.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [bulkError, setBulkError] = useState<string>();
+  const [isBulkDeleting, startBulkDelete] = useTransition();
+
   const filters = {
     dateFrom: first(params.dateFrom),
     dateTo: first(params.dateTo),
@@ -136,6 +181,74 @@ export function TransactionsList({
   // Ghosts only ever belong on page 1 (newest-first) -- a row that hasn't
   // been saved yet has no real position on page 2+.
   const ghosts = page === 1 ? pending.filter((tx) => matchesFilters(tx, filters)) : [];
+
+  // Computed unconditionally (before the empty-state early returns below) so
+  // the hooks above stay unconditional too -- this is just array shaping,
+  // cheap even when the page ends up rendering an EmptyState instead.
+  const displayRows = buildDisplayRows(transactions);
+  const selectionInfos = displayRows.map(selectionInfoFor);
+  const selectableKeys = selectionInfos.map((info) => info.key);
+
+  const allSelected = selectableKeys.length > 0 && selectableKeys.every((key) => selected.has(key));
+  const someSelected = selected.size > 0 && !allSelected;
+
+  const selectedInfos = selectionInfos.filter((info) => selected.has(info.key));
+  // Summed in integer cents, not JS floats -- amount is exact numeric, and
+  // this total is shown back to the user, so it has to match to the cent.
+  const selectedTotal =
+    selectedInfos.reduce((cents, info) => cents + Math.round(info.amount * 100), 0) / 100;
+  const selectedTransferCount = selectedInfos.filter((info) => info.transferGroupId !== null).length;
+
+  function toggleAll(checked: boolean) {
+    setSelected(checked ? new Set(selectableKeys) : new Set());
+  }
+
+  // onClick, not onChange -- a checkbox's `.checked` is already updated to
+  // its new value by the time the click event fires (before change), and
+  // onClick is the one that carries shiftKey. Shift-click applies that same
+  // new value across the whole range since the last row clicked, matching
+  // the familiar Gmail-style multi-select.
+  function handleRowCheckboxClick(e: React.MouseEvent<HTMLInputElement>, index: number, key: string) {
+    const checked = e.currentTarget.checked;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (e.shiftKey && lastCheckedIndex !== null) {
+        const [start, end] = [lastCheckedIndex, index].sort((a, b) => a - b);
+        for (let i = start; i <= end; i++) {
+          const rowKey = selectableKeys[i];
+          if (checked) next.add(rowKey);
+          else next.delete(rowKey);
+        }
+      } else if (checked) {
+        next.add(key);
+      } else {
+        next.delete(key);
+      }
+      return next;
+    });
+    setLastCheckedIndex(index);
+  }
+
+  function handleBulkDelete() {
+    const transactionIds = selectedInfos
+      .filter((info): info is Extract<SelectionInfo, { transactionId: string }> => info.transactionId !== null)
+      .map((info) => info.transactionId);
+    const transferGroupIds = selectedInfos
+      .filter((info): info is Extract<SelectionInfo, { transferGroupId: string }> => info.transferGroupId !== null)
+      .map((info) => info.transferGroupId);
+
+    startBulkDelete(async () => {
+      const result = await bulkDeleteTransactionsAction(transactionIds, transferGroupIds);
+      if (result?.error) {
+        setBulkError(result.error);
+        return;
+      }
+      setSelected(new Set());
+      setLastCheckedIndex(null);
+      setConfirmOpen(false);
+      setBulkError(undefined);
+    });
+  }
 
   if (transactions.length === 0 && ghosts.length === 0 && page > 1 && totalCount > 0) {
     return (
@@ -178,10 +291,53 @@ export function TransactionsList({
 
   return (
     <>
+      {selected.size > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-hairline bg-surface-raised px-4 py-3">
+          <p className="text-sm font-medium text-ink">
+            {selected.size} selected
+          </p>
+          <div className="flex items-center gap-3">
+            {bulkError ? <span className="text-sm text-critical">{bulkError}</span> : null}
+            <button
+              type="button"
+              onClick={() => {
+                setSelected(new Set());
+                setLastCheckedIndex(null);
+                setBulkError(undefined);
+              }}
+              className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised"
+            >
+              Clear
+            </button>
+            <Button
+              type="button"
+              variant="critical"
+              onClick={() => setConfirmOpen(true)}
+              className="inline-flex items-center gap-1.5"
+            >
+              <TrashIcon className="h-4 w-4" />
+              Delete
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="overflow-x-auto rounded-2xl border border-hairline bg-surface">
         <table className="w-full min-w-[720px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-hairline text-left text-xs font-medium uppercase tracking-wide text-ink-muted">
+              <th className="w-10 px-4 py-3">
+                <input
+                  type="checkbox"
+                  aria-label="Select all visible transactions"
+                  checked={allSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someSelected;
+                  }}
+                  onChange={(e) => toggleAll(e.target.checked)}
+                  className={checkboxClassName}
+                />
+              </th>
               <th className="px-4 py-3 font-medium">Date</th>
               <th className="px-4 py-3 font-medium">Description</th>
               <th className="px-4 py-3 font-medium">Category</th>
@@ -205,6 +361,7 @@ export function TransactionsList({
                       : "motion-safe:animate-[row-pending-pulse_1.4s_ease-in-out_infinite] opacity-60"
                   }
                 >
+                  <td className="px-4 py-3" />
                   <td className="whitespace-nowrap px-4 py-3 text-ink-secondary">
                     {formatDate(tx.transaction_date)}
                   </td>
@@ -229,13 +386,29 @@ export function TransactionsList({
                 </tr>
               );
             })}
-            {buildDisplayRows(transactions).map((row) => {
+            {displayRows.map((row, index) => {
+              const { key } = selectionInfos[index];
+              const isSelected = selected.has(key);
+              const checkbox = (
+                <td className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label={`Select transaction: ${row.kind === "transfer" ? row.description : row.tx.description}`}
+                    checked={isSelected}
+                    onChange={() => {}}
+                    onClick={(e) => handleRowCheckboxClick(e, index, key)}
+                    className={checkboxClassName}
+                  />
+                </td>
+              );
+
               if (row.kind === "transfer") {
                 return (
                   <tr
                     key={`transfer-${row.transferGroupId}`}
                     className="transition-colors duration-150 hover:bg-surface-raised motion-safe:animate-[row-in_600ms_ease-out]"
                   >
+                    {checkbox}
                     <td className="whitespace-nowrap px-4 py-3 text-ink-secondary">
                       {formatDate(row.transaction_date)}
                     </td>
@@ -281,6 +454,7 @@ export function TransactionsList({
                   key={tx.id}
                   className="transition-colors duration-150 hover:bg-surface-raised motion-safe:animate-[row-in_600ms_ease-out]"
                 >
+                  {checkbox}
                   <td className="whitespace-nowrap px-4 py-3 text-ink-secondary">
                     {formatDate(tx.transaction_date)}
                   </td>
@@ -324,6 +498,26 @@ export function TransactionsList({
           </tbody>
         </table>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title={`Delete ${selected.size} transaction${selected.size === 1 ? "" : "s"} totalling ${formatCurrency(selectedTotal)}?`}
+        description={
+          selectedTransferCount === 0
+            ? "This can't be undone -- these transactions will be permanently removed."
+            : `This can't be undone -- these transactions will be permanently removed. ${
+                selectedTransferCount === 1
+                  ? "1 of these is a transfer"
+                  : `${selectedTransferCount} of these are transfers`
+              } — ${selectedTransferCount === 1 ? "its matching leg" : "their matching legs"} will also be deleted.`
+        }
+        confirmLabel={isBulkDeleting ? "Deleting…" : "Delete"}
+        confirmIcon={<TrashIcon className="h-4 w-4" />}
+        cancelLabel="Cancel"
+        tone="critical"
+        onConfirm={handleBulkDelete}
+        onCancel={() => setConfirmOpen(false)}
+      />
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-ink-secondary">
         <p>

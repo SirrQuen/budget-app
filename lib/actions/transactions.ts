@@ -8,6 +8,7 @@ import {
   deleteTransaction,
   createTransfer,
   deleteTransfer,
+  bulkDeleteTransactions,
   getTransactionCount,
   suggestCategoryForMerchant,
   type CreateTransactionInput,
@@ -257,6 +258,33 @@ export async function deleteTransactionAction(
   if (redirectToList) {
     redirect("/transactions");
   }
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// The list's selection bar sends whatever ids the client rendered checkboxes
+// for -- a public endpoint regardless of what the UI allows, so ids that
+// aren't well-formed UUIDs are dropped rather than handed to the DB layer's
+// raw filter string.
+export async function bulkDeleteTransactionsAction(
+  transactionIds: string[],
+  transferGroupIds: string[],
+): Promise<ActionState> {
+  const ids = transactionIds.filter((id) => UUID_RE.test(id));
+  const groupIds = transferGroupIds.filter((id) => UUID_RE.test(id));
+
+  if (ids.length === 0 && groupIds.length === 0) {
+    return { error: "Nothing selected." };
+  }
+
+  const { error } = await bulkDeleteTransactions(ids, groupIds);
+  if (error) {
+    return { error };
+  }
+
+  revalidatePath("/transactions");
+  // A bulk delete can touch several accounts' balances at once.
+  revalidatePath("/accounts");
 }
 
 // A transfer is two rows sharing transfer_group_id -- deleteTransfer removes

@@ -497,6 +497,43 @@ export async function updateTransfer(
   return { data, error: null };
 }
 
+// Bulk delete for the list's selection bar -- one statement covering plain
+// transaction ids and whole transfer groups together (never a loop of
+// individual deletes). transferGroupIds expands to both legs automatically,
+// same as deleteTransfer. RLS still scopes every row to auth.uid() regardless
+// of this filter, so a malformed id can only ever fail to match, never widen
+// the delete beyond the caller's own rows.
+export async function bulkDeleteTransactions(
+  transactionIds: string[],
+  transferGroupIds: string[],
+): Promise<DbResult<{ id: string }[]>> {
+  if (transactionIds.length === 0 && transferGroupIds.length === 0) {
+    return { data: [], error: null };
+  }
+
+  const supabase = await createClient();
+
+  const filters: string[] = [];
+  if (transactionIds.length > 0) {
+    filters.push(`id.in.(${transactionIds.join(",")})`);
+  }
+  if (transferGroupIds.length > 0) {
+    filters.push(`transfer_group_id.in.(${transferGroupIds.join(",")})`);
+  }
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .delete()
+    .or(filters.join(","))
+    .select("id");
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data, error: null };
+}
+
 // One statement targeting the whole group -- never delete a single leg.
 export async function deleteTransfer(groupId: string): Promise<DbResult<{ id: string }[]>> {
   const supabase = await createClient();
