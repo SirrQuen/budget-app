@@ -1,6 +1,6 @@
 const variantClass = {
   primary: "bg-gold text-gold-ink hover:bg-gold-hover active:bg-gold-pressed",
-  critical: "bg-critical text-white hover:bg-critical/90 active:bg-critical",
+  critical: "bg-critical text-critical-ink hover:bg-critical/90 active:bg-critical",
 };
 
 export function Button({

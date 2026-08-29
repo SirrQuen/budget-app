@@ -41,7 +41,7 @@ export function ConfirmDialog({
         e.preventDefault();
         onCancel();
       }}
-      className="w-full max-w-sm rounded-2xl border border-hairline bg-surface p-0 text-ink backdrop:bg-black/60"
+      className="w-full max-w-sm rounded-2xl border border-hairline bg-surface p-0 text-ink backdrop:bg-scrim"
     >
       <div className="p-5">
         <h2 className="text-base font-semibold text-ink">{title}</h2>

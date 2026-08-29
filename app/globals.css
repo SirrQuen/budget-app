@@ -26,6 +26,11 @@
   --gridline: #2c2c42;
   --baseline: #383850;
 
+  /* Scrim behind modals, dialogs and the mobile quick-add sheet. A fixed
+     black wash rather than a step of --page, so it keeps dimming what's
+     behind it whatever the surface tokens become in light mode. */
+  --scrim: rgba(0, 0, 0, 0.6);
+
   /* categorical data series -- fixed order, never cycled or reassigned.
      Re-validated against --surface (#1b1b2f); do not re-step. */
   --cat-1: #3987e5; /* blue */
@@ -42,6 +47,11 @@
   --warning: #fab219;
   --serious: #ec835a;
   --critical: #d03b3b;
+  /* Ink on a filled --critical surface, the counterpart to --gold-ink. White
+     on #d03b3b is 4.80:1, so it clears AA for the button's 14px semibold.
+     Pinned rather than tracking --ink: --critical is a fixed status colour in
+     both themes, so its ink must not flip to dark when the page does. */
+  --critical-ink: #ffffff;
 }
 
 @theme inline {
@@ -61,6 +71,7 @@
 
   --color-gridline: var(--gridline);
   --color-baseline: var(--baseline);
+  --color-scrim: var(--scrim);
 
   --color-cat-1: var(--cat-1);
   --color-cat-2: var(--cat-2);
@@ -75,6 +86,7 @@
   --color-warning: var(--warning);
   --color-serious: var(--serious);
   --color-critical: var(--critical);
+  --color-critical-ink: var(--critical-ink);
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);

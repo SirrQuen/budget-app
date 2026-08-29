@@ -375,7 +375,7 @@ export function QuickAddBar({
 
       {sheetOpen ? (
         <div
-          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          className="fixed inset-0 z-30 bg-scrim md:hidden"
           onClick={() => setSheetOpen(false)}
         />
       ) : null}

@@ -36,7 +36,7 @@ export function FullFormOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-8 sm:items-center"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-scrim px-4 py-8 sm:items-center"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
