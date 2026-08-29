@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth/dal";
+import { recordLogin } from "@/lib/db/profile";
 import { getLoggingStreak } from "@/lib/db/dashboard";
 import { listAccounts } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
@@ -6,9 +7,15 @@ import { getMostRecentTransactionAccountId } from "@/lib/db/transactions";
 import { AppShell } from "@/components/app-shell/AppShell";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const [user, streakResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult] =
+  const [user, , streakResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult] =
     await Promise.all([
       requireUser(),
+      // Every authenticated route runs this layout, including the
+      // email-confirmation redirect straight into /dashboard that never
+      // touches lib/auth/actions.ts login() -- so the lastlogin
+      // read-before-write has to happen here, not there. recordLogin is
+      // request-cached, so DashboardPage re-reading it below is free.
+      recordLogin(),
       getLoggingStreak(),
       listAccounts({ is_active: true }),
       listCategoriesForType("Income"),

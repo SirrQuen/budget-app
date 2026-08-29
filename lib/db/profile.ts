@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 
@@ -33,6 +34,37 @@ export async function getProfile(): Promise<DbResult<ProfileRow>> {
 
   return { data, error: null };
 }
+
+export type LoginGreeting = { firstName: string; isFirstLogin: boolean };
+
+// Cached per-request (see lib/auth/dal.ts requireUser for the same
+// pattern): app/(app)/layout.tsx calls this so the read-before-write runs
+// for every entry into an authenticated route -- not just lib/auth/actions.ts
+// login(), which only one of the two session-creating flows goes through
+// (the email-confirmation callback in app/auth/confirm/route.ts verifies
+// the OTP and redirects straight to /dashboard, bypassing login()
+// entirely). The dashboard page calls it again to read the greeting values
+// without a second round trip.
+export const recordLogin = cache(async (): Promise<DbResult<LoginGreeting>> => {
+  const profileResult = await getProfile();
+
+  if (!profileResult.data) {
+    return { data: null, error: profileResult.error };
+  }
+
+  const isFirstLogin = profileResult.data.lastlogin === null;
+
+  const updateResult = await updateProfile({ lastlogin: new Date().toISOString() });
+
+  if (!updateResult.data) {
+    return { data: null, error: updateResult.error };
+  }
+
+  return {
+    data: { firstName: profileResult.data.first_name, isFirstLogin },
+    error: null,
+  };
+});
 
 export async function updateProfile(
   patch: UpdateProfilePatch,
