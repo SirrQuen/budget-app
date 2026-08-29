@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
-import { todayISO, endOfMonthISO, daysBetweenInclusive } from "@/lib/date";
+import { todayISO, addDaysISO, endOfMonthISO, daysBetweenInclusive } from "@/lib/date";
 
 type DashboardKpisRow = Database["public"]["Views"]["v_dashboard_kpis"]["Row"];
 type NetWorthRow = Database["public"]["Views"]["v_net_worth"]["Row"];
@@ -210,6 +210,47 @@ export async function getUpcomingRecurring(
   }
 
   return { data, error: null };
+}
+
+export type CashflowPoint = {
+  /** "YYYY-MM-DD", local calendar day. */
+  day: string;
+  income: number;
+  expenses: number;
+};
+
+// A continuous daily series for the cashflow chart -- exactly `days` points
+// ending today, one per calendar day. v_daily_cashflow only has rows for
+// days with activity (see DATABASE.md), so the gaps are filled here with
+// zeros: a time axis has to be continuous or the line lies about the dates
+// between two sparse points. income/expenses are per-day figures the view
+// already summed -- nothing is aggregated here, just placed on the grid.
+export async function getCashflowChart(days = 90): Promise<DbResult<CashflowPoint[]>> {
+  const supabase = await createClient();
+
+  const today = todayISO();
+  const from = addDaysISO(today, -(days - 1));
+
+  const { data, error } = await supabase
+    .from("v_daily_cashflow")
+    .select("day, income, expenses")
+    .gte("day", from)
+    .lte("day", today)
+    .order("day", { ascending: true });
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  const byDay = new Map(data.map((row) => [row.day, row]));
+  const points: CashflowPoint[] = [];
+  for (let i = 0; i < days; i++) {
+    const day = addDaysISO(from, i);
+    const row = byDay.get(day);
+    points.push({ day, income: row?.income ?? 0, expenses: row?.expenses ?? 0 });
+  }
+
+  return { data: points, error: null };
 }
 
 export type LoggingStreak = {

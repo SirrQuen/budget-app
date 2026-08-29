@@ -1,19 +1,27 @@
 import { recordLogin } from "@/lib/db/profile";
-import { getSafeToSpend, getDashboardStats, getLoggingStreak } from "@/lib/db/dashboard";
+import {
+  getSafeToSpend,
+  getDashboardStats,
+  getLoggingStreak,
+  getCashflowChart,
+} from "@/lib/db/dashboard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatTile } from "@/components/ui/StatTile";
 import { ReturnSummaryStrip } from "@/components/ui/ReturnSummaryStrip";
 import { SafeToSpendHero } from "./SafeToSpendHero";
+import { CashflowChart } from "./CashflowChart";
 
 // Auth is already enforced by app/(app)/layout.tsx's requireUser() before
 // this page renders.
 export default async function DashboardPage() {
-  const [greetingResult, safeToSpendResult, statsResult, streakResult] = await Promise.all([
-    recordLogin(),
-    getSafeToSpend(),
-    getDashboardStats(),
-    getLoggingStreak(),
-  ]);
+  const [greetingResult, safeToSpendResult, statsResult, streakResult, cashflowResult] =
+    await Promise.all([
+      recordLogin(),
+      getSafeToSpend(),
+      getDashboardStats(),
+      getLoggingStreak(),
+      getCashflowChart(),
+    ]);
 
   const firstName = greetingResult.data?.firstName;
   const namePart = firstName ? `, ${firstName}` : "";
@@ -23,6 +31,10 @@ export default async function DashboardPage() {
 
   const stats = statsResult.data;
   const streak = streakResult.data;
+  // Nothing to plot until there's at least one day of activity in the window.
+  const cashflow = cashflowResult.data?.some((p) => p.income > 0 || p.expenses > 0)
+    ? cashflowResult.data
+    : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -81,6 +93,8 @@ export default async function DashboardPage() {
           ) : null}
         </div>
       ) : null}
+
+      {cashflow ? <CashflowChart points={cashflow} /> : null}
 
       <ReturnSummaryStrip />
     </div>
