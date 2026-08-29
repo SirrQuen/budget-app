@@ -35,7 +35,16 @@ export async function getProfile(): Promise<DbResult<ProfileRow>> {
   return { data, error: null };
 }
 
-export type LoginGreeting = { firstName: string; isFirstLogin: boolean };
+export type LoginGreeting = {
+  firstName: string;
+  isFirstLogin: boolean;
+  /**
+   * lastlogin as it stood *before* this request bumped it -- i.e. when the
+   * user was last active. null on the very first login. The dashboard's
+   * "since you were last here" strip keys off this.
+   */
+  previousLoginAt: string | null;
+};
 
 // Cached per-request (see lib/auth/dal.ts requireUser for the same
 // pattern): app/(app)/layout.tsx calls this so the read-before-write runs
@@ -52,7 +61,8 @@ export const recordLogin = cache(async (): Promise<DbResult<LoginGreeting>> => {
     return { data: null, error: profileResult.error };
   }
 
-  const isFirstLogin = profileResult.data.lastlogin === null;
+  const previousLoginAt = profileResult.data.lastlogin;
+  const isFirstLogin = previousLoginAt === null;
 
   const updateResult = await updateProfile({ lastlogin: new Date().toISOString() });
 
@@ -61,7 +71,7 @@ export const recordLogin = cache(async (): Promise<DbResult<LoginGreeting>> => {
   }
 
   return {
-    data: { firstName: profileResult.data.first_name, isFirstLogin },
+    data: { firstName: profileResult.data.first_name, isFirstLogin, previousLoginAt },
     error: null,
   };
 });

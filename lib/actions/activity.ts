@@ -4,10 +4,21 @@ import { getActivitySince } from "@/lib/db/activity";
 import { getLoggingStreak } from "@/lib/db/dashboard";
 import { formatCurrency } from "@/lib/format";
 
+// A few hours away is the bar for a "since you were last here" strip -- a
+// page hop earlier in the same session doesn't count.
+const AWAY_MS = 4 * 60 * 60 * 1000;
+
 // Fixed order, matching the spec: transactions logged, goal progress,
 // current streak, budgets crossed. At most one fact per category, so this
-// is also the natural "never more than four facts" cap.
+// is also the natural "never more than four facts" cap. Returns [] when the
+// last visit was too recent, or when genuinely nothing changed -- the
+// caller renders nothing on an empty list either way.
 export async function getReturnSummaryFacts(sinceISO: string): Promise<string[]> {
+  const sinceMs = Date.parse(sinceISO);
+  if (Number.isNaN(sinceMs) || Date.now() - sinceMs < AWAY_MS) {
+    return [];
+  }
+
   const [activityResult, streakResult] = await Promise.all([
     getActivitySince(sinceISO),
     getLoggingStreak(),

@@ -146,6 +146,149 @@ export async function getCategorySpending(
   return { data, error: null };
 }
 
+export type Movement = {
+  id: string;
+  name: string;
+  /** This month's spend, dollars. */
+  current: number;
+  /** Average monthly spend over the prior three calendar months, dollars. */
+  baseline: number;
+  /** (current - baseline) / baseline -- signed. 0.34 reads as "up 34%". */
+  pctChange: number;
+};
+
+export type GroupMovement = Movement & {
+  /** Active categories in this group that have a baseline, biggest mover first. */
+  categories: Movement[];
+};
+
+export type GroupMovementResult = {
+  /** Every group with a trailing baseline, largest absolute mover first. */
+  groups: GroupMovement[];
+  /**
+   * The one group worth a sentence -- it clears both a percentage and a
+   * dollar floor. null is a real answer: a quiet month.
+   */
+  topMover: GroupMovement | null;
+};
+
+// A mover must clear both floors: a big percentage on a trivial base
+// ($2 -> $3) is noise, and a big dollar swing that's small against the base
+// isn't really a move.
+const MOVER_MIN_PCT = 0.15;
+const MOVER_MIN_DOLLARS = 25;
+
+// This month's spend per category group, against that group's own average
+// over the prior three calendar months, ranked by how far it moved.
+//
+// v_category_spending is Expense-only and already drops transfer legs; it
+// carries no is_active flag, so inactive categories are filtered out here
+// against the categories table. Group totals sum their categories -- cents
+// math, never JS floats (amount is exact numeric).
+//
+// "This month" is the raw month-to-date figure, like every other
+// current-month number on the dashboard. Early in the month most groups
+// read low; the dollar floor and the quiet-month fallback absorb that
+// rather than surfacing a false "everything is down".
+export async function getGroupMovement(): Promise<DbResult<GroupMovementResult>> {
+  const supabase = await createClient();
+
+  // months[0..2] are the trailing three; months[3] is the current month.
+  const now = new Date();
+  const months = [3, 2, 1, 0].map((back) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  });
+  const currentMonth = months[3];
+
+  const [spendRes, activeRes] = await Promise.all([
+    supabase
+      .from("v_category_spending")
+      .select("month, group_id, group_name, category_id, category_name, total_spend")
+      .gte("month", months[0])
+      .lte("month", currentMonth),
+    supabase.from("categories").select("id").eq("is_active", true),
+  ]);
+
+  if (spendRes.error) {
+    return { data: null, error: spendRes.error.message };
+  }
+  if (activeRes.error) {
+    return { data: null, error: activeRes.error.message };
+  }
+
+  const activeIds = new Set(activeRes.data.map((row) => row.id));
+
+  type Acc = { name: string; currentCents: number; trailingCents: number };
+  type GroupAcc = Acc & { cats: Map<string, Acc> };
+  const groups = new Map<string, GroupAcc>();
+
+  for (const row of spendRes.data) {
+    if (!row.group_id || !row.category_id || !activeIds.has(row.category_id)) {
+      continue;
+    }
+
+    let group = groups.get(row.group_id);
+    if (!group) {
+      group = { name: row.group_name ?? "", currentCents: 0, trailingCents: 0, cats: new Map() };
+      groups.set(row.group_id, group);
+    }
+
+    let cat = group.cats.get(row.category_id);
+    if (!cat) {
+      cat = { name: row.category_name ?? "", currentCents: 0, trailingCents: 0 };
+      group.cats.set(row.category_id, cat);
+    }
+
+    const cents = Math.round((row.total_spend ?? 0) * 100);
+    const bucket = row.month === currentMonth ? "currentCents" : "trailingCents";
+    cat[bucket] += cents;
+    group[bucket] += cents;
+  }
+
+  // A movement needs a non-zero baseline; without one there's no percentage
+  // to rank by (that's "new spending", a different story).
+  const toMovement = (id: string, acc: Acc): Movement | null => {
+    const baselineCents = acc.trailingCents / 3;
+    if (baselineCents <= 0) {
+      return null;
+    }
+    return {
+      id,
+      name: acc.name,
+      current: acc.currentCents / 100,
+      baseline: baselineCents / 100,
+      pctChange: (acc.currentCents - baselineCents) / baselineCents,
+    };
+  };
+
+  const byAbsPct = (a: Movement, b: Movement) => Math.abs(b.pctChange) - Math.abs(a.pctChange);
+
+  const groupMovements: GroupMovement[] = [];
+  for (const [id, group] of groups) {
+    const gm = toMovement(id, group);
+    if (!gm) {
+      continue;
+    }
+    const categories = [...group.cats]
+      .map(([catId, cat]) => toMovement(catId, cat))
+      .filter((m): m is Movement => m !== null)
+      .sort(byAbsPct);
+    groupMovements.push({ ...gm, categories });
+  }
+
+  groupMovements.sort(byAbsPct);
+
+  const topMover =
+    groupMovements.find(
+      (g) =>
+        Math.abs(g.pctChange) >= MOVER_MIN_PCT &&
+        Math.abs(g.current - g.baseline) >= MOVER_MIN_DOLLARS,
+    ) ?? null;
+
+  return { data: { groups: groupMovements, topMover }, error: null };
+}
+
 // target_date/last_contribution_date describe each goal, not a bucketed
 // series -- there's no meaningful range filter here, unlike the cashflow
 // views above.

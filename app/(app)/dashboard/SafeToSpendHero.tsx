@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import type { SafeToSpend } from "@/lib/db/dashboard";
 import { Amount } from "@/components/ui/Amount";
+import { useCountUp } from "@/components/ui/useCountUp";
 import { formatCurrency } from "@/lib/format";
 import { ChevronDownIcon } from "@/components/ui/icons";
 
@@ -15,6 +16,10 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
   const panelId = useId();
 
   const short = data.safeToSpend < 0;
+  // The hero figure counts up on load (tabular-nums while it moves,
+  // proportional at rest); reduced motion lands it instantly. `type` tracks
+  // the real value's sign so the tone doesn't flicker mid-count.
+  const { display, animating } = useCountUp(data.safeToSpend, "safe-to-spend");
 
   const subline =
     data.perDay !== null
@@ -35,9 +40,9 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
         <div>
           <p className="text-sm font-medium text-ink-secondary">Safe to spend</p>
           <Amount
-            amount={data.safeToSpend}
+            amount={display}
             type={short ? "Expense" : "Income"}
-            className="mt-1 block text-5xl"
+            className={`mt-1 block text-5xl ${animating ? "tabular-nums" : ""}`}
           />
           <p className="mt-2 text-sm text-ink-secondary">{subline}</p>
         </div>

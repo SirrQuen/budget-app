@@ -33,6 +33,12 @@ const mediumDate = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
 });
 
+const shortDate = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+
 /** Full-precision currency for a single figure -- a transaction row, a line item. */
 export function formatCurrency(amount: number): string {
   return currency.format(amount);
@@ -53,6 +59,11 @@ export function formatAccountBalance(balance: number, accountType: string): stri
 /** "Aug 16, 2026" for an ISO date string or a Date. */
 export function formatDate(date: string | Date): string {
   return mediumDate.format(typeof date === "string" ? new Date(date) : date);
+}
+
+/** "Aug 16" -- no year, for compact rows where the year is obvious. */
+export function formatDateShort(date: string | Date): string {
+  return shortDate.format(typeof date === "string" ? new Date(date) : date);
 }
 
 /**
