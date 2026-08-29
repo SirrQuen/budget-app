@@ -91,14 +91,14 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
       <div className="flex items-center justify-between gap-3">
         <Link
           href={`/budgets?month=${shiftMonth(month, -1)}`}
-          className="rounded-full border border-hairline bg-surface px-3 py-1.5 text-sm font-medium text-ink-secondary transition-all duration-150 ease-out hover:-translate-y-0.5 hover:text-ink active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-page"
+          className="rounded-full border border-hairline bg-surface px-3 py-1.5 text-sm font-medium text-ink-secondary transition-all duration-150 ease-out hover:-translate-y-0.5 hover:text-ink active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page"
         >
           ← Prev
         </Link>
         <span className="text-sm font-medium text-ink">{formatMonthLabel(month)}</span>
         <Link
           href={`/budgets?month=${shiftMonth(month, 1)}`}
-          className="rounded-full border border-hairline bg-surface px-3 py-1.5 text-sm font-medium text-ink-secondary transition-all duration-150 ease-out hover:-translate-y-0.5 hover:text-ink active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-page"
+          className="rounded-full border border-hairline bg-surface px-3 py-1.5 text-sm font-medium text-ink-secondary transition-all duration-150 ease-out hover:-translate-y-0.5 hover:text-ink active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page"
         >
           Next →
         </Link>

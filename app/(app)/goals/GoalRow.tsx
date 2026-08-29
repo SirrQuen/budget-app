@@ -16,7 +16,7 @@ import type { Database } from "@/lib/database.types";
 type GoalProgressRow = Database["public"]["Views"]["v_goal_progress"]["Row"];
 
 const fieldClassName =
-  "w-full rounded-lg border border-hairline bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-gold focus:ring-2 focus:ring-gold/40";
+  "w-full rounded-lg border border-hairline bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40";
 
 function todayISO() {
   // Local calendar day, not UTC -- see AddTransactionForm's todayISO.
@@ -83,7 +83,7 @@ export function GoalRow({ goal }: { goal: GoalProgressRow }) {
         <button
           type="button"
           onClick={() => setContributing((v) => !v)}
-          className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           {contributing ? "Cancel" : "Add contribution"}
         </button>

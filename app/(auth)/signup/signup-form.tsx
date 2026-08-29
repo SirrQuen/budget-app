@@ -51,7 +51,7 @@ export function SignupForm() {
         Already have an account?{" "}
         <Link
           href="/login"
-          className="rounded text-ink transition-colors duration-150 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          className="rounded text-ink transition-colors duration-150 hover:text-action focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           Log in
         </Link>

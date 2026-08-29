@@ -95,7 +95,7 @@ export default async function TransactionsPage({
           </p>
           <Link
             href="/accounts"
-            className="rounded text-sm font-medium text-gold transition-colors duration-150 hover:text-gold-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            className="rounded text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
           >
             Add your first account
           </Link>
@@ -121,7 +121,7 @@ export default async function TransactionsPage({
             name="dateFrom"
             type="date"
             defaultValue={dateFrom || undefined}
-            className="rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-gold focus:ring-2 focus:ring-gold/40"
+            className="rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40"
           />
         </div>
 
@@ -134,7 +134,7 @@ export default async function TransactionsPage({
             name="dateTo"
             type="date"
             defaultValue={dateTo || undefined}
-            className="rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-gold focus:ring-2 focus:ring-gold/40"
+            className="rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40"
           />
         </div>
 
@@ -146,7 +146,7 @@ export default async function TransactionsPage({
             id="categoryid"
             name="categoryid"
             defaultValue={categoryid}
-            className="rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-gold focus:ring-2 focus:ring-gold/40"
+            className="rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40"
           >
             <option value="">All categories</option>
             {incomeCategories.length > 0 ? (
@@ -178,7 +178,7 @@ export default async function TransactionsPage({
             id="accountid"
             name="accountid"
             defaultValue={accountid}
-            className="rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-gold focus:ring-2 focus:ring-gold/40"
+            className="rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40"
           >
             <option value="">All accounts</option>
             {accounts.map((a) => (
@@ -198,7 +198,7 @@ export default async function TransactionsPage({
             id="type"
             name="type"
             defaultValue={type}
-            className="rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-gold focus:ring-2 focus:ring-gold/40"
+            className="rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40"
           >
             <option value="">All</option>
             <option value="Income">Income</option>
@@ -208,7 +208,7 @@ export default async function TransactionsPage({
 
         <button
           type="submit"
-          className="inline-flex items-center justify-center rounded-full bg-gold px-4 py-2 text-sm font-semibold text-gold-ink transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-gold-hover hover:shadow-md active:translate-y-0 active:scale-[0.97] active:bg-gold-pressed active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          className="inline-flex items-center justify-center rounded-full bg-action px-4 py-2 text-sm font-semibold text-action-ink transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-action-hover hover:shadow-md active:translate-y-0 active:scale-[0.97] active:bg-action-pressed active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           Filter
         </button>
@@ -216,7 +216,7 @@ export default async function TransactionsPage({
         {hasFilters ? (
           <Link
             href="/transactions"
-            className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
           >
             Clear filters
           </Link>

@@ -1,57 +1,268 @@
 @import "tailwindcss";
 
+/* =====================================================================
+   THEME TOKENS
+   =====================================================================
+
+   Every colour in the app resolves through a token defined here. Nothing
+   downstream carries a literal -- see the note on categories.color in
+   lib/categoryOptions.ts for the one value that is stored rather than
+   styled, and how it is mapped back to a token at render time.
+
+   Three states, two blocks of dark values:
+
+     :root                                  light (the default definition)
+     @media (prefers-color-scheme: dark)
+       :root:not([data-theme="light"])      dark, when the OS asks for it
+     :root[data-theme="dark"]               dark, when the user asked for it
+
+   The :not([data-theme="light"]) guard is what makes an explicit choice
+   win in BOTH directions: picking Light on a dark-OS machine blocks the
+   media query, and picking Dark on a light-OS machine is carried by the
+   attribute rule. Absent the attribute, the OS decides -- which is the
+   "System" state.
+
+   The dark values are named once, as --dk-* constants on :root, and the
+   two dark blocks are thin mappings onto them. The cascade behaviour is
+   identical to writing the hex twice; this way a dark value has exactly
+   one definition to edit, so the two blocks cannot drift apart.
+   ===================================================================== */
+
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
-  /* brand -- chrome only: logo, nav, primary buttons, splash. Never a data
-     colour, a meter fill, or a status indicator. */
-  --gold: #e9b949;
-  --gold-hover: #f2c866;
-  --gold-pressed: #d4a32f;
-  /* Text on gold is ALWAYS dark ink -- white on gold fails at 1.83:1. */
-  --gold-ink: #0b0b0b;
+  /* ---- LIGHT (default) --------------------------------------------
 
-  /* surfaces -- navy family, matching the logo */
-  --page: #131322;
-  --surface: #1b1b2f;
-  --surface-raised: #23233a;
-  --hairline: rgba(255, 255, 255, 0.1);
+     The brand roles swap here. Navy becomes the primary action colour
+     carrying white text; gold drops to a decorative accent. Gold at its
+     brand value (#e9b949) is 1.72:1 on a light surface, so it can never
+     carry text or meaning on this side -- --gold is re-stepped to a deep
+     gold that clears 3:1 as a UI mark, and anything that needs to be
+     *read* uses ink or --action instead. */
 
-  /* ink */
-  --ink: #ffffff;
-  --ink-secondary: #c3c2b7;
-  --ink-muted: #898781;
+  /* brand -- decorative only in light: dots, icons, rules, washes. */
+  --gold: #8a6d10;
+  --gold-hover: #a08214;
+  --gold-pressed: #745b0d;
+  --gold-ink: #ffffff;
+
+  /* Primary action -- navy on light, and the same token carries text
+     links, focus rings and selected chips.
+     Deliberately deeper and more saturated than --surface's navy: the
+     surface value (#1b1b2f) is only 1.08:1 against --ink, so a link in it
+     would be indistinguishable from body copy. This one is 1.79:1 against
+     ink, 8.68:1 as text on --page, and 10.21:1 under white as a fill. */
+  --action: #2a3d7c;
+  --action-hover: #354c98;
+  --action-pressed: #1a2a5c;
+  --action-ink: #ffffff;
+
+  /* surfaces -- page darkest, raised lightest, same direction as dark */
+  --page: #ececf2;
+  --surface: #f8f8fb;
+  --surface-raised: #ffffff;
+  --hairline: rgba(0, 0, 0, 0.12);
+
+  /* ink -- muted is 4.70:1 on --page, its worst ground */
+  --ink: #14141f;
+  --ink-secondary: #4a4a58;
+  --ink-muted: #67677a;
 
   /* structure */
-  --gridline: #2c2c42;
-  --baseline: #383850;
+  --gridline: #d8d8e2;
+  --baseline: #c2c2d0;
 
-  /* Scrim behind modals, dialogs and the mobile quick-add sheet. A fixed
-     black wash rather than a step of --page, so it keeps dimming what's
-     behind it whatever the surface tokens become in light mode. */
-  --scrim: rgba(0, 0, 0, 0.6);
+  /* Splash -- the auth brand panel, and the ONLY surface that does not
+     flip with the theme. It is brand chrome ("logo, nav, primary buttons,
+     splash"), and the logo is a fixed-gold SVG asset that no stylesheet
+     can restep: on a light ground that mark is 1.72:1 and washes out, and
+     the panel stops reading as the brand at all. Pinning the ground to
+     the brand navy keeps the gold mark at its validated contrast in both
+     modes and gives light mode somewhere the identity actually lives.
+     Deliberately defined once -- the dark blocks below do not override
+     these, because there is nothing to swap. */
+  --splash: #131322;
+  --splash-ink: #ffffff;
+  --splash-ink-secondary: #c3c2b7;
+
+  /* Scrim behind modals, dialogs and the mobile quick-add sheet. Lighter
+     than the dark-mode scrim: the same wash reads heavier over pale
+     content. Black in both modes rather than a step of --page, so it
+     keeps dimming whatever the surfaces become. */
+  --scrim: rgba(0, 0, 0, 0.5);
 
   /* categorical data series -- fixed order, never cycled or reassigned.
-     Re-validated against --surface (#1b1b2f); do not re-step. */
-  --cat-1: #3987e5; /* blue */
-  --cat-2: #d95926; /* orange */
-  --cat-3: #199e70; /* aqua */
-  --cat-4: #c98500; /* yellow */
-  --cat-5: #d55181; /* magenta */
-  --cat-6: #008300; /* green */
-  --cat-7: #9085e9; /* violet */
-  --cat-8: #e66767; /* red */
+     A SELECTED light set, not a flip of the dark one: the dark values
+     are 1.7-2.5:1 on a light ground. Re-stepped and re-validated against
+     --page, --surface and --surface-raised, passing all six checks on
+     each (worst adjacent pair magenta<->yellow, dE 9.0 deutan / 8.0
+     tritan / 16.0 normal). Do not re-step without re-running the
+     validator against all three light surfaces. */
+  --cat-1: #1f5fb0; /* blue */
+  --cat-2: #b8431a; /* orange */
+  --cat-3: #0b8068; /* aqua */
+  --cat-4: #96610a; /* yellow */
+  --cat-5: #b03763; /* magenta */
+  --cat-6: #0a6b0a; /* green */
+  --cat-7: #6055c4; /* violet */
+  --cat-8: #c23f3f; /* red */
 
-  /* status -- reserved, never used as a series colour */
-  --good: #0ca30c;
-  --warning: #fab219;
-  --serious: #ec835a;
-  --critical: #d03b3b;
-  /* Ink on a filled --critical surface, the counterpart to --gold-ink. White
-     on #d03b3b is 4.80:1, so it clears AA for the button's 14px semibold.
-     Pinned rather than tracking --ink: --critical is a fixed status colour in
-     both themes, so its ink must not flip to dark when the page does. */
+  /* Status -- reserved, never used as a series colour.
+     --good and --critical are rendered as actual text (an income figure in
+     Amount, the delete affordances), so both clear 4.5:1 on --page, their
+     worst ground. --warning never is: it appears only as the streak flame
+     icon and as a Meter fill, both of which are marks needing 3:1. Holding
+     it to the text bar forced it down to a muddy brown that stopped
+     reading as caution at all -- the over-budget meter looked like a
+     colour, not a warning. It sits at the brightest amber that still
+     clears 3:1 on every light ground (3.25:1 on --page). If it ever wears
+     text, it needs re-stepping or a separate token. */
+  --good: #097009;
+  --warning: #b8730a;
+  --serious: #a84718;
+  --critical: #c0261f;
   --critical-ink: #ffffff;
+
+  /* ---- DARK VALUES (named once, mapped by the two blocks below) ---- */
+
+  --dk-gold: #e9b949;
+  --dk-gold-hover: #f2c866;
+  --dk-gold-pressed: #d4a32f;
+  /* Text on gold is ALWAYS dark ink -- white on gold fails at 1.83:1. */
+  --dk-gold-ink: #0b0b0b;
+
+  /* Gold IS the primary action in dark -- the role swap is light-only. */
+  --dk-action: #e9b949;
+  --dk-action-hover: #f2c866;
+  --dk-action-pressed: #d4a32f;
+  --dk-action-ink: #0b0b0b;
+
+  --dk-page: #131322;
+  --dk-surface: #1b1b2f;
+  --dk-surface-raised: #23233a;
+  --dk-hairline: rgba(255, 255, 255, 0.1);
+
+  --dk-ink: #ffffff;
+  --dk-ink-secondary: #c3c2b7;
+  --dk-ink-muted: #898781;
+
+  --dk-gridline: #2c2c42;
+  --dk-baseline: #383850;
+
+  --dk-scrim: rgba(0, 0, 0, 0.6);
+
+  /* Re-validated against --dk-surface (#1b1b2f); do not re-step. */
+  --dk-cat-1: #3987e5; /* blue */
+  --dk-cat-2: #d95926; /* orange */
+  --dk-cat-3: #199e70; /* aqua */
+  --dk-cat-4: #c98500; /* yellow */
+  --dk-cat-5: #d55181; /* magenta */
+  --dk-cat-6: #008300; /* green */
+  --dk-cat-7: #9085e9; /* violet */
+  --dk-cat-8: #e66767; /* red */
+
+  --dk-good: #0ca30c;
+  --dk-warning: #fab219;
+  --dk-serious: #ec835a;
+  --dk-critical: #d03b3b;
+  /* Ink on a filled --critical surface, the counterpart to --gold-ink.
+     White on #d03b3b is 4.80:1 and on #c0261f is 5.94:1, so it clears AA
+     for the button's 14px semibold in both modes. Pinned rather than
+     tracking --ink: --critical is a fixed status colour, so its ink must
+     not flip to dark when the page does. */
+  --dk-critical-ink: #ffffff;
+}
+
+/* System (no data-theme attribute) following a dark OS. The guard is
+   what lets an explicit Light choice override a dark OS. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --gold: var(--dk-gold);
+    --gold-hover: var(--dk-gold-hover);
+    --gold-pressed: var(--dk-gold-pressed);
+    --gold-ink: var(--dk-gold-ink);
+
+    --action: var(--dk-action);
+    --action-hover: var(--dk-action-hover);
+    --action-pressed: var(--dk-action-pressed);
+    --action-ink: var(--dk-action-ink);
+
+    --page: var(--dk-page);
+    --surface: var(--dk-surface);
+    --surface-raised: var(--dk-surface-raised);
+    --hairline: var(--dk-hairline);
+
+    --ink: var(--dk-ink);
+    --ink-secondary: var(--dk-ink-secondary);
+    --ink-muted: var(--dk-ink-muted);
+
+    --gridline: var(--dk-gridline);
+    --baseline: var(--dk-baseline);
+
+    --scrim: var(--dk-scrim);
+
+    --cat-1: var(--dk-cat-1);
+    --cat-2: var(--dk-cat-2);
+    --cat-3: var(--dk-cat-3);
+    --cat-4: var(--dk-cat-4);
+    --cat-5: var(--dk-cat-5);
+    --cat-6: var(--dk-cat-6);
+    --cat-7: var(--dk-cat-7);
+    --cat-8: var(--dk-cat-8);
+
+    --good: var(--dk-good);
+    --warning: var(--dk-warning);
+    --serious: var(--dk-serious);
+    --critical: var(--dk-critical);
+    --critical-ink: var(--dk-critical-ink);
+  }
+}
+
+/* An explicit Dark choice -- wins on a light-OS machine, and matches the
+   media query on a dark-OS one. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --gold: var(--dk-gold);
+  --gold-hover: var(--dk-gold-hover);
+  --gold-pressed: var(--dk-gold-pressed);
+  --gold-ink: var(--dk-gold-ink);
+
+  --action: var(--dk-action);
+  --action-hover: var(--dk-action-hover);
+  --action-pressed: var(--dk-action-pressed);
+  --action-ink: var(--dk-action-ink);
+
+  --page: var(--dk-page);
+  --surface: var(--dk-surface);
+  --surface-raised: var(--dk-surface-raised);
+  --hairline: var(--dk-hairline);
+
+  --ink: var(--dk-ink);
+  --ink-secondary: var(--dk-ink-secondary);
+  --ink-muted: var(--dk-ink-muted);
+
+  --gridline: var(--dk-gridline);
+  --baseline: var(--dk-baseline);
+
+  --scrim: var(--dk-scrim);
+
+  --cat-1: var(--dk-cat-1);
+  --cat-2: var(--dk-cat-2);
+  --cat-3: var(--dk-cat-3);
+  --cat-4: var(--dk-cat-4);
+  --cat-5: var(--dk-cat-5);
+  --cat-6: var(--dk-cat-6);
+  --cat-7: var(--dk-cat-7);
+  --cat-8: var(--dk-cat-8);
+
+  --good: var(--dk-good);
+  --warning: var(--dk-warning);
+  --serious: var(--dk-serious);
+  --critical: var(--dk-critical);
+  --critical-ink: var(--dk-critical-ink);
 }
 
 @theme inline {
@@ -59,6 +270,11 @@
   --color-gold-hover: var(--gold-hover);
   --color-gold-pressed: var(--gold-pressed);
   --color-gold-ink: var(--gold-ink);
+
+  --color-action: var(--action);
+  --color-action-hover: var(--action-hover);
+  --color-action-pressed: var(--action-pressed);
+  --color-action-ink: var(--action-ink);
 
   --color-page: var(--page);
   --color-surface: var(--surface);
@@ -72,6 +288,10 @@
   --color-gridline: var(--gridline);
   --color-baseline: var(--baseline);
   --color-scrim: var(--scrim);
+
+  --color-splash: var(--splash);
+  --color-splash-ink: var(--splash-ink);
+  --color-splash-ink-secondary: var(--splash-ink-secondary);
 
   --color-cat-1: var(--cat-1);
   --color-cat-2: var(--cat-2);

@@ -6,6 +6,7 @@ import { archiveCategoryAction } from "@/lib/actions/categories";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { CategoryWithGroup } from "@/lib/db/categories";
+import { categoryColorVar } from "@/lib/categoryOptions";
 
 export function CategoryRow({
   category,
@@ -49,7 +50,7 @@ export function CategoryRow({
     >
       <span
         className="h-2.5 w-2.5 shrink-0 rounded-full"
-        style={{ backgroundColor: category.color ?? "var(--color-ink-muted)" }}
+        style={{ backgroundColor: categoryColorVar(category.color) }}
         aria-hidden="true"
       />
       <CategoryIcon icon={category.icon} className="h-4 w-4 shrink-0 text-ink-secondary" />
@@ -63,7 +64,7 @@ export function CategoryRow({
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
       >
         Edit
       </button>
@@ -71,7 +72,7 @@ export function CategoryRow({
         <button
           type="button"
           onClick={() => setConfirmingArchive(true)}
-          className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           Archive
         </button>

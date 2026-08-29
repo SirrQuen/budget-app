@@ -52,7 +52,7 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/categ
                 key={filter.value}
                 href={buildHref(filter.value, showArchived)}
                 aria-current={active || undefined}
-                className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
+                className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
                   active ? "bg-surface-raised text-ink" : "text-ink-secondary hover:text-ink"
                 }`}
               >
@@ -65,9 +65,9 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/categ
         <Link
           href={buildHref(type, !showArchived)}
           aria-pressed={showArchived}
-          className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all duration-150 ease-out hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-page ${
+          className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all duration-150 ease-out hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page ${
             showArchived
-              ? "border-gold/40 bg-gold/10 text-gold"
+              ? "border-action/40 bg-action/10 text-action"
               : "border-hairline bg-surface text-ink-secondary hover:text-ink"
           }`}
         >
@@ -114,7 +114,7 @@ function CategoryGroups({
         action={
           <Link
             href="/categories"
-            className="rounded text-sm font-medium text-gold transition-colors duration-150 hover:text-gold-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            className="rounded text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
           >
             Clear filters
           </Link>

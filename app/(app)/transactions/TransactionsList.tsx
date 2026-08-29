@@ -12,9 +12,10 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DeleteTransactionButton } from "./DeleteTransactionButton";
 import { useOptimisticTransactions, type PendingTransaction } from "@/components/quick-add/OptimisticTransactionsContext";
+import { categoryColorVar } from "@/lib/categoryOptions";
 
 const checkboxClassName =
-  "h-4 w-4 cursor-pointer rounded border-hairline bg-surface-raised accent-gold outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
+  "h-4 w-4 cursor-pointer rounded border-hairline bg-surface-raised accent-action outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -259,7 +260,7 @@ export function TransactionsList({
         action={
           <Link
             href={buildHref(params, { page: "1" })}
-            className="rounded text-sm font-medium text-gold transition-colors duration-150 hover:text-gold-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            className="rounded text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
           >
             Back to page 1
           </Link>
@@ -280,7 +281,7 @@ export function TransactionsList({
         }
         action={
           hasFilters ? (
-            <Link href="/transactions" className="rounded text-sm font-medium text-gold transition-colors duration-150 hover:text-gold-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
+            <Link href="/transactions" className="rounded text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
               Clear filters
             </Link>
           ) : undefined
@@ -305,7 +306,7 @@ export function TransactionsList({
                 setLastCheckedIndex(null);
                 setBulkError(undefined);
               }}
-              className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised"
+              className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised"
             >
               Clear
             </button>
@@ -370,7 +371,7 @@ export function TransactionsList({
                     <span className="inline-flex items-center gap-2 text-ink-secondary">
                       <span
                         className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: tx.category_color ?? "var(--color-ink-muted)" }}
+                        style={{ backgroundColor: categoryColorVar(tx.category_color) }}
                         aria-hidden="true"
                       />
                       {tx.category_name ?? "Uncategorized"}
@@ -429,7 +430,7 @@ export function TransactionsList({
                       <div className="inline-flex items-center gap-3">
                         <Link
                           href={`/transactions/${row.id}/edit`}
-                          className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                          className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
                         >
                           Edit
                         </Link>
@@ -463,7 +464,7 @@ export function TransactionsList({
                     <span className="inline-flex items-center gap-2 text-ink-secondary">
                       <span
                         className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: tx.category_color ?? "var(--color-ink-muted)" }}
+                        style={{ backgroundColor: categoryColorVar(tx.category_color) }}
                         aria-hidden="true"
                       />
                       {tx.category_name ?? "Uncategorized"}
@@ -477,7 +478,7 @@ export function TransactionsList({
                     <div className="inline-flex items-center gap-3">
                       <Link
                         href={`/transactions/${tx.id}/edit`}
-                        className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                        className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
                       >
                         Edit
                       </Link>
@@ -527,7 +528,7 @@ export function TransactionsList({
           {page > 1 ? (
             <Link
               href={buildHref(params, { page: String(page - 1) })}
-              className="rounded font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-page"
+              className="rounded font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page"
             >
               Previous
             </Link>
@@ -540,7 +541,7 @@ export function TransactionsList({
           {page < totalPages ? (
             <Link
               href={buildHref(params, { page: String(page + 1) })}
-              className="rounded font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-page"
+              className="rounded font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page"
             >
               Next
             </Link>

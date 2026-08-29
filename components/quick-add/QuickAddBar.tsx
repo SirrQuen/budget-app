@@ -272,12 +272,12 @@ export function QuickAddBar({
           onKeyDown={handleInputKeyDown}
           placeholder="Quick add — e.g. trader joes 82.45"
           autoComplete="off"
-          className="w-full rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink placeholder:text-ink-muted outline-none transition-colors focus:border-gold focus:ring-2 focus:ring-gold/40"
+          className="w-full rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink placeholder:text-ink-muted outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40"
         />
         <button
           type="button"
           onClick={openFullForm}
-          className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           Full form
         </button>
@@ -303,7 +303,7 @@ export function QuickAddBar({
                   categoryTouchedRef.current = true;
                   setCategoryid(e.target.value);
                 }}
-                className="rounded-lg border border-hairline bg-surface-raised px-2 py-1 text-xs text-ink outline-none transition-colors duration-150 focus:border-gold focus:ring-2 focus:ring-gold/40"
+                className="rounded-lg border border-hairline bg-surface-raised px-2 py-1 text-xs text-ink outline-none transition-colors duration-150 focus:border-action focus:ring-2 focus:ring-action/40"
               >
                 <option value="" disabled>
                   Category
@@ -319,7 +319,7 @@ export function QuickAddBar({
                 name="accountid"
                 value={accountid}
                 onChange={(e) => setAccountid(e.target.value)}
-                className="rounded-lg border border-hairline bg-surface-raised px-2 py-1 text-xs text-ink-secondary outline-none transition-colors duration-150 focus:border-gold focus:ring-2 focus:ring-gold/40"
+                className="rounded-lg border border-hairline bg-surface-raised px-2 py-1 text-xs text-ink-secondary outline-none transition-colors duration-150 focus:border-action focus:ring-2 focus:ring-action/40"
               >
                 <option value="" disabled>
                   Account
@@ -368,7 +368,7 @@ export function QuickAddBar({
           inputRef.current?.focus();
         }}
         aria-label="Quick add transaction"
-        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gold text-gold-ink shadow-lg transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-gold-hover hover:shadow-xl active:translate-y-0 active:scale-95 active:bg-gold-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-page md:hidden"
+        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-action text-action-ink shadow-lg transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-action-hover hover:shadow-xl active:translate-y-0 active:scale-95 active:bg-action-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page md:hidden"
       >
         <PlusIcon className="h-6 w-6" />
       </button>

@@ -7,7 +7,7 @@ import {
   updateCategoryAction,
   type ActionState,
 } from "@/lib/actions/categories";
-import { CATEGORY_COLOR_SWATCHES } from "@/lib/categoryOptions";
+import { CATEGORY_COLOR_SWATCHES, categoryColorVar } from "@/lib/categoryOptions";
 import { CATEGORY_ICON_NAMES, CategoryIcon } from "@/components/ui/CategoryIcon";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import { FormField } from "@/components/ui/FormField";
@@ -57,7 +57,7 @@ export function CategoryForm({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           Cancel
         </button>
@@ -79,7 +79,7 @@ export function CategoryForm({
           {(["Income", "Expense"] as const).map((value) => (
             <label
               key={value}
-              className="cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink has-[:checked]:bg-surface has-[:checked]:text-ink has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-surface-raised"
+              className="cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink has-[:checked]:bg-surface has-[:checked]:text-ink has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-action has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-surface-raised"
             >
               <input
                 type="radio"
@@ -101,7 +101,7 @@ export function CategoryForm({
           name="groupid"
           required
           defaultValue={category?.groupid ?? ""}
-          className="w-full rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-gold focus:ring-2 focus:ring-gold/40"
+          className="w-full rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40"
         >
           <option value="" disabled>
             Select a group
@@ -120,7 +120,7 @@ export function CategoryForm({
           {CATEGORY_ICON_NAMES.map((name) => (
             <label
               key={name}
-              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border border-hairline bg-surface-raised text-ink-secondary transition-all duration-150 hover:-translate-y-0.5 hover:border-ink-muted hover:text-ink has-[:checked]:border-gold has-[:checked]:bg-gold/10 has-[:checked]:text-gold has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-surface"
+              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border border-hairline bg-surface-raised text-ink-secondary transition-all duration-150 hover:-translate-y-0.5 hover:border-ink-muted hover:text-ink has-[:checked]:border-action has-[:checked]:bg-action/10 has-[:checked]:text-action has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-action has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-surface"
             >
               <input
                 type="radio"
@@ -143,11 +143,14 @@ export function CategoryForm({
           Picked from the app&rsquo;s fixed data-colour set, so it stays readable in charts.
         </p>
         <div className="flex flex-wrap gap-2">
+          {/* The swatch previews the slot as it looks in the CURRENT theme,
+              not as the hex it stores -- otherwise the picker shows one
+              colour and the dot it produces shows another. */}
           {CATEGORY_COLOR_SWATCHES.map((swatch) => (
             <label
               key={swatch.value}
-              className="h-8 w-8 cursor-pointer rounded-full ring-2 ring-transparent ring-offset-2 ring-offset-surface transition-all duration-150 hover:scale-110 has-[:checked]:ring-ink has-[:focus-visible]:ring-gold"
-              style={{ backgroundColor: swatch.value }}
+              className="h-8 w-8 cursor-pointer rounded-full ring-2 ring-transparent ring-offset-2 ring-offset-surface transition-all duration-150 hover:scale-110 has-[:checked]:ring-ink has-[:focus-visible]:ring-action"
+              style={{ backgroundColor: categoryColorVar(swatch.value) }}
             >
               <input
                 type="radio"

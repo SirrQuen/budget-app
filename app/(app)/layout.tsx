@@ -4,10 +4,12 @@ import { getLoggingStreak } from "@/lib/db/dashboard";
 import { listAccounts } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { getMostRecentTransactionAccountId } from "@/lib/db/transactions";
+import { getTheme } from "@/lib/db/settings";
 import { AppShell } from "@/components/app-shell/AppShell";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const [user, , streakResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult] =
+  const [user, , streakResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme] =
     await Promise.all([
       requireUser(),
       // Every authenticated route runs this layout, including the
@@ -21,6 +23,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       listCategoriesForType("Income"),
       listCategoriesForType("Expense"),
       getMostRecentTransactionAccountId(),
+      // Never rejects and never surfaces an error -- an unreadable settings
+      // row resolves to "system" rather than failing every authenticated
+      // route. See lib/db/settings.ts.
+      getTheme(),
     ]);
 
   // Nothing worth showing for a user who hasn't logged anything in the
@@ -44,8 +50,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       : null;
 
   return (
-    <AppShell userEmail={user.email ?? "Signed in"} streak={streak} quickAdd={quickAdd}>
-      {children}
-    </AppShell>
+    <ThemeProvider stored={theme}>
+      <AppShell userEmail={user.email ?? "Signed in"} streak={streak} quickAdd={quickAdd}>
+        {children}
+      </AppShell>
+    </ThemeProvider>
   );
 }
