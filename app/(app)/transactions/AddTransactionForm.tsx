@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { Celebration } from "@/components/ui/Celebration";
-import { FlameIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, FlameIcon } from "@/components/ui/icons";
 
 const fieldClassName =
   "w-full rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-gold focus:ring-2 focus:ring-gold/40";
@@ -132,12 +132,19 @@ export function AddTransactionForm({
   const [celebrateMessage, setCelebrateMessage] = useState("Logged");
   const [celebrateIcon, setCelebrateIcon] = useState<React.ReactNode>("✓");
   const formRef = useRef<HTMLFormElement>(null);
+  const amountInputRef = useRef<HTMLInputElement>(null);
   const wasPending = useRef(false);
   const celebrateTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const categoryGroups =
     type === "Transfer" ? [] : groupByCategoryGroup(type === "Income" ? incomeCategories : expenseCategories);
   const accountsMismatch = type === "Transfer" && fromAccountId !== "" && fromAccountId === toAccountId;
+  // Closed by default (most entries skip these), but an edit or a prefill
+  // that already carries one of these values should show it immediately
+  // rather than hiding data the user (or quick-add) already supplied.
+  const detailsDefaultOpen = Boolean(
+    initialValues?.merchant || initialValues?.notes || initialValues?.payment_method || prefill?.merchant,
+  );
 
   // Success is "was pending, now isn't, and the server didn't hand back an
   // error" -- create-only. An edit's success redirects server side (see
@@ -152,6 +159,11 @@ export function AddTransactionForm({
       setToAccountId("");
       setAmount("");
       setClientError(undefined);
+      // Reset leaves focus wherever it was (typically the submit button) --
+      // pull it back into the form so the next entry can start typing
+      // immediately, without the browser scrolling to bring the field into
+      // view (it's already on screen).
+      amountInputRef.current?.focus({ preventScroll: true });
       const milestone = state?.milestone;
       setCelebrateMessage(milestone?.message ?? "Logged");
       setCelebrateIcon(milestone?.kind === "streak-7" ? <FlameIcon className="h-4 w-4" /> : "✓");
@@ -252,201 +264,216 @@ export function AddTransactionForm({
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="Date" htmlFor="transaction_date" required>
-            <input
-              id="transaction_date"
-              name="transaction_date"
-              type="date"
-              required
-              defaultValue={initialValues?.transaction_date ?? prefill?.transaction_date ?? todayISO()}
-              className={fieldClassName}
-            />
-          </FormField>
-
-          <FormField label="Amount" htmlFor="amount" required>
-            <Input
-              id="amount"
-              name="amount"
-              type="number"
-              inputMode="decimal"
-              min="0.01"
-              step="0.01"
-              placeholder="0.00"
-              required
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              onKeyDown={handleAmountKeyDown}
-              onPaste={handleAmountPaste}
-            />
-          </FormField>
-        </div>
-
-        <FormField label="Description" htmlFor="description" required>
-          <Input
-            id="description"
-            name="description"
-            required
-            maxLength={120}
-            placeholder="e.g. Groceries"
-            defaultValue={initialValues?.description ?? prefill?.description}
-          />
-        </FormField>
-
-        <fieldset className="flex flex-col gap-1.5">
-          <legend className="text-sm font-medium text-ink-secondary">Type</legend>
-          <div className="inline-flex w-fit rounded-full border border-hairline bg-surface-raised p-1">
-            {typeOptions.map((value) => (
-              <label
-                key={value}
-                className="cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink has-[:checked]:bg-surface has-[:checked]:text-ink has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-surface-raised"
-              >
+        <div className="grid grid-cols-1 gap-x-6 gap-y-4 lg:grid-cols-2">
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <FormField label="Date" htmlFor="transaction_date" required>
                 <input
-                  type="radio"
-                  name="transaction_type"
-                  value={value}
-                  checked={type === value}
-                  onChange={() => handleTypeChange(value)}
-                  className="sr-only"
+                  id="transaction_date"
+                  name="transaction_date"
+                  type="date"
+                  required
+                  defaultValue={initialValues?.transaction_date ?? prefill?.transaction_date ?? todayISO()}
+                  className={fieldClassName}
                 />
-                {value}
-              </label>
-            ))}
-          </div>
-        </fieldset>
+              </FormField>
 
-        {type === "Transfer" ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="From account" htmlFor="fromAccountId" required>
-              <select
-                id="fromAccountId"
-                name="fromAccountId"
+              <FormField label="Amount" htmlFor="amount" required>
+                <Input
+                  ref={amountInputRef}
+                  id="amount"
+                  name="amount"
+                  type="number"
+                  inputMode="decimal"
+                  min="0.01"
+                  step="0.01"
+                  placeholder="0.00"
+                  required
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  onKeyDown={handleAmountKeyDown}
+                  onPaste={handleAmountPaste}
+                />
+              </FormField>
+            </div>
+
+            <FormField label="Description" htmlFor="description" required>
+              <Input
+                id="description"
+                name="description"
                 required
-                value={fromAccountId}
-                onChange={(e) => setFromAccountId(e.target.value)}
-                className={fieldClassName}
-              >
-                <option value="" disabled>
-                  Select an account
-                </option>
-                {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.account_name}
-                    {account.is_active ? "" : " (archived)"}
-                  </option>
-                ))}
-              </select>
+                maxLength={120}
+                placeholder="e.g. Groceries"
+                defaultValue={initialValues?.description ?? prefill?.description}
+              />
             </FormField>
 
-            <FormField
-              label="To account"
-              htmlFor="toAccountId"
-              required
-              error={accountsMismatch ? "From and to accounts must be different." : undefined}
-            >
-              <select
-                id="toAccountId"
-                name="toAccountId"
-                required
-                value={toAccountId}
-                onChange={(e) => setToAccountId(e.target.value)}
-                className={fieldClassName}
-              >
-                <option value="" disabled>
-                  Select an account
-                </option>
-                {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.account_name}
-                    {account.is_active ? "" : " (archived)"}
-                  </option>
+            <fieldset className="flex flex-col gap-1.5">
+              <legend className="text-sm font-medium text-ink-secondary">Type</legend>
+              <div className="inline-flex w-fit rounded-full border border-hairline bg-surface-raised p-1">
+                {typeOptions.map((value) => (
+                  <label
+                    key={value}
+                    className="cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink has-[:checked]:bg-surface has-[:checked]:text-ink has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-surface-raised"
+                  >
+                    <input
+                      type="radio"
+                      name="transaction_type"
+                      value={value}
+                      checked={type === value}
+                      onChange={() => handleTypeChange(value)}
+                      className="sr-only"
+                    />
+                    {value}
+                  </label>
                 ))}
-              </select>
-            </FormField>
+              </div>
+            </fieldset>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Category" htmlFor="categoryid" required>
-              <select
-                id="categoryid"
-                name="categoryid"
-                required
-                value={categoryid}
-                onChange={(e) => setCategoryid(e.target.value)}
-                className={fieldClassName}
-              >
-                <option value="" disabled>
-                  Select a category
-                </option>
-                {categoryGroups.map((group) => (
-                  <optgroup key={group.name} label={group.name}>
-                    {group.categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.category_name}
-                        {category.is_active ? "" : " (archived)"}
+
+          <div className="flex flex-col gap-4">
+            {type === "Transfer" ? (
+              <>
+                <FormField label="From account" htmlFor="fromAccountId" required>
+                  <select
+                    id="fromAccountId"
+                    name="fromAccountId"
+                    required
+                    value={fromAccountId}
+                    onChange={(e) => setFromAccountId(e.target.value)}
+                    className={fieldClassName}
+                  >
+                    <option value="" disabled>
+                      Select an account
+                    </option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.account_name}
+                        {account.is_active ? "" : " (archived)"}
                       </option>
                     ))}
-                  </optgroup>
-                ))}
-              </select>
-            </FormField>
+                  </select>
+                </FormField>
 
-            <FormField label="Account" htmlFor="accountid" required>
-              <select
-                id="accountid"
-                name="accountid"
-                required
-                defaultValue={initialValues?.accountid ?? ""}
+                <FormField
+                  label="To account"
+                  htmlFor="toAccountId"
+                  required
+                  error={accountsMismatch ? "From and to accounts must be different." : undefined}
+                >
+                  <select
+                    id="toAccountId"
+                    name="toAccountId"
+                    required
+                    value={toAccountId}
+                    onChange={(e) => setToAccountId(e.target.value)}
+                    className={fieldClassName}
+                  >
+                    <option value="" disabled>
+                      Select an account
+                    </option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.account_name}
+                        {account.is_active ? "" : " (archived)"}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+              </>
+            ) : (
+              <>
+                <FormField label="Category" htmlFor="categoryid" required>
+                  <select
+                    id="categoryid"
+                    name="categoryid"
+                    required
+                    value={categoryid}
+                    onChange={(e) => setCategoryid(e.target.value)}
+                    className={fieldClassName}
+                  >
+                    <option value="" disabled>
+                      Select a category
+                    </option>
+                    {categoryGroups.map((group) => (
+                      <optgroup key={group.name} label={group.name}>
+                        {group.categories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.category_name}
+                            {category.is_active ? "" : " (archived)"}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </FormField>
+
+                <FormField label="Account" htmlFor="accountid" required>
+                  <select
+                    id="accountid"
+                    name="accountid"
+                    required
+                    defaultValue={initialValues?.accountid ?? ""}
+                    className={fieldClassName}
+                  >
+                    <option value="" disabled>
+                      Select an account
+                    </option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.account_name}
+                        {account.is_active ? "" : " (archived)"}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+              </>
+            )}
+          </div>
+        </div>
+
+        <details className="group rounded-lg border border-hairline" open={detailsDefaultOpen}>
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink [&::-webkit-details-marker]:hidden">
+            <ChevronDownIcon className="h-4 w-4 transition-transform duration-150 group-open:rotate-180" />
+            Add details
+          </summary>
+          <div className="flex flex-col gap-4 px-3 pb-3 pt-1">
+            {type === "Transfer" ? null : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormField label="Merchant" htmlFor="merchant" hint="Optional">
+                  <Input
+                    id="merchant"
+                    name="merchant"
+                    maxLength={80}
+                    placeholder="e.g. Trader Joe's"
+                    defaultValue={initialValues?.merchant ?? prefill?.merchant}
+                  />
+                </FormField>
+
+                <FormField label="Payment method" htmlFor="payment_method" hint="Optional">
+                  <Input
+                    id="payment_method"
+                    name="payment_method"
+                    maxLength={40}
+                    placeholder="e.g. Debit card"
+                    defaultValue={initialValues?.payment_method ?? undefined}
+                  />
+                </FormField>
+              </div>
+            )}
+
+            <FormField label="Notes" htmlFor="notes" hint="Optional">
+              <textarea
+                id="notes"
+                name="notes"
+                rows={2}
+                maxLength={500}
+                defaultValue={initialValues?.notes ?? undefined}
                 className={fieldClassName}
-              >
-                <option value="" disabled>
-                  Select an account
-                </option>
-                {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.account_name}
-                    {account.is_active ? "" : " (archived)"}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-          </div>
-        )}
-
-        {type === "Transfer" ? null : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Merchant" htmlFor="merchant" hint="Optional">
-              <Input
-                id="merchant"
-                name="merchant"
-                maxLength={80}
-                placeholder="e.g. Trader Joe's"
-                defaultValue={initialValues?.merchant ?? prefill?.merchant}
-              />
-            </FormField>
-
-            <FormField label="Payment method" htmlFor="payment_method" hint="Optional">
-              <Input
-                id="payment_method"
-                name="payment_method"
-                maxLength={40}
-                placeholder="e.g. Debit card"
-                defaultValue={initialValues?.payment_method ?? undefined}
               />
             </FormField>
           </div>
-        )}
-
-        <FormField label="Notes" htmlFor="notes" hint="Optional">
-          <textarea
-            id="notes"
-            name="notes"
-            rows={2}
-            maxLength={500}
-            defaultValue={initialValues?.notes ?? undefined}
-            className={fieldClassName}
-          />
-        </FormField>
+        </details>
 
         {clientError || state?.error ? <ErrorMessage message={clientError ?? state!.error!} /> : null}
 
@@ -456,7 +483,9 @@ export function AddTransactionForm({
       </form>
 
       {isEdit ? null : (
-        <Celebration show={celebrate} message={celebrateMessage} icon={celebrateIcon} />
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center">
+          <Celebration show={celebrate} message={celebrateMessage} icon={celebrateIcon} />
+        </div>
       )}
     </div>
   );
