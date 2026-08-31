@@ -58,7 +58,7 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
         <div id={panelId} className="border-t border-hairline px-5 py-4">
           <dl className="flex flex-col gap-2 text-sm">
             <div className="flex items-baseline justify-between gap-4">
-              <dt className="text-ink-secondary">Cash on hand</dt>
+              <dt className="text-ink-secondary">Spendable cash</dt>
               <dd className="font-medium text-ink">{formatCurrency(data.cashOnHand)}</dd>
             </div>
 

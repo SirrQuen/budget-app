@@ -504,9 +504,12 @@ export type SafeToSpendCommitment = {
 
 export type SafeToSpend = {
   /**
-   * Balance across asset accounts only -- Checking, Savings, Investment,
-   * Cash. Never Credit Card or Loan. This is v_net_worth.total_assets,
-   * which sums exactly those active account balances in SQL.
+   * Balance across spendable cash accounts only -- Checking, Savings, Cash.
+   * Investment is excluded: a 401k or IRA can't be spent without penalty
+   * and tax, and counting it inflates the figure past usefulness. Credit
+   * Card and Loan are excluded too. This is v_dashboard_kpis.cash_balance,
+   * which sums exactly those active account balances in SQL. Investment
+   * accounts still count toward net worth, which this does not feed.
    */
   cashOnHand: number;
   /**
@@ -544,13 +547,14 @@ type RawRecurringRow = {
   category: { category_type: string };
 };
 
-// "Safe to spend" = asset-account cash, minus the recurring bills still to
+// "Safe to spend" = spendable cash, minus the recurring bills still to
 // land this month. Deliberately no budget term -- see SafeToSpend.safeToSpend.
 //
-// cash comes from v_net_worth (SQL-summed); the recurring side is read from
-// the base table, not v_upcoming_recurring, because that view drops the
-// column that carries Income/Expense direction. A recurring template's
-// direction is its category's category_type.
+// cash comes from v_dashboard_kpis.cash_balance -- SQL-summed over active
+// Checking / Savings / Cash accounts only, never Investment. The recurring
+// side is read from the base table, not v_upcoming_recurring, because that
+// view drops the column that carries Income/Expense direction. A recurring
+// template's direction is its category's category_type.
 //
 // The one subtraction and the commitment sum run in integer cents, never JS
 // floats -- amount is exact `numeric` and this figure is shown to the cent
@@ -562,8 +566,8 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   const periodEnd = endOfMonthISO(today);
   const daysRemaining = daysBetweenInclusive(today, periodEnd);
 
-  const [assetsRes, recurringRes] = await Promise.all([
-    supabase.from("v_net_worth").select("total_assets").maybeSingle(),
+  const [cashRes, recurringRes] = await Promise.all([
+    supabase.from("v_dashboard_kpis").select("cash_balance").maybeSingle(),
     supabase
       .from("recurring_transactions")
       .select(
@@ -576,8 +580,8 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
       .returns<RawRecurringRow[]>(),
   ]);
 
-  if (assetsRes.error) {
-    return { data: null, error: assetsRes.error.message };
+  if (cashRes.error) {
+    return { data: null, error: cashRes.error.message };
   }
   if (recurringRes.error) {
     return { data: null, error: recurringRes.error.message };
@@ -597,7 +601,7 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
       dueDate: row.next_run_date,
     }));
 
-  const cashCents = Math.round((assetsRes.data?.total_assets ?? 0) * 100);
+  const cashCents = Math.round((cashRes.data?.cash_balance ?? 0) * 100);
   const committedCents = commitments.reduce(
     (cents, c) => cents + Math.round(c.amount * 100),
     0,
