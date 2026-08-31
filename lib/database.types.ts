@@ -1322,6 +1322,17 @@ export type Database = {
       }
     }
     Functions: {
+      category_spend_between: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          category_id: string
+          category_name: string
+          group_id: string
+          group_name: string
+          group_sort_order: number
+          total_spend: number
+        }[]
+      }
       email_for_username: { Args: { p_username: string }; Returns: string }
       seed_default_categories: {
         Args: { p_userid: string }

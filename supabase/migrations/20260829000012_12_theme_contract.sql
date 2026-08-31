@@ -26,7 +26,16 @@
 -- Note lib/theme.ts coerceTheme() already treats any unrecognised value
 -- as 'system' on read, so an un-backfilled row renders correctly today --
 -- it just can't be written back until it's corrected.
+--
+-- The column itself was added to the remote out of band, ahead of this
+-- migration -- no earlier migration creates it. The `add column if not
+-- exists` below is a no-op against that remote and makes a rebuild from
+-- migrations alone (supabase db reset) correct, so the `set default` that
+-- follows always has a column to act on.
 -- =====================================================================
+
+alter table public.settings
+  add column if not exists theme text;
 
 alter table public.settings
   alter column theme set default 'system';

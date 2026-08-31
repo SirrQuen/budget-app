@@ -59,12 +59,48 @@ function yAxis(dataMax: number): { max: number; ticks: number[] } {
   return { max: step * 4, ticks: [0, 1, 2, 3, 4].map((k) => k * step) };
 }
 
-export function CashflowChart({ points }: { points: CashflowPoint[] }) {
+// Which slice of the 90-day series the dashboard filter currently has
+// selected -- drawn as a recessive raised band so the trend keeps its full
+// history while the chosen window stays legible. Chrome, not a data mark.
+function shadeIndices(
+  points: CashflowPoint[],
+  shadeFrom?: string,
+  shadeTo?: string,
+): { start: number; end: number } | null {
+  if (!shadeFrom || !shadeTo) return null;
+  const start = points.findIndex((p) => p.day >= shadeFrom);
+  if (start === -1) return null;
+  let end = start;
+  for (let i = points.length - 1; i >= start; i--) {
+    if (points[i].day <= shadeTo) {
+      end = i;
+      break;
+    }
+  }
+  // A band that spans the whole chart tells the reader nothing.
+  if (start === 0 && end === points.length - 1) return null;
+  return { start, end };
+}
+
+export function CashflowChart({
+  points,
+  shadeFrom,
+  shadeTo,
+}: {
+  points: CashflowPoint[];
+  shadeFrom?: string;
+  shadeTo?: string;
+}) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [active, setActive] = useState<number | null>(null);
   const tableId = useId();
 
   const n = points.length;
+  const shade = shadeIndices(points, shadeFrom, shadeTo);
+  const shadeLabel =
+    shadeFrom && shadeTo
+      ? `${shortDate.format(new Date(shadeFrom))} – ${shortDate.format(new Date(shadeTo))} highlighted`
+      : null;
   const { max: yMax, ticks: yTicks } = yAxis(
     Math.max(...points.flatMap((p) => [p.income, p.expenses]), 0),
   );
@@ -119,7 +155,9 @@ export function CashflowChart({ points }: { points: CashflowPoint[] }) {
       <figcaption className="mb-3 flex items-baseline justify-between gap-4">
         <div>
           <h2 className="text-sm font-medium text-ink-secondary">Cash flow</h2>
-          <p className="text-xs text-ink-muted">Last 90 days</p>
+          <p className="text-xs text-ink-muted">
+            Last 90 days{shadeLabel ? ` · ${shadeLabel}` : ""}
+          </p>
         </div>
         <ul className="flex items-center gap-4">
           {SERIES.map((s) => (
@@ -143,7 +181,9 @@ export function CashflowChart({ points }: { points: CashflowPoint[] }) {
           className="block h-auto touch-none"
           role="img"
           tabIndex={0}
-          aria-label="Cash flow, last 90 days. Arrow keys read each day; the full table follows."
+          aria-label={`Cash flow, last 90 days${
+            shadeLabel ? `, with ${shadeLabel}` : ""
+          }. Arrow keys read each day; the full table follows.`}
           aria-describedby={tableId}
           onPointerMove={(e) => setActive(pointerToIndex(e.clientX))}
           onPointerLeave={() => setActive(null)}
@@ -151,6 +191,31 @@ export function CashflowChart({ points }: { points: CashflowPoint[] }) {
           onBlur={() => setActive(null)}
           onKeyDown={onKeyDown}
         >
+          {/* selected-range band -- raised surface, behind everything */}
+          {shade ? (
+            <g aria-hidden="true">
+              <rect
+                x={x(shade.start)}
+                y={PLOT_T}
+                width={Math.max(x(shade.end) - x(shade.start), 1)}
+                height={PLOT_H}
+                fill="var(--color-surface-raised)"
+              />
+              {[shade.start, shade.end].map((i) => (
+                <line
+                  key={i}
+                  x1={x(i)}
+                  x2={x(i)}
+                  y1={PLOT_T}
+                  y2={PLOT_B}
+                  stroke="var(--color-hairline)"
+                  strokeWidth={1}
+                  vectorEffect="non-scaling-stroke"
+                />
+              ))}
+            </g>
+          ) : null}
+
           {/* gridlines + axis ticks -- recessive, under the data */}
           {yTicks.map((t) => (
             <g key={t}>

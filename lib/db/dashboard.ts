@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import { todayISO, addDaysISO, endOfMonthISO, daysBetweenInclusive } from "@/lib/date";
+import type { DashboardRange } from "@/lib/dashboardRange";
 
 type DashboardKpisRow = Database["public"]["Views"]["v_dashboard_kpis"]["Row"];
 type NetWorthRow = Database["public"]["Views"]["v_net_worth"]["Row"];
@@ -149,9 +150,9 @@ export async function getCategorySpending(
 export type Movement = {
   id: string;
   name: string;
-  /** This month's spend, dollars. */
+  /** Spend inside the selected range, dollars. */
   current: number;
-  /** Average monthly spend over the prior three calendar months, dollars. */
+  /** Spend inside the comparison window (see DashboardRange.prevLabel), dollars. */
   baseline: number;
   /** (current - baseline) / baseline -- signed. 0.34 reads as "up 34%". */
   pctChange: number;
@@ -163,13 +164,15 @@ export type GroupMovement = Movement & {
 };
 
 export type GroupMovementResult = {
-  /** Every group with a trailing baseline, largest absolute mover first. */
+  /** Every group with a comparison-window baseline, largest absolute mover first. */
   groups: GroupMovement[];
   /**
    * The one group worth a sentence -- it clears both a percentage and a
-   * dollar floor. null is a real answer: a quiet month.
+   * dollar floor. null is a real answer: a quiet period.
    */
   topMover: GroupMovement | null;
+  /** Names the comparison window, e.g. "previous 30 days" -- for the headline copy. */
+  prevLabel: string;
 };
 
 // A mover must clear both floors: a big percentage on a trivial base
@@ -178,78 +181,74 @@ export type GroupMovementResult = {
 const MOVER_MIN_PCT = 0.15;
 const MOVER_MIN_DOLLARS = 25;
 
-// This month's spend per category group, against that group's own average
-// over the prior three calendar months, ranked by how far it moved.
+// Spend per category group inside the selected range, against the same
+// group's spend in the comparison window (range.prevFrom..range.prevTo),
+// ranked by how far it moved.
 //
-// v_category_spending is Expense-only and already drops transfer legs; it
-// carries no is_active flag, so inactive categories are filtered out here
-// against the categories table. Group totals sum their categories -- cents
-// math, never JS floats (amount is exact numeric).
+// category_spend_between() mirrors v_category_spending's Expense side
+// (positive amounts, no transfer legs, active categories only) but for
+// spans that don't align to month boundaries. Called twice -- selected
+// window, then comparison window. Group totals sum their categories in
+// integer cents, never JS floats (amount is exact numeric).
 //
-// "This month" is the raw month-to-date figure, like every other
-// current-month number on the dashboard. Early in the month most groups
-// read low; the dollar floor and the quiet-month fallback absorb that
-// rather than surfacing a false "everything is down".
-export async function getGroupMovement(): Promise<DbResult<GroupMovementResult>> {
+// Early in a month-to-date range most groups read low; the dollar floor
+// and the quiet-period fallback absorb that rather than surfacing a false
+// "everything is down".
+export async function getGroupMovement(
+  range: DashboardRange,
+): Promise<DbResult<GroupMovementResult>> {
   const supabase = await createClient();
 
-  // months[0..2] are the trailing three; months[3] is the current month.
-  const now = new Date();
-  const months = [3, 2, 1, 0].map((back) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-  });
-  const currentMonth = months[3];
-
-  const [spendRes, activeRes] = await Promise.all([
-    supabase
-      .from("v_category_spending")
-      .select("month, group_id, group_name, category_id, category_name, total_spend")
-      .gte("month", months[0])
-      .lte("month", currentMonth),
-    supabase.from("categories").select("id").eq("is_active", true),
+  const [currentRes, prevRes] = await Promise.all([
+    supabase.rpc("category_spend_between", { p_from: range.from, p_to: range.to }),
+    supabase.rpc("category_spend_between", { p_from: range.prevFrom, p_to: range.prevTo }),
   ]);
 
-  if (spendRes.error) {
-    return { data: null, error: spendRes.error.message };
+  if (currentRes.error) {
+    return { data: null, error: currentRes.error.message };
   }
-  if (activeRes.error) {
-    return { data: null, error: activeRes.error.message };
+  if (prevRes.error) {
+    return { data: null, error: prevRes.error.message };
   }
 
-  const activeIds = new Set(activeRes.data.map((row) => row.id));
-
-  type Acc = { name: string; currentCents: number; trailingCents: number };
+  type Acc = { name: string; currentCents: number; prevCents: number };
   type GroupAcc = Acc & { cats: Map<string, Acc> };
   const groups = new Map<string, GroupAcc>();
 
-  for (const row of spendRes.data) {
-    if (!row.group_id || !row.category_id || !activeIds.has(row.category_id)) {
-      continue;
-    }
+  const ingest = (
+    rows: NonNullable<typeof currentRes.data>,
+    bucket: "currentCents" | "prevCents",
+  ) => {
+    for (const row of rows) {
+      if (!row.group_id || !row.category_id) {
+        continue;
+      }
 
-    let group = groups.get(row.group_id);
-    if (!group) {
-      group = { name: row.group_name ?? "", currentCents: 0, trailingCents: 0, cats: new Map() };
-      groups.set(row.group_id, group);
-    }
+      let group = groups.get(row.group_id);
+      if (!group) {
+        group = { name: row.group_name ?? "", currentCents: 0, prevCents: 0, cats: new Map() };
+        groups.set(row.group_id, group);
+      }
 
-    let cat = group.cats.get(row.category_id);
-    if (!cat) {
-      cat = { name: row.category_name ?? "", currentCents: 0, trailingCents: 0 };
-      group.cats.set(row.category_id, cat);
-    }
+      let cat = group.cats.get(row.category_id);
+      if (!cat) {
+        cat = { name: row.category_name ?? "", currentCents: 0, prevCents: 0 };
+        group.cats.set(row.category_id, cat);
+      }
 
-    const cents = Math.round((row.total_spend ?? 0) * 100);
-    const bucket = row.month === currentMonth ? "currentCents" : "trailingCents";
-    cat[bucket] += cents;
-    group[bucket] += cents;
-  }
+      const cents = Math.round((row.total_spend ?? 0) * 100);
+      cat[bucket] += cents;
+      group[bucket] += cents;
+    }
+  };
+
+  ingest(currentRes.data ?? [], "currentCents");
+  ingest(prevRes.data ?? [], "prevCents");
 
   // A movement needs a non-zero baseline; without one there's no percentage
   // to rank by (that's "new spending", a different story).
   const toMovement = (id: string, acc: Acc): Movement | null => {
-    const baselineCents = acc.trailingCents / 3;
+    const baselineCents = acc.prevCents;
     if (baselineCents <= 0) {
       return null;
     }
@@ -286,7 +285,7 @@ export async function getGroupMovement(): Promise<DbResult<GroupMovementResult>>
         Math.abs(g.current - g.baseline) >= MOVER_MIN_DOLLARS,
     ) ?? null;
 
-  return { data: { groups: groupMovements, topMover }, error: null };
+  return { data: { groups: groupMovements, topMover, prevLabel: range.prevLabel }, error: null };
 }
 
 // target_date/last_contribution_date describe each goal, not a bucketed
@@ -620,19 +619,19 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
 }
 
 export type DashboardStat = {
-  /** The current (this-month, or as-of-now) figure. */
+  /** The headline figure -- as-of-now for net worth, range total for cashflow. */
   value: number;
   /**
-   * 12 monthly points, oldest first, the last being the current month.
-   * Dollars.
+   * Sparkline points, oldest first, the last being the most recent bucket.
+   * Dollars. 12 monthly points for net worth; range-bucketed for the
+   * cashflow tiles.
    */
   points: number[];
-  /** Current month minus the prior month. Dollars, signed. */
+  /** value minus the comparison figure (prior month, or preceding window). Dollars, signed. */
   delta: number;
 };
 
-export type DashboardStats = {
-  netWorth: DashboardStat;
+export type RangeCashflowStats = {
   income: DashboardStat;
   spending: DashboardStat;
 };
@@ -653,19 +652,23 @@ function last12MonthStartsISO(): string[] {
   return out;
 }
 
-// The three trend tiles under the dashboard hero. Income and spending come
-// straight off v_monthly_cashflow. Net worth is back-cast: v_net_worth gives
-// today's figure, and every earlier month-end is that figure minus the
-// net cashflow that has landed since -- exact here because in this schema
-// net worth only moves through transactions (opening balances are fixed,
-// investments are carried at cost, transfers net to zero). The one blind
-// spot is a soft-deleted account with past activity: v_net_worth counts
-// only active accounts while v_monthly_cashflow counts all, which can skew
-// the older sparkline points but never today's value.
+// The net-worth tile in the dashboard's "Right now" region -- an as-of-now
+// figure, a month-over-month delta, and a 12-month sparkline. It stays
+// monthly and unfiltered: net worth is point-in-time, so a historical
+// date range has nothing to say about it.
+//
+// Net worth is back-cast: v_net_worth gives today's figure, and every
+// earlier month-end is that figure minus the net cashflow that has landed
+// since -- exact here because in this schema net worth only moves through
+// transactions (opening balances are fixed, investments are carried at
+// cost, transfers net to zero). The one blind spot is a soft-deleted
+// account with past activity: v_net_worth counts only active accounts
+// while v_monthly_cashflow counts all, which can skew the older sparkline
+// points but never today's value.
 //
 // All arithmetic is in integer cents -- amount is exact `numeric` and these
 // figures show to the cent (same rule as getSafeToSpend / TransactionsList).
-export async function getDashboardStats(): Promise<DbResult<DashboardStats>> {
+export async function getNetWorthStat(): Promise<DbResult<DashboardStat>> {
   const supabase = await createClient();
 
   const months = last12MonthStartsISO();
@@ -699,21 +702,86 @@ export async function getDashboardStats(): Promise<DbResult<DashboardStats>> {
     netWorthCents[k] = netWorthCents[k + 1] - netCashflowCents[k + 1];
   }
 
-  const toDollars = (cents: number[]) => cents.map((c) => c / 100);
-  const stat = (cents: number[]): DashboardStat => ({
-    value: cents[11] / 100,
-    points: toDollars(cents),
-    delta: (cents[11] - cents[10]) / 100,
-  });
-
   return {
     data: {
-      netWorth: stat(netWorthCents),
-      income: stat(incomeCents),
-      spending: stat(expenseCents),
+      value: netWorthCents[11] / 100,
+      points: netWorthCents.map((c) => c / 100),
+      delta: (netWorthCents[11] - netWorthCents[10]) / 100,
     },
     error: null,
   };
+}
+
+// The Income and Spending tiles in the dashboard's "Over time" region --
+// each a range total, a delta against the comparison window, and a
+// sparkline bucketed to the range's granularity (~daily to a month,
+// weekly to six, monthly beyond).
+//
+// One read off v_daily_cashflow spanning prevFrom..to; every figure is
+// summed off that daily grid in integer cents (amount is exact `numeric`;
+// same rule as getNetWorthStat / getSafeToSpend). v_daily_cashflow only
+// has rows for days with activity, so a missing day is a real zero.
+export async function getRangeCashflowStats(
+  range: DashboardRange,
+): Promise<DbResult<RangeCashflowStats>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("v_daily_cashflow")
+    .select("day, income, expenses")
+    .gte("day", range.prevFrom)
+    .lte("day", range.to)
+    .order("day", { ascending: true });
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  const toCents = (n: number | null | undefined) => Math.round((n ?? 0) * 100);
+  const byDay = new Map(
+    data.filter((r): r is typeof r & { day: string } => r.day !== null).map((r) => [r.day, r]),
+  );
+
+  // Sum an inclusive [from, to] span off the daily grid, in cents. ISO
+  // "YYYY-MM-DD" strings compare lexicographically, so the loop bound is safe.
+  const sumSpan = (from: string, to: string, key: "income" | "expenses") => {
+    let cents = 0;
+    for (let d = from; d <= to; d = addDaysISO(d, 1)) {
+      cents += toCents(byDay.get(d)?.[key]);
+    }
+    return cents;
+  };
+
+  // Bucket start dates across the selected range, per range.bucket.
+  const bucketStarts: string[] = [];
+  if (range.bucket === "month") {
+    let d = `${range.from.slice(0, 7)}-01`;
+    while (d <= range.to) {
+      bucketStarts.push(d < range.from ? range.from : d);
+      const [y, m] = d.split("-").map(Number);
+      const ny = m === 12 ? y + 1 : y;
+      const nm = m === 12 ? 1 : m + 1;
+      d = `${ny}-${String(nm).padStart(2, "0")}-01`;
+    }
+  } else {
+    const step = range.bucket === "week" ? 7 : 1;
+    for (let d = range.from; d <= range.to; d = addDaysISO(d, step)) {
+      bucketStarts.push(d);
+    }
+  }
+
+  const stat = (key: "income" | "expenses"): DashboardStat => {
+    const valueCents = sumSpan(range.from, range.to, key);
+    const prevCents = sumSpan(range.prevFrom, range.prevTo, key);
+    const points = bucketStarts.map((start, i) => {
+      const end =
+        i + 1 < bucketStarts.length ? addDaysISO(bucketStarts[i + 1], -1) : range.to;
+      return sumSpan(start, end, key) / 100;
+    });
+    return { value: valueCents / 100, points, delta: (valueCents - prevCents) / 100 };
+  };
+
+  return { data: { income: stat("income"), spending: stat("expenses") }, error: null };
 }
 
 // Ops-only (see DATABASE.md) -- no user-facing screen reads this.

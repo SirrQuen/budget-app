@@ -10,8 +10,8 @@ function signedPct(m: Movement): string {
   return `${m.pctChange >= 0 ? "+" : "−"}${p}%`;
 }
 
-function detail(m: Movement): string {
-  return `${formatCurrency(m.current)} this month · ${formatCurrency(m.baseline)} three-month average`;
+function detail(m: Movement, prevLabel: string): string {
+  return `${formatCurrency(m.current)} this range · ${formatCurrency(m.baseline)} over the ${prevLabel}`;
 }
 
 // Bar length is |movement| relative to the biggest in the set; a floor keeps
@@ -55,15 +55,15 @@ function Bars({ items, emphasisId }: { items: Movement[]; emphasisId: string | n
 }
 
 export function GroupMovementChart({ data }: { data: GroupMovementResult }) {
-  const { groups, topMover } = data;
+  const { groups, topMover, prevLabel } = data;
   const [openId, setOpenId] = useState<string | null>(null);
   const panelId = useId();
 
   const headline = topMover
     ? `${topMover.name} is ${topMover.pctChange >= 0 ? "up" : "down"} ${Math.round(
         Math.abs(topMover.pctChange) * 100,
-      )}% against your three-month average.`
-    : "Your spending stayed close to its three-month average this month.";
+      )}% against the ${prevLabel}.`
+    : `Your spending stayed close to the ${prevLabel}.`;
 
   const groupMaxAbs = Math.max(...groups.map((g) => Math.abs(g.pctChange)), 0.0001);
 
@@ -101,7 +101,7 @@ export function GroupMovementChart({ data }: { data: GroupMovementResult }) {
 
                 {open ? (
                   <div id={`${panelId}-${g.id}`} className="mb-1 mt-1 border-l-2 border-hairline pl-3">
-                    <p className="mb-2 text-xs text-ink-muted">{detail(g)}</p>
+                    <p className="mb-2 text-xs text-ink-muted">{detail(g, prevLabel)}</p>
                     {g.categories.length > 0 ? (
                       <Bars items={g.categories} emphasisId={g.categories[0]?.id ?? null} />
                     ) : (
