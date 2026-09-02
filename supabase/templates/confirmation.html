@@ -1,0 +1,54 @@
+<!--
+  Confirm-signup email — canonical source for a future custom "Confirm signup"
+  template. NOT in use yet: until custom SMTP is configured we run on
+  Supabase's default email, and app/auth/confirm/route.ts handles that
+  (?code=... via exchangeCodeForSession). Switch to this template once custom
+  SMTP is live — paste it into Dashboard > Authentication > Emails.
+
+  The link MUST be {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email
+  so it lands on app/auth/confirm/route.ts, which calls verifyOtp with the
+  token_hash + type. Do NOT use {{ .ConfirmationURL }} — that points at
+  Supabase's own /verify endpoint and bypasses our scanner-tolerant handler.
+
+  Site URL and the redirect allow-list must also be set in that dashboard:
+  Site URL = the deployed origin (http://localhost:3000 for local testing),
+  Redirect URLs must include <origin>/auth/confirm.
+-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#131322;padding:32px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="440" cellpadding="0" cellspacing="0" style="background:#1B1B2F;border:1px solid rgba(255,255,255,0.10);border-radius:16px;padding:36px">
+        <tr>
+          <td style="color:#ffffff;font-size:20px;font-weight:600;padding-bottom:12px">
+            Confirm your email
+          </td>
+        </tr>
+        <tr>
+          <td style="color:#c3c2b7;font-size:15px;line-height:22px;padding-bottom:28px">
+            You're one step from your dashboard. Confirm this address to finish
+            setting up your account.
+          </td>
+        </tr>
+        <tr>
+          <td style="padding-bottom:28px">
+            <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email"
+               style="display:inline-block;background:#E9B949;color:#0B0B0B;font-size:15px;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:10px">
+              Confirm email
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="color:#898781;font-size:13px;line-height:20px">
+            If the button doesn't work, paste this link into your browser:<br />
+            <span style="color:#c3c2b7;word-break:break-all">{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="color:#898781;font-size:13px;line-height:20px;padding-top:24px">
+            If you didn't create an account, you can ignore this email.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
