@@ -490,7 +490,7 @@ export type Database = {
           first_name: string
           id: string
           last_name: string
-          lastlogin: string
+          lastlogin: string | null
           phone: string | null
           subscription_plan: string | null
           subscription_status: string | null
@@ -502,7 +502,7 @@ export type Database = {
           first_name: string
           id: string
           last_name: string
-          lastlogin?: string
+          lastlogin?: string | null
           phone?: string | null
           subscription_plan?: string | null
           subscription_status?: string | null
@@ -514,7 +514,7 @@ export type Database = {
           first_name?: string
           id?: string
           last_name?: string
-          lastlogin?: string
+          lastlogin?: string | null
           phone?: string | null
           subscription_plan?: string | null
           subscription_status?: string | null
