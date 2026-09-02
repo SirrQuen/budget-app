@@ -35,6 +35,13 @@ export type ListTransactionsOptions = {
 export type TransactionsPage = {
   transactions: TransactionWithRelations[];
   totalCount: number;
+  /**
+   * Set when PostgREST's `max-rows` ceiling truncated the read: the list can
+   * only reach the most recent `transactionsShown` of `transactionsTotal`
+   * rows, and the older ones aren't available here. null in the normal case,
+   * where the whole matching history came back.
+   */
+  truncation: { transactionsShown: number; transactionsTotal: number } | null;
 };
 
 // categoryid has FK relationships to several relations (categories, plus a
@@ -102,9 +109,14 @@ export async function listTransactions(
   // since a transfer's pair might sit outside whatever raw range() would've
   // covered. PostgREST's own count is a raw-row count, so it can't answer
   // "how many units" either; counting is done in JS below instead.
+  // count:"exact" is a raw-row count (a transfer is two rows). Compared
+  // against keyRows.length -- also raw rows -- it's how truncation is
+  // detected below, with no magic threshold: whatever the project's
+  // max-rows ceiling is, keyRows.length lands exactly on it and count runs
+  // past it.
   let keyQuery = supabase
     .from("transactions")
-    .select("id, transaction_date, created_at, transfer_group_id")
+    .select("id, transaction_date, created_at, transfer_group_id", { count: "exact" })
     .order("transaction_date", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -130,12 +142,29 @@ export async function listTransactions(
     keyQuery = keyQuery.is("transfer_group_id", null);
   }
 
-  const { data: keyRows, error: keyError } = await keyQuery.returns<UnitKeyRow[]>();
+  const {
+    data: keyRows,
+    error: keyError,
+    count: rawRowCount,
+  } = await keyQuery.returns<UnitKeyRow[]>();
   if (keyError) {
     return { data: null, error: keyError.message };
   }
 
+  // PostgREST caps a range-less result at the project's max-rows setting and
+  // returns 206, not an error -- so without this check a heavy user would
+  // page through a partial history behind a confidently wrong total, with
+  // nothing saying rows were missing. keyRows is newest-first, so what's
+  // dropped is the oldest. Hand the caller the numbers for an honest banner
+  // rather than blanking the page or lying in the footer.
+  const truncation =
+    rawRowCount !== null && keyRows.length < rawRowCount
+      ? { transactionsShown: keyRows.length, transactionsTotal: rawRowCount }
+      : null;
+
   const { unitKeys, idsByUnit } = groupIntoUnits(keyRows);
+  // Exact when the whole history came back; when truncated, the count of
+  // units actually reachable through pagination (every one still resolves).
   const totalCount = unitKeys.length;
 
   const from = (page - 1) * TRANSACTIONS_PAGE_SIZE;
@@ -144,7 +173,7 @@ export async function listTransactions(
   // Past the last page (a stale bookmark, or rows deleted since) -- nothing
   // to fetch, but still a real totalCount rather than a DB error.
   if (pageIds.length === 0) {
-    return { data: { transactions: [], totalCount }, error: null };
+    return { data: { transactions: [], totalCount, truncation }, error: null };
   }
 
   // Pass 2: full data for exactly the rows this page needs -- both legs of
@@ -161,7 +190,7 @@ export async function listTransactions(
     return { data: null, error: error.message };
   }
 
-  return { data: { transactions: data.map(flatten), totalCount }, error: null };
+  return { data: { transactions: data.map(flatten), totalCount, truncation }, error: null };
 }
 
 // head:true means no rows come back over the wire -- just the count, cheap

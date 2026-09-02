@@ -8,6 +8,7 @@ import { listCategories, listCategoriesForType } from "@/lib/db/categories";
 import { listAccounts } from "@/lib/db/accounts";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { InfoIcon } from "@/components/ui/icons";
 import { AddTransactionForm } from "./AddTransactionForm";
 import { TransactionsList } from "./TransactionsList";
 
@@ -75,7 +76,7 @@ export default async function TransactionsPage({
     );
   }
 
-  const { transactions, totalCount } = transactionsResult.data;
+  const { transactions, totalCount, truncation } = transactionsResult.data;
   const categories = categoriesResult.data;
   const accounts = accountsResult.data;
   const activeAccounts = accounts.filter((a) => a.is_active);
@@ -223,6 +224,20 @@ export default async function TransactionsPage({
           </Link>
         ) : null}
       </form>
+
+      {truncation ? (
+        <p
+          role="status"
+          className="flex items-start gap-3 rounded-xl border border-hairline bg-surface-raised px-4 py-3 text-sm font-medium text-ink"
+        >
+          <InfoIcon className="mt-0.5 h-5 w-5 shrink-0 text-ink-muted" aria-hidden="true" />
+          <span>
+            Showing your most recent {truncation.transactionsShown.toLocaleString("en-US")} of{" "}
+            {truncation.transactionsTotal.toLocaleString("en-US")} transactions. Narrow the date
+            range above to see older ones.
+          </span>
+        </p>
+      ) : null}
 
       <TransactionsList
         transactions={transactions}
