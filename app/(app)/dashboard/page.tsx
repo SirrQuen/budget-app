@@ -1,6 +1,9 @@
 import { recordLogin } from "@/lib/db/profile";
 import {
+  getDashboardOnboarding,
+  classifyDashboardStage,
   getSafeToSpend,
+  getNetWorth,
   getNetWorthStat,
   getLoggingStreak,
   getRangeCashflowStats,
@@ -10,6 +13,7 @@ import {
   getUpcomingRecurring,
 } from "@/lib/db/dashboard";
 import { getBudgetProgress } from "@/lib/db/budgets";
+import { listAccountBalances } from "@/lib/db/accounts";
 import { getReturnSummaryFacts } from "@/lib/actions/activity";
 import { todayISO } from "@/lib/date";
 import { resolveDashboardRange } from "@/lib/dashboardRange";
@@ -23,24 +27,32 @@ import { GroupMovementChart } from "./GroupMovementChart";
 import { BudgetMeters } from "./BudgetMeters";
 import { GoalMeters } from "./GoalMeters";
 import { UpcomingList } from "./UpcomingList";
+import { SectionError } from "./SectionError";
+import { NoAccountsView, NoTransactionsView } from "./DashboardOnboarding";
 
 // Auth is already enforced by app/(app)/layout.tsx's requireUser() before
 // this page renders.
 export default async function DashboardPage({ searchParams }: PageProps<"/dashboard">) {
   const params = await searchParams;
   const range = resolveDashboardRange(params);
-  const currentMonth = `${todayISO().slice(0, 7)}-01`;
+  const today = todayISO();
+  const currentMonth = `${today.slice(0, 7)}-01`;
 
-  // Cache hit -- app/(app)/layout.tsx already ran recordLogin() this
-  // request, so this is free and gives us the pre-bump lastlogin. null on a
-  // first-ever login. getReturnSummaryFacts self-gates on how long ago that
-  // was, so an empty list here means "too recent, or nothing changed".
+  // Cache hit -- app/(app)/layout.tsx already ran recordLogin() this request,
+  // so this is free and gives us the pre-bump lastlogin (null on a first-ever
+  // login).
   const greetingResult = await recordLogin();
+  const firstName = greetingResult.data?.firstName;
+  const isFirstLogin = greetingResult.data?.isFirstLogin ?? false;
   const previousLoginAt = greetingResult.data?.previousLoginAt ?? null;
 
+  // One round trip. A brand-new user (stages 1-2) fetches a few results it
+  // won't render -- all cheap and empty -- which is the price of not adding a
+  // waterfall for the common full-dashboard case.
   const [
+    onboardingResult,
     safeToSpendResult,
-    netWorthResult,
+    netWorthStatResult,
     streakResult,
     budgetResult,
     goalResult,
@@ -49,7 +61,10 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     rangeStatsResult,
     cashflowResult,
     movementResult,
+    balancesResult,
+    netWorthResult,
   ] = await Promise.all([
+    getDashboardOnboarding(),
     getSafeToSpend(),
     getNetWorthStat(),
     getLoggingStreak(),
@@ -62,33 +77,76 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     getRangeCashflowStats(range),
     getCashflowChart(),
     getGroupMovement(range),
+    listAccountBalances({ is_active: true }),
+    getNetWorth(),
   ]);
 
-  const firstName = greetingResult.data?.firstName;
+  // If the snapshot itself failed we can't tell which stage the user is in --
+  // fall through to the full dashboard, where the per-section error handling
+  // surfaces whatever's actually broken. A wrong welcome screen would be worse.
+  const stage = onboardingResult.data
+    ? classifyDashboardStage(onboardingResult.data, today)
+    : "full";
+
+  if (stage === "no-accounts") {
+    return <NoAccountsView firstName={firstName} />;
+  }
+
+  if (stage === "no-transactions") {
+    return (
+      <NoTransactionsView
+        firstName={firstName}
+        isFirstLogin={isFirstLogin}
+        accounts={balancesResult.data ?? []}
+        accountsError={balancesResult.error}
+        netWorth={netWorthResult.data?.net_worth ?? null}
+      />
+    );
+  }
+
+  // stage is "early" or "full". Real numbers either way; the 90-day trend
+  // charts only make sense once there's a fortnight of history behind them.
+  const showTrend = stage === "full";
   const namePart = firstName ? `, ${firstName}` : "";
-  const description = greetingResult.data?.isFirstLogin
+  const description = isFirstLogin
     ? `Welcome to EverNest${namePart}.`
     : `Welcome back${namePart}.`;
 
-  const netWorth = netWorthResult.data;
-  const streak = streakResult.data;
+  const streak =
+    streakResult.data && (streakResult.data.current > 0 || streakResult.data.best > 0)
+      ? streakResult.data
+      : null;
   const rangeStats = rangeStatsResult.data;
 
   // Nothing to plot until there's at least one day of activity in the window.
   const cashflow = cashflowResult.data?.some((p) => p.income > 0 || p.expenses > 0)
     ? cashflowResult.data
     : null;
-  // No baseline anywhere means no story to tell -- skip the section entirely.
   const movement =
-    movementResult.data && movementResult.data.groups.length > 0 ? movementResult.data : null;
+    movementResult.data && movementResult.data.groups.length > 0
+      ? movementResult.data
+      : null;
 
   // v_budget_vs_actual is ordered status_rank desc (problems first); a
   // budget_id of null is a spent-but-unbudgeted category, not a budget.
   const topBudgets =
     budgetResult.data?.filter((b) => b.budget_id !== null).slice(0, 3) ?? [];
-  const activeGoals = goalResult.data?.filter((g) => g.status === "Active").slice(0, 3) ?? [];
+  const activeGoals =
+    goalResult.data?.filter((g) => g.status === "Active").slice(0, 3) ?? [];
   const upcoming = recurringResult.data?.slice(0, 5) ?? [];
-  const hasPanels = topBudgets.length > 0 || activeGoals.length > 0 || upcoming.length > 0;
+
+  const showTiles =
+    netWorthStatResult.error != null ||
+    netWorthStatResult.data != null ||
+    streakResult.error != null ||
+    streak != null;
+  const showPanels =
+    budgetResult.error != null ||
+    topBudgets.length > 0 ||
+    goalResult.error != null ||
+    activeGoals.length > 0 ||
+    recurringResult.error != null ||
+    upcoming.length > 0;
 
   return (
     <div className="flex flex-col gap-10">
@@ -102,26 +160,35 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         {previousLoginAt && returnFacts.length > 0 ? (
           <ReturnSummaryStrip since={previousLoginAt} facts={returnFacts} />
         ) : null}
-        {safeToSpendResult.data ? <SafeToSpendHero data={safeToSpendResult.data} /> : null}
 
-        {(netWorth || streak) ? (
+        {safeToSpendResult.error ? (
+          <SectionError label="Safe to spend" />
+        ) : safeToSpendResult.data ? (
+          <SafeToSpendHero data={safeToSpendResult.data} />
+        ) : null}
+
+        {showTiles ? (
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {netWorth ? (
+            {netWorthStatResult.error ? (
+              <SectionError label="Net worth" />
+            ) : netWorthStatResult.data ? (
               <StatTile
                 id="dashboard-net-worth"
                 label="Net worth"
-                value={netWorth.value}
+                value={netWorthStatResult.data.value}
                 format="currency"
                 delta={{
-                  value: netWorth.delta,
+                  value: netWorthStatResult.data.delta,
                   periodLabel: "last month",
                   format: "currency",
                   goodWhen: "up",
                 }}
-                trend={netWorth.points}
+                trend={netWorthStatResult.data.points}
               />
             ) : null}
-            {streak ? (
+            {streakResult.error ? (
+              <SectionError label="Logging streak" />
+            ) : streak ? (
               <StatTile
                 id="dashboard-streak"
                 label="Logging streak"
@@ -133,19 +200,31 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
           </div>
         ) : null}
 
-        {hasPanels ? (
+        {showPanels ? (
           <div className="flex flex-col gap-4 lg:flex-row">
-            {topBudgets.length > 0 ? (
+            {budgetResult.error ? (
+              <div className="min-w-0 lg:flex-1 lg:basis-0">
+                <SectionError label="Budgets" />
+              </div>
+            ) : topBudgets.length > 0 ? (
               <div className="min-w-0 lg:flex-1 lg:basis-0">
                 <BudgetMeters budgets={topBudgets} />
               </div>
             ) : null}
-            {activeGoals.length > 0 ? (
+            {goalResult.error ? (
+              <div className="min-w-0 lg:flex-1 lg:basis-0">
+                <SectionError label="Goals" />
+              </div>
+            ) : activeGoals.length > 0 ? (
               <div className="min-w-0 lg:flex-1 lg:basis-0">
                 <GoalMeters goals={activeGoals} />
               </div>
             ) : null}
-            {upcoming.length > 0 ? (
+            {recurringResult.error ? (
+              <div className="min-w-0 lg:flex-1 lg:basis-0">
+                <SectionError label="Upcoming" />
+              </div>
+            ) : upcoming.length > 0 ? (
               <div className="min-w-0 lg:flex-1 lg:basis-0">
                 <UpcomingList items={upcoming} />
               </div>
@@ -156,7 +235,9 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
 
       {/* ── Over time: everything the date-range filter scopes ── */}
       <ScopedRegion range={range}>
-        {rangeStats ? (
+        {rangeStatsResult.error ? (
+          <SectionError label="Income and spending" />
+        ) : rangeStats ? (
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatTile
               id="dashboard-income"
@@ -187,10 +268,28 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
           </div>
         ) : null}
 
-        {cashflow ? (
+        {/* The 90-day trend charts render at "full". At "early" they'd be four
+            points of noise, so a plain line stands in for them -- but a real
+            load failure always surfaces in place, even early, never hidden
+            behind that note. */}
+        {cashflowResult.error ? (
+          <SectionError label="Cash flow" />
+        ) : showTrend && cashflow ? (
           <CashflowChart points={cashflow} shadeFrom={range.from} shadeTo={range.to} />
         ) : null}
-        {movement ? <GroupMovementChart data={movement} /> : null}
+
+        {movementResult.error ? (
+          <SectionError label="Category movement" />
+        ) : showTrend && movement ? (
+          <GroupMovementChart data={movement} />
+        ) : null}
+
+        {!showTrend && !cashflowResult.error && !movementResult.error ? (
+          <p className="rounded-2xl border border-hairline bg-surface px-4 py-3 text-sm text-ink-secondary">
+            Your cash-flow trend and category movement need a couple of weeks of history. Keep
+            logging and they show up here.
+          </p>
+        ) : null}
       </ScopedRegion>
     </div>
   );

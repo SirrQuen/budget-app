@@ -19,6 +19,86 @@ type PortfolioSummaryRow = Database["public"]["Views"]["v_portfolio_summary"]["R
 
 export type DbResult<T> = { data: T; error: null } | { data: null; error: string };
 
+// ---------------------------------------------------------------------------
+// Onboarding stage
+//
+// A brand-new user walks through distinct stages, and the dashboard renders a
+// different screen for each -- a wall of $0 tiles and empty charts reads as
+// broken. This is the cheap read that decides which one: two head-count
+// queries and the single earliest transaction date.
+// ---------------------------------------------------------------------------
+
+export type OnboardingSnapshot = {
+  activeAccountCount: number;
+  transactionCount: number;
+  /** Earliest transaction_date, or null when there are none. */
+  firstTransactionDate: string | null;
+};
+
+export type DashboardStage =
+  | "no-accounts"
+  | "no-transactions"
+  | "early"
+  | "full";
+
+// Below this many days of history, a 90-day trend line is four points of
+// noise, not a trend -- the "early" stage suppresses it and says so.
+export const EARLY_HISTORY_DAYS = 14;
+
+export async function getDashboardOnboarding(): Promise<DbResult<OnboardingSnapshot>> {
+  const supabase = await createClient();
+
+  const [accountsRes, txCountRes, firstTxRes] = await Promise.all([
+    supabase
+      .from("accounts")
+      .select("id", { count: "exact", head: true })
+      .eq("is_active", true),
+    supabase.from("transactions").select("id", { count: "exact", head: true }),
+    supabase
+      .from("transactions")
+      .select("transaction_date")
+      .order("transaction_date", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  if (accountsRes.error) {
+    return { data: null, error: describeReadError(accountsRes.error, "dashboard") };
+  }
+  if (txCountRes.error) {
+    return { data: null, error: describeReadError(txCountRes.error, "dashboard") };
+  }
+  if (firstTxRes.error) {
+    return { data: null, error: describeReadError(firstTxRes.error, "dashboard") };
+  }
+
+  return {
+    data: {
+      activeAccountCount: accountsRes.count ?? 0,
+      transactionCount: txCountRes.count ?? 0,
+      firstTransactionDate: firstTxRes.data?.transaction_date ?? null,
+    },
+    error: null,
+  };
+}
+
+// Pure -- takes the snapshot and today, returns the stage. Kept separate so
+// the page can classify without another round trip and so it's unit-testable.
+export function classifyDashboardStage(
+  snapshot: OnboardingSnapshot,
+  today: string,
+): DashboardStage {
+  if (snapshot.activeAccountCount === 0) return "no-accounts";
+  if (snapshot.transactionCount === 0) return "no-transactions";
+  if (
+    snapshot.firstTransactionDate &&
+    daysBetweenInclusive(snapshot.firstTransactionDate, today) < EARLY_HISTORY_DAYS
+  ) {
+    return "early";
+  }
+  return "full";
+}
+
 // One row per user, pinned to the current calendar month server-side --
 // there's no month param to pass. If a date-pickable dashboard shows up,
 // this view needs to become a ranged function (see DATABASE.md).
