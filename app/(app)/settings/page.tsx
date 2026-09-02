@@ -4,8 +4,9 @@ import { getAccountDeletionSummary } from "@/lib/db/profile";
 import { DeleteAccountSection } from "./DeleteAccountSection";
 
 export default async function SettingsPage() {
-  // Hidden rather than shown with guessed numbers if the counts can't be
-  // read -- an irreversible action should never lead with wrong figures.
+  // The breakdown of what deletion removes -- null when the count query
+  // fails. The section renders either way (see DeleteAccountSection): a
+  // failed SELECT must not block someone from erasing their own data.
   const summary = await getAccountDeletionSummary();
 
   return (
@@ -29,8 +30,9 @@ export default async function SettingsPage() {
         <ThemeToggle className="mt-4" />
       </section>
 
-      {/* Last, below everything else. */}
-      {summary.data ? <DeleteAccountSection summary={summary.data} /> : null}
+      {/* Last, below everything else. Always rendered -- summary is null if
+          the count query failed, and the section handles that itself. */}
+      <DeleteAccountSection summary={summary.data} />
     </div>
   );
 }

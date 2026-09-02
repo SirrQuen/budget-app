@@ -34,7 +34,14 @@ function summarySentence(s: AccountDeletionSummary) {
   return `This will permanently delete your ${joinList(items)}.`;
 }
 
-export function DeleteAccountSection({ summary }: { summary: AccountDeletionSummary }) {
+// `summary` is null when the count query failed. The section still renders
+// and the delete still works -- a failed SELECT must never stand between
+// someone and erasing their own data.
+export function DeleteAccountSection({
+  summary,
+}: {
+  summary: AccountDeletionSummary | null;
+}) {
   const [state, action, pending] = useActionState<DeleteAccountState, FormData>(
     deleteAccountAction,
     undefined,
@@ -57,7 +64,11 @@ export function DeleteAccountSection({ summary }: { summary: AccountDeletionSumm
         Delete account
       </h2>
 
-      <p className="mt-2 max-w-prose text-sm text-ink-secondary">{summarySentence(summary)}</p>
+      <p className="mt-2 max-w-prose text-sm text-ink-secondary">
+        {summary
+          ? summarySentence(summary)
+          : "We couldn't load a breakdown of what will be deleted. This still permanently removes your account and everything in it."}
+      </p>
       <p className="mt-2 max-w-prose text-sm text-ink-secondary">
         This cannot be undone, and no backup is kept. Once it is gone, it is gone.
       </p>
