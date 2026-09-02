@@ -10,6 +10,7 @@ import {
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { TransactionType } from "@/lib/db/transactions";
 import { todayISO } from "@/lib/date";
+import { formatCurrency } from "@/lib/format";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -152,6 +153,13 @@ export function AddTransactionForm({
   // long enough for a stay-open reset to matter.
   useEffect(() => {
     if (!isEdit && wasPending.current && !pending && !state?.error) {
+      // Capture what was just logged before reset() wipes the fields, so the
+      // confirmation names it ("Logged $82.45 · Groceries") rather than a
+      // bare "Logged".
+      const descriptionField = formRef.current?.elements.namedItem("description");
+      const loggedDescription =
+        descriptionField instanceof HTMLInputElement ? descriptionField.value.trim() : "";
+      const loggedAmount = Number(amount);
       formRef.current?.reset();
       setType("Expense");
       setCategoryid("");
@@ -165,7 +173,13 @@ export function AddTransactionForm({
       // view (it's already on screen).
       amountInputRef.current?.focus({ preventScroll: true });
       const milestone = state?.milestone;
-      setCelebrateMessage(milestone?.message ?? "Logged");
+      const loggedMessage =
+        Number.isFinite(loggedAmount) && loggedAmount > 0
+          ? loggedDescription
+            ? `Logged ${formatCurrency(loggedAmount)} · ${loggedDescription}`
+            : `Logged ${formatCurrency(loggedAmount)}`
+          : "Logged";
+      setCelebrateMessage(milestone?.message ?? loggedMessage);
       setCelebrateIcon(milestone?.kind === "streak-7" ? <FlameIcon className="h-4 w-4" /> : "✓");
       setCelebrate(true);
       clearTimeout(celebrateTimeout.current);
@@ -175,6 +189,10 @@ export function AddTransactionForm({
       }, 1600);
     }
     wasPending.current = pending;
+    // `amount` is read only at the pending->done transition, where it still
+    // holds the just-submitted value -- listing it would re-run this on
+    // every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pending, state, isEdit, onSaved]);
 
   useEffect(() => {

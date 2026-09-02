@@ -73,11 +73,12 @@ export default async function EditTransactionPage({
       <div className="flex flex-col gap-6">
         <PageHeader title="Edit transaction" />
         <ErrorMessage
+          severity="critical"
           message={
             incomeCategoriesResult.error ??
             expenseCategoriesResult.error ??
             accountsResult.error ??
-            "Failed to load the form."
+            "We couldn't load this transaction. Refresh the page to try again."
           }
         />
       </div>

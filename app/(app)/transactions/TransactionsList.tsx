@@ -147,6 +147,7 @@ export function TransactionsList({
   pageSize,
   params,
   hasFilters,
+  canLog,
 }: {
   transactions: TransactionWithRelations[];
   totalCount: number;
@@ -155,6 +156,9 @@ export function TransactionsList({
   pageSize: number;
   params: SearchParams;
   hasFilters: boolean;
+  /** False when there's no active account yet -- the add-transaction form
+   * isn't shown above, so the empty state has to point at /accounts. */
+  canLog: boolean;
 }) {
   const { pending } = useOptimisticTransactions();
 
@@ -270,22 +274,47 @@ export function TransactionsList({
   }
 
   if (transactions.length === 0 && ghosts.length === 0) {
+    if (hasFilters) {
+      return (
+        <EmptyState
+          icon={<ListIcon className="h-10 w-10" />}
+          heading="Nothing matches these filters"
+          message="Try a wider date range, or clear a filter to see more."
+          action={
+            <Link
+              href="/transactions"
+              className="rounded text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            >
+              Clear filters
+            </Link>
+          }
+        />
+      );
+    }
+
+    if (!canLog) {
+      return (
+        <EmptyState
+          icon={<ListIcon className="h-10 w-10" />}
+          heading="This is where it all shows up"
+          message="Add an account first, then log a transaction against it and this list starts filling in."
+          action={
+            <Link
+              href="/accounts"
+              className="rounded text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            >
+              Add an account
+            </Link>
+          }
+        />
+      );
+    }
+
     return (
       <EmptyState
         icon={<ListIcon className="h-10 w-10" />}
-        heading={hasFilters ? "Nothing matches these filters" : "This is where it all shows up"}
-        message={
-          hasFilters
-            ? "Try a wider date range, or clear a filter to see more."
-            : "Log your first transaction above and this list becomes the real story of where your money's going."
-        }
-        action={
-          hasFilters ? (
-            <Link href="/transactions" className="rounded text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
-              Clear filters
-            </Link>
-          ) : undefined
-        }
+        heading="This is where it all shows up"
+        message="Log your first transaction above and this list becomes the real story of where your money's going."
       />
     );
   }

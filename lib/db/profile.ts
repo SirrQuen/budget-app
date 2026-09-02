@@ -85,7 +85,10 @@ export async function updateProfile(
   const userid = claimsData?.claims?.sub;
 
   if (claimsError || !userid) {
-    return { data: null, error: "No authenticated user session." };
+    return {
+      data: null,
+      error: "Your session's expired. Log in again to pick up where you left off.",
+    };
   }
 
   // PostgREST rejects an UPDATE with no filter (error 21000), so this .eq

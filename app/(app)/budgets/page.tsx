@@ -57,8 +57,12 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
           description="Set a monthly envelope for each category and watch it fill."
         />
         <ErrorMessage
+          severity="critical"
           message={
-            progressResult.error ?? historyResult.error ?? categoriesResult.error ?? "Failed to load budgets."
+            progressResult.error ??
+            historyResult.error ??
+            categoriesResult.error ??
+            "We couldn't load your budgets. Refresh the page to try again."
           }
         />
       </div>

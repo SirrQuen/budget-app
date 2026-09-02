@@ -61,13 +61,14 @@ export default async function TransactionsPage({
       <div className="flex flex-col gap-6">
         <PageHeader title="Transactions" description="Every dollar in and out, newest first." />
         <ErrorMessage
+          severity="critical"
           message={
             transactionsResult.error ??
             categoriesResult.error ??
             accountsResult.error ??
             incomeCategoriesResult.error ??
             expenseCategoriesResult.error ??
-            "Failed to load transactions."
+            "We couldn't load your transactions. Refresh the page to try again."
           }
         />
       </div>
@@ -231,6 +232,7 @@ export default async function TransactionsPage({
         pageSize={TRANSACTIONS_PAGE_SIZE}
         params={params}
         hasFilters={hasFilters}
+        canLog={activeAccounts.length > 0}
       />
     </div>
   );

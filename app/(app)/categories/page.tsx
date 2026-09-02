@@ -77,7 +77,12 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/categ
 
       {categoriesResult.error !== null || groupsResult.error !== null ? (
         <ErrorMessage
-          message={categoriesResult.error ?? groupsResult.error ?? "Failed to load categories."}
+          severity="critical"
+          message={
+            categoriesResult.error ??
+            groupsResult.error ??
+            "We couldn't load your categories. Refresh the page to try again."
+          }
         />
       ) : (
         <>

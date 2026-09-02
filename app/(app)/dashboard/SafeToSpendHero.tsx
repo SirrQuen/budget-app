@@ -26,7 +26,7 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
       ? `${formatCurrency(data.perDay)} a day for the ${data.daysRemaining} day${
           data.daysRemaining === 1 ? "" : "s"
         } left this month`
-      : `You're ${formatCurrency(Math.abs(data.safeToSpend))} short of your commitments this month`;
+      : `You have ${formatCurrency(Math.abs(data.safeToSpend))} less than this month's commitments`;
 
   return (
     <div className="rounded-2xl border border-hairline bg-surface">

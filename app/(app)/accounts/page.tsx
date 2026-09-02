@@ -45,7 +45,12 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
       <div className="flex flex-col gap-6">
         <PageHeader title="Accounts" description="Every place your money lives, in one list." />
         <ErrorMessage
-          message={accountsResult.error ?? netWorthResult.error ?? "Failed to load accounts."}
+          severity="critical"
+          message={
+            accountsResult.error ??
+            netWorthResult.error ??
+            "We couldn't load your accounts. Refresh the page to try again."
+          }
         />
       </div>
     );

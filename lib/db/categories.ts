@@ -113,7 +113,10 @@ export async function createCategory(
   const userid = claimsData?.claims?.sub;
 
   if (claimsError || !userid) {
-    return { data: null, error: "No authenticated user session." };
+    return {
+      data: null,
+      error: "Your session's expired. Log in again to pick up where you left off.",
+    };
   }
 
   const { data, error } = await supabase

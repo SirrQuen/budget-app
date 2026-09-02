@@ -29,5 +29,5 @@ export function authErrorMessage(error: AuthError): string {
   }
   // Fall back to Supabase's own message rather than a generic string —
   // it's still a real, specific error even if we haven't mapped its code.
-  return error.message || "Something went wrong. Please try again.";
+  return error.message || "That didn't go through. Give it another try in a moment.";
 }

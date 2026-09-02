@@ -217,7 +217,10 @@ export async function createTransaction(
   const userid = claimsData?.claims?.sub;
 
   if (claimsError || !userid) {
-    return { data: null, error: "No authenticated user session." };
+    return {
+      data: null,
+      error: "Your session's expired. Log in again to pick up where you left off.",
+    };
   }
 
   // Pre-check so a mismatched category/type pair gets a readable error
@@ -421,7 +424,7 @@ export async function createTransfer(
   input: CreateTransferInput,
 ): Promise<DbResult<TransactionRow[]>> {
   if (input.fromAccountId === input.toAccountId) {
-    return { data: null, error: "Transfer source and destination accounts must differ." };
+    return { data: null, error: "Choose two different accounts for a transfer." };
   }
 
   const supabase = await createClient();
@@ -430,7 +433,10 @@ export async function createTransfer(
   const userid = claimsData?.claims?.sub;
 
   if (claimsError || !userid) {
-    return { data: null, error: "No authenticated user session." };
+    return {
+      data: null,
+      error: "Your session's expired. Log in again to pick up where you left off.",
+    };
   }
 
   const transfer_group_id = crypto.randomUUID();

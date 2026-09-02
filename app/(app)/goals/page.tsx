@@ -21,7 +21,12 @@ export default async function GoalsPage() {
           description="What you're saving toward, and how close you are."
         />
         <ErrorMessage
-          message={progressResult.error ?? summaryResult.error ?? "Failed to load goals."}
+          severity="critical"
+          message={
+            progressResult.error ??
+            summaryResult.error ??
+            "We couldn't load your goals. Refresh the page to try again."
+          }
         />
       </div>
     );

@@ -6,7 +6,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
 
   const initialError =
     params.error === "confirmation_failed"
-      ? "That confirmation link is invalid or has expired."
+      ? "That confirmation link didn't work — it may be expired or already used. Try logging in below; your email may already be confirmed."
       : undefined;
 
   // Set by app/auth/confirm/route.ts when a signup token was already spent —
