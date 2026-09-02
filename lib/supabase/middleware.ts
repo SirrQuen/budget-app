@@ -12,10 +12,15 @@ const PUBLIC_PATHS = new Set([
   "/signup",
   "/forgot-password",
   "/reset-password",
+  // The post-deletion confirmation. Reached right after the account (and its
+  // session) is gone, so it has to be public.
+  "/account-deleted",
 ]);
 
-// Paths an authenticated user should be bounced away from.
-const AUTH_REDIRECT_PATHS = new Set(["/login", "/signup"]);
+// Paths an authenticated user should be bounced away from. /account-deleted
+// is here too: a signed-in user hitting it directly hasn't deleted anything,
+// and the page would wrongly tell them they had.
+const AUTH_REDIRECT_PATHS = new Set(["/login", "/signup", "/account-deleted"]);
 
 function redirectTo(request: NextRequest, pathname: string, supabaseResponse: NextResponse) {
   const url = request.nextUrl.clone();

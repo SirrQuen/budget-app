@@ -1333,6 +1333,7 @@ export type Database = {
           total_spend: number
         }[]
       }
+      delete_own_account: { Args: never; Returns: undefined }
       email_for_username: { Args: { p_username: string }; Returns: string }
       seed_default_categories: {
         Args: { p_userid: string }

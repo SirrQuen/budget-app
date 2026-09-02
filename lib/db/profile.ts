@@ -187,3 +187,66 @@ export async function getStripeSubscription(): Promise<
 
   return { data, error: null };
 }
+
+export type AccountDeletionSummary = {
+  accounts: number;
+  transactions: number;
+  goals: number;
+  budgets: number;
+};
+
+// Row counts for the "what will be deleted" summary on the delete-account
+// screen. Every count is unfiltered -- deletion removes all of a user's
+// rows, soft-deleted ones included -- and scoped to the caller by RLS.
+export async function getAccountDeletionSummary(): Promise<
+  DbResult<AccountDeletionSummary>
+> {
+  const supabase = await createClient();
+
+  const count = (table: "accounts" | "transactions" | "goals" | "budgets") =>
+    supabase.from(table).select("*", { count: "exact", head: true });
+
+  const [accounts, transactions, goals, budgets] = await Promise.all([
+    count("accounts"),
+    count("transactions"),
+    count("goals"),
+    count("budgets"),
+  ]);
+
+  const firstError =
+    accounts.error ?? transactions.error ?? goals.error ?? budgets.error;
+  if (firstError) {
+    return { data: null, error: firstError.message };
+  }
+
+  return {
+    data: {
+      accounts: accounts.count ?? 0,
+      transactions: transactions.count ?? 0,
+      goals: goals.count ?? 0,
+      budgets: budgets.count ?? 0,
+    },
+    error: null,
+  };
+}
+
+// Permanently deletes the calling user -- every owned row in public.*, then
+// their auth.users row (see migration 14). Irreversible, no backup. The
+// delete_own_account() function takes no argument and operates only on
+// auth.uid(), so this can never touch another user; never reach for the
+// service_role key to do this.
+//
+// After this resolves the caller's session is dead at the database (the
+// auth.sessions row cascaded away) -- the action that calls this must sign
+// out locally and send the user somewhere public.
+export async function deleteOwnAccount(): Promise<DbResult<null>> {
+  const supabase = await createClient();
+
+  const { error } = await supabase.rpc("delete_own_account");
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data: null, error: null };
+}
