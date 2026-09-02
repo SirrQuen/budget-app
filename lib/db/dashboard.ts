@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import { todayISO, addDaysISO, endOfMonthISO, daysBetweenInclusive } from "@/lib/date";
 import type { DashboardRange } from "@/lib/dashboardRange";
+import { describeReadError } from "@/lib/db/errors";
 
 type DashboardKpisRow = Database["public"]["Views"]["v_dashboard_kpis"]["Row"];
 type NetWorthRow = Database["public"]["Views"]["v_net_worth"]["Row"];
@@ -27,7 +28,7 @@ export async function getDashboardKpis(): Promise<DbResult<DashboardKpisRow>> {
   const { data, error } = await supabase.from("v_dashboard_kpis").select("*").single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "dashboard") };
   }
 
   return { data, error: null };
@@ -44,7 +45,7 @@ export async function getNetWorth(): Promise<DbResult<NetWorthRow | null>> {
   const { data, error } = await supabase.from("v_net_worth").select("*").maybeSingle();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "net worth") };
   }
 
   return { data, error: null };
@@ -75,7 +76,7 @@ export async function getMonthlyCashflow(
   const { data, error } = await query;
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "cash flow") };
   }
 
   return { data, error: null };
@@ -109,7 +110,7 @@ export async function getDailyCashflow(
   const { data, error } = await query;
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "cash flow") };
   }
 
   return { data, error: null };
@@ -141,7 +142,7 @@ export async function getCategorySpending(
   const { data, error } = await query;
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "spending") };
   }
 
   return { data, error: null };
@@ -205,10 +206,10 @@ export async function getGroupMovement(
   ]);
 
   if (currentRes.error) {
-    return { data: null, error: currentRes.error.message };
+    return { data: null, error: describeReadError(currentRes.error, "spending") };
   }
   if (prevRes.error) {
-    return { data: null, error: prevRes.error.message };
+    return { data: null, error: describeReadError(prevRes.error, "spending") };
   }
 
   type Acc = { name: string; currentCents: number; prevCents: number };
@@ -300,7 +301,7 @@ export async function getGoalProgress(): Promise<DbResult<GoalProgressRow[]>> {
     .order("target_date", { ascending: true, nullsFirst: false });
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "goals") };
   }
 
   return { data, error: null };
@@ -317,7 +318,7 @@ export async function getGoalsSummary(): Promise<DbResult<GoalsSummaryRow | null
   const { data, error } = await supabase.from("v_goals_summary").select("*").maybeSingle();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "goals") };
   }
 
   return { data, error: null };
@@ -348,7 +349,7 @@ export async function getUpcomingRecurring(
   const { data, error } = await query;
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "upcoming transactions") };
   }
 
   return { data, error: null };
@@ -381,7 +382,7 @@ export async function getCashflowChart(days = 90): Promise<DbResult<CashflowPoin
     .order("day", { ascending: true });
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "cash flow") };
   }
 
   const byDay = new Map(data.map((row) => [row.day, row]));
@@ -481,7 +482,7 @@ export async function getLoggingStreak(): Promise<DbResult<LoggingStreak>> {
     .gte("transaction_date", localISODate(since));
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "streak") };
   }
 
   const streak = computeLoggingStreak(
@@ -581,10 +582,10 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   ]);
 
   if (cashRes.error) {
-    return { data: null, error: cashRes.error.message };
+    return { data: null, error: describeReadError(cashRes.error, "dashboard") };
   }
   if (recurringRes.error) {
-    return { data: null, error: recurringRes.error.message };
+    return { data: null, error: describeReadError(recurringRes.error, "dashboard") };
   }
 
   const commitments: SafeToSpendCommitment[] = recurringRes.data
@@ -687,10 +688,10 @@ export async function getNetWorthStat(): Promise<DbResult<DashboardStat>> {
   ]);
 
   if (netWorthRes.error) {
-    return { data: null, error: netWorthRes.error.message };
+    return { data: null, error: describeReadError(netWorthRes.error, "net worth") };
   }
   if (cashflowRes.error) {
-    return { data: null, error: cashflowRes.error.message };
+    return { data: null, error: describeReadError(cashflowRes.error, "net worth") };
   }
 
   const byMonth = new Map(cashflowRes.data.map((row) => [row.month, row]));
@@ -738,7 +739,7 @@ export async function getRangeCashflowStats(
     .order("day", { ascending: true });
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "cash flow") };
   }
 
   const toCents = (n: number | null | undefined) => Math.round((n ?? 0) * 100);
@@ -795,7 +796,7 @@ export async function getIntegrityIssues(): Promise<DbResult<IntegrityIssueRow[]
   const { data, error } = await supabase.from("v_integrity_issues").select("*");
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "data") };
   }
 
   return { data, error: null };
@@ -812,7 +813,7 @@ export async function getInvestmentHoldings(): Promise<DbResult<InvestmentHoldin
     .order("ticker", { ascending: true });
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "investments") };
   }
 
   return { data, error: null };
@@ -828,7 +829,7 @@ export async function getPortfolioSummary(): Promise<DbResult<PortfolioSummaryRo
     .order("account_name", { ascending: true });
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "investments") };
   }
 
   return { data, error: null };

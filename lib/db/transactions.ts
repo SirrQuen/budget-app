@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
+import { describeReadError, describeWriteError } from "@/lib/db/errors";
 
 type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"];
 type TransactionInsert = Database["public"]["Tables"]["transactions"]["Insert"];
@@ -148,7 +149,7 @@ export async function listTransactions(
     count: rawRowCount,
   } = await keyQuery.returns<UnitKeyRow[]>();
   if (keyError) {
-    return { data: null, error: keyError.message };
+    return { data: null, error: describeReadError(keyError, "transactions") };
   }
 
   // PostgREST caps a range-less result at the project's max-rows setting and
@@ -187,7 +188,7 @@ export async function listTransactions(
     .returns<RawTransactionRow[]>();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "transactions") };
   }
 
   return { data: { transactions: data.map(flatten), totalCount, truncation }, error: null };
@@ -204,7 +205,7 @@ export async function getTransactionCount(): Promise<DbResult<number>> {
     .select("id", { count: "exact", head: true });
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "transactions") };
   }
 
   return { data: count ?? 0, error: null };
@@ -223,7 +224,7 @@ export async function getTransaction(
     .returns<RawTransactionRow>();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "transaction") };
   }
 
   return { data: flatten(data), error: null };
@@ -262,7 +263,7 @@ export async function createTransaction(
     .single();
 
   if (categoryError) {
-    return { data: null, error: categoryError.message };
+    return { data: null, error: describeWriteError(categoryError, "transaction") };
   }
 
   if (category.category_type !== input.transaction_type) {
@@ -292,12 +293,12 @@ export async function createTransaction(
         .single();
 
       if (existingError) {
-        return { data: null, error: existingError.message };
+        return { data: null, error: describeWriteError(existingError, "transaction") };
       }
       return { data: existing, error: null };
     }
 
-    return { data: null, error: error.message };
+    return { data: null, error: describeWriteError(error, "transaction") };
   }
 
   return { data, error: null };
@@ -322,7 +323,7 @@ export async function updateTransaction(
     .single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeWriteError(error, "transaction") };
   }
 
   return { data, error: null };
@@ -339,7 +340,7 @@ export async function deleteTransaction(id: string): Promise<DbResult<{ id: stri
     .single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeWriteError(error, "transaction") };
   }
 
   return { data, error: null };
@@ -402,10 +403,10 @@ export async function suggestCategoryForMerchant(
   ]);
 
   if (byMerchant.error) {
-    return { data: null, error: byMerchant.error.message };
+    return { data: null, error: describeReadError(byMerchant.error, "transactions") };
   }
   if (byDescription.error) {
-    return { data: null, error: byDescription.error.message };
+    return { data: null, error: describeReadError(byDescription.error, "transactions") };
   }
 
   const counts = new Map<string, { count: number; category_name: string; color: string | null }>();
@@ -500,7 +501,7 @@ export async function createTransfer(
     .select();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeWriteError(error, "transfer") };
   }
 
   return { data, error: null };
@@ -526,7 +527,7 @@ export async function updateTransfer(
     .select();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeWriteError(error, "transfer") };
   }
 
   return { data, error: null };
@@ -563,7 +564,7 @@ export async function bulkDeleteTransactions(
     .select("id");
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeWriteError(error, "transaction") };
   }
 
   return { data, error: null };
@@ -580,7 +581,7 @@ export async function deleteTransfer(groupId: string): Promise<DbResult<{ id: st
     .select("id");
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeWriteError(error, "transfer") };
   }
 
   return { data, error: null };
@@ -600,7 +601,7 @@ export async function getMostRecentTransactionAccountId(): Promise<DbResult<stri
     .maybeSingle();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "transactions") };
   }
 
   return { data: data?.accountid ?? null, error: null };

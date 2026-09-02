@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { describeReadError } from "@/lib/db/errors";
 
 export type DbResult<T> = { data: T; error: null } | { data: null; error: string };
 
@@ -66,11 +67,17 @@ export async function getActivitySince(sinceISO: string): Promise<DbResult<Activ
       .lt("transaction_date", end),
   ]);
 
-  if (txCountRes.error) return { data: null, error: txCountRes.error.message };
-  if (goalRes.error) return { data: null, error: goalRes.error.message };
-  if (overBudgetRes.error) return { data: null, error: overBudgetRes.error.message };
+  if (txCountRes.error) {
+    return { data: null, error: describeReadError(txCountRes.error, "recent activity") };
+  }
+  if (goalRes.error) {
+    return { data: null, error: describeReadError(goalRes.error, "recent activity") };
+  }
+  if (overBudgetRes.error) {
+    return { data: null, error: describeReadError(overBudgetRes.error, "recent activity") };
+  }
   if (recentExpenseCategoriesRes.error) {
-    return { data: null, error: recentExpenseCategoriesRes.error.message };
+    return { data: null, error: describeReadError(recentExpenseCategoriesRes.error, "recent activity") };
   }
 
   const recentCategoryIds = new Set(

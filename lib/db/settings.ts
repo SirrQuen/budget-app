@@ -3,6 +3,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { coerceTheme, type Theme } from "@/lib/theme";
 import type { Database } from "@/lib/database.types";
+import { describeReadError } from "@/lib/db/errors";
 
 type SettingsRow = Database["public"]["Tables"]["settings"]["Row"];
 
@@ -24,7 +25,7 @@ export const getSettings = cache(async (): Promise<DbResult<SettingsRow | null>>
   const { data, error } = await supabase.from("settings").select("*").maybeSingle();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "settings") };
   }
 
   return { data, error: null };
@@ -63,7 +64,7 @@ export async function updateTheme(theme: Theme): Promise<DbResult<Theme>> {
     .single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "settings") };
   }
 
   return { data: coerceTheme(data.theme), error: null };

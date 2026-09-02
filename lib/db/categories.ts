@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import type { TransactionType } from "@/lib/db/transactions";
+import { describeReadError, describeWriteError } from "@/lib/db/errors";
 
 type CategoryRow = Database["public"]["Tables"]["categories"]["Row"];
 type CategoryInsert = Database["public"]["Tables"]["categories"]["Insert"];
@@ -64,7 +65,7 @@ export async function listCategories(
   const { data, error } = await query.returns<RawCategoryRow[]>();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "categories") };
   }
 
   return { data: sortByGroupThenName(data).map(flatten), error: null };
@@ -91,7 +92,7 @@ export async function getCategory(id: string): Promise<DbResult<CategoryWithGrou
     .returns<RawCategoryRow>();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "category") };
   }
 
   return { data: flatten(data), error: null };
@@ -126,7 +127,7 @@ export async function createCategory(
     .single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeWriteError(error, "category") };
   }
 
   return { data, error: null };
@@ -148,7 +149,7 @@ export async function updateCategory(
     .single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeWriteError(error, "category") };
   }
 
   return { data, error: null };
@@ -170,7 +171,7 @@ export async function listCategoryGroups(): Promise<DbResult<CategoryGroupRow[]>
     .order("sort_order", { ascending: true });
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "categories") };
   }
 
   return { data, error: null };

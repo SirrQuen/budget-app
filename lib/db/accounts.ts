@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import { isLiabilityAccountType, type AccountType } from "@/lib/accountOptions";
+import { describeReadError, describeWriteError } from "@/lib/db/errors";
 
 export { ACCOUNT_TYPES, type AccountType } from "@/lib/accountOptions";
 
@@ -33,7 +34,7 @@ export async function listAccounts(
   const { data, error } = await query;
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "accounts") };
   }
 
   return { data, error: null };
@@ -49,7 +50,7 @@ export async function getAccount(id: string): Promise<DbResult<AccountRow>> {
     .single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "account") };
   }
 
   return { data, error: null };
@@ -84,7 +85,7 @@ export async function createAccount(
     .single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeWriteError(error, "account") };
   }
 
   return { data, error: null };
@@ -109,7 +110,7 @@ export async function updateAccount(
     .single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeWriteError(error, "account") };
   }
 
   return { data, error: null };
@@ -137,7 +138,7 @@ export async function getMostUsedAssetAccountId(): Promise<DbResult<string | nul
     .order("account_name", { ascending: true });
 
   if (accountsError) {
-    return { data: null, error: accountsError.message };
+    return { data: null, error: describeReadError(accountsError, "accounts") };
   }
 
   const assetAccountIds = accounts
@@ -154,7 +155,7 @@ export async function getMostUsedAssetAccountId(): Promise<DbResult<string | nul
     .in("accountid", assetAccountIds);
 
   if (legsError) {
-    return { data: null, error: legsError.message };
+    return { data: null, error: describeReadError(legsError, "accounts") };
   }
 
   const counts = new Map<string, number>();
@@ -201,7 +202,7 @@ export async function listAccountBalances(
   const { data, error } = await query;
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "accounts") };
   }
 
   return { data, error: null };

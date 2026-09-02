@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
+import { describeReadError, describeWriteError } from "@/lib/db/errors";
 
 type BudgetRow = Database["public"]["Tables"]["budgets"]["Row"];
 type BudgetInsert = Database["public"]["Tables"]["budgets"]["Insert"];
@@ -37,7 +38,7 @@ export async function listBudgets(
   const { data, error } = await query;
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "budgets") };
   }
 
   return { data, error: null };
@@ -53,7 +54,7 @@ export async function getBudget(id: string): Promise<DbResult<BudgetRow>> {
     .single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "budget") };
   }
 
   return { data, error: null };
@@ -83,7 +84,7 @@ export async function createBudget(
     .single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeWriteError(error, "budget") };
   }
 
   return { data, error: null };
@@ -105,7 +106,7 @@ export async function updateBudget(
     .single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeWriteError(error, "budget") };
   }
 
   return { data, error: null };
@@ -125,7 +126,7 @@ export async function deleteBudget(id: string): Promise<DbResult<{ id: string }>
     .single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeWriteError(error, "budget") };
   }
 
   return { data, error: null };
@@ -160,7 +161,7 @@ export async function getBudgetProgress(
   const { data, error } = await query;
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "budgets") };
   }
 
   return { data, error: null };

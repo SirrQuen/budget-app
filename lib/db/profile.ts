@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
+import { describeReadError, describeWriteError } from "@/lib/db/errors";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
@@ -29,7 +30,7 @@ export async function getProfile(): Promise<DbResult<ProfileRow>> {
   const { data, error } = await supabase.from("profiles").select("*").single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "profile") };
   }
 
   return { data, error: null };
@@ -102,7 +103,7 @@ export async function updateProfile(
     .single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeWriteError(error, "profile") };
   }
 
   return { data, error: null };
@@ -121,7 +122,7 @@ export async function checkUsernameAvailable(
   });
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "username") };
   }
 
   return { data, error: null };
@@ -154,7 +155,7 @@ export async function getPlan(): Promise<DbResult<Plan>> {
     .single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "subscription") };
   }
 
   return {
@@ -185,7 +186,7 @@ export async function getStripeSubscription(): Promise<
   const { data, error } = await supabase.from("subscriptions").select("*").maybeSingle();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeReadError(error, "subscription") };
   }
 
   return { data, error: null };
@@ -219,7 +220,7 @@ export async function getAccountDeletionSummary(): Promise<
   const firstError =
     accounts.error ?? transactions.error ?? goals.error ?? budgets.error;
   if (firstError) {
-    return { data: null, error: firstError.message };
+    return { data: null, error: describeReadError(firstError, "account details") };
   }
 
   return {
@@ -248,7 +249,10 @@ export async function deleteOwnAccount(): Promise<DbResult<null>> {
   const { error } = await supabase.rpc("delete_own_account");
 
   if (error) {
-    return { data: null, error: error.message };
+    // The caller (deleteAccountAction) replaces this string with its own
+    // "nothing was removed" copy -- but describeWriteError still fires the
+    // console.error, so a failed deletion is never silent on our side.
+    return { data: null, error: describeWriteError(error, "profile") };
   }
 
   return { data: null, error: null };

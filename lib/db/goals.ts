@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import type { GoalType } from "@/lib/goalOptions";
+import { describeWriteError } from "@/lib/db/errors";
 
 type GoalRow = Database["public"]["Tables"]["goals"]["Row"];
 type GoalInsert = Database["public"]["Tables"]["goals"]["Insert"];
@@ -42,7 +43,7 @@ export async function createGoal(input: CreateGoalInput): Promise<DbResult<GoalR
   const { data, error } = await supabase.from("goals").insert(insert).select().single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeWriteError(error, "goal") };
   }
 
   return { data, error: null };
@@ -70,7 +71,7 @@ export async function contributeToGoal(
     .single();
 
   if (error) {
-    return { data: null, error: error.message };
+    return { data: null, error: describeWriteError(error, "contribution") };
   }
 
   return { data, error: null };
