@@ -207,9 +207,19 @@ Read `../../DATABASE.md` before writing any query or signup flow:
   `settings` row, and default `category_groups`/`categories`. App code must
   never insert into `profiles`/`settings`/`category_groups`/`categories`
   directly — the trigger owns them.
+- A user's tier lives on `profiles.subscription_plan` /
+  `subscription_status` — read it with `getPlan()` in `lib/db/profile.ts`.
+  `handle_new_user()` and the service-role billing sync own those columns;
+  they are not in the `authenticated` UPDATE grant.
+- `subscriptions` holds Stripe billing records only — `stripe_customer_id`,
+  `stripe_subscription_id` and `renewal_date` are all NOT NULL, so a row
+  exists only once a user actually pays. It is empty until then, and that is
+  correct, not a bug. Read it with `getStripeSubscription()`; a `null`
+  result means "not a paying subscriber", a normal state.
 - `subscriptions` is service_role-only: client code may `SELECT` it, never
   write to it (no INSERT/UPDATE/DELETE policy exists, and the grants are
-  revoked for `authenticated`).
+  revoked for `authenticated`). Neither `profiles` tier columns nor
+  `subscriptions` are writable by `authenticated`.
 - Username login resolves server-side only (`email_for_username()` is
   `service_role`-only).
 - Only `Income`/`Expense` transaction types exist — transfers unsupported.
@@ -244,7 +254,12 @@ Read `../../DATABASE.md` before writing any query or signup flow:
 - Never aggregate money in JavaScript. Use the v_* views, or sum
   signed_amount(amount, transaction_type) in SQL.
 - profiles: SELECT plus UPDATE on only first_name, last_name, username,
-  phone, lastlogin, updated_at. Nothing else is writable.
+  phone, lastlogin, updated_at. Nothing else is writable — subscription_plan
+  and subscription_status included.
+- Tier is profiles.subscription_plan / subscription_status, via getPlan().
+  subscriptions is a separate table of Stripe billing records, read via
+  getStripeSubscription(); it is empty until a user pays and null there
+  means "not a paying subscriber", not an error.
 - subscriptions: read-only for users. Billing state is service_role only.
 - Never use the service role key in application code.
 - The data layer test harness lives in git history — recover with

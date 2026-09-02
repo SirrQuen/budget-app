@@ -36,7 +36,8 @@ import {
   getProfile,
   updateProfile,
   checkUsernameAvailable,
-  getSubscription,
+  getPlan,
+  getStripeSubscription,
   type UpdateProfilePatch,
 } from "@/lib/db/profile";
 import {
@@ -139,7 +140,7 @@ async function collectRawErrors(
 
   {
     const { error } = await supabase.from("subscriptions").select("*").single();
-    record("getSubscription()", error);
+    record("getStripeSubscription()", error);
   }
 
   {
@@ -403,7 +404,10 @@ async function collectResults(): Promise<{
     () => checkUsernameAvailable(`db-test-probe-${Date.now()}`),
   );
 
-  await run(results, "Profile", "getSubscription()", "success", () => getSubscription());
+  await run(results, "Profile", "getPlan()", "success", () => getPlan());
+  await run(results, "Profile", "getStripeSubscription()", "success", () =>
+    getStripeSubscription(),
+  );
 
   // --------------------------------------------------------------- Dashboard
   await run(results, "Dashboard", "getDashboardKpis()", "success", () => getDashboardKpis());

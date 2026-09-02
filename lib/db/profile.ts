@@ -124,14 +124,59 @@ export async function checkUsernameAvailable(
   return { data, error: null };
 }
 
-// Read-only by design: subscriptions has no INSERT/UPDATE/DELETE policy
-// for `authenticated`, and those grants are revoked -- billing state is
-// written only by the service-role webhook handler. Do not add a write
-// function here.
+export type Plan = {
+  /** 'Free' | 'Pro' | 'Premium', or null before handle_new_user() / the
+   *  billing sync has set one. Treat null as Free. */
+  plan: string | null;
+  /** 'Active' | 'Trialing' | 'PastDue' | 'Canceled' | 'Incomplete', or null. */
+  status: string | null;
+};
+
+// The user's tier. It lives on profiles (subscription_plan /
+// subscription_status), written by handle_new_user() at signup and by the
+// service-role billing sync thereafter -- never by the client. This is the
+// function the app uses to gate features by plan.
 //
-// maybeSingle(), not single(): a user with no billing row yet is a normal
-// state, not an error -- .single() would throw PGRST116 for it.
-export async function getSubscription(): Promise<DbResult<SubscriptionRow | null>> {
+// Not to be confused with getStripeSubscription() below: that reads the
+// subscriptions table, which holds Stripe billing records only and is empty
+// until a user actually pays.
+export async function getPlan(): Promise<DbResult<Plan>> {
+  const supabase = await createClient();
+
+  // One row per user, scoped by RLS to id = auth.uid() (see getProfile).
+  // .single(): a missing profile row is a genuine error, not an empty state.
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("subscription_plan, subscription_status")
+    .single();
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return {
+    data: { plan: data.subscription_plan, status: data.subscription_status },
+    error: null,
+  };
+}
+
+// Reads the subscriptions table, which stores Stripe billing records only:
+// stripe_customer_id, stripe_subscription_id and renewal_date are all NOT
+// NULL, so a row can exist only once a user has a real Stripe subscription.
+//
+// A null result means "not a paying subscriber" -- a normal, expected state,
+// not an error. The table has zero rows until someone pays; that is correct.
+// For the user's tier, call getPlan() instead.
+//
+// Read-only by design: subscriptions has no INSERT/UPDATE/DELETE policy for
+// `authenticated`, and those grants are revoked -- billing state is written
+// only by the service-role webhook handler. Do not add a write function here.
+//
+// maybeSingle(), not single(): the no-row case is normal, so .single() would
+// wrongly surface PGRST116 as an error.
+export async function getStripeSubscription(): Promise<
+  DbResult<SubscriptionRow | null>
+> {
   const supabase = await createClient();
 
   const { data, error } = await supabase.from("subscriptions").select("*").maybeSingle();
