@@ -422,3 +422,42 @@ body {
   color: var(--ink);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+/* =====================================================================
+   FOCUS -- global safety net
+   =====================================================================
+
+   Every component that owns its focus treatment sets
+   `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action`
+   and overrides this. This rule is here for everything that doesn't: a
+   focusable <svg> chart, a <kbd>, a bare <a>, anything third-party. The
+   ring colour is --action, which is deep navy in light and brand gold in
+   dark -- the same treatment the rest of the app uses, so keyboard focus
+   is never invisible anywhere. Mouse clicks don't trigger :focus-visible,
+   so this never shows on pointer interaction. */
+:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* =====================================================================
+   REDUCED MOTION -- global safety net
+   =====================================================================
+
+   Individual animations are already gated with Tailwind's `motion-safe:`
+   / `motion-reduce:` variants. This block is the belt-and-braces layer:
+   any transition or animation that slips through (a hover lift on a
+   button, a CSS transition added later) is collapsed to a single frame.
+   Durations go to ~0 rather than `none` so the end state still commits --
+   a fill still reaches its width, a panel still lands open, an entrance
+   still ends visible; it just doesn't travel there. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 
 export function ConfirmDialog({
@@ -26,6 +26,8 @@ export function ConfirmDialog({
   onCancel: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const descId = useId();
 
   useEffect(() => {
     const dialog = ref.current;
@@ -37,6 +39,8 @@ export function ConfirmDialog({
   return (
     <dialog
       ref={ref}
+      aria-labelledby={titleId}
+      aria-describedby={descId}
       onCancel={(e) => {
         e.preventDefault();
         onCancel();
@@ -48,8 +52,12 @@ export function ConfirmDialog({
       className="mx-auto my-auto w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-hairline bg-surface p-0 text-ink backdrop:bg-scrim"
     >
       <div className="p-5">
-        <h2 className="text-base font-semibold text-ink">{title}</h2>
-        <p className="mt-2 text-sm text-ink-secondary">{description}</p>
+        <h2 id={titleId} className="text-base font-semibold text-ink">
+          {title}
+        </h2>
+        <p id={descId} className="mt-2 text-sm text-ink-secondary">
+          {description}
+        </p>
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"

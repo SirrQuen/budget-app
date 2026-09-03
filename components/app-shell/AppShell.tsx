@@ -47,6 +47,14 @@ export function AppShell({
 
   return (
     <div className="min-h-dvh bg-page text-ink md:flex">
+      {/* First tab stop on every authenticated page -- jumps past the nav
+          straight to the page content. Visually hidden until focused. */}
+      <a
+        href="#main-content"
+        className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:left-4 focus-visible:top-4 focus-visible:z-50 focus-visible:rounded-lg focus-visible:bg-action focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-semibold focus-visible:text-action-ink focus-visible:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page"
+      >
+        Skip to main content
+      </a>
       <header className="flex items-center justify-between border-b border-hairline bg-page px-4 py-3 md:hidden">
         <span className="text-lg font-semibold">EverNest Finance</span>
         <button
@@ -113,7 +121,7 @@ export function AppShell({
         </div>
       </aside>
 
-      <main className="flex-1 px-4 py-6 md:px-8 md:py-8">
+      <main id="main-content" tabIndex={-1} className="flex-1 px-4 py-6 outline-none md:px-8 md:py-8">
         <OptimisticTransactionsProvider>
           {quickAdd ? (
             <QuickAddBar

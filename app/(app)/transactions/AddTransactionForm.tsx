@@ -91,6 +91,7 @@ export function AddTransactionForm({
   accounts,
   prefill,
   embedded = false,
+  headingId,
   onClose,
   onSaved,
 }: {
@@ -104,6 +105,9 @@ export function AddTransactionForm({
   /** Always renders the full form, skipping the collapsed "Add transaction"
    * button -- for mounting inside an overlay that's already the toggle. */
   embedded?: boolean;
+  /** Set by a wrapping dialog so its aria-labelledby can point at this
+   * form's own <h2> heading. */
+  headingId?: string;
   /** Embedded mode only: called instead of collapsing when Close is clicked. */
   onClose?: () => void;
   /** Embedded mode only: called once the create-success celebration finishes. */
@@ -261,7 +265,7 @@ export function AddTransactionForm({
         ) : null}
 
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-ink">
+          <h2 id={headingId} className="text-base font-semibold text-ink">
             {isEdit ? "Edit transaction" : "Add transaction"}
           </h2>
           {isEdit ? (

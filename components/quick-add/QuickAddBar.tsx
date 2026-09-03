@@ -46,6 +46,7 @@ export function QuickAddBar({
   const [celebrateMessage, setCelebrateMessage] = useState("Logged");
   const [celebrateIcon, setCelebrateIcon] = useState<React.ReactNode>("✓");
 
+  const sheetRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const categorySelectRef = useRef<HTMLSelectElement>(null);
   const accountSelectRef = useRef<HTMLSelectElement>(null);
@@ -163,6 +164,25 @@ export function QuickAddBar({
   useEffect(() => {
     return () => clearTimeout(celebrateTimeoutRef.current);
   }, []);
+
+  // The same DOM node is an off-screen bottom sheet on mobile and an
+  // always-visible sticky bar on desktop. When it's the closed mobile
+  // sheet (translated off-screen), its fields must leave the tab order --
+  // `inert` does that without affecting the desktop bar, where the sheet
+  // is never "closed". `inert` can't be expressed as a responsive class,
+  // so it's toggled here against the md breakpoint.
+  useEffect(() => {
+    const node = sheetRef.current;
+    if (!node) return;
+    const desktop = window.matchMedia("(min-width: 768px)");
+    const sync = () => {
+      if (!desktop.matches && !sheetOpen) node.setAttribute("inert", "");
+      else node.removeAttribute("inert");
+    };
+    sync();
+    desktop.addEventListener("change", sync);
+    return () => desktop.removeEventListener("change", sync);
+  }, [sheetOpen]);
 
   useEffect(() => {
     function handleGlobalKeydown(e: KeyboardEvent) {
@@ -358,6 +378,7 @@ export function QuickAddBar({
           Desktop: the same node becomes an always-visible sticky bar
           (position/inset utilities overridden at md:, not swapped out). */}
       <div
+        ref={sheetRef}
         className={`fixed inset-x-0 bottom-0 z-40 rounded-t-2xl border-t border-hairline bg-surface transition-transform duration-200 motion-reduce:transition-none ${
           sheetOpen ? "translate-y-0" : "translate-y-full"
         } md:sticky md:top-0 md:z-30 md:translate-y-0 md:rounded-none md:border-t-0 md:border-b md:bg-page md:transition-none`}
