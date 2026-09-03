@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { CashflowPoint } from "@/lib/db/dashboard";
 import { formatCurrency } from "@/lib/format";
 
@@ -11,17 +11,19 @@ const SERIES = [
   { key: "expenses", name: "Spending", color: "var(--color-cat-2)" },
 ] as const;
 
-// Plotted in viewBox units; the <svg> scales to its container width. Stroked
-// marks use non-scaling-stroke so 2px stays 2px at any render width.
-const VB_W = 840;
-const VB_H = 300;
-const PAD = { top: 16, right: 72, bottom: 28, left: 56 };
-const PLOT_L = PAD.left;
-const PLOT_R = VB_W - PAD.right;
-const PLOT_T = PAD.top;
-const PLOT_B = VB_H - PAD.bottom;
-const PLOT_W = PLOT_R - PLOT_L;
-const PLOT_H = PLOT_B - PLOT_T;
+// The viewBox width tracks the measured container width and the <svg> fills
+// it (preserveAspectRatio="none", so no distortion once measured), which
+// means these are effectively real px. The plot area is a FIXED height,
+// independent of width -- a wide, short chart reads direction better than a
+// tall one, and small day-to-day wobble stops looking like a cliff. The
+// y-labels (left), x-labels (bottom) and top gutter live in PAD, outside the
+// plot, so the plot never gets squeezed further. The legend is HTML above.
+const PLOT_H_MOBILE = 160;
+const PLOT_H_DESKTOP = 220;
+const DESKTOP_MIN_WIDTH = 640;
+const PAD = { top: 12, right: 64, bottom: 28, left: 48 };
+// First paint / SSR, before ResizeObserver has measured the container.
+const FALLBACK_WIDTH = 720;
 
 const shortDate = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -91,9 +93,33 @@ export function CashflowChart({
   shadeFrom?: string;
   shadeTo?: string;
 }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const [width, setWidth] = useState(FALLBACK_WIDTH);
   const [active, setActive] = useState<number | null>(null);
   const tableId = useId();
+
+  // Track the container's width so the plot fills it, while its height stays
+  // fixed (below). Deterministic first render (FALLBACK_WIDTH) keeps SSR and
+  // the first client render in agreement; the observer corrects on mount.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const measure = () => setWidth(el.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const plotH = width >= DESKTOP_MIN_WIDTH ? PLOT_H_DESKTOP : PLOT_H_MOBILE;
+  const svgH = PAD.top + plotH + PAD.bottom;
+  const PLOT_L = PAD.left;
+  const PLOT_R = width - PAD.right;
+  const PLOT_T = PAD.top;
+  const PLOT_B = PAD.top + plotH;
+  const PLOT_W = Math.max(PLOT_R - PLOT_L, 1);
+  const PLOT_H = plotH;
 
   const n = points.length;
   const shade = shadeIndices(points, shadeFrom, shadeTo);
@@ -127,8 +153,10 @@ export function CashflowChart({
 
   function pointerToIndex(clientX: number): number {
     const rect = svgRef.current!.getBoundingClientRect();
-    const vbX = ((clientX - rect.left) / rect.width) * VB_W;
-    const i = Math.round(((vbX - PLOT_L) / PLOT_W) * (n - 1));
+    // viewBox width tracks `width`, so map the pointer through the actual
+    // rendered width in case the two are a frame out of sync (or page zoom).
+    const localX = ((clientX - rect.left) / rect.width) * width;
+    const i = Math.round(((localX - PLOT_L) / PLOT_W) * (n - 1));
     return Math.max(0, Math.min(n - 1, i));
   }
 
@@ -147,7 +175,7 @@ export function CashflowChart({
 
   const activePoint = active === null ? null : points[active];
   const activeX = active === null ? 0 : x(active);
-  const tooltipLeftPct = (activeX / VB_W) * 100;
+  const tooltipLeftPct = (activeX / width) * 100;
   const tooltipSide = tooltipLeftPct > 62 ? "right" : tooltipLeftPct < 12 ? "left" : "center";
 
   return (
@@ -173,12 +201,14 @@ export function CashflowChart({
         </ul>
       </figcaption>
 
-      <div className="relative">
+      <div className="relative" ref={wrapRef}>
         <svg
           ref={svgRef}
-          viewBox={`0 0 ${VB_W} ${VB_H}`}
+          viewBox={`0 0 ${width} ${svgH}`}
           width="100%"
-          className="block h-auto touch-none"
+          height={svgH}
+          preserveAspectRatio="none"
+          className="block touch-none"
           role="img"
           tabIndex={0}
           aria-label={`Cash flow, last 90 days${
