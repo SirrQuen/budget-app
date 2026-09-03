@@ -76,55 +76,63 @@ export function AccountRow({
 
   return (
     <li
-      className={`flex items-center gap-3 px-4 py-3 transition-colors duration-150 hover:bg-surface-raised ${account.is_active ? "" : "opacity-60"}`}
+      className={`flex flex-col gap-2 px-4 py-3 transition-colors duration-150 hover:bg-surface-raised sm:flex-row sm:items-center sm:gap-3 ${account.is_active ? "" : "opacity-60"}`}
     >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium text-ink">{account.account_name}</span>
-          <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-secondary">
-            {account.account_type}
-          </span>
-          {!account.is_active ? (
-            <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
-              Archived
+      {/* Below sm the actions drop onto their own line: on a liability row,
+          balance + "Make a payment" + Edit + Archive on one line crushed the
+          account name to nothing. `sm:contents` dissolves these wrappers from
+          sm up so the original single-line layout is unchanged. */}
+      <div className="flex items-start justify-between gap-3 sm:contents">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-medium text-ink">{account.account_name}</span>
+            <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-secondary">
+              {account.account_type}
             </span>
+            {!account.is_active ? (
+              <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
+                Archived
+              </span>
+            ) : null}
+          </div>
+          {account.institution ? (
+            <p className="mt-0.5 truncate text-sm text-ink-muted">{account.institution}</p>
           ) : null}
         </div>
-        {account.institution ? (
-          <p className="mt-0.5 truncate text-sm text-ink-muted">{account.institution}</p>
-        ) : null}
+
+        <span className="shrink-0 text-sm font-medium tabular-nums text-ink">
+          {formatAccountBalance(account.balance ?? 0, account.account_type ?? "")}
+        </span>
       </div>
 
-      <span className="shrink-0 text-sm font-medium tabular-nums text-ink">
-        {formatAccountBalance(account.balance ?? 0, account.account_type ?? "")}
-      </span>
-
-      {archiveError ? <span className="shrink-0 text-sm text-critical">{archiveError}</span> : null}
-      {canMakePayment ? (
+      <div className="-mx-2 flex shrink-0 items-center gap-1 sm:contents">
+        {archiveError ? <span className="px-2 text-sm text-critical sm:px-0">{archiveError}</span> : null}
+        {canMakePayment ? (
+          <button
+            type="button"
+            onClick={() => setMakingPayment(true)}
+            className="inline-flex min-h-11 shrink-0 items-center rounded px-2 text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface sm:px-0"
+          >
+            Make a payment
+          </button>
+        ) : null}
         <button
           type="button"
-          onClick={() => setMakingPayment(true)}
-          className="shrink-0 rounded text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          onClick={() => setEditing(true)}
+          className="inline-flex min-h-11 shrink-0 items-center rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface sm:px-0"
         >
-          Make a payment
+          Edit
         </button>
-      ) : null}
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-      >
-        Edit
-      </button>
-      {account.is_active ? (
-        <button
-          type="button"
-          onClick={() => setConfirmingArchive(true)}
-          className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-        >
-          Archive
-        </button>
-      ) : null}
+        {account.is_active ? (
+          <button
+            type="button"
+            onClick={() => setConfirmingArchive(true)}
+            className="inline-flex min-h-11 shrink-0 items-center rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface sm:px-0"
+          >
+            Archive
+          </button>
+        ) : null}
+      </div>
 
       <ConfirmDialog
         open={confirmingArchive}

@@ -122,25 +122,32 @@ export function BudgetRow({
 
   return (
     <li className="flex flex-col gap-3 px-4 py-4 transition-colors duration-150 hover:bg-surface-raised">
-      <div className="flex items-center gap-3">
-        <CategoryIcon icon={budget.category_icon} className="h-4 w-4 shrink-0 text-ink-secondary" />
-        <span className="flex-1 text-sm font-medium text-ink">{budget.category_name}</span>
-        {deleteError ? <span className="shrink-0 text-sm text-critical">{deleteError}</span> : null}
-        <span className="shrink-0 text-base font-semibold tabular-nums text-ink">{Math.round(pctUsed)}%</span>
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-        >
-          Edit
-        </button>
-        <button
-          type="button"
-          onClick={() => setConfirmingDelete(true)}
-          className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-        >
-          Delete
-        </button>
+      {/* Below sm the actions drop onto their own line so "Edit" / "Delete"
+          stop competing with the category name for width, and each gets a
+          44px tap target; inline from sm up. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+        <div className="flex min-w-0 items-center gap-3 sm:flex-1">
+          <CategoryIcon icon={budget.category_icon} className="h-4 w-4 shrink-0 text-ink-secondary" />
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{budget.category_name}</span>
+          <span className="shrink-0 text-base font-semibold tabular-nums text-ink">{Math.round(pctUsed)}%</span>
+        </div>
+        <div className="-mx-2 flex shrink-0 items-center gap-1 sm:mx-0 sm:gap-3">
+          {deleteError ? <span className="px-2 text-sm text-critical sm:px-0">{deleteError}</span> : null}
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="inline-flex min-h-11 items-center rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface sm:px-0"
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmingDelete(true)}
+            className="inline-flex min-h-11 items-center rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface sm:px-0"
+          >
+            Delete
+          </button>
+        </div>
       </div>
 
       <Meter value={pctUsed} ariaLabel={`${budget.category_name ?? "Category"} budget used`} />

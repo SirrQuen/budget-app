@@ -361,25 +361,31 @@ export function CashflowChart({
           : ""}
       </span>
 
-      <table id={tableId} className="sr-only">
-        <caption>Daily income and spending, last 90 days</caption>
-        <thead>
-          <tr>
-            <th scope="col">Day</th>
-            <th scope="col">Income</th>
-            <th scope="col">Spending</th>
-          </tr>
-        </thead>
-        <tbody>
-          {points.map((p) => (
-            <tr key={p.day}>
-              <th scope="row">{fullDate.format(new Date(p.day))}</th>
-              <td>{formatCurrency(p.income)}</td>
-              <td>{formatCurrency(p.expenses)}</td>
+      {/* sr-only must sit on a wrapper, not the <table>: a table's
+          width/height are treated as minimums, so `sr-only` on the table
+          itself leaves it ~290x2200px (only its paint is clipped), adding a
+          huge dead scroll region below the dashboard on mobile. */}
+      <div className="sr-only">
+        <table id={tableId}>
+          <caption>Daily income and spending, last 90 days</caption>
+          <thead>
+            <tr>
+              <th scope="col">Day</th>
+              <th scope="col">Income</th>
+              <th scope="col">Spending</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {points.map((p) => (
+              <tr key={p.day}>
+                <th scope="row">{fullDate.format(new Date(p.day))}</th>
+                <td>{formatCurrency(p.income)}</td>
+                <td>{formatCurrency(p.expenses)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </figure>
   );
 }

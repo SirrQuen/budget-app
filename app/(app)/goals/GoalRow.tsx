@@ -74,16 +74,21 @@ export function GoalRow({ goal }: { goal: GoalProgressRow }) {
 
   return (
     <li className="flex flex-col gap-3 px-4 py-4 transition-colors duration-150 hover:bg-surface-raised">
-      <div className="flex items-center gap-3">
-        <TargetIcon className="h-4 w-4 shrink-0 text-ink-secondary" aria-hidden="true" />
-        <span className="flex-1 text-sm font-medium text-ink">{goal.goal_name}</span>
-        <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
-          {goal.goal_type}
-        </span>
+      {/* Below sm the action drops onto its own line beneath the name so it
+          stops competing with the goal name for width and gets a 44px tap
+          target; inline on the right from sm up. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+        <div className="flex min-w-0 items-center gap-3 sm:flex-1">
+          <TargetIcon className="h-4 w-4 shrink-0 text-ink-secondary" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{goal.goal_name}</span>
+          <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
+            {goal.goal_type}
+          </span>
+        </div>
         <button
           type="button"
           onClick={() => setContributing((v) => !v)}
-          className="shrink-0 rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          className="-mx-2 inline-flex min-h-11 shrink-0 items-center self-start rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface sm:mx-0 sm:self-auto sm:px-0"
         >
           {contributing ? "Cancel" : "Add contribution"}
         </button>

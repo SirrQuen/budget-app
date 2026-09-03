@@ -352,7 +352,11 @@ export function TransactionsList({
         </div>
       ) : null}
 
-      <div className="overflow-x-auto rounded-2xl border border-hairline bg-surface">
+      {/* `relative` contains the sr-only <th> spans: sr-only is
+          position:absolute, and with no positioned ancestor they escape this
+          scroll container and land ~700px out, dragging the page into a
+          horizontal scroll on mobile. */}
+      <div className="relative overflow-x-auto rounded-2xl border border-hairline bg-surface">
         <table className="w-full min-w-[720px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-hairline text-left text-xs font-medium uppercase tracking-wide text-ink-muted">
@@ -456,10 +460,10 @@ export function TransactionsList({
                       <span className="font-medium tabular-nums text-ink">{formatCurrency(row.amount)}</span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <div className="inline-flex items-center gap-3">
+                      <div className="inline-flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
                         <Link
                           href={`/transactions/${row.id}/edit`}
-                          className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                          className="inline-flex min-h-11 items-center justify-end rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
                         >
                           Edit
                         </Link>
@@ -504,10 +508,10 @@ export function TransactionsList({
                     <Amount amount={Number(tx.amount)} type={tx.transaction_type as TransactionType} column />
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <div className="inline-flex items-center gap-3">
+                    <div className="inline-flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
                       <Link
                         href={`/transactions/${tx.id}/edit`}
-                        className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                        className="inline-flex min-h-11 items-center justify-end rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
                       >
                         Edit
                       </Link>

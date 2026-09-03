@@ -54,7 +54,7 @@ export function AppShell({
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-label={open ? "Close menu" : "Open menu"}
-          className="rounded-lg p-2 text-ink-secondary transition-colors duration-150 hover:bg-surface hover:text-ink active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-lg p-2 text-ink-secondary transition-colors duration-150 hover:bg-surface hover:text-ink active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page"
         >
           {open ? <CloseIcon className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
         </button>
@@ -80,7 +80,7 @@ export function AppShell({
                   href={item.href}
                   onClick={() => setOpen(false)}
                   aria-current={active ? "page" : undefined}
-                  className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page ${
+                  className={`flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page ${
                     active
                       ? "bg-surface text-ink"
                       : "text-ink-secondary hover:bg-surface hover:text-ink"
@@ -105,7 +105,7 @@ export function AppShell({
           <form action={logout}>
             <button
               type="submit"
-              className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-secondary transition-colors duration-150 hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page"
+              className="min-h-11 w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-secondary transition-colors duration-150 hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page"
             >
               Log out
             </button>
@@ -121,6 +121,7 @@ export function AppShell({
               incomeCategories={quickAdd.incomeCategories}
               expenseCategories={quickAdd.expenseCategories}
               defaultAccountId={quickAdd.defaultAccountId}
+              navOpen={open}
             />
           ) : null}
           {children}

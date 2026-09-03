@@ -64,7 +64,7 @@ export function ThemeToggle({
               }}
               title={compact ? THEME_LABELS[option] : undefined}
               className={`flex items-center justify-center gap-2 rounded-full text-sm font-medium transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
-                compact ? "h-9 w-9" : "px-4 py-2"
+                compact ? "h-11 w-11" : "min-h-11 px-4 py-2"
               } ${
                 selected
                   ? "bg-action text-action-ink"

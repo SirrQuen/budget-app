@@ -41,7 +41,11 @@ export function ConfirmDialog({
         e.preventDefault();
         onCancel();
       }}
-      className="w-full max-w-sm rounded-2xl border border-hairline bg-surface p-0 text-ink backdrop:bg-scrim"
+      // A definite width already inside the viewport (rather than w-full +
+      // max-width): Chrome resolves width:100% before the max-width clamp and
+      // drops the auto margins to 0, pinning the modal to the top-left. This
+      // keeps a 1rem gutter and stays centred by the dialog UA margin:auto.
+      className="mx-auto my-auto w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-hairline bg-surface p-0 text-ink backdrop:bg-scrim"
     >
       <div className="p-5">
         <h2 className="text-base font-semibold text-ink">{title}</h2>
@@ -50,7 +54,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-full px-4 py-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:bg-surface-raised hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            className="min-h-11 rounded-full px-4 py-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:bg-surface-raised hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
           >
             {cancelLabel}
           </button>

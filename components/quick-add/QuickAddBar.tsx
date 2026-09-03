@@ -23,11 +23,15 @@ export function QuickAddBar({
   incomeCategories,
   expenseCategories,
   defaultAccountId,
+  navOpen = false,
 }: {
   accounts: TransactionAccountOption[];
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
   defaultAccountId: string | null;
+  /** The mobile nav drawer is open -- hide the FAB so it doesn't sit on top
+   * of the drawer's footer controls. */
+  navOpen?: boolean;
 }) {
   const [text, setText] = useState("");
   const [categoryid, setCategoryid] = useState("");
@@ -368,7 +372,11 @@ export function QuickAddBar({
           inputRef.current?.focus();
         }}
         aria-label="Quick add transaction"
-        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-action text-action-ink shadow-lg transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-action-hover hover:shadow-xl active:translate-y-0 active:scale-95 active:bg-action-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page md:hidden"
+        aria-hidden={sheetOpen || navOpen}
+        tabIndex={sheetOpen || navOpen ? -1 : undefined}
+        className={`fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-action text-action-ink shadow-lg transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-action-hover hover:shadow-xl active:translate-y-0 active:scale-95 active:bg-action-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page md:hidden ${
+          sheetOpen || navOpen ? "pointer-events-none opacity-0" : ""
+        }`}
       >
         <PlusIcon className="h-6 w-6" />
       </button>
