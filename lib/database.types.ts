@@ -533,8 +533,10 @@ export type Database = {
           end_date: string | null
           frequency: string
           id: string
+          interval_count: number
           is_active: boolean
           next_run_date: string
+          occurrence_limit: number | null
           start_date: string | null
           userid: string
         }
@@ -547,8 +549,10 @@ export type Database = {
           end_date?: string | null
           frequency?: string
           id?: string
+          interval_count?: number
           is_active?: boolean
           next_run_date: string
+          occurrence_limit?: number | null
           start_date?: string | null
           userid: string
         }
@@ -561,8 +565,10 @@ export type Database = {
           end_date?: string | null
           frequency?: string
           id?: string
+          interval_count?: number
           is_active?: boolean
           next_run_date?: string
+          occurrence_limit?: number | null
           start_date?: string | null
           userid?: string
         }
@@ -1262,8 +1268,10 @@ export type Database = {
           description: string | null
           end_date: string | null
           frequency: string | null
+          interval_count: number | null
           is_overdue: boolean | null
           next_run_date: string | null
+          occurrence_limit: number | null
           recurring_id: string | null
           start_date: string | null
           userid: string | null

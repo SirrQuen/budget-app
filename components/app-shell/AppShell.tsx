@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { logout } from "@/lib/auth/actions";
 import { StreakBadge } from "@/components/ui/StreakBadge";
-import { HomeIcon, ListIcon, WalletIcon, TagIcon, PieIcon, TargetIcon, SettingsIcon, MenuIcon, CloseIcon, type IconProps } from "@/components/ui/icons";
+import { HomeIcon, ListIcon, WalletIcon, TagIcon, PieIcon, TargetIcon, RepeatIcon, SettingsIcon, MenuIcon, CloseIcon, type IconProps } from "@/components/ui/icons";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { QuickAddBar } from "@/components/quick-add/QuickAddBar";
 import { OptimisticTransactionsProvider } from "@/components/quick-add/OptimisticTransactionsContext";
@@ -26,6 +26,7 @@ const NAV_ITEMS: { href: string; label: string; icon: (props: IconProps) => Reac
   { href: "/categories", label: "Categories", icon: TagIcon },
   { href: "/budgets", label: "Budgets", icon: PieIcon },
   { href: "/goals", label: "Goals", icon: TargetIcon },
+  { href: "/recurring", label: "Recurring", icon: RepeatIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 

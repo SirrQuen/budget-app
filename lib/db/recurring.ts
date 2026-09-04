@@ -16,6 +16,11 @@ export type DbResult<T> = { data: T; error: null } | { data: null; error: string
 export type RecurringWithRelations = RecurringRow & {
   category_name: string | null;
   category_color: string | null;
+  category_icon: string | null;
+  // Needed by the edit form to pre-select Income/Expense -- see CLAUDE.md
+  // "Recurring transactions": the schedule carries no transaction_type of
+  // its own, direction always comes from the linked category.
+  category_type: string | null;
   account_name: string | null;
 };
 
@@ -23,10 +28,10 @@ export type RecurringWithRelations = RecurringRow & {
 // tables, plus reporting views) -- naming "categories"/"accounts" explicitly
 // picks the base-table relationship, same as transactions.ts's TRANSACTION_SELECT.
 const RECURRING_SELECT =
-  "*, category:categories(category_name, color), account:accounts(account_name)";
+  "*, category:categories(category_name, color, icon, category_type), account:accounts(account_name)";
 
 type RawRecurringRow = RecurringRow & {
-  category: { category_name: string; color: string | null } | null;
+  category: { category_name: string; color: string | null; icon: string | null; category_type: string } | null;
   account: { account_name: string } | null;
 };
 
@@ -36,6 +41,8 @@ function flatten(row: RawRecurringRow): RecurringWithRelations {
     ...rest,
     category_name: category?.category_name ?? null,
     category_color: category?.color ?? null,
+    category_icon: category?.icon ?? null,
+    category_type: category?.category_type ?? null,
     account_name: account?.account_name ?? null,
   };
 }
@@ -52,37 +59,72 @@ function flatten(row: RawRecurringRow): RecurringWithRelations {
 // re-deriving it.
 // ---------------------------------------------------------------------------
 
-// Adds whole months to an ISO date, clamped to the last day of the target
-// month when the original day doesn't exist there (Jan 31 + 1 month ->
-// Feb 28, not Mar 3, which is what plain Date month arithmetic would give).
-// Also how Yearly avoids landing on a Feb 29 that doesn't exist.
-function addMonthsClampedISO(dateISO: string, months: number): string {
-  const [year, month, day] = dateISO.split("-").map(Number);
+// Adds whole months to an ISO date, landing on anchorDay -- clamped to the
+// target month's last day when anchorDay doesn't exist there (anchorDay 31,
+// target month Feb -> the 28th/29th, not rolled into March).
+//
+// anchorDay is deliberately NOT derived from dateISO's own day. Doing that
+// would drift the schedule permanently downward the first time a short
+// month clamps it: Jan 31 -> Feb 28 (correct), then Feb 28 + 1 month -> Mar
+// 28 forever, never back to the 31st a 31-day month actually has. Passing a
+// fixed anchorDay (the caller reads it from start_date, which the generator
+// never advances) means a July 31 occurrence, three months after a Feb
+// clamp, is still the 31st -- and the same guards a Yearly Feb 29 schedule
+// from getting stuck on the 28th once it crosses a non-leap year.
+function addMonthsClampedISO(dateISO: string, months: number, anchorDay: number): string {
+  const [year, month] = dateISO.split("-").map(Number);
   const total = month - 1 + months;
   const targetYear = year + Math.floor(total / 12);
   const targetMonth = ((total % 12) + 12) % 12;
   const lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
-  const d = new Date(targetYear, targetMonth, Math.min(day, lastDayOfTargetMonth));
+  const d = new Date(targetYear, targetMonth, Math.min(anchorDay, lastDayOfTargetMonth));
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function nextOccurrenceISO(dateISO: string, frequency: string): string {
+function dayOfMonth(dateISO: string): number {
+  return Number(dateISO.split("-")[2]);
+}
+
+// intervalCount is the N in "every N weeks" -- meaningful for Weekly only.
+// anchorDateISO is the schedule's stable reference point for Monthly/
+// Quarterly/Yearly (see addMonthsClampedISO) -- callers pass
+// template.start_date, never the cursor being advanced. Weekly/Biweekly
+// don't need it: +7*N days never drifts off the original weekday the way
+// month-length clamping drifts off a day-of-month, so cursor arithmetic
+// alone is exact.
+//
+// Not exported: this file is server-only, and lib/recurringSchedule.ts (the
+// client-safe copy of this same cadence, for the schedule picker and each
+// row's display text) has to duplicate the switch rather than import it --
+// keep the two in sync by hand if a case here ever changes.
+//
+// Daily/Biweekly/Quarterly are still handled here for any row already
+// carrying one of those values -- rectx_frequency_check still allows them --
+// but the schedule picker no longer writes them: "every N weeks" (Weekly +
+// interval_count) folds Biweekly's job in, and Daily/Quarterly turned out to
+// be exotic enough nobody used them.
+function nextOccurrenceISO(
+  dateISO: string,
+  frequency: string,
+  intervalCount: number,
+  anchorDateISO: string,
+): string {
   switch (frequency) {
     case "Daily":
       return addDaysISO(dateISO, 1);
     case "Weekly":
-      return addDaysISO(dateISO, 7);
+      return addDaysISO(dateISO, 7 * intervalCount);
     case "Biweekly":
       return addDaysISO(dateISO, 14);
     case "Monthly":
-      return addMonthsClampedISO(dateISO, 1);
+      return addMonthsClampedISO(dateISO, 1, dayOfMonth(anchorDateISO));
     case "Quarterly":
-      return addMonthsClampedISO(dateISO, 3);
+      return addMonthsClampedISO(dateISO, 3, dayOfMonth(anchorDateISO));
     case "Yearly":
-      return addMonthsClampedISO(dateISO, 12);
+      return addMonthsClampedISO(dateISO, 12, dayOfMonth(anchorDateISO));
     default:
       // rectx_frequency_check should make this unreachable -- fail loudly
       // rather than silently stalling a schedule on a value the DB let through.
@@ -285,8 +327,15 @@ type DueRecurringRow = {
   accountid: string;
   categoryid: string;
   next_run_date: string;
+  // The schedule's stable anchor for Monthly/Quarterly/Yearly's day-of-month
+  // -- see nextOccurrenceISO. Nullable in the schema; falls back to
+  // next_run_date below for a row somehow missing it rather than crashing
+  // catch-up for every other schedule in the same batch.
+  start_date: string | null;
   end_date: string | null;
   frequency: string;
+  interval_count: number;
+  occurrence_limit: number | null;
   category: { category_type: string };
 };
 
@@ -335,7 +384,7 @@ export const generateDueOccurrences = cache(async (): Promise<
   const { data: due, error: dueError } = await supabase
     .from("recurring_transactions")
     .select(
-      "id, description, amount, accountid, categoryid, next_run_date, end_date, frequency, category:categories!inner(category_type)",
+      "id, description, amount, accountid, categoryid, next_run_date, start_date, end_date, frequency, interval_count, occurrence_limit, category:categories!inner(category_type)",
     )
     .eq("is_active", true)
     .lte("next_run_date", today)
@@ -350,8 +399,31 @@ export const generateDueOccurrences = cache(async (): Promise<
   for (const template of due) {
     let cursor = template.next_run_date;
     let advanced = false;
+    const anchor = template.start_date ?? template.next_run_date;
 
-    while (cursor <= today) {
+    // "Ends after N occurrences" is tracked by counting the ledger, never a
+    // stored counter (see the 18_recurring_schedule migration) -- so a
+    // capped template gets one extra read here, up front, rather than a
+    // query per occurrence. Uncapped templates (the common case) skip it.
+    let remaining = Infinity;
+    if (template.occurrence_limit !== null) {
+      const { count, error: countError } = await supabase
+        .from("transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("recurringid", template.id);
+
+      if (countError) {
+        console.error(
+          `[db:recurring] failed counting occurrences for ${template.id}:`,
+          countError,
+        );
+        continue;
+      }
+
+      remaining = template.occurrence_limit - (count ?? 0);
+    }
+
+    while (cursor <= today && remaining > 0) {
       // Mirrors v_upcoming_recurring's own end-date guard: a template that
       // has already ended isn't due again even if next_run_date wasn't
       // advanced past it. Leave next_run_date as-is -- there's nothing left
@@ -377,8 +449,9 @@ export const generateDueOccurrences = cache(async (): Promise<
         if (insertError.code === "23505") {
           // Someone else's request already generated this exact occurrence.
           // That's the desired outcome, not a failure -- move on as if this
-          // insert had succeeded.
-          cursor = nextOccurrenceISO(cursor, template.frequency);
+          // insert had succeeded. Already reflected in the count `remaining`
+          // was seeded from, so it doesn't get decremented again here.
+          cursor = nextOccurrenceISO(cursor, template.frequency, template.interval_count, anchor);
           advanced = true;
           continue;
         }
@@ -391,8 +464,9 @@ export const generateDueOccurrences = cache(async (): Promise<
       }
 
       created.push(row);
-      cursor = nextOccurrenceISO(cursor, template.frequency);
+      cursor = nextOccurrenceISO(cursor, template.frequency, template.interval_count, anchor);
       advanced = true;
+      remaining -= 1;
     }
 
     if (advanced && cursor !== template.next_run_date) {

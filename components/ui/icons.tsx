@@ -200,3 +200,31 @@ export function TrashIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function RepeatIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M17 2.5 20 5.5l-3 3" />
+      <path d="M4 11.5v-1a5 5 0 0 1 5-5h11" />
+      <path d="M7 21.5 4 18.5l3-3" />
+      <path d="M20 12.5v1a5 5 0 0 1-5 5H4" />
+    </svg>
+  );
+}
+
+export function PauseIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="6" y="4.5" width="4" height="15" rx="1" />
+      <rect x="14" y="4.5" width="4" height="15" rx="1" />
+    </svg>
+  );
+}
+
+export function PlayIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M7 4.5v15l13-7.5-13-7.5Z" strokeLinejoin="round" />
+    </svg>
+  );
+}
