@@ -4,7 +4,7 @@ import { useId, useState } from "react";
 import type { SafeToSpend } from "@/lib/db/dashboard";
 import { Amount } from "@/components/ui/Amount";
 import { useCountUp } from "@/components/ui/useCountUp";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDateShort } from "@/lib/format";
 import { ChevronDownIcon } from "@/components/ui/icons";
 
 // The one hero figure on the dashboard (design language: >=48px, exactly one
@@ -65,8 +65,10 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
             {data.commitments.length > 0 ? (
               data.commitments.map((c) => (
                 <div key={c.recurringId} className="flex items-baseline justify-between gap-4">
-                  <dt className="text-ink-secondary">{c.name}</dt>
-                  <dd>
+                  <dt className="min-w-0 truncate text-ink-secondary">
+                    {c.name} <span className="text-ink-muted">· {formatDateShort(c.dueDate)}</span>
+                  </dt>
+                  <dd className="shrink-0">
                     <Amount amount={c.amount} type="Expense" />
                   </dd>
                 </div>

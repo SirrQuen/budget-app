@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
+import { TransferIcon } from "@/components/ui/icons";
 import { formatCurrency, formatDateShort } from "@/lib/format";
 import type { Database } from "@/lib/database.types";
 
@@ -24,7 +25,11 @@ export function UpcomingList({ items }: { items: UpcomingRow[] }) {
       <ul className="divide-y divide-hairline">
         {items.map((r) => (
           <li key={r.recurring_id} className="flex items-center gap-3 py-2.5 text-sm">
-            <CategoryIcon icon={r.category_icon} className="h-4 w-4 shrink-0 text-ink-muted" />
+            {r.to_accountid !== null ? (
+              <TransferIcon className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
+            ) : (
+              <CategoryIcon icon={r.category_icon} className="h-4 w-4 shrink-0 text-ink-muted" />
+            )}
             <span className="min-w-0 flex-1 truncate text-ink">{r.description}</span>
             <span className="shrink-0 tabular-nums text-ink-secondary">
               {r.next_run_date ? formatDateShort(r.next_run_date) : "—"}

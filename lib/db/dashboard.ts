@@ -624,13 +624,14 @@ export type SafeToSpend = {
   periodEnd: string;
 };
 
-type RawRecurringRow = {
-  id: string;
+type UpcomingCommitmentRow = {
+  recurring_id: string;
   description: string;
   amount: number;
   next_run_date: string;
-  end_date: string | null;
-  category: { category_type: string };
+  // Null for a transfer template -- see the kind filter below.
+  category_type: string | null;
+  to_accountid: string | null;
 };
 
 // "Safe to spend" = spendable cash, minus the recurring bills still to
@@ -638,9 +639,16 @@ type RawRecurringRow = {
 //
 // cash comes from v_dashboard_kpis.cash_balance -- SQL-summed over active
 // Checking / Savings / Cash accounts only, never Investment. The recurring
-// side is read from the base table, not v_upcoming_recurring, because that
-// view drops the column that carries Income/Expense direction. A recurring
-// template's direction is its category's category_type.
+// side reads v_upcoming_recurring (21_upcoming_recurring_category_type),
+// not the base table -- the view already carries is_active, the end-date
+// guard, AND the occurrence_limit-exhaustion guard (19_recurring_transfers)
+// that a direct base-table query has no way to apply: an exhausted
+// schedule's next_run_date freezes on whatever date the generator last
+// advanced it to (see lib/db/recurring.ts), which can still fall inside
+// this window even though that occurrence will never actually post. This
+// used to read the base table because the view dropped category_type;
+// now that it carries it, there's no reason left to duplicate the view's
+// filtering by hand.
 //
 // The one subtraction and the commitment sum run in integer cents, never JS
 // floats -- amount is exact `numeric` and this figure is shown to the cent
@@ -655,15 +663,12 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   const [cashRes, recurringRes] = await Promise.all([
     supabase.from("v_dashboard_kpis").select("cash_balance").maybeSingle(),
     supabase
-      .from("recurring_transactions")
-      .select(
-        "id, description, amount, next_run_date, end_date, category:categories!inner(category_type)",
-      )
-      .eq("is_active", true)
+      .from("v_upcoming_recurring")
+      .select("recurring_id, description, amount, next_run_date, category_type, to_accountid")
       .gte("next_run_date", today)
       .lte("next_run_date", periodEnd)
       .order("next_run_date", { ascending: true })
-      .returns<RawRecurringRow[]>(),
+      .returns<UpcomingCommitmentRow[]>(),
   ]);
 
   if (cashRes.error) {
@@ -674,14 +679,14 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   }
 
   const commitments: SafeToSpendCommitment[] = recurringRes.data
-    // Outflows only. An Income recurring template funds the account, it
-    // doesn't draw it down.
-    .filter((row) => row.category.category_type === "Expense")
-    // Mirror v_upcoming_recurring's own end-date guard: a template that has
-    // already ended isn't due again even if next_run_date wasn't advanced.
-    .filter((row) => row.end_date === null || row.end_date >= today)
+    // Outflows only. An Income category schedule funds the account, it
+    // doesn't draw it down -- and a transfer (to_accountid set, category_type
+    // null) always draws down its source account, the same way "Make a
+    // payment" already does for a one-off transfer: it's cash leaving
+    // accountid regardless of what the destination is.
+    .filter((row) => row.to_accountid !== null || row.category_type === "Expense")
     .map((row) => ({
-      recurringId: row.id,
+      recurringId: row.recurring_id,
       name: row.description,
       amount: row.amount,
       dueDate: row.next_run_date,

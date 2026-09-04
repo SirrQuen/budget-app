@@ -1280,6 +1280,7 @@ export type Database = {
           category_color: string | null
           category_icon: string | null
           category_name: string | null
+          category_type: string | null
           categoryid: string | null
           days_until: number | null
           description: string | null
