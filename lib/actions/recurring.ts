@@ -17,12 +17,14 @@ export type ActionState = { error?: string } | undefined;
 // weeks" is Weekly + interval_count, not a frequency value of its own.
 const FREQUENCIES = ["Monthly", "Weekly", "Yearly"] as const;
 const ENDS_MODES = ["never", "count", "date"] as const;
+const KINDS = ["Expense", "Income", "Transfer"] as const;
 
 type ParsedRecurringFields = {
   description: string;
   amount: number;
-  categoryid: string;
+  categoryid: string | null;
   accountid: string;
+  to_accountid: string | null;
   frequency: string;
   interval_count: number;
   next_run_date: string;
@@ -34,8 +36,7 @@ type ParsedRecurringFields = {
 function parseRecurringFields(formData: FormData): ParsedRecurringFields | { error: string } {
   const description = String(formData.get("description") ?? "").trim();
   const amountInput = String(formData.get("amount") ?? "").trim();
-  const categoryid = String(formData.get("categoryid") ?? "");
-  const accountid = String(formData.get("accountid") ?? "");
+  const kind = String(formData.get("kind") ?? "");
   const frequency = String(formData.get("frequency") ?? "");
   const next_run_date = String(formData.get("next_run_date") ?? "");
   const ends = String(formData.get("ends") ?? "never");
@@ -48,12 +49,43 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
   if (!Number.isFinite(amount) || amount <= 0) {
     return { error: "Enter an amount greater than zero." };
   }
-  if (!categoryid) {
-    return { error: "Choose a category." };
+
+  if (!KINDS.includes(kind as (typeof KINDS)[number])) {
+    return { error: "Choose a type." };
   }
-  if (!accountid) {
-    return { error: "Choose an account." };
+
+  let categoryid: string | null = null;
+  let accountid: string;
+  let to_accountid: string | null = null;
+
+  if (kind === "Transfer") {
+    // "accountid" doubles as the transfer's source ("from") account --
+    // same field name RecurringForm's From/To pair and category mode's
+    // single Account picker both submit, since a category schedule and a
+    // transfer's source account are the same concept either way (see the
+    // 19_recurring_transfers migration).
+    accountid = String(formData.get("accountid") ?? "");
+    to_accountid = String(formData.get("to_accountid") ?? "");
+    if (!accountid) {
+      return { error: "Choose a from account." };
+    }
+    if (!to_accountid) {
+      return { error: "Choose a to account." };
+    }
+    if (accountid === to_accountid) {
+      return { error: "Choose two different accounts for a transfer." };
+    }
+  } else {
+    categoryid = String(formData.get("categoryid") ?? "");
+    accountid = String(formData.get("accountid") ?? "");
+    if (!categoryid) {
+      return { error: "Choose a category." };
+    }
+    if (!accountid) {
+      return { error: "Choose an account." };
+    }
   }
+
   if (!FREQUENCIES.includes(frequency as (typeof FREQUENCIES)[number])) {
     return { error: "Choose how often this repeats." };
   }
@@ -100,6 +132,7 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
     amount,
     categoryid,
     accountid,
+    to_accountid,
     frequency,
     interval_count,
     next_run_date,
@@ -122,6 +155,7 @@ export async function createRecurringAction(
     amount: parsed.amount,
     categoryid: parsed.categoryid,
     accountid: parsed.accountid,
+    to_accountid: parsed.to_accountid,
     frequency: parsed.frequency,
     interval_count: parsed.interval_count,
     next_run_date: parsed.next_run_date,
@@ -158,6 +192,7 @@ export async function updateRecurringAction(
     amount: parsed.amount,
     categoryid: parsed.categoryid,
     accountid: parsed.accountid,
+    to_accountid: parsed.to_accountid,
     frequency: parsed.frequency,
     interval_count: parsed.interval_count,
     next_run_date: parsed.next_run_date,

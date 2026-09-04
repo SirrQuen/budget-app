@@ -248,6 +248,9 @@ export default async function TransactionsPage({
         params={params}
         hasFilters={hasFilters}
         canLog={activeAccounts.length > 0}
+        accounts={activeAccounts}
+        incomeCategories={incomeCategoriesResult.data}
+        expenseCategories={expenseCategoriesResult.data}
       />
     </div>
   );

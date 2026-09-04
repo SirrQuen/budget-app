@@ -527,7 +527,7 @@ export type Database = {
         Row: {
           accountid: string
           amount: number
-          categoryid: string
+          categoryid: string | null
           created_at: string
           description: string
           end_date: string | null
@@ -538,12 +538,13 @@ export type Database = {
           next_run_date: string
           occurrence_limit: number | null
           start_date: string | null
+          to_accountid: string | null
           userid: string
         }
         Insert: {
           accountid: string
           amount: number
-          categoryid: string
+          categoryid?: string | null
           created_at?: string
           description: string
           end_date?: string | null
@@ -554,12 +555,13 @@ export type Database = {
           next_run_date: string
           occurrence_limit?: number | null
           start_date?: string | null
+          to_accountid?: string | null
           userid: string
         }
         Update: {
           accountid?: string
           amount?: number
-          categoryid?: string
+          categoryid?: string | null
           created_at?: string
           description?: string
           end_date?: string | null
@@ -570,6 +572,7 @@ export type Database = {
           next_run_date?: string
           occurrence_limit?: number | null
           start_date?: string | null
+          to_accountid?: string | null
           userid?: string
         }
         Relationships: [
@@ -607,6 +610,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_category_spending"
             referencedColumns: ["category_id"]
+          },
+          {
+            foreignKeyName: "recurring_transactions_to_accountid_fkey"
+            columns: ["to_accountid"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_transactions_to_accountid_fkey"
+            columns: ["to_accountid"]
+            isOneToOne: false
+            referencedRelation: "v_account_balances"
+            referencedColumns: ["account_id"]
           },
           {
             foreignKeyName: "recurring_transactions_userid_fkey"
@@ -1274,6 +1291,8 @@ export type Database = {
           occurrence_limit: number | null
           recurring_id: string | null
           start_date: string | null
+          to_account_name: string | null
+          to_accountid: string | null
           userid: string | null
         }
         Relationships: [
@@ -1311,6 +1330,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_category_spending"
             referencedColumns: ["category_id"]
+          },
+          {
+            foreignKeyName: "recurring_transactions_to_accountid_fkey"
+            columns: ["to_accountid"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_transactions_to_accountid_fkey"
+            columns: ["to_accountid"]
+            isOneToOne: false
+            referencedRelation: "v_account_balances"
+            referencedColumns: ["account_id"]
           },
           {
             foreignKeyName: "recurring_transactions_userid_fkey"

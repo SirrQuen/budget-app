@@ -1,0 +1,25 @@
+-- =====================================================================
+-- EverNest 20: Drop a stray, untracked unique index
+--
+-- Found while testing recurring transfers: transactions_recurrence_
+-- occurrence_uniq, a unique index on (recurringid, transaction_date)
+-- (no transaction_type), existed on the live database but appears in NO
+-- migration file in this repo -- it was created out of band at some
+-- point, not through this migration history.
+--
+-- It duplicated recurring_tx_no_double_post's job under the single-leg
+-- model (04_hardening.sql), so it never caused a visible problem before
+-- now. But it's narrower than the widened index from 19_recurring_
+-- transfers: it forbids TWO rows sharing a (recurringid, date) regardless
+-- of transaction_type, which is exactly what a recurring transfer's
+-- Expense + Income leg pair is. Every attempt to generate one failed its
+-- second leg with 23505 against THIS index, silently -- the generator
+-- treats 23505 as "already exists" and advances next_run_date anyway, so
+-- the schedule looked like it was working while quietly never posting.
+--
+-- recurring_tx_no_double_post (recurringid, transaction_date,
+-- transaction_type) already covers everything this one did and more --
+-- dropping it outright, not narrowing it.
+-- =====================================================================
+
+drop index if exists transactions_recurrence_occurrence_uniq;

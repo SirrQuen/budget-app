@@ -9,6 +9,7 @@ type RecurringRow = Database["public"]["Tables"]["recurring_transactions"]["Row"
 type RecurringInsert = Database["public"]["Tables"]["recurring_transactions"]["Insert"];
 type RecurringUpdate = Database["public"]["Tables"]["recurring_transactions"]["Update"];
 type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"];
+type TransactionInsert = Database["public"]["Tables"]["transactions"]["Insert"];
 type UpcomingRecurringRow = Database["public"]["Views"]["v_upcoming_recurring"]["Row"];
 
 export type DbResult<T> = { data: T; error: null } | { data: null; error: string };
@@ -19,24 +20,35 @@ export type RecurringWithRelations = RecurringRow & {
   category_icon: string | null;
   // Needed by the edit form to pre-select Income/Expense -- see CLAUDE.md
   // "Recurring transactions": the schedule carries no transaction_type of
-  // its own, direction always comes from the linked category.
+  // its own, direction always comes from the linked category. Null for a
+  // transfer template (to_accountid set) -- it has no category at all,
+  // same as a transfer transaction's own categoryid.
   category_type: string | null;
   account_name: string | null;
+  // Destination account name for a transfer template; null for an
+  // ordinary category schedule.
+  to_account_name: string | null;
 };
 
 // categoryid/accountid have FK relationships to several relations (base
 // tables, plus reporting views) -- naming "categories"/"accounts" explicitly
 // picks the base-table relationship, same as transactions.ts's TRANSACTION_SELECT.
+// accountid and to_accountid both reference accounts, so each embed names
+// its FK constraint explicitly (!recurring_transactions_..._fkey) --
+// PostgREST can't otherwise tell which column a bare "accounts" embed means.
 const RECURRING_SELECT =
-  "*, category:categories(category_name, color, icon, category_type), account:accounts(account_name)";
+  "*, category:categories(category_name, color, icon, category_type)," +
+  " account:accounts!recurring_transactions_accountid_fkey(account_name)," +
+  " to_account:accounts!recurring_transactions_to_accountid_fkey(account_name)";
 
 type RawRecurringRow = RecurringRow & {
   category: { category_name: string; color: string | null; icon: string | null; category_type: string } | null;
   account: { account_name: string } | null;
+  to_account: { account_name: string } | null;
 };
 
 function flatten(row: RawRecurringRow): RecurringWithRelations {
-  const { category, account, ...rest } = row;
+  const { category, account, to_account, ...rest } = row;
   return {
     ...rest,
     category_name: category?.category_name ?? null,
@@ -44,6 +56,7 @@ function flatten(row: RawRecurringRow): RecurringWithRelations {
     category_icon: category?.icon ?? null,
     category_type: category?.category_type ?? null,
     account_name: account?.account_name ?? null,
+    to_account_name: to_account?.account_name ?? null,
   };
 }
 
@@ -325,7 +338,10 @@ type DueRecurringRow = {
   description: string;
   amount: number;
   accountid: string;
-  categoryid: string;
+  // Null for a transfer template -- to_accountid is set instead, and
+  // category/category_type never get read for that row.
+  categoryid: string | null;
+  to_accountid: string | null;
   next_run_date: string;
   // The schedule's stable anchor for Monthly/Quarterly/Yearly's day-of-month
   // -- see nextOccurrenceISO. Nullable in the schema; falls back to
@@ -336,24 +352,33 @@ type DueRecurringRow = {
   frequency: string;
   interval_count: number;
   occurrence_limit: number | null;
-  category: { category_type: string };
+  category: { category_type: string } | null;
 };
 
 // Lazy catch-up, run when a user opens the app -- there is no scheduler.
-// recurring_transactions carries no transaction_type of its own; direction
+// A category schedule carries no transaction_type of its own; direction
 // comes from the linked category's category_type, same rule createTransaction
-// enforces via the enforce_category_type trigger.
+// enforces via the enforce_category_type trigger. A transfer template
+// (to_accountid set) instead posts the same two-leg shape createTransfer
+// does: an Expense leg on accountid, an Income leg on to_accountid, sharing
+// a fresh transfer_group_id -- both legs still carry this template's
+// recurringid, so they show the recurring icon and link back like any
+// other generated row.
 //
 // Idempotency is a database guarantee, not an application one:
-// recurring_tx_no_double_post is a unique index on
-// (recurringid, transaction_date) where recurringid is not null
-// (04_hardening.sql). Two concurrent page loads racing to generate the same
-// occurrence both attempt the insert; exactly one succeeds, and the loser's
-// 23505 is treated as success -- the occurrence exists, which is the only
-// thing that was ever being asked for. A non-23505 failure stops that
-// template's loop without advancing next_run_date, so the missed occurrence
-// is retried on the next catch-up rather than silently skipped, but doesn't
-// block generation for the user's other schedules.
+// recurring_tx_no_double_post is a unique index on (recurringid,
+// transaction_date, transaction_type) where recurringid is not null
+// (widened in the 19_recurring_transfers migration -- a transfer occurrence
+// posts two rows for the same date under the same recurringid, and
+// transaction_type is what tells those two apart). Two concurrent page
+// loads racing to generate the same occurrence both attempt the insert
+// (both legs at once for a transfer, in one statement, so it can't land
+// half-posted); exactly one succeeds, and the loser's 23505 is treated as
+// success -- the occurrence exists, which is the only thing that was ever
+// being asked for. A non-23505 failure stops that template's loop without
+// advancing next_run_date, so the missed occurrence is retried on the next
+// catch-up rather than silently skipped, but doesn't block generation for
+// the user's other schedules.
 //
 // cache()d like recordLogin/getLoggingStreak: app/(app)/layout.tsx runs this
 // on every authenticated route so a schedule can't go stale just because a
@@ -384,7 +409,7 @@ export const generateDueOccurrences = cache(async (): Promise<
   const { data: due, error: dueError } = await supabase
     .from("recurring_transactions")
     .select(
-      "id, description, amount, accountid, categoryid, next_run_date, start_date, end_date, frequency, interval_count, occurrence_limit, category:categories!inner(category_type)",
+      "id, description, amount, accountid, categoryid, to_accountid, next_run_date, start_date, end_date, frequency, interval_count, occurrence_limit, category:categories(category_type)",
     )
     .eq("is_active", true)
     .lte("next_run_date", today)
@@ -430,24 +455,64 @@ export const generateDueOccurrences = cache(async (): Promise<
       // to catch up.
       if (template.end_date && cursor > template.end_date) break;
 
-      const { data: row, error: insertError } = await supabase
+      // A transfer template posts both legs in one insert statement -- one
+      // call, one transaction, so a failure can't land only one leg (same
+      // reason createTransfer batches its two legs together).
+      const insertRows: TransactionInsert[] =
+        template.to_accountid !== null
+          ? (() => {
+              const transfer_group_id = crypto.randomUUID();
+              return [
+                {
+                  userid,
+                  accountid: template.accountid,
+                  categoryid: null,
+                  amount: template.amount,
+                  transaction_type: "Expense",
+                  transaction_date: cursor,
+                  description: template.description,
+                  recurringid: template.id,
+                  transfer_group_id,
+                },
+                {
+                  userid,
+                  accountid: template.to_accountid,
+                  categoryid: null,
+                  amount: template.amount,
+                  transaction_type: "Income",
+                  transaction_date: cursor,
+                  description: template.description,
+                  recurringid: template.id,
+                  transfer_group_id,
+                },
+              ];
+            })()
+          : [
+              {
+                userid,
+                accountid: template.accountid,
+                categoryid: template.categoryid,
+                amount: template.amount,
+                // Non-null: a category template's select above embeds
+                // categories with categoryid not null (rectx_category_required
+                // guarantees it), so category is always present here.
+                transaction_type: template.category!.category_type,
+                transaction_date: cursor,
+                description: template.description,
+                recurringid: template.id,
+              },
+            ];
+
+      const { data: rows, error: insertError } = await supabase
         .from("transactions")
-        .insert({
-          userid,
-          accountid: template.accountid,
-          categoryid: template.categoryid,
-          amount: template.amount,
-          transaction_type: template.category.category_type,
-          transaction_date: cursor,
-          description: template.description,
-          recurringid: template.id,
-        })
-        .select()
-        .single();
+        .insert(insertRows)
+        .select();
 
       if (insertError) {
         if (insertError.code === "23505") {
-          // Someone else's request already generated this exact occurrence.
+          // Someone else's request already generated this exact occurrence
+          // (both legs, for a transfer -- the whole statement above is one
+          // insert, so this fires if either leg's key already exists).
           // That's the desired outcome, not a failure -- move on as if this
           // insert had succeeded. Already reflected in the count `remaining`
           // was seeded from, so it doesn't get decremented again here.
@@ -463,7 +528,10 @@ export const generateDueOccurrences = cache(async (): Promise<
         break;
       }
 
-      created.push(row);
+      // One entry per occurrence for the "while you were away" banner, even
+      // for a transfer's two rows -- both legs share the same description,
+      // so pushing both would read as two things happening, not one.
+      created.push(rows[0]);
       cursor = nextOccurrenceISO(cursor, template.frequency, template.interval_count, anchor);
       advanced = true;
       remaining -= 1;

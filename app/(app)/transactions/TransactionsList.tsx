@@ -11,8 +11,11 @@ import { Amount } from "@/components/ui/Amount";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DeleteTransactionButton } from "./DeleteTransactionButton";
+import { MakeRecurringButton } from "./MakeRecurringButton";
+import type { TransactionAccountOption } from "./AddTransactionForm";
 import { useOptimisticTransactions, type PendingTransaction } from "@/components/quick-add/OptimisticTransactionsContext";
 import { categoryColorVar } from "@/lib/categoryOptions";
+import type { CategoryWithGroup } from "@/lib/db/categories";
 
 const checkboxClassName =
   "h-4 w-4 cursor-pointer rounded border-hairline bg-surface-raised accent-action outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
@@ -72,6 +75,13 @@ type TransferDisplayRow = {
   amount: number;
   fromAccountName: string | null;
   toAccountName: string | null;
+  // For "Make this recurring" (prefilling RecurringForm's From/To pickers,
+  // which need ids, not display names) and for hiding that action on a leg
+  // a recurring transfer already generated. Both legs of one transfer share
+  // the same recurringid, so either one is representative.
+  recurringid: string | null;
+  fromAccountId: string | null;
+  toAccountId: string | null;
 };
 
 type SingleDisplayRow = { kind: "single"; tx: TransactionWithRelations };
@@ -108,6 +118,9 @@ function buildDisplayRows(transactions: TransactionWithRelations[]): DisplayRow[
       amount: Number(tx.amount),
       fromAccountName: fromLeg?.account_name ?? null,
       toAccountName: toLeg?.account_name ?? null,
+      recurringid: tx.recurringid,
+      fromAccountId: fromLeg?.accountid ?? null,
+      toAccountId: toLeg?.accountid ?? null,
     });
   }
 
@@ -148,6 +161,9 @@ export function TransactionsList({
   params,
   hasFilters,
   canLog,
+  accounts,
+  incomeCategories,
+  expenseCategories,
 }: {
   transactions: TransactionWithRelations[];
   totalCount: number;
@@ -159,6 +175,10 @@ export function TransactionsList({
   /** False when there's no active account yet -- the add-transaction form
    * isn't shown above, so the empty state has to point at /accounts. */
   canLog: boolean;
+  /** For "Make this recurring" -- same shape RecurringForm's own picker needs. */
+  accounts: TransactionAccountOption[];
+  incomeCategories: CategoryWithGroup[];
+  expenseCategories: CategoryWithGroup[];
 }) {
   const { pending } = useOptimisticTransactions();
 
@@ -461,6 +481,27 @@ export function TransactionsList({
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="inline-flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
+                        {/* Already-generated legs (recurringid set) don't
+                            offer this -- making a recurring row recurring
+                            again is meaningless. Also needs both legs' own
+                            account ids, not just their display names, which
+                            can be missing if the pair split across a page
+                            boundary (see buildDisplayRows). */}
+                        {row.recurringid === null && row.fromAccountId && row.toAccountId ? (
+                          <MakeRecurringButton
+                            prefill={{
+                              description: row.description,
+                              amount: row.amount,
+                              kind: "Transfer",
+                              categoryid: null,
+                              accountid: row.fromAccountId,
+                              to_accountid: row.toAccountId,
+                            }}
+                            incomeCategories={incomeCategories}
+                            expenseCategories={expenseCategories}
+                            accounts={accounts}
+                          />
+                        ) : null}
                         <Link
                           href={`/transactions/${row.id}/edit`}
                           className="inline-flex min-h-11 items-center justify-end rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
@@ -509,6 +550,24 @@ export function TransactionsList({
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="inline-flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
+                      {/* Not on a row a schedule already generated
+                          (recurringid set) -- making a recurring
+                          transaction recurring again is meaningless. */}
+                      {tx.recurringid === null ? (
+                        <MakeRecurringButton
+                          prefill={{
+                            description: tx.description,
+                            amount: Number(tx.amount),
+                            kind: tx.transaction_type as "Income" | "Expense",
+                            categoryid: tx.categoryid,
+                            accountid: tx.accountid,
+                            to_accountid: null,
+                          }}
+                          incomeCategories={incomeCategories}
+                          expenseCategories={expenseCategories}
+                          accounts={accounts}
+                        />
+                      ) : null}
                       <Link
                         href={`/transactions/${tx.id}/edit`}
                         className="inline-flex min-h-11 items-center justify-end rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"

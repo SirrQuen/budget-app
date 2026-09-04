@@ -8,7 +8,6 @@ import {
   type ActionState,
 } from "@/lib/actions/recurring";
 import type { CategoryWithGroup } from "@/lib/db/categories";
-import type { TransactionType } from "@/lib/db/transactions";
 import type { TransactionAccountOption } from "../transactions/AddTransactionForm";
 import { todayISO } from "@/lib/date";
 import { FormField } from "@/components/ui/FormField";
@@ -18,6 +17,17 @@ import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
 const fieldClassName =
   "w-full rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40";
+
+// Expense/Income pick a category (filtered by this same value, same trick
+// AddTransactionForm uses); Transfer swaps Category+Account for From/To
+// account pickers -- no category at all, same as a transfer transaction's
+// own categoryid (see CLAUDE.md "Backend contract" and 07_transfers.sql).
+type Kind = "Expense" | "Income" | "Transfer";
+const KIND_OPTIONS: { value: Kind; label: string }[] = [
+  { value: "Expense", label: "Expense" },
+  { value: "Income", label: "Income" },
+  { value: "Transfer", label: "Transfer" },
+];
 
 // The three cadences people actually use -- "every N weeks" folds Biweekly
 // in as Weekly + interval_count rather than a frequency value of its own.
@@ -62,14 +72,29 @@ export type EditableRecurring = {
   id: string;
   description: string;
   amount: number;
-  categoryid: string;
-  category_type: TransactionType;
+  kind: Kind;
+  categoryid: string | null;
   accountid: string;
+  to_accountid: string | null;
   frequency: string;
   interval_count: number;
   next_run_date: string;
   occurrence_limit: number | null;
   end_date: string | null;
+};
+
+// Seeds a fresh (create-mode) schedule from something that already carries
+// this data -- currently just an existing transaction ("Make this
+// recurring"). Unlike EditableRecurring, deliberately carries no schedule
+// fields: a one-off transaction implies no cadence, so Repeats/Next due
+// date/Ends all start from this form's normal create-mode defaults instead.
+export type RecurringPrefill = {
+  description: string;
+  amount: number;
+  kind: Kind;
+  categoryid: string | null;
+  accountid: string;
+  to_accountid: string | null;
 };
 
 // Groups an already type-filtered category list by its category group for
@@ -88,9 +113,9 @@ function groupByCategoryGroup(categories: CategoryWithGroup[]) {
   return groups;
 }
 
-// The Expense/Income, Repeats and Ends pickers are all the same shape: a
-// pill row where one choice is selected, the rest just for switching. Typed
-// on the option value so a caller's onChange never needs a cast.
+// The Type, Repeats and Ends pickers are all the same shape: a pill row
+// where one choice is selected, the rest just for switching. Typed on the
+// option value so a caller's onChange never needs a cast.
 function SegmentedControl<T extends string>({
   name,
   value,
@@ -124,14 +149,18 @@ function SegmentedControl<T extends string>({
   );
 }
 
-// Shared by the "Add schedule" flow and each row's "Edit" flow. A schedule
-// stores no transaction_type of its own -- the Income/Expense toggle here
-// only picks which category list to show (same trick as AddTransactionForm);
-// the type the user ends up with is whatever the chosen category carries,
-// and the enforce_category_type trigger checks it exactly like it does for
-// a normal transaction once an occurrence actually posts.
+// Shared by the "Add schedule" flow, each row's "Edit" flow, and "Make this
+// recurring" on an existing transaction (prefill). A category schedule
+// stores no transaction_type of its own -- Kind here only picks which
+// category list to show (same trick as AddTransactionForm); the type the
+// user ends up with is whatever the chosen category carries, and the
+// enforce_category_type trigger checks it exactly like it does for a normal
+// transaction once an occurrence actually posts. Kind "Transfer" instead
+// posts the same two-leg shape a manual transfer does (see
+// lib/db/recurring.ts's generateDueOccurrences) -- no category at all.
 export function RecurringForm({
   recurring,
+  prefill,
   incomeCategories,
   expenseCategories,
   accounts,
@@ -139,6 +168,8 @@ export function RecurringForm({
   onCancel,
 }: {
   recurring?: EditableRecurring;
+  /** Create mode only -- seeds fields from an existing transaction. Ignored if `recurring` is set. */
+  prefill?: RecurringPrefill;
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
   accounts: TransactionAccountOption[];
@@ -146,6 +177,7 @@ export function RecurringForm({
   onCancel: () => void;
 }) {
   const isEdit = recurring !== undefined;
+  const seed = recurring ?? prefill;
   const [state, action, pending] = useActionState<ActionState, FormData>(
     isEdit ? updateRecurringAction : createRecurringAction,
     undefined,
@@ -159,7 +191,8 @@ export function RecurringForm({
     wasPending.current = pending;
   }, [pending, state, onSuccess]);
 
-  const initialType: TransactionType = recurring?.category_type ?? "Expense";
+  const initialKind: Kind = seed?.kind ?? "Expense";
+  const [kind, setKind] = useState<Kind>(initialKind);
   const [repeats, setRepeats] = useState<Repeats>(
     recurring ? repeatsFromFrequency(recurring.frequency) : "Monthly",
   );
@@ -176,6 +209,8 @@ export function RecurringForm({
       : repeats === "Weekly"
         ? "Sets which weekday it repeats on."
         : "Sets the month and day it repeats on.";
+
+  const categoryGroups = groupByCategoryGroup(kind === "Income" ? incomeCategories : expenseCategories);
 
   return (
     <form
@@ -205,7 +240,7 @@ export function RecurringForm({
             required
             maxLength={120}
             placeholder="e.g. Rent"
-            defaultValue={recurring?.description}
+            defaultValue={seed?.description}
           />
         </FormField>
 
@@ -219,37 +254,76 @@ export function RecurringForm({
             step="0.01"
             placeholder="0.00"
             required
-            defaultValue={recurring?.amount}
+            defaultValue={seed?.amount}
           />
         </FormField>
       </div>
 
-      <RecurringCategoryFields
-        incomeCategories={incomeCategories}
-        expenseCategories={expenseCategories}
-        initialType={initialType}
-        initialCategoryId={recurring?.categoryid}
-      />
+      <fieldset className="flex flex-col gap-1.5">
+        <legend className="text-sm font-medium text-ink-secondary">Type</legend>
+        <SegmentedControl name="kind" value={kind} onChange={setKind} options={KIND_OPTIONS} />
+      </fieldset>
 
-      <FormField label="Account" htmlFor="accountid" required>
-        <select
-          id="accountid"
-          name="accountid"
-          required
-          defaultValue={recurring?.accountid ?? ""}
-          className={fieldClassName}
-        >
-          <option value="" disabled>
-            Select an account
-          </option>
-          {accounts.map((account) => (
-            <option key={account.id} value={account.id}>
-              {account.account_name}
-              {account.is_active ? "" : " (archived)"}
-            </option>
-          ))}
-        </select>
-      </FormField>
+      {kind === "Transfer" ? (
+        <TransferAccountFields
+          accounts={accounts}
+          initialFromAccountId={kind === initialKind ? (seed?.accountid ?? "") : ""}
+          initialToAccountId={kind === initialKind ? (seed?.to_accountid ?? "") : ""}
+        />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField label="Category" htmlFor="categoryid" required>
+            <select
+              id="categoryid"
+              name="categoryid"
+              required
+              // Remounts on kind change (key={kind}) so switching Expense/
+              // Income/Transfer starts from an unselected list rather than
+              // carrying over a categoryid that belongs to another list --
+              // the previous kind's selection has no meaning for this one,
+              // same as AddTransactionForm's handleTypeChange clearing it.
+              defaultValue={kind === initialKind ? (seed?.categoryid ?? "") : ""}
+              key={kind}
+              className={fieldClassName}
+            >
+              <option value="" disabled>
+                Select a category
+              </option>
+              {categoryGroups.map((group) => (
+                <optgroup key={group.name} label={group.name}>
+                  {group.categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.category_name}
+                      {category.is_active ? "" : " (archived)"}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </FormField>
+
+          <FormField label="Account" htmlFor="accountid" required>
+            <select
+              id="accountid"
+              name="accountid"
+              required
+              defaultValue={kind === initialKind ? (seed?.accountid ?? "") : ""}
+              key={kind}
+              className={fieldClassName}
+            >
+              <option value="" disabled>
+                Select an account
+              </option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.account_name}
+                  {account.is_active ? "" : " (archived)"}
+                </option>
+              ))}
+            </select>
+          </FormField>
+        </div>
+      )}
 
       <div className="flex flex-col gap-4 rounded-xl border border-hairline p-4">
         <div className="flex flex-wrap items-end gap-4">
@@ -334,64 +408,68 @@ export function RecurringForm({
   );
 }
 
-// Split out only so the Income/Expense toggle can own its own state without
-// dragging useState into the parent -- everything else here stays a plain
-// uncontrolled form, same as BudgetForm.
-function RecurringCategoryFields({
-  incomeCategories,
-  expenseCategories,
-  initialType,
-  initialCategoryId,
+// Split out only so the From/To mismatch check can own its own state
+// without dragging useState into the parent -- mirrors AddTransactionForm's
+// Transfer mode exactly (the same "choose two different accounts" rule,
+// checked inline rather than round-tripping to the server for it).
+function TransferAccountFields({
+  accounts,
+  initialFromAccountId,
+  initialToAccountId,
 }: {
-  incomeCategories: CategoryWithGroup[];
-  expenseCategories: CategoryWithGroup[];
-  initialType: TransactionType;
-  initialCategoryId?: string;
+  accounts: TransactionAccountOption[];
+  initialFromAccountId: string;
+  initialToAccountId: string;
 }) {
-  const [type, setType] = useState<TransactionType>(initialType);
-  const categoryGroups = groupByCategoryGroup(type === "Income" ? incomeCategories : expenseCategories);
+  const [fromAccountId, setFromAccountId] = useState(initialFromAccountId);
+  const [toAccountId, setToAccountId] = useState(initialToAccountId);
+  const mismatch = fromAccountId !== "" && fromAccountId === toAccountId;
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <fieldset className="flex flex-col gap-1.5">
-        <legend className="text-sm font-medium text-ink-secondary">Type</legend>
-        <SegmentedControl
-          name="type-display-only"
-          value={type}
-          onChange={setType}
-          options={[
-            { value: "Expense", label: "Expense" },
-            { value: "Income", label: "Income" },
-          ]}
-        />
-      </fieldset>
-
-      <FormField label="Category" htmlFor="categoryid" required>
+      <FormField label="From account" htmlFor="accountid" required>
         <select
-          id="categoryid"
-          name="categoryid"
+          id="accountid"
+          name="accountid"
           required
-          // Remounts on type change (key={type}) so switching Expense/Income
-          // starts from an unselected list rather than carrying over a
-          // categoryid that belongs to the other type's groups -- the
-          // previous type's selection has no meaning for the new list, same
-          // as AddTransactionForm's handleTypeChange clearing categoryid.
-          defaultValue={type === initialType ? (initialCategoryId ?? "") : ""}
-          key={type}
+          value={fromAccountId}
+          onChange={(e) => setFromAccountId(e.target.value)}
           className={fieldClassName}
         >
           <option value="" disabled>
-            Select a category
+            Select an account
           </option>
-          {categoryGroups.map((group) => (
-            <optgroup key={group.name} label={group.name}>
-              {group.categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.category_name}
-                  {category.is_active ? "" : " (archived)"}
-                </option>
-              ))}
-            </optgroup>
+          {accounts.map((account) => (
+            <option key={account.id} value={account.id}>
+              {account.account_name}
+              {account.is_active ? "" : " (archived)"}
+            </option>
+          ))}
+        </select>
+      </FormField>
+
+      <FormField
+        label="To account"
+        htmlFor="to_accountid"
+        required
+        error={mismatch ? "From and to accounts must be different." : undefined}
+      >
+        <select
+          id="to_accountid"
+          name="to_accountid"
+          required
+          value={toAccountId}
+          onChange={(e) => setToAccountId(e.target.value)}
+          className={fieldClassName}
+        >
+          <option value="" disabled>
+            Select an account
+          </option>
+          {accounts.map((account) => (
+            <option key={account.id} value={account.id}>
+              {account.account_name}
+              {account.is_active ? "" : " (archived)"}
+            </option>
           ))}
         </select>
       </FormField>

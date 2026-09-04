@@ -9,7 +9,7 @@ import {
 } from "@/lib/actions/recurring";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { PauseIcon, PlayIcon, TrashIcon } from "@/components/ui/icons";
+import { PauseIcon, PlayIcon, TransferIcon, TrashIcon } from "@/components/ui/icons";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { formatSchedule, formatEndCondition } from "@/lib/recurringSchedule";
 import type { RecurringWithRelations } from "@/lib/db/recurring";
@@ -58,14 +58,17 @@ export function RecurringRow({
     });
   }
 
+  const isTransfer = recurring.to_accountid !== null;
+
   if (editing) {
     const editable: EditableRecurring = {
       id: recurring.id,
       description: recurring.description,
       amount: Number(recurring.amount),
+      kind: isTransfer ? "Transfer" : ((recurring.category_type as TransactionType) ?? "Expense"),
       categoryid: recurring.categoryid,
-      category_type: (recurring.category_type as TransactionType) ?? "Expense",
       accountid: recurring.accountid,
+      to_accountid: recurring.to_accountid,
       frequency: recurring.frequency,
       interval_count: recurring.interval_count,
       next_run_date: recurring.next_run_date,
@@ -97,7 +100,11 @@ export function RecurringRow({
           the description for width and each keeps a 44px tap target. */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <div className="flex min-w-0 items-center gap-3 sm:flex-1">
-          <CategoryIcon icon={recurring.category_icon} className="h-4 w-4 shrink-0 text-ink-secondary" />
+          {isTransfer ? (
+            <TransferIcon className="h-4 w-4 shrink-0 text-ink-secondary" aria-hidden="true" />
+          ) : (
+            <CategoryIcon icon={recurring.category_icon} className="h-4 w-4 shrink-0 text-ink-secondary" />
+          )}
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{recurring.description}</span>
           {!recurring.is_active ? (
             <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
@@ -143,7 +150,9 @@ export function RecurringRow({
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-ink-secondary">
         <span>
-          {recurring.category_name ?? "Uncategorized"} · {recurring.account_name ?? "—"}
+          {isTransfer
+            ? `${recurring.account_name ?? "…"} → ${recurring.to_account_name ?? "…"}`
+            : `${recurring.category_name ?? "Uncategorized"} · ${recurring.account_name ?? "—"}`}
         </span>
         <span>
           {formatSchedule(
