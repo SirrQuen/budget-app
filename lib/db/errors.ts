@@ -33,7 +33,8 @@ export type WriteContext =
   | "contribution"
   | "transaction"
   | "transfer"
-  | "profile";
+  | "profile"
+  | "recurring";
 
 // 23505 unique_violation, phrased per what was being created. Every one of
 // these is something the user can see and change.
@@ -52,6 +53,7 @@ const DUPLICATE: Record<WriteContext, string> = {
   transfer:
     "That transfer is already logged. Refresh the page to see it in the list.",
   profile: "That username is already taken. Pick a different one.",
+  recurring: "You already have a schedule set up like that. Edit the existing one instead.",
 };
 
 // SQLSTATEs where "try again in a moment" is genuine advice -- the write

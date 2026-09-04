@@ -14,12 +14,14 @@ import {
 } from "@/lib/db/dashboard";
 import { getBudgetProgress } from "@/lib/db/budgets";
 import { listAccountBalances } from "@/lib/db/accounts";
+import { generateDueOccurrences } from "@/lib/db/recurring";
 import { getReturnSummaryFacts } from "@/lib/actions/activity";
 import { todayISO } from "@/lib/date";
 import { resolveDashboardRange } from "@/lib/dashboardRange";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatTile } from "@/components/ui/StatTile";
 import { ReturnSummaryStrip } from "@/components/ui/ReturnSummaryStrip";
+import { GeneratedOccurrencesBanner } from "./GeneratedOccurrencesBanner";
 import { SafeToSpendHero } from "./SafeToSpendHero";
 import { ScopedRegion } from "./ScopedRegion";
 import { CashflowChart } from "./CashflowChart";
@@ -48,6 +50,15 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     const prev = r.data?.previousLoginAt ?? null;
     return prev ? getReturnSummaryFacts(prev) : ([] as string[]);
   });
+
+  // Lazy catch-up (see CLAUDE.md "Recurring transactions") -- must finish
+  // before anything below reads a balance, a budget, cashflow, or the
+  // upcoming list, every one of which this can change by inserting
+  // transactions and advancing next_run_date. Unrelated to the greeting/
+  // return-facts chain above, so it's still in flight concurrently with
+  // that request; only the batch below has to wait for it.
+  const generatedResult = await generateDueOccurrences();
+  const generatedOccurrences = generatedResult.data ?? [];
 
   // One batch, all in flight together. A brand-new user (stages 1-2) fetches
   // a few results it won't render -- all cheap and empty -- which is the price
@@ -166,6 +177,12 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
 
         {previousLoginAt && returnFacts.length > 0 ? (
           <ReturnSummaryStrip since={previousLoginAt} facts={returnFacts} />
+        ) : null}
+
+        {generatedOccurrences.length > 0 ? (
+          <GeneratedOccurrencesBanner
+            descriptions={generatedOccurrences.map((t) => t.description)}
+          />
         ) : null}
 
         {safeToSpendResult.error ? (

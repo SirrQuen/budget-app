@@ -4,11 +4,22 @@ import { getLoggingStreak } from "@/lib/db/dashboard";
 import { listAccounts } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { getMostRecentTransactionAccountId } from "@/lib/db/transactions";
+import { generateDueOccurrences } from "@/lib/db/recurring";
 import { getTheme } from "@/lib/db/settings";
 import { AppShell } from "@/components/app-shell/AppShell";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  // Every authenticated route runs this layout -- lazy catch-up (see
+  // CLAUDE.md "Recurring transactions") belongs here, not just on
+  // /dashboard, or a schedule goes stale for anyone who always lands
+  // straight on /transactions. Must finish before getLoggingStreak() and
+  // getMostRecentTransactionAccountId() below, both of which read
+  // transactions and would otherwise race its inserts. cache()d (like
+  // recordLogin), so DashboardPage's own call for the created list, to
+  // build its banner, is free -- both resolve to this one run.
+  await generateDueOccurrences();
+
   const [user, , streakResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme] =
     await Promise.all([
       requireUser(),
