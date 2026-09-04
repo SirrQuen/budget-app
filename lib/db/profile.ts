@@ -55,24 +55,39 @@ export type LoginGreeting = {
 // the OTP and redirects straight to /dashboard, bypassing login()
 // entirely). The dashboard page calls it again to read the greeting values
 // without a second round trip.
+//
+// The read-then-write is a single round trip: record_login() (migration
+// 17) captures the prior first_name / lastlogin, stamps lastlogin = now(),
+// and returns the old values -- all in one call, on the critical path of
+// every authenticated route.
 export const recordLogin = cache(async (): Promise<DbResult<LoginGreeting>> => {
-  const profileResult = await getProfile();
+  const supabase = await createClient();
 
-  if (!profileResult.data) {
-    return { data: null, error: profileResult.error };
+  const { data, error } = await supabase.rpc("record_login").maybeSingle();
+
+  if (error) {
+    return { data: null, error: describeWriteError(error, "profile") };
   }
 
-  const previousLoginAt = profileResult.data.lastlogin;
-  const isFirstLogin = previousLoginAt === null;
-
-  const updateResult = await updateProfile({ lastlogin: new Date().toISOString() });
-
-  if (!updateResult.data) {
-    return { data: null, error: updateResult.error };
+  if (!data) {
+    // No row means no profile for this session -- the same failure the old
+    // getProfile().single() surfaced as a read error.
+    return {
+      data: null,
+      error: "Your session's expired. Log in again to pick up where you left off.",
+    };
   }
+
+  // record_login() returns SQL NULL here on a first-ever login; the
+  // generated type widens timestamptz to a non-null string, so annotate.
+  const previousLoginAt: string | null = data.previous_login_at;
 
   return {
-    data: { firstName: profileResult.data.first_name, isFirstLogin, previousLoginAt },
+    data: {
+      firstName: data.first_name,
+      isFirstLogin: previousLoginAt === null,
+      previousLoginAt,
+    },
     error: null,
   };
 });
