@@ -265,3 +265,36 @@ Read `../../DATABASE.md` before writing any query or signup flow:
 - The data layer test harness lives in git history — recover with
   `git checkout <commit> -- app/db-test`. Re-run it as two different users
   after any change to `lib/db/`.
+
+## Recurring transactions
+
+Generated automatically on the due date -- never prompted. The app has no bank
+sync, so it cannot know a payment cleared; the trade is that generated rows are
+obvious and trivially correctable rather than confirmed in advance.
+
+- `transactions.recurringid` non-null means the row was generated from a
+  schedule. Nothing else distinguishes them.
+- Generated rows carry a small recurring icon in lists -- an icon, not a
+  separate status or a different colour. They are normal transactions.
+- Editing or deleting a generated transaction is unremarkable: no extra
+  confirmation, no warning, no special path.
+- When a user edits the AMOUNT on a generated transaction, offer once to update
+  the schedule too ("Update the Rent schedule to $1,450?"). Declining leaves the
+  schedule alone and is never asked again for that edit. This is what makes
+  variable bills (utilities) workable.
+- Deleting a schedule must NOT delete transactions already generated from it.
+  `recurringid` is ON DELETE SET NULL; that history is real.
+
+### Counting, and the safe-to-spend boundary
+- Before its due date, a recurrence is a COMMITMENT: it appears in
+  `v_upcoming_recurring` and is subtracted from safe-to-spend.
+- On its due date it becomes a TRANSACTION: it leaves the commitments list and
+  reduces the account balance instead.
+- The money is counted exactly once. The hero number must NOT change at that
+  boundary -- if it jumps, something is double-counting.
+
+### Generation
+- Lazy catch-up when a user opens the app. No scheduler.
+- MUST be idempotent, enforced by a database constraint on
+  (recurringid, occurrence date) -- not by application logic. Two page loads
+  must never create two rows.
