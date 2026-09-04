@@ -38,18 +38,22 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   const today = todayISO();
   const currentMonth = `${today.slice(0, 7)}-01`;
 
-  // Cache hit -- app/(app)/layout.tsx already ran recordLogin() this request,
-  // so this is free and gives us the pre-bump lastlogin (null on a first-ever
-  // login).
-  const greetingResult = await recordLogin();
-  const firstName = greetingResult.data?.firstName;
-  const isFirstLogin = greetingResult.data?.isFirstLogin ?? false;
-  const previousLoginAt = greetingResult.data?.previousLoginAt ?? null;
+  // recordLogin() is a two-round-trip read-then-write (see lib/db/profile.ts),
+  // and app/(app)/layout.tsx fires it too -- it's cache()d, so asking again
+  // here is free. The point is not to *await* it ahead of the main batch:
+  // only the return-summary strip needs its result, so that single read is
+  // chained off it while everything else starts immediately.
+  const greetingPromise = recordLogin();
+  const returnFactsPromise = greetingPromise.then((r) => {
+    const prev = r.data?.previousLoginAt ?? null;
+    return prev ? getReturnSummaryFacts(prev) : ([] as string[]);
+  });
 
-  // One round trip. A brand-new user (stages 1-2) fetches a few results it
-  // won't render -- all cheap and empty -- which is the price of not adding a
-  // waterfall for the common full-dashboard case.
+  // One batch, all in flight together. A brand-new user (stages 1-2) fetches
+  // a few results it won't render -- all cheap and empty -- which is the price
+  // of not adding a waterfall for the common full-dashboard case.
   const [
+    greetingResult,
     onboardingResult,
     safeToSpendResult,
     netWorthStatResult,
@@ -64,6 +68,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     balancesResult,
     netWorthResult,
   ] = await Promise.all([
+    greetingPromise,
     getDashboardOnboarding(),
     getSafeToSpend(),
     getNetWorthStat(),
@@ -71,15 +76,17 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     getBudgetProgress({ budget_month: currentMonth }),
     getGoalProgress(),
     getUpcomingRecurring(),
-    previousLoginAt
-      ? getReturnSummaryFacts(previousLoginAt)
-      : Promise.resolve<string[]>([]),
+    returnFactsPromise,
     getRangeCashflowStats(range),
     getCashflowChart(),
     getGroupMovement(range),
     listAccountBalances({ is_active: true }),
     getNetWorth(),
   ]);
+
+  const firstName = greetingResult.data?.firstName;
+  const isFirstLogin = greetingResult.data?.isFirstLogin ?? false;
+  const previousLoginAt = greetingResult.data?.previousLoginAt ?? null;
 
   // If the snapshot itself failed we can't tell which stage the user is in --
   // fall through to the full dashboard, where the per-section error handling

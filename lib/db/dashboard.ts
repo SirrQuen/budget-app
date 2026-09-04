@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import { todayISO, addDaysISO, endOfMonthISO, daysBetweenInclusive } from "@/lib/date";
@@ -549,7 +550,11 @@ export function computeLoggingStreak(dates: string[], todayISO: string): Logging
 // elsewhere in this file. Never stored or incremented: recomputed from
 // the transactions table on every read, so there's no counter to drift
 // out of sync with reality.
-export async function getLoggingStreak(): Promise<DbResult<LoggingStreak>> {
+//
+// Cached per-request: the app layout, the dashboard page, and
+// getReturnSummaryFacts each ask for the streak, and without this that's
+// three identical 90-day scans on one dashboard render.
+export const getLoggingStreak = cache(async (): Promise<DbResult<LoggingStreak>> => {
   const supabase = await createClient();
 
   const today = new Date();
@@ -571,7 +576,7 @@ export async function getLoggingStreak(): Promise<DbResult<LoggingStreak>> {
   );
 
   return { data: streak, error: null };
-}
+});
 
 export type SafeToSpendCommitment = {
   recurringId: string;
