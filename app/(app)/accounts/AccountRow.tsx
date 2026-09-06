@@ -11,7 +11,9 @@ import type { Database } from "@/lib/database.types";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { AddTransactionPrefill, TransactionAccountOption } from "../transactions/AddTransactionForm";
 
-type AccountBalanceRow = Database["public"]["Views"]["v_account_balances"]["Row"];
+type AccountBalanceRow = Database["public"]["Views"]["v_account_balances"]["Row"] & {
+  opening_date: string | null;
+};
 
 export function AccountRow({
   account,

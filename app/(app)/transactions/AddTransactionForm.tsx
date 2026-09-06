@@ -1,33 +1,37 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import {
   createTransactionAction,
   updateTransactionAction,
   type ActionState,
 } from "@/lib/actions/transactions";
+import { updateAccountOpeningDateAction } from "@/lib/actions/accounts";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { TransactionType } from "@/lib/db/transactions";
 import { todayISO } from "@/lib/date";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { Celebration } from "@/components/ui/Celebration";
-import { ChevronDownIcon, FlameIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, FlameIcon, InfoIcon } from "@/components/ui/icons";
 
 const fieldClassName =
   "w-full rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40";
 
 // Minimal shape the account picker needs -- AccountRow/AccountBalanceRow
 // both satisfy this structurally, so callers can pass either straight
-// through with no mapping.
+// through with no mapping. opening_date drives the "this predates the
+// account's balance" note below -- transactions dated before it don't
+// move that account's balance (v_account_balances filters them out).
 export type TransactionAccountOption = {
   id: string;
   account_name: string;
   is_active: boolean;
+  opening_date: string;
 };
 
 export type TransactionFormMode = "create" | "edit";
@@ -127,8 +131,12 @@ export function AddTransactionForm({
     initialValues?.transaction_type ?? prefill?.transaction_type ?? "Expense",
   );
   const [categoryid, setCategoryid] = useState(initialValues?.categoryid ?? "");
+  const [accountid, setAccountid] = useState(initialValues?.accountid ?? "");
   const [fromAccountId, setFromAccountId] = useState(prefill?.fromAccountId ?? "");
   const [toAccountId, setToAccountId] = useState(prefill?.toAccountId ?? "");
+  const [transactionDate, setTransactionDate] = useState(
+    initialValues?.transaction_date ?? prefill?.transaction_date ?? todayISO(),
+  );
   const [amount, setAmount] = useState(
     initialValues ? String(initialValues.amount) : (prefill?.amount ?? ""),
   );
@@ -136,6 +144,12 @@ export function AddTransactionForm({
   const [celebrate, setCelebrate] = useState(false);
   const [celebrateMessage, setCelebrateMessage] = useState("Logged");
   const [celebrateIcon, setCelebrateIcon] = useState<React.ReactNode>("✓");
+  // Optimistic local view of an account's opening_date after "Move the
+  // balance date" -- keyed by account id, so it survives switching between
+  // fields without waiting on the server round-trip that revalidates
+  // `accounts`.
+  const [openingDateOverrides, setOpeningDateOverrides] = useState<Record<string, string>>({});
+  const [isMovingOpeningDate, startMoveOpeningDate] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
   const wasPending = useRef(false);
@@ -144,6 +158,43 @@ export function AddTransactionForm({
   const categoryGroups =
     type === "Transfer" ? [] : groupByCategoryGroup(type === "Income" ? incomeCategories : expenseCategories);
   const accountsMismatch = type === "Transfer" && fromAccountId !== "" && fromAccountId === toAccountId;
+
+  function handleMoveOpeningDate(accountId: string, newOpeningDate: string) {
+    startMoveOpeningDate(async () => {
+      const result = await updateAccountOpeningDateAction(accountId, newOpeningDate);
+      if (!result?.error) {
+        setOpeningDateOverrides((prev) => ({ ...prev, [accountId]: newOpeningDate }));
+      }
+    });
+  }
+
+  // Renders the "this predates the account's balance" note for whichever
+  // account id is passed in (the single Account field, or either leg of a
+  // Transfer) -- null when there's nothing to say.
+  function renderOpeningDateNote(accountId: string) {
+    const account = accounts.find((a) => a.id === accountId);
+    if (!account) return null;
+    const openingDate = openingDateOverrides[account.id] ?? account.opening_date;
+    if (transactionDate >= openingDate) return null;
+
+    return (
+      <p className="flex items-start gap-2 rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink-secondary">
+        <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
+        <span className="flex-1">
+          This is before your {account.account_name} balance date of {formatDate(openingDate)}, so
+          it won&apos;t change that balance.{" "}
+          <button
+            type="button"
+            onClick={() => handleMoveOpeningDate(account.id, transactionDate)}
+            disabled={isMovingOpeningDate}
+            className="font-medium text-action underline-offset-2 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised"
+          >
+            Move the balance date to {formatDate(transactionDate)}
+          </button>
+        </span>
+      </p>
+    );
+  }
   // Closed by default (most entries skip these), but an edit or a prefill
   // that already carries one of these values should show it immediately
   // rather than hiding data the user (or quick-add) already supplied.
@@ -167,8 +218,10 @@ export function AddTransactionForm({
       formRef.current?.reset();
       setType("Expense");
       setCategoryid("");
+      setAccountid("");
       setFromAccountId("");
       setToAccountId("");
+      setTransactionDate(todayISO());
       setAmount("");
       setClientError(undefined);
       // Reset leaves focus wherever it was (typically the submit button) --
@@ -295,7 +348,8 @@ export function AddTransactionForm({
                   name="transaction_date"
                   type="date"
                   required
-                  defaultValue={initialValues?.transaction_date ?? prefill?.transaction_date ?? todayISO()}
+                  value={transactionDate}
+                  onChange={(e) => setTransactionDate(e.target.value)}
                   className={fieldClassName}
                 />
               </FormField>
@@ -376,6 +430,7 @@ export function AddTransactionForm({
                     ))}
                   </select>
                 </FormField>
+                {fromAccountId ? renderOpeningDateNote(fromAccountId) : null}
 
                 <FormField
                   label="To account"
@@ -402,6 +457,7 @@ export function AddTransactionForm({
                     ))}
                   </select>
                 </FormField>
+                {toAccountId ? renderOpeningDateNote(toAccountId) : null}
               </>
             ) : (
               <>
@@ -435,7 +491,8 @@ export function AddTransactionForm({
                     id="accountid"
                     name="accountid"
                     required
-                    defaultValue={initialValues?.accountid ?? ""}
+                    value={accountid}
+                    onChange={(e) => setAccountid(e.target.value)}
                     className={fieldClassName}
                   >
                     <option value="" disabled>
@@ -449,6 +506,7 @@ export function AddTransactionForm({
                     ))}
                   </select>
                 </FormField>
+                {accountid ? renderOpeningDateNote(accountid) : null}
               </>
             )}
           </div>

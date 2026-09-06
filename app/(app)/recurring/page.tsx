@@ -34,6 +34,7 @@ export default async function RecurringPage() {
     id: a.id,
     account_name: a.account_name,
     is_active: a.is_active,
+    opening_date: a.opening_date,
   }));
   const incomeCategories = incomeCategoriesResult.data ?? [];
   const expenseCategories = expenseCategoriesResult.data ?? [];

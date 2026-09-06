@@ -25,6 +25,7 @@ export type Database = {
           institution: string | null
           is_active: boolean
           opening_balance: number
+          opening_date: string
           updated_at: string
           userid: string
         }
@@ -38,6 +39,7 @@ export type Database = {
           institution?: string | null
           is_active?: boolean
           opening_balance?: number
+          opening_date?: string
           updated_at?: string
           userid: string
         }
@@ -51,6 +53,7 @@ export type Database = {
           institution?: string | null
           is_active?: boolean
           opening_balance?: number
+          opening_date?: string
           updated_at?: string
           userid?: string
         }

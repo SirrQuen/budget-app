@@ -8,13 +8,17 @@ import {
   type ActionState,
 } from "@/lib/actions/accounts";
 import { ACCOUNT_TYPES, isLiabilityAccountType } from "@/lib/accountOptions";
+import { todayISO } from "@/lib/date";
+import { formatDate } from "@/lib/format";
 import type { Database } from "@/lib/database.types";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
-type AccountBalanceRow = Database["public"]["Views"]["v_account_balances"]["Row"];
+type AccountBalanceRow = Database["public"]["Views"]["v_account_balances"]["Row"] & {
+  opening_date: string | null;
+};
 
 // Shared by the "Add account" flow and each row's "Edit" flow -- same
 // fields either way, just pre-filled and pointed at a different action when
@@ -44,6 +48,10 @@ export function AccountForm({
     account?.opening_balance != null && isLiabilityAccountType(account.account_type ?? "")
       ? Math.abs(account.opening_balance)
       : (account?.opening_balance ?? undefined);
+  // Drives the amount field's label -- "Balance as of {date}" only reads as
+  // meaningful once the date is live, so it has to track the picker rather
+  // than the value the form loaded with.
+  const [openingDate, setOpeningDate] = useState(account?.opening_date ?? todayISO());
 
   useEffect(() => {
     if (wasPending.current && !pending && !state?.error) {
@@ -114,14 +122,34 @@ export function AccountForm({
       </FormField>
 
       <FormField
-        label={isLiability ? "How much do you currently owe?" : "Starting balance"}
+        label="Balance as of"
+        htmlFor="opening_date"
+        hint="Transactions dated before this don't count toward the balance."
+      >
+        <input
+          id="opening_date"
+          name="opening_date"
+          type="date"
+          required
+          value={openingDate}
+          onChange={(e) => setOpeningDate(e.target.value)}
+          className="w-full rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40"
+        />
+      </FormField>
+
+      <FormField
+        label={
+          isLiability
+            ? `How much did you owe on ${formatDate(openingDate)}?`
+            : `Balance on ${formatDate(openingDate)}`
+        }
         htmlFor="opening_balance"
         hint={
           isEdit
             ? "Changing this shifts every balance calculated from it."
             : isLiability
               ? "Enter a positive number -- we'll track it as debt from here."
-              : "What this account holds right now. You can enter 0 and log transactions from here."
+              : "You can enter 0 and log transactions from here."
         }
       >
         <Input

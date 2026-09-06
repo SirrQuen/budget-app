@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { listAccountBalances, getMostUsedAssetAccountId } from "@/lib/db/accounts";
+import { listAccountBalances, listAccounts, getMostUsedAssetAccountId } from "@/lib/db/accounts";
 import { getNetWorth } from "@/lib/db/dashboard";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -8,17 +8,20 @@ import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { StatTile } from "@/components/ui/StatTile";
 import { WalletIcon } from "@/components/ui/icons";
 import { formatAccountBalance } from "@/lib/format";
+import { todayISO } from "@/lib/date";
 import { ACCOUNT_TYPE_GROUP_ORDER, isLiabilityAccountType } from "@/lib/accountOptions";
 import { CreateAccountForm } from "./CreateAccountForm";
 import { AccountRow } from "./AccountRow";
 import type { Database } from "@/lib/database.types";
 import type { TransactionAccountOption } from "../transactions/AddTransactionForm";
 
-type AccountBalanceRow = Database["public"]["Views"]["v_account_balances"]["Row"];
+type AccountBalanceRow = Database["public"]["Views"]["v_account_balances"]["Row"] & {
+  opening_date: string | null;
+};
 
-function isNamedAccount(
-  a: AccountBalanceRow,
-): a is AccountBalanceRow & { account_id: string; account_name: string } {
+function isNamedAccount<T extends AccountBalanceRow>(
+  a: T,
+): a is T & { account_id: string; account_name: string } {
   return a.account_id !== null && a.account_name !== null;
 }
 
@@ -30,17 +33,25 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
   const params = await searchParams;
   const showArchived = params.archived === "1";
 
-  const [accountsResult, netWorthResult, mostUsedAssetResult, incomeCategoriesResult, expenseCategoriesResult] =
-    await Promise.all([
-      listAccountBalances(),
-      getNetWorth(),
-      // These three only feed the "Make a payment" shortcut's pre-fill --
-      // a failure there shouldn't take down the whole accounts page, so
-      // they're deliberately left out of the error check below.
-      getMostUsedAssetAccountId(),
-      listCategoriesForType("Income"),
-      listCategoriesForType("Expense"),
-    ]);
+  const [
+    accountsResult,
+    netWorthResult,
+    mostUsedAssetResult,
+    incomeCategoriesResult,
+    expenseCategoriesResult,
+    accountsTableResult,
+  ] = await Promise.all([
+    listAccountBalances(),
+    getNetWorth(),
+    // These four only feed the "Make a payment" shortcut's pre-fill and the
+    // opening-date display -- a failure there shouldn't take down the whole
+    // accounts page, so they're deliberately left out of the error check
+    // below.
+    getMostUsedAssetAccountId(),
+    listCategoriesForType("Income"),
+    listCategoriesForType("Expense"),
+    listAccounts(),
+  ]);
 
   if (accountsResult.error !== null || netWorthResult.error !== null) {
     return (
@@ -58,7 +69,16 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
     );
   }
 
-  const allAccounts = accountsResult.data;
+  // v_account_balances deliberately doesn't carry opening_date (see the
+  // migration comment) -- merged in here from the base table so the edit
+  // form and the "Make a payment" shortcut both have it.
+  const openingDateById = new Map(
+    (accountsTableResult.data ?? []).map((a) => [a.id, a.opening_date]),
+  );
+  const allAccounts: AccountBalanceRow[] = accountsResult.data.map((a) => ({
+    ...a,
+    opening_date: (a.account_id && openingDateById.get(a.account_id)) ?? null,
+  }));
 
   // A brand-new user has zero accounts, full stop -- nothing else on this
   // page (hero figure, archived toggle) means anything yet, so the whole
@@ -88,7 +108,12 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
   const transactionAccounts: TransactionAccountOption[] = allAccounts
     .filter((a) => a.is_active)
     .filter(isNamedAccount)
-    .map((a) => ({ id: a.account_id, account_name: a.account_name, is_active: true }));
+    .map((a) => ({
+      id: a.account_id,
+      account_name: a.account_name,
+      is_active: true,
+      opening_date: a.opening_date ?? todayISO(),
+    }));
   const defaultFromAccountId = mostUsedAssetResult.data ?? null;
   const incomeCategories = incomeCategoriesResult.data ?? [];
   const expenseCategories = expenseCategoriesResult.data ?? [];
