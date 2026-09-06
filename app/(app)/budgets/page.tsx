@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { parseLocalDate } from "@/lib/date";
 import { getBudgetProgress } from "@/lib/db/budgets";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { getChronicOverBudgetInsight } from "@/lib/budgetInsights";
@@ -25,12 +26,13 @@ function shiftMonth(monthISO: string, delta: number): string {
   return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}-01`;
 }
 
+// No explicit timeZone -- monthISO is parsed to local midnight via
+// parseLocalDate, matching lib/format.ts's date formatters, so formatting
+// in the viewer's own zone lands back on the same calendar month.
 function formatMonthLabel(monthISO: string): string {
-  const [y, m] = monthISO.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", {
+  return parseLocalDate(monthISO).toLocaleDateString("en-US", {
     month: "long",
     year: "numeric",
-    timeZone: "UTC",
   });
 }
 

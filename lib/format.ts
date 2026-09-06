@@ -1,4 +1,5 @@
 import { isLiabilityAccountType } from "@/lib/accountOptions";
+import { parseLocalDate } from "@/lib/date";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -40,10 +41,10 @@ const ISO_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 // recurring dates, ...) arrive as a bare "YYYY-MM-DD" with no time or zone.
 // `new Date("2026-03-06")` parses that as UTC midnight, which renders as
 // Mar 5 once formatted in any negative-offset zone (e.g. America/New_York).
-// Building the Date from its year/month/day parts instead -- the same
-// local-calendar-day approach as lib/date.ts's todayISO/addDaysISO -- keeps
-// the parse and the format (which now also runs in the local zone) on the
-// same basis, so the displayed day always matches the stored day.
+// parseLocalDate builds the Date from its year/month/day parts instead,
+// which keeps the parse and the format (which now also runs in the local
+// zone) on the same basis, so the displayed day always matches the stored
+// day.
 //
 // Returns null for anything that doesn't parse to a real date, so callers
 // can render a blank rather than crash on Intl.DateTimeFormat.format
@@ -53,8 +54,7 @@ function parseDisplayDate(date: string | Date): Date | null {
     return Number.isNaN(date.getTime()) ? null : date;
   }
   if (ISO_DATE_ONLY.test(date)) {
-    const [year, month, day] = date.split("-").map(Number);
-    return new Date(year, month - 1, day);
+    return parseLocalDate(date);
   }
   const parsed = new Date(date);
   return Number.isNaN(parsed.getTime()) ? null : parsed;

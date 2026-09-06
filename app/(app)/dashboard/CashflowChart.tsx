@@ -2,7 +2,8 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import type { CashflowPoint } from "@/lib/db/dashboard";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDateShort } from "@/lib/format";
+import { parseLocalDate } from "@/lib/date";
 
 // Slots 1 and 2 of the categorical ramp, read from the theme so the chart
 // re-colours itself in light and dark with no branch here. Never a literal.
@@ -25,16 +26,13 @@ const PAD = { top: 12, right: 64, bottom: 28, left: 48 };
 // First paint / SSR, before ResizeObserver has measured the container.
 const FALLBACK_WIDTH = 720;
 
-const shortDate = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  timeZone: "UTC",
-});
+// No explicit timeZone -- points' "day"/"month" values are parsed to local
+// midnight via parseLocalDate, matching lib/format.ts's date formatters, so
+// formatting in the viewer's own zone lands back on the same calendar day.
 const fullDate = new Intl.DateTimeFormat("en-US", {
   weekday: "short",
   month: "short",
   day: "numeric",
-  timeZone: "UTC",
 });
 // Compact currency for axis ticks: "$0" / "$125" / "$1.3K", never ".00".
 const axisMoney = new Intl.NumberFormat("en-US", {
@@ -125,7 +123,7 @@ export function CashflowChart({
   const shade = shadeIndices(points, shadeFrom, shadeTo);
   const shadeLabel =
     shadeFrom && shadeTo
-      ? `${shortDate.format(new Date(shadeFrom))} – ${shortDate.format(new Date(shadeTo))} highlighted`
+      ? `${formatDateShort(shadeFrom)} – ${formatDateShort(shadeTo)} highlighted`
       : null;
   const { max: yMax, ticks: yTicks } = yAxis(
     Math.max(...points.flatMap((p) => [p.income, p.expenses]), 0),
@@ -279,7 +277,7 @@ export function CashflowChart({
               className="fill-ink-muted"
               fontSize={11}
             >
-              {shortDate.format(new Date(points[i].day))}
+              {formatDateShort(points[i].day)}
             </text>
           ))}
 
@@ -363,7 +361,7 @@ export function CashflowChart({
                     : "translateX(-50%)",
             }}
           >
-            <p className="mb-1 text-ink-secondary">{fullDate.format(new Date(activePoint.day))}</p>
+            <p className="mb-1 text-ink-secondary">{fullDate.format(parseLocalDate(activePoint.day))}</p>
             <dl className="flex flex-col gap-0.5">
               {SERIES.map((s) => (
                 <div key={s.key} className="flex items-center gap-1.5">
@@ -385,7 +383,7 @@ export function CashflowChart({
 
       <span className="sr-only" aria-live="polite">
         {activePoint
-          ? `${fullDate.format(new Date(activePoint.day))}: income ${formatCurrency(
+          ? `${fullDate.format(parseLocalDate(activePoint.day))}: income ${formatCurrency(
               activePoint.income,
             )}, spending ${formatCurrency(activePoint.expenses)}`
           : ""}
@@ -408,7 +406,7 @@ export function CashflowChart({
           <tbody>
             {points.map((p) => (
               <tr key={p.day}>
-                <th scope="row">{fullDate.format(new Date(p.day))}</th>
+                <th scope="row">{fullDate.format(parseLocalDate(p.day))}</th>
                 <td>{formatCurrency(p.income)}</td>
                 <td>{formatCurrency(p.expenses)}</td>
               </tr>

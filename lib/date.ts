@@ -6,6 +6,17 @@ export function todayISO(): string {
   return local.toISOString().slice(0, 10);
 }
 
+// Builds a Date at LOCAL midnight from a Postgres `date` column's bare
+// "YYYY-MM-DD" -- new Date(dateISO) parses that as UTC midnight instead,
+// which renders a day early once formatted in any negative-offset zone
+// (e.g. America/New_York). Shared by every Intl.DateTimeFormat in the app
+// that displays one of these values (lib/format.ts, lib/recurringSchedule.ts,
+// CashflowChart), so the parse and the (local-zone) format always agree.
+export function parseLocalDate(dateISO: string): Date {
+  const [year, month, day] = dateISO.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
 // Adds (or subtracts, for negative delta) whole days to an ISO "YYYY-MM-DD"
 // date string, staying in local-calendar-day terms the same way todayISO()
 // does -- never routes through a UTC-midnight Date for the input.

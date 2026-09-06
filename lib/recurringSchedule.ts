@@ -9,21 +9,15 @@
 // is still the 31st -- see addMonthsClampedISO's comment for why the two
 // can diverge.
 
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateShort } from "@/lib/format";
+import { parseLocalDate } from "@/lib/date";
 
+// No explicit timeZone -- anchorDateISO is parsed to local midnight via
+// parseLocalDate (matching lib/format.ts's date formatters), so formatting
+// in the viewer's own zone lands back on the same calendar weekday/day
+// regardless of the offset direction.
 const weekdayFormatter = new Intl.DateTimeFormat("en-US", {
   weekday: "long",
-  // UTC, matching lib/format.ts's date formatters -- a plain "YYYY-MM-DD"
-  // has no time component, and pinning both sides to UTC keeps the
-  // displayed weekday/day matching the stored calendar date regardless of
-  // the viewer's timezone offset.
-  timeZone: "UTC",
-});
-
-const monthDayFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  timeZone: "UTC",
 });
 
 function ordinal(n: number): string {
@@ -55,16 +49,16 @@ export function formatSchedule(frequency: string, anchorDateISO: string, interva
       return "Every day";
     case "Weekly":
       return intervalCount <= 1
-        ? `Weekly on ${weekdayFormatter.format(new Date(anchorDateISO))}`
-        : `Every ${intervalCount} weeks on ${weekdayFormatter.format(new Date(anchorDateISO))}`;
+        ? `Weekly on ${weekdayFormatter.format(parseLocalDate(anchorDateISO))}`
+        : `Every ${intervalCount} weeks on ${weekdayFormatter.format(parseLocalDate(anchorDateISO))}`;
     case "Biweekly":
-      return `Every 2 weeks on ${weekdayFormatter.format(new Date(anchorDateISO))}`;
+      return `Every 2 weeks on ${weekdayFormatter.format(parseLocalDate(anchorDateISO))}`;
     case "Monthly":
       return `Monthly on the ${ordinal(dayOfMonth(anchorDateISO))}`;
     case "Quarterly":
       return `Every 3 months on the ${ordinal(dayOfMonth(anchorDateISO))}`;
     case "Yearly":
-      return `Yearly on ${monthDayFormatter.format(new Date(anchorDateISO))}`;
+      return `Yearly on ${formatDateShort(anchorDateISO)}`;
     default:
       // rectx_frequency_check should make this unreachable, same guard as
       // nextOccurrenceISO -- fail visibly rather than showing nothing.
