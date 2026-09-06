@@ -15,6 +15,18 @@ export const ACCOUNT_TYPES = [
 
 export type AccountType = (typeof ACCOUNT_TYPES)[number];
 
+// Display order for the accounts list, grouped by type -- deliberately not
+// alphabetical. Assets in the order people think about their money
+// (most-used first), liabilities last, so it reads like a balance sheet.
+export const ACCOUNT_TYPE_GROUP_ORDER: AccountType[] = [
+  "Checking",
+  "Savings",
+  "Cash",
+  "Investment",
+  "Credit Card",
+  "Loan",
+];
+
 // Mirrors accounts_liability_sign (20260822000006_06_liability_sign.sql):
 // Credit Card and Loan balances are stored negative. Every place that reads
 // or writes opening_balance needs to know which types those are.
