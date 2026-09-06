@@ -52,6 +52,10 @@ export function AccountForm({
   // meaningful once the date is live, so it has to track the picker rather
   // than the value the form loaded with.
   const [openingDate, setOpeningDate] = useState(account?.opening_date ?? todayISO());
+  // A native date input's value is "" while a segment is mid-edit (e.g. the
+  // day was just cleared) -- only format it into the label once it's a
+  // complete date, so the label never shows a stale or blank date fragment.
+  const openingDateIsComplete = /^\d{4}-\d{2}-\d{2}$/.test(openingDate);
 
   useEffect(() => {
     if (wasPending.current && !pending && !state?.error) {
@@ -140,8 +144,12 @@ export function AccountForm({
       <FormField
         label={
           isLiability
-            ? `How much did you owe on ${formatDate(openingDate)}?`
-            : `Balance on ${formatDate(openingDate)}`
+            ? openingDateIsComplete
+              ? `How much did you owe on ${formatDate(openingDate)}?`
+              : "How much do you currently owe?"
+            : openingDateIsComplete
+              ? `Balance on ${formatDate(openingDate)}`
+              : "Balance"
         }
         htmlFor="opening_balance"
         hint={

@@ -19,25 +19,46 @@ const compactNumber = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
 });
 
-// timeZone: "UTC" is deliberate -- Postgres `date` columns (transaction_date,
-// etc.) have no time component, but a plain "2026-08-19" string is still
-// parsed by `new Date()` as UTC midnight. Without pinning the formatter to
-// UTC too, any viewer west of Greenwich would see that calendar date roll
-// back a day (e.g. today, entered and stored as "2026-08-19", displaying as
-// "Aug 18"). Pinning both sides to UTC makes the displayed day match the
-// stored day regardless of the viewer's local timezone.
+// No explicit timeZone -- date-only strings are parsed to LOCAL midnight
+// (see parseDisplayDate below), so formatting in the viewer's own zone
+// lands back on that same calendar day. Pinning this to UTC while parsing
+// local would shift the day again for any positive-offset viewer.
 const mediumDate = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
   year: "numeric",
-  timeZone: "UTC",
 });
 
 const shortDate = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
-  timeZone: "UTC",
 });
+
+const ISO_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+// Postgres `date` columns (transaction_date, opening_date, budget periods,
+// recurring dates, ...) arrive as a bare "YYYY-MM-DD" with no time or zone.
+// `new Date("2026-03-06")` parses that as UTC midnight, which renders as
+// Mar 5 once formatted in any negative-offset zone (e.g. America/New_York).
+// Building the Date from its year/month/day parts instead -- the same
+// local-calendar-day approach as lib/date.ts's todayISO/addDaysISO -- keeps
+// the parse and the format (which now also runs in the local zone) on the
+// same basis, so the displayed day always matches the stored day.
+//
+// Returns null for anything that doesn't parse to a real date, so callers
+// can render a blank rather than crash on Intl.DateTimeFormat.format
+// throwing on an Invalid Date.
+function parseDisplayDate(date: string | Date): Date | null {
+  if (date instanceof Date) {
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  if (ISO_DATE_ONLY.test(date)) {
+    const [year, month, day] = date.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }
+  const parsed = new Date(date);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 
 /** Full-precision currency for a single figure -- a transaction row, a line item. */
 export function formatCurrency(amount: number): string {
@@ -56,14 +77,31 @@ export function formatAccountBalance(balance: number, accountType: string): stri
   return formatCurrency(balance);
 }
 
-/** "Aug 16, 2026" for an ISO date string or a Date. */
+/**
+ * "Aug 16, 2026" for an ISO date string or a Date. Never throws -- this is
+ * shared across the whole app, so a malformed value renders as an empty
+ * string rather than crashing whatever page it's embedded in.
+ */
 export function formatDate(date: string | Date): string {
-  return mediumDate.format(typeof date === "string" ? new Date(date) : date);
+  try {
+    const parsed = parseDisplayDate(date);
+    return parsed ? mediumDate.format(parsed) : "";
+  } catch {
+    return "";
+  }
 }
 
-/** "Aug 16" -- no year, for compact rows where the year is obvious. */
+/**
+ * "Aug 16" -- no year, for compact rows where the year is obvious. Same
+ * never-throws contract as formatDate.
+ */
 export function formatDateShort(date: string | Date): string {
-  return shortDate.format(typeof date === "string" ? new Date(date) : date);
+  try {
+    const parsed = parseDisplayDate(date);
+    return parsed ? shortDate.format(parsed) : "";
+  } catch {
+    return "";
+  }
 }
 
 /**
