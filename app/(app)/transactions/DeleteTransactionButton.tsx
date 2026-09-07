@@ -19,6 +19,7 @@ export function DeleteTransactionButton({
   transactionType,
   transactionDate,
   transferGroupId = null,
+  transferAccounts,
   redirectToList,
   className = "inline-flex min-h-11 items-center rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-critical focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
   label = "Delete",
@@ -29,6 +30,9 @@ export function DeleteTransactionButton({
   transactionType: TransactionType;
   transactionDate: string;
   transferGroupId?: string | null;
+  /** Transfer only: names both accounts in the confirmation, e.g. "from
+   *  Checking to Savings". Omitted when a leg's account can't be resolved. */
+  transferAccounts?: { from: string; to: string };
   redirectToList: boolean;
   className?: string;
   label?: string;
@@ -40,6 +44,11 @@ export function DeleteTransactionButton({
   const isTransfer = transferGroupId !== null;
   // A transfer is neither income nor expense -- no sign, same as the list row.
   const amountText = isTransfer ? formatCurrency(amount) : formatSignedAmount(amount, transactionType).text;
+
+  const title =
+    isTransfer && transferAccounts
+      ? `Delete transfer of ${amountText} from ${transferAccounts.from} to ${transferAccounts.to}?`
+      : `Delete ${description}, ${amountText}, ${formatDate(transactionDate)}?`;
 
   function handleDelete() {
     startDelete(async () => {
@@ -64,7 +73,7 @@ export function DeleteTransactionButton({
 
       <ConfirmDialog
         open={confirming}
-        title={`Delete ${description}, ${amountText}, ${formatDate(transactionDate)}?`}
+        title={title}
         description={
           isTransfer
             ? "This can't be undone -- both legs of this transfer will be permanently removed."

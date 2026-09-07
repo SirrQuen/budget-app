@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getTransaction, type TransactionType, type TransactionWithRelations } from "@/lib/db/transactions";
+import {
+  getTransaction,
+  getTransferAccounts,
+  type TransactionType,
+  type TransactionWithRelations,
+} from "@/lib/db/transactions";
 import { listCategoriesForType, getCategory } from "@/lib/db/categories";
 import { listAccounts, getAccount } from "@/lib/db/accounts";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -34,24 +39,52 @@ export default async function EditTransactionPage({
   }
   const tx = transactionResult.data;
 
-  // A transfer is two linked legs, not one transaction -- there's no
-  // per-leg edit flow yet, so point back at the list instead of rendering a
-  // form that would only ever touch one side of the pair.
+  // A transfer is two linked legs, not one transaction -- editing one side
+  // on its own would put the pair out of sync, so there's no per-leg edit
+  // flow. Explain that, and offer a paired delete (both legs, one
+  // confirmation) as the way to change it.
   if (!isNonTransfer(tx)) {
+    // isNonTransfer keyed on transfer_group_id === null, so this branch has a
+    // group id -- TS just can't narrow a non-union field through the negation.
+    const transferGroupId = tx.transfer_group_id as string;
+    const transferAccountsResult = await getTransferAccounts(transferGroupId);
+    const transferAccounts =
+      transferAccountsResult.error === null &&
+      transferAccountsResult.data.fromAccountName &&
+      transferAccountsResult.data.toAccountName
+        ? {
+            from: transferAccountsResult.data.fromAccountName,
+            to: transferAccountsResult.data.toAccountName,
+          }
+        : undefined;
+
     return (
       <div className="flex flex-col gap-6">
         <PageHeader title="Edit transaction" />
         <EmptyState
           icon={<WalletIcon className="h-10 w-10" />}
-          heading="This is a transfer"
-          message="Transfers move money between two accounts as a linked pair, so there's nothing to edit here yet. Delete it and re-log the transfer if the details were wrong."
+          heading="Transfers are edited as a pair"
+          message="Moving money between accounts creates two linked entries, so editing one on its own would put them out of sync. Delete the transfer and re-enter it to change it."
           action={
-            <Link
-              href="/transactions"
-              className="rounded text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-            >
-              Back to transactions
-            </Link>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Link
+                href="/transactions"
+                className="rounded text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+              >
+                Back to transactions
+              </Link>
+              <DeleteTransactionButton
+                id={tx.id}
+                description={tx.description}
+                amount={tx.amount}
+                transactionType={tx.transaction_type as TransactionType}
+                transactionDate={tx.transaction_date}
+                transferGroupId={transferGroupId}
+                transferAccounts={transferAccounts}
+                redirectToList={true}
+                label="Delete this transfer"
+              />
+            </div>
           }
         />
       </div>

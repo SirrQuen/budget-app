@@ -533,6 +533,43 @@ export async function updateTransfer(
   return { data, error: null };
 }
 
+export type TransferAccountNames = {
+  fromAccountName: string | null;
+  toAccountName: string | null;
+};
+
+// Both legs of a transfer share transfer_group_id: the Expense leg draws
+// from the "from" account, the Income leg lands in the "to" account. The
+// edit page uses this to name both accounts when it explains that a transfer
+// is a linked pair rather than a single editable row. Archived accounts
+// still resolve -- the join has no is_active filter.
+export async function getTransferAccounts(
+  groupId: string,
+): Promise<DbResult<TransferAccountNames>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("transaction_type, account:accounts(account_name)")
+    .eq("transfer_group_id", groupId)
+    .returns<{ transaction_type: string; account: { account_name: string } | null }[]>();
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "transfer") };
+  }
+
+  const fromLeg = data.find((leg) => leg.transaction_type === "Expense");
+  const toLeg = data.find((leg) => leg.transaction_type === "Income");
+
+  return {
+    data: {
+      fromAccountName: fromLeg?.account?.account_name ?? null,
+      toAccountName: toLeg?.account?.account_name ?? null,
+    },
+    error: null,
+  };
+}
+
 // Bulk delete for the list's selection bar -- one statement covering plain
 // transaction ids and whole transfer groups together (never a loop of
 // individual deletes). transferGroupIds expands to both legs automatically,

@@ -140,6 +140,16 @@ export function AddTransactionForm({
   const [amount, setAmount] = useState(
     initialValues ? String(initialValues.amount) : (prefill?.amount ?? ""),
   );
+  // Controlled so they survive a type change -- switching to Transfer
+  // unmounts the merchant/payment-method fields, and someone who typed them
+  // before realising the type was wrong shouldn't lose that work. Notes is
+  // rendered in every mode but is controlled here too for the same reset
+  // path. Cleared alongside the other fields on a successful create.
+  const [merchant, setMerchant] = useState(
+    initialValues?.merchant ?? prefill?.merchant ?? "",
+  );
+  const [paymentMethod, setPaymentMethod] = useState(initialValues?.payment_method ?? "");
+  const [notes, setNotes] = useState(initialValues?.notes ?? "");
   const [clientError, setClientError] = useState<string>();
   const [celebrate, setCelebrate] = useState(false);
   const [celebrateMessage, setCelebrateMessage] = useState("Logged");
@@ -223,6 +233,9 @@ export function AddTransactionForm({
       setToAccountId("");
       setTransactionDate(todayISO());
       setAmount("");
+      setMerchant("");
+      setPaymentMethod("");
+      setNotes("");
       setClientError(undefined);
       // Reset leaves focus wherever it was (typically the submit button) --
       // pull it back into the form so the next entry can start typing
@@ -339,6 +352,28 @@ export function AddTransactionForm({
           )}
         </div>
 
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="text-sm font-medium text-ink-secondary">Type</legend>
+          <div className="flex w-full gap-1 rounded-xl border border-hairline bg-surface-raised p-1">
+            {typeOptions.map((value) => (
+              <label
+                key={value}
+                className="flex min-h-11 flex-1 cursor-pointer items-center justify-center rounded-lg px-3 py-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink has-[:checked]:bg-action has-[:checked]:text-action-ink has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-action has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-surface-raised"
+              >
+                <input
+                  type="radio"
+                  name="transaction_type"
+                  value={value}
+                  checked={type === value}
+                  onChange={() => handleTypeChange(value)}
+                  className="sr-only"
+                />
+                {value}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
         <div className="grid grid-cols-1 gap-x-6 gap-y-4 lg:grid-cols-2">
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -383,28 +418,6 @@ export function AddTransactionForm({
                 defaultValue={initialValues?.description ?? prefill?.description}
               />
             </FormField>
-
-            <fieldset className="flex flex-col gap-1.5">
-              <legend className="text-sm font-medium text-ink-secondary">Type</legend>
-              <div className="inline-flex w-fit rounded-full border border-hairline bg-surface-raised p-1">
-                {typeOptions.map((value) => (
-                  <label
-                    key={value}
-                    className="cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink has-[:checked]:bg-surface has-[:checked]:text-ink has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-action has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-surface-raised"
-                  >
-                    <input
-                      type="radio"
-                      name="transaction_type"
-                      value={value}
-                      checked={type === value}
-                      onChange={() => handleTypeChange(value)}
-                      className="sr-only"
-                    />
-                    {value}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
           </div>
 
           <div className="flex flex-col gap-4">
@@ -526,7 +539,8 @@ export function AddTransactionForm({
                     name="merchant"
                     maxLength={80}
                     placeholder="e.g. Trader Joe's"
-                    defaultValue={initialValues?.merchant ?? prefill?.merchant}
+                    value={merchant}
+                    onChange={(e) => setMerchant(e.target.value)}
                   />
                 </FormField>
 
@@ -536,7 +550,8 @@ export function AddTransactionForm({
                     name="payment_method"
                     maxLength={40}
                     placeholder="e.g. Debit card"
-                    defaultValue={initialValues?.payment_method ?? undefined}
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
                   />
                 </FormField>
               </div>
@@ -548,7 +563,8 @@ export function AddTransactionForm({
                 name="notes"
                 rows={2}
                 maxLength={500}
-                defaultValue={initialValues?.notes ?? undefined}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
                 className={fieldClassName}
               />
             </FormField>
