@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { Celebration } from "@/components/ui/Celebration";
+import { useConfirmPulse } from "@/components/ui/ConfirmPulse";
 import { ChevronDownIcon, FlameIcon, InfoIcon } from "@/components/ui/icons";
 
 const fieldClassName =
@@ -154,6 +155,7 @@ export function AddTransactionForm({
   const [celebrate, setCelebrate] = useState(false);
   const [celebrateMessage, setCelebrateMessage] = useState("Logged");
   const [celebrateIcon, setCelebrateIcon] = useState<React.ReactNode>("✓");
+  const pulse = useConfirmPulse();
   // Optimistic local view of an account's opening_date after "Move the
   // balance date" -- keyed by account id, so it survives switching between
   // fields without waiting on the server round-trip that revalidates
@@ -252,6 +254,10 @@ export function AddTransactionForm({
       setCelebrateMessage(milestone?.message ?? loggedMessage);
       setCelebrateIcon(milestone?.kind === "streak-7" ? <FlameIcon className="h-4 w-4" /> : "✓");
       setCelebrate(true);
+      // Fires only on user-initiated create. Recurring catch-up runs
+      // server-side in the layout and has no path here -- keep it that
+      // way if that notice ever becomes a client component.
+      pulse();
       clearTimeout(celebrateTimeout.current);
       celebrateTimeout.current = setTimeout(() => {
         setCelebrate(false);

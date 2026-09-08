@@ -57,6 +57,14 @@
   --action-pressed: #1a2a5c;
   --action-ink: #ffffff;
 
+  /* Peak opacity of the screen-edge confirm pulse (see CONFIRM PULSE at
+     the foot of this file). The colour itself is --action in both modes,
+     so there is nothing to swap there -- but the intensity is not
+     symmetric: navy at 0.55 barely separates from the light plane, where
+     gold at 0.55 already reads clearly against #131322. Only this number
+     flips. */
+  --pulse-peak: 0.75;
+
   /* surfaces -- page darkest, raised lightest, same direction as dark */
   --page: #ececf2;
   --surface: #f8f8fb;
@@ -137,6 +145,8 @@
   --dk-action-pressed: #d4a32f;
   --dk-action-ink: #0b0b0b;
 
+  --dk-pulse-peak: 0.55;
+
   --dk-page: #131322;
   --dk-surface: #1b1b2f;
   --dk-surface-raised: #23233a;
@@ -189,6 +199,8 @@
     --action-pressed: var(--dk-action-pressed);
     --action-ink: var(--dk-action-ink);
 
+    --pulse-peak: var(--dk-pulse-peak);
+
     --page: var(--dk-page);
     --surface: var(--dk-surface);
     --surface-raised: var(--dk-surface-raised);
@@ -234,6 +246,8 @@
   --action-hover: var(--dk-action-hover);
   --action-pressed: var(--dk-action-pressed);
   --action-ink: var(--dk-action-ink);
+
+  --pulse-peak: var(--dk-pulse-peak);
 
   --page: var(--dk-page);
   --surface: var(--dk-surface);
@@ -459,5 +473,95 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* =====================================================================
+   CONFIRM PULSE
+   =====================================================================
+
+   A single screen-edge glow acknowledging a successful log. One element,
+   mounted once at the shell (components/ui/ConfirmPulse.tsx) -- fixed to
+   the viewport, so it frames the screen no matter where the page is
+   scrolled, and never attached to a scrolling container.
+
+   It carries no information. The toast beside it states what was logged;
+   anyone who can't perceive this loses nothing, which is why the element
+   is aria-hidden and why the reduced-motion variant flattens it rather
+   than removing it -- less movement, not less confirmation.
+
+   Colour is --action, which is deep navy in light and brand gold in
+   dark: the same token the focus ring uses, so the acknowledgement is in
+   the app's own voice on both sides. Gold reaching a data context would
+   break the hard rule -- it doesn't here; this is chrome, the same class
+   of thing as a focus ring.
+
+   The border and inset shadow are PRE-STYLED at rest under opacity: 0.
+   Only opacity animates -- box-shadow, colour and size are all
+   main-thread work, and a full-viewport shadow re-rastering 60 times a
+   second is exactly the frame drop this effect can't afford. */
+.confirm-pulse {
+  position: fixed;
+  inset: 0;
+  /* Above page content (sticky quick-add bar 30, mobile sheet 40) and
+     below the toast and the full-form overlay, both 50 -- the toast must
+     sit on top of the tint, never inside it. */
+  z-index: 45;
+  pointer-events: none;
+  opacity: 0;
+  border: 2px solid var(--action);
+  box-shadow: inset 0 0 24px 0 var(--action);
+}
+
+/* 120ms in, 120ms hold, 300ms out = 540ms. The stops are that split
+   expressed against the 540ms duration; the per-keyframe timing
+   functions are what make it ease-out on the way in and ease-in on the
+   way out, with a flat hold between. */
+@keyframes confirm-pulse {
+  0% {
+    opacity: 0;
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+  22.2% {
+    opacity: var(--pulse-peak);
+    animation-timing-function: linear;
+  }
+  44.4% {
+    opacity: var(--pulse-peak);
+    animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.confirm-pulse--run {
+  /* Scoped to the running state rather than the resting element: a
+     permanently promoted full-viewport layer costs memory for the ~99.9%
+     of the session this thing isn't visible. */
+  will-change: opacity;
+  animation: confirm-pulse 540ms both;
+}
+
+/* Flattened, not removed. Half intensity, linear, no hold -- the screen
+   acknowledges without anything travelling.
+
+   Needs !important to clear the global safety net above, which collapses
+   every animation-duration to 0.01ms. Class specificity (0,1,0) beats
+   that block's `*` (0,0,0), so this wins the !important contest rather
+   than merely coming later. */
+@media (prefers-reduced-motion: reduce) {
+  .confirm-pulse--run {
+    animation: confirm-pulse-reduced 200ms linear both !important;
+  }
+}
+
+@keyframes confirm-pulse-reduced {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: calc(var(--pulse-peak) / 2);
   }
 }

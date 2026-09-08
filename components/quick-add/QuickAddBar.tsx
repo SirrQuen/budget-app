@@ -15,6 +15,7 @@ import { PlusIcon, FlameIcon } from "@/components/ui/icons";
 import { Amount } from "@/components/ui/Amount";
 import { Button } from "@/components/ui/Button";
 import { Celebration } from "@/components/ui/Celebration";
+import { useConfirmPulse } from "@/components/ui/ConfirmPulse";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { FullFormOverlay } from "@/components/quick-add/FullFormOverlay";
 
@@ -45,6 +46,7 @@ export function QuickAddBar({
   const [celebrate, setCelebrate] = useState(false);
   const [celebrateMessage, setCelebrateMessage] = useState("Logged");
   const [celebrateIcon, setCelebrateIcon] = useState<React.ReactNode>("✓");
+  const pulse = useConfirmPulse();
 
   const sheetRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -151,6 +153,10 @@ export function QuickAddBar({
       setCelebrateMessage(message);
       setCelebrateIcon(icon);
       setCelebrate(true);
+      // Fires only on user-initiated create. Recurring catch-up runs
+      // server-side in the layout and has no path here -- keep it that
+      // way if that notice ever becomes a client component.
+      pulse();
       setText("");
       setSheetOpen(false);
       clearTimeout(celebrateTimeoutRef.current);
