@@ -94,6 +94,8 @@ data contexts.
 - Meters: fill carries severity (accent -> warning -> critical); the unfilled
   track is a lighter step of the same hue, so state reads across the whole bar.
 - Every animation respects `prefers-reduced-motion`.
+- Green marks income. Expenses and transfers use the theme accent. No colour
+  in the app ever marks spending as negative.
 
 ### Voice
 

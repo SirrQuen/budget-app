@@ -227,6 +227,9 @@ export function AddTransactionForm({
       const loggedDescription =
         descriptionField instanceof HTMLInputElement ? descriptionField.value.trim() : "";
       const loggedAmount = Number(amount);
+      // Capture the submitted direction before setType("Expense") below --
+      // the pulse variant must reflect what was logged, not the reset value.
+      const loggedType = type;
       formRef.current?.reset();
       setType("Expense");
       setCategoryid("");
@@ -257,7 +260,7 @@ export function AddTransactionForm({
       // Fires only on user-initiated create. Recurring catch-up runs
       // server-side in the layout and has no path here -- keep it that
       // way if that notice ever becomes a client component.
-      pulse();
+      pulse(loggedType === "Income" ? "income" : "default");
       clearTimeout(celebrateTimeout.current);
       celebrateTimeout.current = setTimeout(() => {
         setCelebrate(false);
@@ -265,9 +268,9 @@ export function AddTransactionForm({
       }, 1600);
     }
     wasPending.current = pending;
-    // `amount` is read only at the pending->done transition, where it still
-    // holds the just-submitted value -- listing it would re-run this on
-    // every keystroke.
+    // `amount` and `type` are read only at the pending->done transition,
+    // where they still hold the just-submitted values -- listing them would
+    // re-run this on every keystroke / type toggle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pending, state, isEdit, onSaved]);
 

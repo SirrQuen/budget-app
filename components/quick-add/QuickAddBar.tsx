@@ -143,7 +143,10 @@ export function QuickAddBar({
       if (clientId) settlePending(clientId);
 
       const milestone = state?.milestone;
-      const verb = parsed.ok && parsed.transaction_type === "Income" ? "from" : "at";
+      // Read off `parsed` here, before setText("") below clears it -- the
+      // next render's `parsed` is a failed parse of an empty string.
+      const isIncome = parsed.ok && parsed.transaction_type === "Income";
+      const verb = isIncome ? "from" : "at";
       const message = milestone
         ? milestone.message
         : parsed.ok
@@ -156,7 +159,7 @@ export function QuickAddBar({
       // Fires only on user-initiated create. Recurring catch-up runs
       // server-side in the layout and has no path here -- keep it that
       // way if that notice ever becomes a client component.
-      pulse();
+      pulse(isIncome ? "income" : "default");
       setText("");
       setSheetOpen(false);
       clearTimeout(celebrateTimeoutRef.current);

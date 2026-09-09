@@ -10,12 +10,20 @@ import { createContext, useCallback, useContext, useMemo, useRef } from "react";
 // It is decorative and says nothing on its own: the toast states what was
 // logged. Hence aria-hidden, and hence a firing site that must be the SAME
 // event as the toast, not a second one.
+//
+// The variant tints the glow by direction: 'income' is the status "good"
+// green, 'default' (Expense and Transfer) is the theme accent. Spending is
+// not a failure state -- there is deliberately no distinct colour for it.
+// The tint still carries no meaning on its own; the toast names what landed.
 
-type ConfirmPulseValue = { pulse: () => void };
+export type ConfirmPulseVariant = "income" | "default";
+
+type ConfirmPulseValue = { pulse: (variant: ConfirmPulseVariant) => void };
 
 const ConfirmPulseContext = createContext<ConfirmPulseValue | null>(null);
 
 const RUN_CLASS = "confirm-pulse--run";
+const INCOME_CLASS = "confirm-pulse--income";
 
 export function ConfirmPulseProvider({ children }: { children: React.ReactNode }) {
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -30,11 +38,15 @@ export function ConfirmPulseProvider({ children }: { children: React.ReactNode }
   // Driving this off a DOM ref rather than React state is deliberate: the
   // effect is purely visual, and routing it through a re-render would put a
   // state update in the submit path of every quick-add for no benefit.
-  const pulse = useCallback(() => {
+  const pulse = useCallback((variant: ConfirmPulseVariant = "default") => {
     const el = overlayRef.current;
     if (!el) return;
     el.classList.remove(RUN_CLASS);
     void el.offsetWidth;
+    // Set the tint before re-adding the run class -- the variant only
+    // changes which custom properties the keyframes read (colour and peak
+    // opacity); timing, z-index and the reduced-motion path are untouched.
+    el.classList.toggle(INCOME_CLASS, variant === "income");
     el.classList.add(RUN_CLASS);
   }, []);
 
@@ -54,14 +66,19 @@ export function ConfirmPulseProvider({ children }: { children: React.ReactNode }
 const noop = () => {};
 
 /**
- * Returns a function that fires the pulse once. Safe to call from anywhere;
- * outside the provider it is a no-op.
+ * Returns a function that fires the pulse once, tinted by the direction of
+ * the transaction that was just logged: pass 'income' for an Income entry,
+ * 'default' for Expense or Transfer. Derive the variant from the type that
+ * was actually submitted, captured BEFORE any form reset -- reading current
+ * form state in the success callback reports Expense for every income entry.
+ *
+ * Safe to call from anywhere; outside the provider it is a no-op.
  *
  * Deliberately does NOT throw the way useOptimisticTransactions does. That
  * hook guards real data -- a missing provider there is a bug that silently
  * loses a row. This one guards a glow that by design carries no meaning, so
  * a missing provider should cost the glow, not the page.
  */
-export function useConfirmPulse(): () => void {
+export function useConfirmPulse(): (variant: ConfirmPulseVariant) => void {
   return useContext(ConfirmPulseContext)?.pulse ?? noop;
 }
