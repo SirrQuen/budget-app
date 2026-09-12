@@ -33,3 +33,18 @@ export const ACCOUNT_TYPE_GROUP_ORDER: AccountType[] = [
 export function isLiabilityAccountType(type: string): boolean {
   return type === "Credit Card" || type === "Loan";
 }
+
+// A variable-amount recurring schedule's live estimate, when there's no
+// confirmed next_amount yet -- the card's current balance, negated (owed
+// amounts are negative per accounts_liability_sign) and floored at zero so
+// a card currently in credit (a positive balance) estimates as nothing
+// owed, not that credit amount. No "server-only" here (unlike lib/db/*) so
+// both a Server Component (RecurringPage, which has a balance from
+// listAccountBalances) and a Client Component (RecurringRow, rendering it)
+// can import this. Mirrors v_upcoming_recurring's own "amount" case
+// expression (20260912000023_23_recurring_variable_amount.sql), which
+// computes the same figure in SQL for every other reader (dashboard,
+// safe-to-spend, the upcoming list).
+export function estimateCardPaymentDue(cardBalance: number): number {
+  return Math.max(-cardBalance, 0);
+}

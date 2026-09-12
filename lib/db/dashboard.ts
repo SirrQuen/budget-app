@@ -586,6 +586,13 @@ export type SafeToSpendCommitment = {
   amount: number;
   /** next_run_date -- the day this commitment falls due. */
   dueDate: string;
+  /**
+   * True for a variable-amount schedule with no confirmed next_amount yet --
+   * `amount` is a live guess off the linked card's balance
+   * (v_upcoming_recurring.is_estimated_amount), never a known figure. The UI
+   * must label it as such (CLAUDE.md "Display").
+   */
+  isEstimate: boolean;
 };
 
 export type SafeToSpend = {
@@ -632,6 +639,7 @@ type UpcomingCommitmentRow = {
   // Null for a transfer template -- see the kind filter below.
   category_type: string | null;
   to_accountid: string | null;
+  is_estimated_amount: boolean;
 };
 
 // "Safe to spend" = spendable cash, minus the recurring bills still to
@@ -664,7 +672,9 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
     supabase.from("v_dashboard_kpis").select("cash_balance").maybeSingle(),
     supabase
       .from("v_upcoming_recurring")
-      .select("recurring_id, description, amount, next_run_date, category_type, to_accountid")
+      .select(
+        "recurring_id, description, amount, next_run_date, category_type, to_accountid, is_estimated_amount",
+      )
       .gte("next_run_date", today)
       .lte("next_run_date", periodEnd)
       .order("next_run_date", { ascending: true })
@@ -690,6 +700,7 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
       name: row.description,
       amount: row.amount,
       dueDate: row.next_run_date,
+      isEstimate: row.is_estimated_amount,
     }));
 
   const cashCents = Math.round((cashRes.data?.cash_balance ?? 0) * 100);

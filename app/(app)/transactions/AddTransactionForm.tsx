@@ -33,6 +33,10 @@ export type TransactionAccountOption = {
   account_name: string;
   is_active: boolean;
   opening_date: string;
+  // Only RecurringForm reads this so far -- it's what decides whether "to
+  // account" is eligible for a variable-amount schedule (destination must
+  // be a Credit Card, see lib/accountOptions.ts's isLiabilityAccountType).
+  account_type: string;
 };
 
 export type TransactionFormMode = "create" | "edit";

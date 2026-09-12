@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { RecurringForm, type EditableRecurring } from "./RecurringForm";
+import { ConfirmVariableAmountSheet } from "./ConfirmVariableAmountSheet";
 import {
   deleteRecurringAction,
   pauseRecurringAction,
@@ -9,7 +10,7 @@ import {
 } from "@/lib/actions/recurring";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { PauseIcon, PlayIcon, TransferIcon, TrashIcon } from "@/components/ui/icons";
+import { PauseIcon, PlayIcon, TransferIcon, TrashIcon, InfoIcon } from "@/components/ui/icons";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { formatSchedule, formatEndCondition } from "@/lib/recurringSchedule";
 import type { RecurringWithRelations } from "@/lib/db/recurring";
@@ -22,11 +23,17 @@ export function RecurringRow({
   incomeCategories,
   expenseCategories,
   accounts,
+  estimatedAmount,
+  today,
 }: {
   recurring: RecurringWithRelations;
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
   accounts: TransactionAccountOption[];
+  /** Live card-balance estimate -- only meaningful while amount_is_variable and unconfirmed. */
+  estimatedAmount: number;
+  /** todayISO(), for deciding whether an unconfirmed variable schedule is already overdue. */
+  today: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -59,6 +66,13 @@ export function RecurringRow({
   }
 
   const isTransfer = recurring.to_accountid !== null;
+  const needsConfirmation = recurring.amount_is_variable && recurring.next_amount_confirmed_at === null;
+  const isOverdueNeedsAmount = needsConfirmation && recurring.next_run_date <= today;
+  const displayAmount = !recurring.amount_is_variable
+    ? Number(recurring.amount)
+    : recurring.next_amount_confirmed_at !== null
+      ? Number(recurring.next_amount)
+      : estimatedAmount;
 
   if (editing) {
     const editable: EditableRecurring = {
@@ -74,6 +88,8 @@ export function RecurringRow({
       next_run_date: recurring.next_run_date,
       occurrence_limit: recurring.occurrence_limit,
       end_date: recurring.end_date,
+      amount_is_variable: recurring.amount_is_variable,
+      statement_day: recurring.statement_day,
     };
     return (
       <li className="p-4">
@@ -112,7 +128,7 @@ export function RecurringRow({
             </span>
           ) : null}
           <span className="shrink-0 text-sm font-medium tabular-nums text-ink">
-            {formatCurrency(Number(recurring.amount))}
+            {formatCurrency(displayAmount)}
           </span>
         </div>
         <div className="-mx-2 flex shrink-0 items-center gap-1 sm:mx-0 sm:gap-3">
@@ -166,6 +182,35 @@ export function RecurringRow({
           )}
         </span>
       </div>
+
+      {needsConfirmation ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <span className="inline-flex items-center gap-1.5 text-ink-muted">
+            <InfoIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            {isOverdueNeedsAmount
+              ? "Needs your amount before it can post"
+              : "Estimate -- confirm once the statement posts"}
+          </span>
+          <ConfirmVariableAmountSheet
+            target={{
+              id: recurring.id,
+              cardName: recurring.to_account_name ?? "the card",
+              estimatedAmount,
+              statementDay: recurring.statement_day ?? 1,
+              dueDate: recurring.next_run_date,
+            }}
+            trigger={(open) => (
+              <button
+                type="button"
+                onClick={open}
+                className="shrink-0 rounded-full bg-surface-raised px-3 py-1 text-xs font-medium text-ink transition-colors duration-150 hover:bg-hairline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+              >
+                Confirm amount
+              </button>
+            )}
+          />
+        </div>
+      ) : null}
 
       <p className="text-sm text-ink-muted">
         Next due {formatDate(recurring.next_run_date)}

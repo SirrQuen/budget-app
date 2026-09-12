@@ -113,6 +113,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
       account_name: a.account_name,
       is_active: true,
       opening_date: a.opening_date ?? todayISO(),
+      account_type: a.account_type ?? "",
     }));
   const defaultFromAccountId = mostUsedAssetResult.data ?? null;
   const incomeCategories = incomeCategoriesResult.data ?? [];

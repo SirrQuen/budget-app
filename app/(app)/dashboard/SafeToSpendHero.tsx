@@ -5,7 +5,7 @@ import type { SafeToSpend } from "@/lib/db/dashboard";
 import { Amount } from "@/components/ui/Amount";
 import { useCountUp } from "@/components/ui/useCountUp";
 import { formatCurrency, formatDateShort } from "@/lib/format";
-import { ChevronDownIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, InfoIcon } from "@/components/ui/icons";
 
 // The one hero figure on the dashboard (design language: >=48px, exactly one
 // per view, proportional figures, same sans as everything else). It renders
@@ -67,6 +67,12 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
                 <div key={c.recurringId} className="flex items-baseline justify-between gap-4">
                   <dt className="min-w-0 truncate text-ink-secondary">
                     {c.name} <span className="text-ink-muted">· {formatDateShort(c.dueDate)}</span>
+                    {c.isEstimate ? (
+                      <span className="ml-1.5 inline-flex items-center gap-1 text-xs text-ink-muted">
+                        <InfoIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
+                        estimate
+                      </span>
+                    ) : null}
                   </dt>
                   <dd className="shrink-0">
                     <Amount amount={c.amount} type="Expense" />

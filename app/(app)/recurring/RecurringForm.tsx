@@ -81,6 +81,8 @@ export type EditableRecurring = {
   next_run_date: string;
   occurrence_limit: number | null;
   end_date: string | null;
+  amount_is_variable: boolean;
+  statement_day: number | null;
 };
 
 // Seeds a fresh (create-mode) schedule from something that already carries
@@ -193,6 +195,19 @@ export function RecurringForm({
 
   const initialKind: Kind = seed?.kind ?? "Expense";
   const [kind, setKind] = useState<Kind>(initialKind);
+  // Mirrors TransferAccountFields' own "to account" selection so this form
+  // can decide whether the destination is a Credit Card -- the only case
+  // "Amount changes each month" is offered. Not the source of truth for
+  // submission (TransferAccountFields still owns and submits its own
+  // <select>); this is purely for showing/hiding the toggle below it.
+  const [toAccountId, setToAccountId] = useState<string>(
+    kind === initialKind ? (seed?.to_accountid ?? "") : "",
+  );
+  const toAccount = accounts.find((a) => a.id === toAccountId);
+  const toAccountIsCreditCard = toAccount?.account_type === "Credit Card";
+  const [amountIsVariable, setAmountIsVariable] = useState(recurring?.amount_is_variable ?? false);
+  const showVariableToggle = kind === "Transfer" && toAccountIsCreditCard;
+  const showVariableFields = showVariableToggle && amountIsVariable;
   const [repeats, setRepeats] = useState<Repeats>(
     recurring ? repeatsFromFrequency(recurring.frequency) : "Monthly",
   );
@@ -244,19 +259,39 @@ export function RecurringForm({
           />
         </FormField>
 
-        <FormField label="Amount" htmlFor="amount" required>
-          <Input
-            id="amount"
-            name="amount"
-            type="number"
-            inputMode="decimal"
-            min="0.01"
-            step="0.01"
-            placeholder="0.00"
+        {showVariableFields ? (
+          <FormField
+            label="Statement day"
+            htmlFor="statement_day"
             required
-            defaultValue={seed?.amount}
-          />
-        </FormField>
+            hint="EverNest asks for the amount once the statement posts on this day each month, and estimates from the card's current balance until then."
+          >
+            <Input
+              id="statement_day"
+              name="statement_day"
+              type="number"
+              inputMode="numeric"
+              min="1"
+              max="31"
+              required
+              defaultValue={recurring?.statement_day ?? undefined}
+            />
+          </FormField>
+        ) : (
+          <FormField label="Amount" htmlFor="amount" required>
+            <Input
+              id="amount"
+              name="amount"
+              type="number"
+              inputMode="decimal"
+              min="0.01"
+              step="0.01"
+              placeholder="0.00"
+              required
+              defaultValue={seed?.amount}
+            />
+          </FormField>
+        )}
       </div>
 
       <fieldset className="flex flex-col gap-1.5">
@@ -265,11 +300,27 @@ export function RecurringForm({
       </fieldset>
 
       {kind === "Transfer" ? (
-        <TransferAccountFields
-          accounts={accounts}
-          initialFromAccountId={kind === initialKind ? (seed?.accountid ?? "") : ""}
-          initialToAccountId={kind === initialKind ? (seed?.to_accountid ?? "") : ""}
-        />
+        <>
+          <TransferAccountFields
+            accounts={accounts}
+            initialFromAccountId={kind === initialKind ? (seed?.accountid ?? "") : ""}
+            initialToAccountId={kind === initialKind ? (seed?.to_accountid ?? "") : ""}
+            onToAccountChange={setToAccountId}
+          />
+
+          {showVariableToggle ? (
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-secondary">
+              <input
+                type="checkbox"
+                name="amount_is_variable"
+                checked={amountIsVariable}
+                onChange={(e) => setAmountIsVariable(e.target.checked)}
+                className="h-4 w-4 rounded border-hairline text-action focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action"
+              />
+              Amount changes each month
+            </label>
+          ) : null}
+        </>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="Category" htmlFor="categoryid" required>
@@ -416,10 +467,13 @@ function TransferAccountFields({
   accounts,
   initialFromAccountId,
   initialToAccountId,
+  onToAccountChange,
 }: {
   accounts: TransactionAccountOption[];
   initialFromAccountId: string;
   initialToAccountId: string;
+  /** Mirrors the selection up to RecurringForm, which needs it to know whether the destination is a Credit Card. */
+  onToAccountChange: (accountId: string) => void;
 }) {
   const [fromAccountId, setFromAccountId] = useState(initialFromAccountId);
   const [toAccountId, setToAccountId] = useState(initialToAccountId);
@@ -459,7 +513,10 @@ function TransferAccountFields({
           name="to_accountid"
           required
           value={toAccountId}
-          onChange={(e) => setToAccountId(e.target.value)}
+          onChange={(e) => {
+            setToAccountId(e.target.value);
+            onToAccountChange(e.target.value);
+          }}
           className={fieldClassName}
         >
           <option value="" disabled>

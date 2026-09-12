@@ -530,6 +530,7 @@ export type Database = {
         Row: {
           accountid: string
           amount: number
+          amount_is_variable: boolean
           categoryid: string | null
           created_at: string
           description: string
@@ -538,15 +539,19 @@ export type Database = {
           id: string
           interval_count: number
           is_active: boolean
+          next_amount: number | null
+          next_amount_confirmed_at: string | null
           next_run_date: string
           occurrence_limit: number | null
           start_date: string | null
+          statement_day: number | null
           to_accountid: string | null
           userid: string
         }
         Insert: {
           accountid: string
           amount: number
+          amount_is_variable?: boolean
           categoryid?: string | null
           created_at?: string
           description: string
@@ -555,15 +560,19 @@ export type Database = {
           id?: string
           interval_count?: number
           is_active?: boolean
+          next_amount?: number | null
+          next_amount_confirmed_at?: string | null
           next_run_date: string
           occurrence_limit?: number | null
           start_date?: string | null
+          statement_day?: number | null
           to_accountid?: string | null
           userid: string
         }
         Update: {
           accountid?: string
           amount?: number
+          amount_is_variable?: boolean
           categoryid?: string | null
           created_at?: string
           description?: string
@@ -572,9 +581,12 @@ export type Database = {
           id?: string
           interval_count?: number
           is_active?: boolean
+          next_amount?: number | null
+          next_amount_confirmed_at?: string | null
           next_run_date?: string
           occurrence_limit?: number | null
           start_date?: string | null
+          statement_day?: number | null
           to_accountid?: string | null
           userid?: string
         }
@@ -1280,6 +1292,7 @@ export type Database = {
           account_name: string | null
           accountid: string | null
           amount: number | null
+          amount_is_variable: boolean | null
           category_color: string | null
           category_icon: string | null
           category_name: string | null
@@ -1290,11 +1303,15 @@ export type Database = {
           end_date: string | null
           frequency: string | null
           interval_count: number | null
+          is_estimated_amount: boolean | null
           is_overdue: boolean | null
+          next_amount: number | null
+          next_amount_confirmed_at: string | null
           next_run_date: string | null
           occurrence_limit: number | null
           recurring_id: string | null
           start_date: string | null
+          statement_day: number | null
           to_account_name: string | null
           to_accountid: string | null
           userid: string | null

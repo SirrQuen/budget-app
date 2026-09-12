@@ -79,3 +79,50 @@ export function formatEndCondition(
   }
   return null;
 }
+
+/** "the 12th" -- statement_day standing alone, same ordinal formatting as a cadence's day-of-month. */
+export function formatStatementDay(statementDay: number): string {
+  return `the ${ordinal(statementDay)}`;
+}
+
+function lastDayOfMonth(year: number, month1based: number): number {
+  return new Date(year, month1based, 0).getDate();
+}
+
+// The card's statement date for the cycle that ends in dueDateISO
+// (next_run_date) -- a variable schedule only stores the day-of-month a
+// statement posts on, not a full date, since that day is stable cycle to
+// cycle the same way a cadence's anchor day is (see addMonthsClampedISO in
+// lib/db/recurring.ts). A statement posts BEFORE its due date, so this
+// walks back from dueDateISO: same calendar month if statementDay falls on
+// or before the due day, otherwise the month before -- exactly the
+// "closest prior occurrence of this day-of-month" a card's billing cycle
+// actually follows. Clamped the same way a monthly cadence clamps (day 31
+// in a 30-day month lands on the 30th) so this never produces an invalid
+// date.
+export function statementDateForCycle(dueDateISO: string, statementDay: number): string {
+  const [year, month] = dueDateISO.split("-").map(Number);
+  const dueDay = dayOfMonth(dueDateISO);
+
+  const sameMonthDay = Math.min(statementDay, lastDayOfMonth(year, month));
+  if (sameMonthDay <= dueDay) {
+    return `${year}-${String(month).padStart(2, "0")}-${String(sameMonthDay).padStart(2, "0")}`;
+  }
+
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const prevMonthDay = Math.min(statementDay, lastDayOfMonth(prevYear, prevMonth));
+  return `${prevYear}-${String(prevMonth).padStart(2, "0")}-${String(prevMonthDay).padStart(2, "0")}`;
+}
+
+// Whether today falls inside the "ask for the amount" window for a
+// variable schedule -- from the statement date (inclusive) through the due
+// date (inclusive). See CLAUDE.md "Prompt timing".
+export function isAwaitingStatementAmount(
+  todayISO: string,
+  dueDateISO: string,
+  statementDay: number,
+): boolean {
+  const statementDateISO = statementDateForCycle(dueDateISO, statementDay);
+  return statementDateISO <= todayISO && todayISO <= dueDateISO;
+}

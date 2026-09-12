@@ -17,11 +17,13 @@ import { listAccountBalances } from "@/lib/db/accounts";
 import { generateDueOccurrences } from "@/lib/db/recurring";
 import { getReturnSummaryFacts } from "@/lib/actions/activity";
 import { todayISO } from "@/lib/date";
+import { isAwaitingStatementAmount } from "@/lib/recurringSchedule";
 import { resolveDashboardRange } from "@/lib/dashboardRange";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatTile } from "@/components/ui/StatTile";
 import { ReturnSummaryStrip } from "@/components/ui/ReturnSummaryStrip";
 import { GeneratedOccurrencesBanner } from "./GeneratedOccurrencesBanner";
+import { VariableAmountPrompt } from "./VariableAmountPrompt";
 import { SafeToSpendHero } from "./SafeToSpendHero";
 import { ScopedRegion } from "./ScopedRegion";
 import { CashflowChart } from "./CashflowChart";
@@ -153,6 +155,27 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     goalResult.data?.filter((g) => g.status === "Active").slice(0, 3) ?? [];
   const upcoming = recurringResult.data?.slice(0, 5) ?? [];
 
+  // The nudge to confirm a card's statement amount runs from the statement
+  // date through the due date (see CLAUDE.md "Prompt timing") -- scanned
+  // over the FULL upcoming list, not just the 5-item slice above, so a
+  // variable schedule further out still gets its prompt.
+  const variableAmountPrompts = (recurringResult.data ?? [])
+    .filter(
+      (r) =>
+        r.amount_is_variable === true &&
+        r.next_amount_confirmed_at === null &&
+        r.statement_day != null &&
+        r.next_run_date != null &&
+        isAwaitingStatementAmount(today, r.next_run_date, r.statement_day),
+    )
+    .map((r) => ({
+      id: r.recurring_id ?? "",
+      cardName: r.to_account_name ?? "the card",
+      estimatedAmount: r.amount ?? 0,
+      statementDay: r.statement_day!,
+      dueDate: r.next_run_date!,
+    }));
+
   const showTiles =
     netWorthStatResult.error != null ||
     netWorthStatResult.data != null ||
@@ -184,6 +207,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
             descriptions={generatedOccurrences.map((t) => t.description)}
           />
         ) : null}
+
+        <VariableAmountPrompt items={variableAmountPrompts} />
 
         {safeToSpendResult.error ? (
           <SectionError label="Safe to spend" />

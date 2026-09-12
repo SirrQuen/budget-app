@@ -7,6 +7,8 @@ import {
   deleteRecurring,
   pauseRecurring,
   resumeRecurring,
+  getRecurring,
+  confirmVariableAmount,
 } from "@/lib/db/recurring";
 
 export type ActionState = { error?: string } | undefined;
@@ -30,12 +32,17 @@ type ParsedRecurringFields = {
   next_run_date: string;
   occurrence_limit: number | null;
   end_date: string | null;
+  // Variable-amount transfer (credit card payment) -- see
+  // 20260912000023_23_recurring_variable_amount.sql. Only ever true
+  // alongside to_accountid set; statement_day is required exactly when
+  // amount_is_variable is (rectx_variable_requires_statement_day).
+  amount_is_variable: boolean;
+  statement_day: number | null;
 };
 
 // Shared by create and update -- both forms offer the exact same fields.
 function parseRecurringFields(formData: FormData): ParsedRecurringFields | { error: string } {
   const description = String(formData.get("description") ?? "").trim();
-  const amountInput = String(formData.get("amount") ?? "").trim();
   const kind = String(formData.get("kind") ?? "");
   const frequency = String(formData.get("frequency") ?? "");
   const next_run_date = String(formData.get("next_run_date") ?? "");
@@ -45,11 +52,6 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
     return { error: "Enter a description." };
   }
 
-  const amount = Number(amountInput);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return { error: "Enter an amount greater than zero." };
-  }
-
   if (!KINDS.includes(kind as (typeof KINDS)[number])) {
     return { error: "Choose a type." };
   }
@@ -57,6 +59,8 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
   let categoryid: string | null = null;
   let accountid: string;
   let to_accountid: string | null = null;
+  let amount_is_variable = false;
+  let statement_day: number | null = null;
 
   if (kind === "Transfer") {
     // "accountid" doubles as the transfer's source ("from") account --
@@ -75,6 +79,21 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
     if (accountid === to_accountid) {
       return { error: "Choose two different accounts for a transfer." };
     }
+
+    // The checkbox only ever renders (and so only ever submits "on") when
+    // RecurringForm has a Credit Card destination selected -- see
+    // RecurringForm.tsx. Trusting formData here rather than re-checking the
+    // destination's account_type is fine: worst case a client bypass sets
+    // amount_is_variable on a non-card transfer, which is still a
+    // perfectly valid variable-amount transfer as far as the schema cares.
+    amount_is_variable = formData.get("amount_is_variable") === "on";
+    if (amount_is_variable) {
+      const statementDayInput = String(formData.get("statement_day") ?? "").trim();
+      statement_day = Math.trunc(Number(statementDayInput));
+      if (!Number.isFinite(statement_day) || statement_day < 1 || statement_day > 31) {
+        return { error: "Enter a statement day between 1 and 31." };
+      }
+    }
   } else {
     categoryid = String(formData.get("categoryid") ?? "");
     accountid = String(formData.get("accountid") ?? "");
@@ -83,6 +102,19 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
     }
     if (!accountid) {
       return { error: "Choose an account." };
+    }
+  }
+
+  // A variable schedule's real amount only ever comes from a confirmed
+  // next_amount or a live card-balance estimate (see
+  // estimateCardPaymentDue/v_upcoming_recurring) -- amount stays 0, an
+  // unused placeholder the NOT NULL column still needs.
+  let amount = 0;
+  if (!amount_is_variable) {
+    const amountInput = String(formData.get("amount") ?? "").trim();
+    amount = Number(amountInput);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return { error: "Enter an amount greater than zero." };
     }
   }
 
@@ -138,6 +170,8 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
     next_run_date,
     occurrence_limit,
     end_date,
+    amount_is_variable,
+    statement_day,
   };
 }
 
@@ -164,6 +198,8 @@ export async function createRecurringAction(
     start_date: parsed.next_run_date,
     occurrence_limit: parsed.occurrence_limit,
     end_date: parsed.end_date,
+    amount_is_variable: parsed.amount_is_variable,
+    statement_day: parsed.statement_day,
   });
 
   if (error) {
@@ -187,6 +223,21 @@ export async function updateRecurringAction(
     return parsed;
   }
 
+  // A pending confirmation (next_amount/next_amount_confirmed_at) belongs to
+  // a specific cycle of a specific card. Turning "Amount changes each month"
+  // off must clear it -- rectx_next_amount_requires_variable would otherwise
+  // reject the update outright. Switching the destination account while
+  // staying variable must clear it too: a confirmed amount is the OLD
+  // card's balance, and carrying it over to a different card would post the
+  // wrong figure next cycle. Neither touches next_amount/confirmed_at.
+  let clearPendingConfirmation = !parsed.amount_is_variable;
+  if (parsed.amount_is_variable && !clearPendingConfirmation) {
+    const current = await getRecurring(id);
+    if (current.data && current.data.to_accountid !== parsed.to_accountid) {
+      clearPendingConfirmation = true;
+    }
+  }
+
   const { error } = await updateRecurring(id, {
     description: parsed.description,
     amount: parsed.amount,
@@ -208,6 +259,9 @@ export async function updateRecurringAction(
     // anymore, not just leave the old value stuck from before the edit.
     occurrence_limit: parsed.occurrence_limit,
     end_date: parsed.end_date,
+    amount_is_variable: parsed.amount_is_variable,
+    statement_day: parsed.statement_day,
+    ...(clearPendingConfirmation ? { next_amount: null, next_amount_confirmed_at: null } : {}),
   });
 
   if (error) {
@@ -215,6 +269,7 @@ export async function updateRecurringAction(
   }
 
   revalidatePath("/recurring");
+  revalidatePath("/dashboard");
 }
 
 export async function deleteRecurringAction(id: string): Promise<ActionState> {
@@ -254,4 +309,31 @@ export async function resumeRecurringAction(id: string): Promise<ActionState> {
   }
 
   revalidatePath("/recurring");
+}
+
+// Confirming is reachable from the upcoming commitments list, the recurring
+// list row, and the dashboard prompt (see ConfirmVariableAmountSheet) --
+// all three submit the same single-field form.
+export async function confirmVariableAmountAction(
+  _prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const id = String(formData.get("id") ?? "");
+  if (!id) {
+    return { error: "Missing schedule id." };
+  }
+
+  const amountInput = String(formData.get("amount") ?? "").trim();
+  const amount = Number(amountInput);
+  if (!Number.isFinite(amount) || amount < 0) {
+    return { error: "Enter an amount of zero or more." };
+  }
+
+  const { error } = await confirmVariableAmount(id, amount);
+  if (error) {
+    return { error };
+  }
+
+  revalidatePath("/recurring");
+  revalidatePath("/dashboard");
 }

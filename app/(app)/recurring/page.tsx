@@ -1,6 +1,8 @@
 import { listRecurring } from "@/lib/db/recurring";
-import { listAccounts } from "@/lib/db/accounts";
+import { listAccounts, listAccountBalances } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
+import { estimateCardPaymentDue } from "@/lib/accountOptions";
+import { todayISO } from "@/lib/date";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
@@ -10,10 +12,11 @@ import { RecurringRow } from "./RecurringRow";
 import type { TransactionAccountOption } from "../transactions/AddTransactionForm";
 
 export default async function RecurringPage() {
-  const [recurringResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult] =
+  const [recurringResult, accountsResult, balancesResult, incomeCategoriesResult, expenseCategoriesResult] =
     await Promise.all([
       listRecurring(),
       listAccounts({ is_active: true }),
+      listAccountBalances(),
       listCategoriesForType("Income"),
       listCategoriesForType("Expense"),
     ]);
@@ -35,10 +38,21 @@ export default async function RecurringPage() {
     account_name: a.account_name,
     is_active: a.is_active,
     opening_date: a.opening_date,
+    account_type: a.account_type,
   }));
   const incomeCategories = incomeCategoriesResult.data ?? [];
   const expenseCategories = expenseCategoriesResult.data ?? [];
   const schedules = recurringResult.data;
+
+  // For a variable schedule with no confirmed next_amount, this is the same
+  // live estimate v_upcoming_recurring computes in SQL -- read here from a
+  // balance already fetched via listAccountBalances rather than a second
+  // per-row round trip, since this page (unlike the dashboard) reads the
+  // raw recurring_transactions table, not that view.
+  const cardBalanceByAccountId = new Map(
+    (balancesResult.data ?? []).map((b) => [b.account_id, b.balance ?? 0]),
+  );
+  const today = todayISO();
 
   // Nothing to manage and no account to schedule against yet -- same
   // narrowing AccountsPage/GoalsPage use for a brand-new list.
@@ -86,15 +100,26 @@ export default async function RecurringPage() {
           archived accounts this way -- a paused schedule is meant to be
           easy to find again and resume). */}
       <ul className="divide-y divide-hairline rounded-2xl border border-hairline bg-surface">
-        {schedules.map((recurring) => (
-          <RecurringRow
-            key={recurring.id}
-            recurring={recurring}
-            incomeCategories={incomeCategories}
-            expenseCategories={expenseCategories}
-            accounts={accounts}
-          />
-        ))}
+        {schedules.map((recurring) => {
+          // Only meaningful when amount_is_variable and unconfirmed --
+          // RecurringRow ignores it otherwise. listAccountBalances() above
+          // was called with no is_active filter, so this covers an
+          // archived destination account too.
+          const cardBalance = recurring.to_accountid
+            ? (cardBalanceByAccountId.get(recurring.to_accountid) ?? 0)
+            : 0;
+          return (
+            <RecurringRow
+              key={recurring.id}
+              recurring={recurring}
+              incomeCategories={incomeCategories}
+              expenseCategories={expenseCategories}
+              accounts={accounts}
+              estimatedAmount={estimateCardPaymentDue(cardBalance)}
+              today={today}
+            />
+          );
+        })}
       </ul>
     </div>
   );

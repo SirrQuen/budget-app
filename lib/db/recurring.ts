@@ -330,6 +330,35 @@ export async function resumeRecurring(id: string): Promise<DbResult<RecurringRow
   return { data, error: null };
 }
 
+// Sets the confirmed amount for a variable schedule's NEXT occurrence only --
+// generateDueOccurrences clears both fields the moment that occurrence
+// posts (see rectx_next_amount_confirmed_together). The
+// amount_is_variable filter is for intent, not security (RLS already scopes
+// this to the caller's own row) -- it stops a stray call from writing
+// next_amount onto a fixed-amount schedule, which rectx_next_amount_
+// requires_variable would reject anyway; this just fails with a clearer
+// "not found" instead of a constraint violation.
+export async function confirmVariableAmount(
+  id: string,
+  amount: number,
+): Promise<DbResult<RecurringRow>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("recurring_transactions")
+    .update({ next_amount: amount, next_amount_confirmed_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("amount_is_variable", true)
+    .select()
+    .single();
+
+  if (error) {
+    return { data: null, error: describeWriteError(error, "recurring") };
+  }
+
+  return { data, error: null };
+}
+
 /** A transaction row that was posted from a schedule, for the "we added N transactions while you were away" summary. */
 export type GeneratedOccurrence = TransactionRow;
 
@@ -353,6 +382,13 @@ type DueRecurringRow = {
   interval_count: number;
   occurrence_limit: number | null;
   category: { category_type: string } | null;
+  // Variable-amount schedule (20260912000023_23_recurring_variable_amount.sql)
+  // -- amount_is_variable only ever true alongside to_accountid set
+  // (rectx_variable_requires_transfer), so it's read for every row but only
+  // meaningful for a transfer template.
+  amount_is_variable: boolean;
+  next_amount: number | null;
+  next_amount_confirmed_at: string | null;
 };
 
 // Lazy catch-up, run when a user opens the app -- there is no scheduler.
@@ -409,7 +445,7 @@ export const generateDueOccurrences = cache(async (): Promise<
   const { data: due, error: dueError } = await supabase
     .from("recurring_transactions")
     .select(
-      "id, description, amount, accountid, categoryid, to_accountid, next_run_date, start_date, end_date, frequency, interval_count, occurrence_limit, category:categories(category_type)",
+      "id, description, amount, accountid, categoryid, to_accountid, next_run_date, start_date, end_date, frequency, interval_count, occurrence_limit, category:categories(category_type), amount_is_variable, next_amount, next_amount_confirmed_at",
     )
     .eq("is_active", true)
     .lte("next_run_date", today)
@@ -425,6 +461,13 @@ export const generateDueOccurrences = cache(async (): Promise<
     let cursor = template.next_run_date;
     let advanced = false;
     const anchor = template.start_date ?? template.next_run_date;
+    // Mutable copy of next_amount_confirmed_at's presence -- template itself
+    // is a snapshot from the initial read, so a catch-up spanning more than
+    // one missed cycle needs its own tracking: the confirmation is good for
+    // exactly one occurrence, and must read as "gone" for the next loop
+    // iteration the moment it's consumed below, not just once the DB is
+    // patched after the loop ends.
+    let hasConfirmedAmount = template.next_amount_confirmed_at !== null;
 
     // "Ends after N occurrences" is tracked by counting the ledger, never a
     // stored counter (see the 18_recurring_schedule migration) -- so a
@@ -452,6 +495,26 @@ export const generateDueOccurrences = cache(async (): Promise<
       // to catch up.
       if (template.end_date && cursor > template.end_date) break;
 
+      // A variable schedule (credit card payment) can't post without a
+      // confirmed amount for this occurrence -- rectx_next_amount_requires_
+      // variable and rectx_next_amount_confirmed_together guarantee
+      // next_amount is set whenever next_amount_confirmed_at is. Stop this
+      // template's loop entirely rather than posting a guess; it surfaces
+      // as "needs your amount" (v_upcoming_recurring.is_estimated_amount)
+      // instead of a transaction. Nothing further is due until the user
+      // confirms, so there's no occurrence past this one to catch up on
+      // either.
+      if (template.amount_is_variable && !hasConfirmedAmount) {
+        break;
+      }
+
+      // A confirmed variable amount is this occurrence's real amount --
+      // template.amount is an unused placeholder for a variable schedule
+      // (see the 23_recurring_variable_amount migration).
+      const occurrenceAmount = template.amount_is_variable
+        ? template.next_amount!
+        : template.amount;
+
       // A transfer template posts both legs in one insert statement -- one
       // call, one transaction, so a failure can't land only one leg (same
       // reason createTransfer batches its two legs together).
@@ -464,7 +527,7 @@ export const generateDueOccurrences = cache(async (): Promise<
                   userid,
                   accountid: template.accountid,
                   categoryid: null,
-                  amount: template.amount,
+                  amount: occurrenceAmount,
                   transaction_type: "Expense",
                   transaction_date: cursor,
                   description: template.description,
@@ -475,7 +538,7 @@ export const generateDueOccurrences = cache(async (): Promise<
                   userid,
                   accountid: template.to_accountid,
                   categoryid: null,
-                  amount: template.amount,
+                  amount: occurrenceAmount,
                   transaction_type: "Income",
                   transaction_date: cursor,
                   description: template.description,
@@ -489,7 +552,7 @@ export const generateDueOccurrences = cache(async (): Promise<
                 userid,
                 accountid: template.accountid,
                 categoryid: template.categoryid,
-                amount: template.amount,
+                amount: occurrenceAmount,
                 // Non-null: a category template's select above embeds
                 // categories with categoryid not null (rectx_category_required
                 // guarantees it), so category is always present here.
@@ -515,6 +578,7 @@ export const generateDueOccurrences = cache(async (): Promise<
           // was seeded from, so it doesn't get decremented again here.
           cursor = nextOccurrenceISO(cursor, template.frequency, template.interval_count, anchor);
           advanced = true;
+          hasConfirmedAmount = false;
           continue;
         }
 
@@ -532,12 +596,24 @@ export const generateDueOccurrences = cache(async (): Promise<
       cursor = nextOccurrenceISO(cursor, template.frequency, template.interval_count, anchor);
       advanced = true;
       remaining -= 1;
+      hasConfirmedAmount = false;
     }
 
     if (advanced && cursor !== template.next_run_date) {
+      // A variable schedule only ever advances past its unconfirmed
+      // occurrence via the break above -- reaching here with advanced true
+      // means the confirmed next_amount was just consumed (posted, or
+      // already posted by a racing request -- see the 23505 branch above),
+      // so it's cleared for the next cycle to prompt again.
+      const patch: RecurringUpdate = { next_run_date: cursor };
+      if (template.amount_is_variable) {
+        patch.next_amount = null;
+        patch.next_amount_confirmed_at = null;
+      }
+
       const { error: advanceError } = await supabase
         .from("recurring_transactions")
-        .update({ next_run_date: cursor })
+        .update(patch)
         .eq("id", template.id);
 
       if (advanceError) {
