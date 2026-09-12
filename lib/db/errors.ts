@@ -1,4 +1,5 @@
 import "server-only";
+import util from "node:util";
 
 // Turns a PostgREST / Postgres error into a string that's safe to show a
 // user, and makes sure the ones that are our fault are never lost.
@@ -76,45 +77,24 @@ const GENERIC_WRITE =
 const GENERIC_WRITE_BUSY =
   "That didn't save -- the database was busy for a moment. Try again.";
 
-// console.error(err) prints "{}" for a native Error -- name, message and
-// stack are non-enumerable own properties, so a plain object dump of the
-// error drops all three. Pull the fields out explicitly instead, so a thrown
-// exception is exactly as visible in the log as a PostgrestError (whose
-// fields are ordinary enumerable properties and survive either way).
+// Server Component console output is serialized on its way to the browser
+// dev overlay, and an object argument to console.error arrives there as
+// "{}" no matter what it contains. A string argument survives intact, so
+// build one line covering every way to identify an error -- a full
+// util.inspect, its String() coercion, constructor name, and own
+// property/symbol names (for the exotic shapes those miss) -- and log that.
 export function logDbError(prefix: string, error: unknown): void {
-  if (error === null || typeof error !== "object") {
-    console.error(prefix, { value: error });
-    return;
-  }
+  const inspected = util.inspect(error, { depth: 4, showHidden: true });
+  const stringified = String(error);
+  const ctorName = (error as { constructor?: { name?: string } } | null)?.constructor?.name;
+  const ownNames = Object.getOwnPropertyNames(error ?? {});
+  const ownSymbols = Object.getOwnPropertySymbols(error ?? {}).map(String);
 
-  const err = error as Record<string, unknown>;
-  const extracted = {
-    name: err.name,
-    message: err.message,
-    code: err.code,
-    details: err.details,
-    hint: err.hint,
-    status: err.status,
-    stack: err.stack,
-  };
+  const line =
+    `inspect=${inspected} string=${stringified} ctor=${ctorName} ` +
+    `ownNames=${JSON.stringify(ownNames)} ownSymbols=${JSON.stringify(ownSymbols)}`;
 
-  // Every field we know to look for came back undefined -- that's not "no
-  // error", it's an error shape we don't recognise. {} would read as the
-  // former; say so explicitly and hand back enough to identify it by.
-  if (Object.values(extracted).every((v) => v === undefined)) {
-    const symbolKeys = Object.getOwnPropertySymbols(err);
-    console.error(prefix, {
-      unrecognisedErrorShape: true,
-      string: String(error),
-      constructorName: err.constructor?.name,
-      toStringTag: Object.prototype.toString.call(error),
-      ownKeys: Object.keys(err),
-      hasSymbolKeys: symbolKeys.length > 0,
-    });
-    return;
-  }
-
-  console.error(prefix, extracted);
+  console.error(prefix + " " + line);
 }
 
 function isStaleSession(error: DbError): boolean {
