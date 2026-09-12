@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
-import { describeReadError, describeWriteError } from "@/lib/db/errors";
+import { describeReadError, describeWriteError, logDbError } from "@/lib/db/errors";
 import { todayISO, addDaysISO } from "@/lib/date";
 
 type RecurringRow = Database["public"]["Tables"]["recurring_transactions"]["Row"];
@@ -438,10 +438,7 @@ export const generateDueOccurrences = cache(async (): Promise<
         .eq("recurringid", template.id);
 
       if (countError) {
-        console.error(
-          `[db:recurring] failed counting occurrences for ${template.id}:`,
-          countError,
-        );
+        logDbError(`[db:recurring] failed counting occurrences for ${template.id}:`, countError);
         continue;
       }
 
@@ -521,7 +518,7 @@ export const generateDueOccurrences = cache(async (): Promise<
           continue;
         }
 
-        console.error(
+        logDbError(
           `[db:recurring] failed generating occurrence for ${template.id} on ${cursor}:`,
           insertError,
         );
@@ -544,10 +541,7 @@ export const generateDueOccurrences = cache(async (): Promise<
         .eq("id", template.id);
 
       if (advanceError) {
-        console.error(
-          `[db:recurring] failed advancing next_run_date for ${template.id}:`,
-          advanceError,
-        );
+        logDbError(`[db:recurring] failed advancing next_run_date for ${template.id}:`, advanceError);
       }
     }
   }

@@ -76,6 +76,29 @@ const GENERIC_WRITE =
 const GENERIC_WRITE_BUSY =
   "That didn't save -- the database was busy for a moment. Try again.";
 
+// console.error(err) prints "{}" for a native Error -- name, message and
+// stack are non-enumerable own properties, so a plain object dump of the
+// error drops all three. Pull the fields out explicitly instead, so a thrown
+// exception is exactly as visible in the log as a PostgrestError (whose
+// fields are ordinary enumerable properties and survive either way).
+export function logDbError(prefix: string, error: unknown): void {
+  if (error === null || typeof error !== "object") {
+    console.error(prefix, { value: error });
+    return;
+  }
+
+  const err = error as Record<string, unknown>;
+  console.error(prefix, {
+    name: err.name,
+    message: err.message,
+    code: err.code,
+    details: err.details,
+    hint: err.hint,
+    status: err.status,
+    stack: err.stack,
+  });
+}
+
 function isStaleSession(error: DbError): boolean {
   return (
     error.code === "PGRST301" ||
@@ -105,14 +128,14 @@ export function describeWriteError(error: DbError, context: WriteContext): strin
   }
 
   if (TRANSIENT.has(error.code)) {
-    console.error(`[db:${context}] transient ${error.code}:`, error);
+    logDbError(`[db:${context}] transient ${error.code}:`, error);
     return GENERIC_WRITE_BUSY;
   }
 
   // 23502 / 23503 / 23514 / 21000 / 42501 / 42703 / 42P01 / PGRST2xx and
   // anything unrecognised: a bug on our side or a bypassed client. Nothing
   // specific for the user; everything for the log.
-  console.error(`[db:${context}] unhandled write error:`, error);
+  logDbError(`[db:${context}] unhandled write error:`, error);
   return GENERIC_WRITE;
 }
 
@@ -124,6 +147,6 @@ export function describeReadError(error: DbError, resource: string): string {
     console.warn(`[db:read:${resource}] stale session: ${error.message}`);
     return SESSION_EXPIRED;
   }
-  console.error(`[db:read:${resource}]`, error);
+  logDbError(`[db:read:${resource}]`, error);
   return `We couldn't load your ${resource} just now. Refresh the page to try again.`;
 }
