@@ -88,7 +88,7 @@ export function logDbError(prefix: string, error: unknown): void {
   }
 
   const err = error as Record<string, unknown>;
-  console.error(prefix, {
+  const extracted = {
     name: err.name,
     message: err.message,
     code: err.code,
@@ -96,7 +96,25 @@ export function logDbError(prefix: string, error: unknown): void {
     hint: err.hint,
     status: err.status,
     stack: err.stack,
-  });
+  };
+
+  // Every field we know to look for came back undefined -- that's not "no
+  // error", it's an error shape we don't recognise. {} would read as the
+  // former; say so explicitly and hand back enough to identify it by.
+  if (Object.values(extracted).every((v) => v === undefined)) {
+    const symbolKeys = Object.getOwnPropertySymbols(err);
+    console.error(prefix, {
+      unrecognisedErrorShape: true,
+      string: String(error),
+      constructorName: err.constructor?.name,
+      toStringTag: Object.prototype.toString.call(error),
+      ownKeys: Object.keys(err),
+      hasSymbolKeys: symbolKeys.length > 0,
+    });
+    return;
+  }
+
+  console.error(prefix, extracted);
 }
 
 function isStaleSession(error: DbError): boolean {
