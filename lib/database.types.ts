@@ -74,6 +74,21 @@ export type Database = {
           },
         ]
       }
+      bank_holidays: {
+        Row: {
+          date: string
+          label: string
+        }
+        Insert: {
+          date: string
+          label: string
+        }
+        Update: {
+          date?: string
+          label?: string
+        }
+        Relationships: []
+      }
       budgets: {
         Row: {
           budget_amount: number
@@ -531,6 +546,7 @@ export type Database = {
           accountid: string
           amount: number
           amount_is_variable: boolean
+          business_day_offset: number
           categoryid: string | null
           created_at: string
           description: string
@@ -541,7 +557,9 @@ export type Database = {
           is_active: boolean
           next_amount: number | null
           next_amount_confirmed_at: string | null
+          next_due_date: string
           next_run_date: string
+          non_business_day_rule: string
           occurrence_limit: number | null
           start_date: string | null
           statement_day: number | null
@@ -552,6 +570,7 @@ export type Database = {
           accountid: string
           amount: number
           amount_is_variable?: boolean
+          business_day_offset?: number
           categoryid?: string | null
           created_at?: string
           description: string
@@ -562,7 +581,9 @@ export type Database = {
           is_active?: boolean
           next_amount?: number | null
           next_amount_confirmed_at?: string | null
+          next_due_date: string
           next_run_date: string
+          non_business_day_rule?: string
           occurrence_limit?: number | null
           start_date?: string | null
           statement_day?: number | null
@@ -573,6 +594,7 @@ export type Database = {
           accountid?: string
           amount?: number
           amount_is_variable?: boolean
+          business_day_offset?: number
           categoryid?: string | null
           created_at?: string
           description?: string
@@ -583,7 +605,9 @@ export type Database = {
           is_active?: boolean
           next_amount?: number | null
           next_amount_confirmed_at?: string | null
+          next_due_date?: string
           next_run_date?: string
+          non_business_day_rule?: string
           occurrence_limit?: number | null
           start_date?: string | null
           statement_day?: number | null
@@ -664,6 +688,7 @@ export type Database = {
           default_budget_month: number | null
           id: string
           notifications_enabled: boolean
+          safe_to_spend_window: string | null
           theme: string
           updated_at: string
           userid: string
@@ -676,6 +701,7 @@ export type Database = {
           default_budget_month?: number | null
           id?: string
           notifications_enabled?: boolean
+          safe_to_spend_window?: string | null
           theme?: string
           updated_at?: string
           userid: string
@@ -688,6 +714,7 @@ export type Database = {
           default_budget_month?: number | null
           id?: string
           notifications_enabled?: boolean
+          safe_to_spend_window?: string | null
           theme?: string
           updated_at?: string
           userid?: string
@@ -1290,6 +1317,7 @@ export type Database = {
         Row: {
           account_color: string | null
           account_name: string | null
+          account_type: string | null
           accountid: string | null
           amount: number | null
           amount_is_variable: boolean | null
@@ -1307,6 +1335,7 @@ export type Database = {
           is_overdue: boolean | null
           next_amount: number | null
           next_amount_confirmed_at: string | null
+          next_due_date: string | null
           next_run_date: string | null
           occurrence_limit: number | null
           recurring_id: string | null
@@ -1384,6 +1413,10 @@ export type Database = {
       }
     }
     Functions: {
+      add_business_days: {
+        Args: { anchor: string; n: number }
+        Returns: string
+      }
       category_spend_between: {
         Args: { p_from: string; p_to: string }
         Returns: {
@@ -1397,12 +1430,17 @@ export type Database = {
       }
       delete_own_account: { Args: never; Returns: undefined }
       email_for_username: { Args: { p_username: string }; Returns: string }
+      is_business_day: { Args: { d: string }; Returns: boolean }
       record_login: {
         Args: never
         Returns: {
           first_name: string
           previous_login_at: string
         }[]
+      }
+      resolve_recurring_due_date: {
+        Args: { anchor: string; offset_days: number; rule: string }
+        Returns: string
       }
       seed_default_categories: {
         Args: { p_userid: string }

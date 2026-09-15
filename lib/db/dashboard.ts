@@ -5,6 +5,7 @@ import type { Database } from "@/lib/database.types";
 import { todayISO, addDaysISO, endOfMonthISO, daysBetweenInclusive } from "@/lib/date";
 import type { DashboardRange } from "@/lib/dashboardRange";
 import { describeReadError } from "@/lib/db/errors";
+import { getSafeToSpendWindowPref } from "@/lib/db/settings";
 
 type DashboardKpisRow = Database["public"]["Views"]["v_dashboard_kpis"]["Row"];
 type NetWorthRow = Database["public"]["Views"]["v_net_worth"]["Row"];
@@ -418,13 +419,13 @@ export async function getUpcomingRecurring(
   let query = supabase
     .from("v_upcoming_recurring")
     .select("*")
-    .order("next_run_date", { ascending: true });
+    .order("next_due_date", { ascending: true });
 
   if (opts.dateFrom) {
-    query = query.gte("next_run_date", opts.dateFrom);
+    query = query.gte("next_due_date", opts.dateFrom);
   }
   if (opts.dateTo) {
-    query = query.lte("next_run_date", opts.dateTo);
+    query = query.lte("next_due_date", opts.dateTo);
   }
 
   const { data, error } = await query;
@@ -584,7 +585,7 @@ export type SafeToSpendCommitment = {
   name: string;
   /** Positive outflow amount, in dollars. */
   amount: number;
-  /** next_run_date -- the day this commitment falls due. */
+  /** next_due_date -- the resolved (business-day-adjusted) day this commitment falls due. */
   dueDate: string;
   /**
    * True for a variable-amount schedule with no confirmed next_amount yet --
@@ -593,6 +594,28 @@ export type SafeToSpendCommitment = {
    * must label it as such (CLAUDE.md "Display").
    */
   isEstimate: boolean;
+};
+
+export type SafeToSpendWindowReason = "next_payday" | "end_of_month" | "next_30_days";
+
+export type SafeToSpendWindow = {
+  /** Last day the window (and the commitments sum) covers, inclusive. */
+  end: string;
+  /**
+   * Why `end` is what it is -- not always the same as the stored
+   * preference: 'next_payday' falls back to 'end_of_month' when no income
+   * schedule exists, and the UI must say which one actually applied rather
+   * than claiming the fallback was the chosen thing.
+   */
+  reason: SafeToSpendWindowReason;
+};
+
+export type SafeToSpendIncome = {
+  recurringId: string;
+  name: string;
+  amount: number;
+  /** next_due_date of the soonest upcoming Income schedule. */
+  date: string;
 };
 
 export type SafeToSpend = {
@@ -606,8 +629,8 @@ export type SafeToSpend = {
    */
   cashOnHand: number;
   /**
-   * Recurring expense outflows whose next run falls between today and the
-   * end of the current calendar month, inclusive, earliest first.
+   * Recurring expense outflows whose resolved due date falls between today
+   * and window.end, inclusive, earliest first.
    */
   commitments: SafeToSpendCommitment[];
   /** Sum of every commitment amount. */
@@ -625,25 +648,87 @@ export type SafeToSpend = {
    * (the UI states the shortfall instead). Zero is a real $0/day.
    */
   perDay: number | null;
-  /** Calendar days from today through periodEnd, inclusive. Always >= 1. */
+  /** Calendar days from today through window.end, inclusive. Always >= 1. */
   daysRemaining: number;
-  /** Last day of the current calendar month, "YYYY-MM-DD". */
-  periodEnd: string;
+  /** What the hero counts down to, and why -- see lib/safeToSpendWindow.ts. */
+  window: SafeToSpendWindow;
+  /**
+   * The soonest upcoming Income schedule landing in a Checking or Savings
+   * account, independent of which window is in effect -- shown as a
+   * context line beneath the total, never folded into the arithmetic
+   * above (this app never counts a paycheck as spendable before it
+   * lands). null when no such schedule exists, which the UI reads as "show
+   * a prompt to add a paycheck."
+   */
+  nextIncome: SafeToSpendIncome | null;
 };
 
 type UpcomingCommitmentRow = {
   recurring_id: string;
   description: string;
   amount: number;
-  next_run_date: string;
+  next_due_date: string;
   // Null for a transfer template -- see the kind filter below.
   category_type: string | null;
   to_accountid: string | null;
   is_estimated_amount: boolean;
 };
 
+type UpcomingIncomeRow = {
+  recurring_id: string;
+  description: string;
+  amount: number;
+  next_due_date: string;
+};
+
+// Shared by getSafeToSpend (full detail, for the context line) and the
+// settings page (existence check only, to pre-select the window toggle
+// when the stored preference is unset -- see lib/safeToSpendWindow.ts).
+// account_type comes from v_upcoming_recurring's own join to accounts
+// (25_bank_holidays.sql) -- an Income category schedule's accountid is
+// where the money lands, same as any category schedule (see
+// lib/db/recurring.ts's generateDueOccurrences).
+export const getSoonestIncomeOccurrence = cache(
+  async (): Promise<DbResult<SafeToSpendIncome | null>> => {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from("v_upcoming_recurring")
+      .select("recurring_id, description, amount, next_due_date")
+      .eq("category_type", "Income")
+      .in("account_type", ["Checking", "Savings"])
+      .order("next_due_date", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+      .returns<UpcomingIncomeRow>();
+
+    if (error) {
+      return { data: null, error: describeReadError(error, "dashboard") };
+    }
+
+    return {
+      data: data
+        ? {
+            recurringId: data.recurring_id,
+            name: data.description,
+            amount: data.amount,
+            date: data.next_due_date,
+          }
+        : null,
+      error: null,
+    };
+  },
+);
+
 // "Safe to spend" = spendable cash, minus the recurring bills still to
-// land this month. Deliberately no budget term -- see SafeToSpend.safeToSpend.
+// land before the window closes. Deliberately no budget term -- see
+// SafeToSpend.safeToSpend.
+//
+// The window itself defaults to the next payday (the soonest upcoming
+// Income schedule landing in Checking/Savings), falling back to end of
+// calendar month when there isn't one -- see lib/safeToSpendWindow.ts and
+// 20260914000026_26_safe_to_spend_window_setting.sql. A user can pin it to
+// end-of-month or a rolling 30 days instead.
 //
 // cash comes from v_dashboard_kpis.cash_balance -- SQL-summed over active
 // Checking / Savings / Cash accounts only, never Investment. The recurring
@@ -653,10 +738,7 @@ type UpcomingCommitmentRow = {
 // that a direct base-table query has no way to apply: an exhausted
 // schedule's next_run_date freezes on whatever date the generator last
 // advanced it to (see lib/db/recurring.ts), which can still fall inside
-// this window even though that occurrence will never actually post. This
-// used to read the base table because the view dropped category_type;
-// now that it carries it, there's no reason left to duplicate the view's
-// filtering by hand.
+// this window even though that occurrence will never actually post.
 //
 // The one subtraction and the commitment sum run in integer cents, never JS
 // floats -- amount is exact `numeric` and this figure is shown to the cent
@@ -665,25 +747,53 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   const supabase = await createClient();
 
   const today = todayISO();
-  const periodEnd = endOfMonthISO(today);
-  const daysRemaining = daysBetweenInclusive(today, periodEnd);
 
-  const [cashRes, recurringRes] = await Promise.all([
+  const [cashRes, incomeRes, windowPref] = await Promise.all([
     supabase.from("v_dashboard_kpis").select("cash_balance").maybeSingle(),
-    supabase
-      .from("v_upcoming_recurring")
-      .select(
-        "recurring_id, description, amount, next_run_date, category_type, to_accountid, is_estimated_amount",
-      )
-      .gte("next_run_date", today)
-      .lte("next_run_date", periodEnd)
-      .order("next_run_date", { ascending: true })
-      .returns<UpcomingCommitmentRow[]>(),
+    getSoonestIncomeOccurrence(),
+    getSafeToSpendWindowPref(),
   ]);
 
   if (cashRes.error) {
     return { data: null, error: describeReadError(cashRes.error, "dashboard") };
   }
+  if (incomeRes.error) {
+    return { data: null, error: incomeRes.error };
+  }
+
+  const nextIncome = incomeRes.data;
+
+  // 'next_payday' is both the explicit preference AND the dynamic default
+  // for an unset one -- it already falls back to end-of-month on its own
+  // when there's no income schedule, which is exactly the stated default
+  // behavior, so there's no separate "auto" branch to maintain.
+  const effectivePref = windowPref ?? "next_payday";
+
+  let windowEnd: string;
+  let reason: SafeToSpendWindowReason;
+  if (effectivePref === "next_payday" && nextIncome) {
+    windowEnd = nextIncome.date;
+    reason = "next_payday";
+  } else if (effectivePref === "next_30_days") {
+    windowEnd = addDaysISO(today, 30);
+    reason = "next_30_days";
+  } else {
+    windowEnd = endOfMonthISO(today);
+    reason = "end_of_month";
+  }
+
+  const daysRemaining = daysBetweenInclusive(today, windowEnd);
+
+  const recurringRes = await supabase
+    .from("v_upcoming_recurring")
+    .select(
+      "recurring_id, description, amount, next_due_date, category_type, to_accountid, is_estimated_amount",
+    )
+    .gte("next_due_date", today)
+    .lte("next_due_date", windowEnd)
+    .order("next_due_date", { ascending: true })
+    .returns<UpcomingCommitmentRow[]>();
+
   if (recurringRes.error) {
     return { data: null, error: describeReadError(recurringRes.error, "dashboard") };
   }
@@ -699,7 +809,7 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
       recurringId: row.recurring_id,
       name: row.description,
       amount: row.amount,
-      dueDate: row.next_run_date,
+      dueDate: row.next_due_date,
       isEstimate: row.is_estimated_amount,
     }));
 
@@ -718,7 +828,8 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
       safeToSpend: safeCents / 100,
       perDay: safeCents >= 0 ? safeCents / daysRemaining / 100 : null,
       daysRemaining,
-      periodEnd,
+      window: { end: windowEnd, reason },
+      nextIncome,
     },
     error: null,
   };

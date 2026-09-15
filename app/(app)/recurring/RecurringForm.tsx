@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useActionState } from "react";
 import {
   createRecurringAction,
@@ -10,6 +10,8 @@ import {
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { TransactionAccountOption } from "../transactions/AddTransactionForm";
 import { todayISO } from "@/lib/date";
+import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
+import { formatDateWithWeekday } from "@/lib/format";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -45,6 +47,51 @@ const ENDS_OPTIONS: { value: Ends; label: string }[] = [
   { value: "count", label: "After" },
   { value: "date", label: "On" },
 ];
+
+// The three timing options a schedule can resolve its due date with --
+// plain language only; business_day_offset/non_business_day_rule and their
+// 'none'/'before'/'after' values never appear as UI copy (see
+// lib/actions/recurring.ts's parseRecurringFields for the mapping). "exact"
+// is the collapsed-by-default option, and what every schedule already
+// meant before this control existed -- selecting it (or never opening the
+// panel at all) submits business_day_offset=0, non_business_day_rule='none',
+// identical to today's implicit behavior.
+type TimingMode = "exact" | "nearest" | "after";
+type NearestDirection = "earlier" | "later";
+
+const TIMING_MODE_OPTIONS: { value: TimingMode; label: string }[] = [
+  { value: "exact", label: "On that exact date" },
+  { value: "nearest", label: "The nearest weekday, if it falls on a weekend or holiday" },
+  { value: "after", label: "A few business days after" },
+];
+
+// Both directions matter: payroll usually pays earlier when a date lands
+// on a weekend, bills usually post later.
+const NEAREST_DIRECTION_OPTIONS: { value: NearestDirection; label: string }[] = [
+  { value: "earlier", label: "Earlier" },
+  { value: "later", label: "Later" },
+];
+
+// Reverse of the mapping lib/actions/recurring.ts's parseRecurringFields
+// applies on submit -- only matters for opening the edit form on a
+// schedule that already has a non-default timing. direction/count fall
+// back to sane values so the sub-controls have something to show if the
+// user switches to a mode they weren't already on.
+function timingFromRecord(
+  businessDayOffset: number,
+  nonBusinessDayRule: string,
+): { mode: TimingMode; direction: NearestDirection; count: number } {
+  if (businessDayOffset > 0) {
+    return { mode: "after", direction: "earlier", count: businessDayOffset };
+  }
+  if (nonBusinessDayRule === "before") {
+    return { mode: "nearest", direction: "earlier", count: 3 };
+  }
+  if (nonBusinessDayRule === "after") {
+    return { mode: "nearest", direction: "later", count: 3 };
+  }
+  return { mode: "exact", direction: "earlier", count: 3 };
+}
 
 // Maps a stored (frequency, interval_count) back onto the picker's three
 // cadences -- only matters for opening the edit form on a schedule already
@@ -83,6 +130,8 @@ export type EditableRecurring = {
   end_date: string | null;
   amount_is_variable: boolean;
   statement_day: number | null;
+  business_day_offset: number;
+  non_business_day_rule: string;
 };
 
 // Seeds a fresh (create-mode) schedule from something that already carries
@@ -151,6 +200,46 @@ function SegmentedControl<T extends string>({
   );
 }
 
+// A vertical sibling of SegmentedControl for the "Adjust timing" panel --
+// same native-radio pattern (sr-only input inside a label, has-[:checked]
+// styling), so it inherits the same keyboard semantics (arrow keys move
+// within a same-name radio group, one tab stop) without any manual key
+// handling. Stacked rather than pill-shaped: these labels are full
+// sentences ("The nearest weekday, if it falls on a weekend or holiday"),
+// not single words.
+function TimingRadioList<T extends string>({
+  name,
+  value,
+  options,
+  onChange,
+}: {
+  name: string;
+  value: T;
+  options: readonly { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      {options.map((opt) => (
+        <label
+          key={opt.value}
+          className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg border border-hairline px-3 py-2 text-sm text-ink-secondary transition-colors duration-150 hover:text-ink has-[:checked]:border-action has-[:checked]:text-ink has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-action has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-surface"
+        >
+          <input
+            type="radio"
+            name={name}
+            value={opt.value}
+            checked={value === opt.value}
+            onChange={() => onChange(opt.value)}
+            className="h-4 w-4 shrink-0 border-hairline text-action focus-visible:outline-none"
+          />
+          {opt.label}
+        </label>
+      ))}
+    </div>
+  );
+}
+
 // Shared by the "Add schedule" flow, each row's "Edit" flow, and "Make this
 // recurring" on an existing transaction (prefill). A category schedule
 // stores no transaction_type of its own -- Kind here only picks which
@@ -166,6 +255,7 @@ export function RecurringForm({
   incomeCategories,
   expenseCategories,
   accounts,
+  holidays = [],
   onSuccess,
   onCancel,
 }: {
@@ -175,6 +265,14 @@ export function RecurringForm({
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
   accounts: TransactionAccountOption[];
+  /**
+   * ISO dates, for the live "Next: ..." timing preview below -- what
+   * actually gets saved is resolved authoritatively server-side
+   * (lib/db/recurring.ts), so an empty list here only makes the preview
+   * weekend-aware instead of holiday-aware, never wrong about what's
+   * submitted.
+   */
+  holidays?: string[];
   onSuccess: () => void;
   onCancel: () => void;
 }) {
@@ -217,6 +315,37 @@ export function RecurringForm({
   const initialIntervalCount = recurring
     ? intervalFromFrequency(recurring.frequency, recurring.interval_count)
     : 1;
+
+  // Controlled (not defaultValue) because the live timing preview below
+  // needs to react to every change -- see nextRunDate's own comment on the
+  // date input further down.
+  const [nextRunDate, setNextRunDate] = useState(recurring?.next_run_date ?? todayISO());
+
+  const initialTiming = timingFromRecord(
+    recurring?.business_day_offset ?? 0,
+    recurring?.non_business_day_rule ?? "none",
+  );
+  const [timingMode, setTimingMode] = useState<TimingMode>(initialTiming.mode);
+  const [nearestDirection, setNearestDirection] = useState<NearestDirection>(
+    initialTiming.direction,
+  );
+  const [afterCount, setAfterCount] = useState<number>(initialTiming.count);
+  // Starts open for a schedule that already has a non-default timing, so
+  // editing one shows its actual configuration rather than hiding it --
+  // collapsed only means "exact date" for a brand-new schedule or one that
+  // was never given a different timing.
+  const [timingOpen, setTimingOpen] = useState(initialTiming.mode !== "exact");
+
+  const holidaySet = useMemo(() => new Set(holidays), [holidays]);
+  // Mirrors exactly what the server computes on submit (lib/db/recurring.ts's
+  // computeNextDueDate, via the same lib/businessDays.ts resolveDueDate) --
+  // this is a preview of that result, not a second implementation of it.
+  const effectiveOffset = timingMode === "after" ? afterCount : 0;
+  const effectiveRule: NonBusinessDayRule =
+    timingMode === "nearest" ? (nearestDirection === "earlier" ? "before" : "after") : "none";
+  const resolvedNextDate = nextRunDate
+    ? resolveDueDate(nextRunDate, effectiveOffset, effectiveRule, holidaySet)
+    : null;
 
   const scheduleHint =
     repeats === "Monthly"
@@ -409,10 +538,73 @@ export function RecurringForm({
             name="next_run_date"
             type="date"
             required
-            defaultValue={recurring?.next_run_date ?? todayISO()}
+            value={nextRunDate}
+            onChange={(e) => setNextRunDate(e.target.value)}
             className={fieldClassName}
           />
         </FormField>
+
+        {/* The point of this line: it turns an abstract rule into a
+            concrete date a user can check against their own bank, live as
+            they change the timing below. */}
+        {resolvedNextDate ? (
+          <p className="text-sm text-ink-secondary">
+            Next: <span className="font-medium text-ink">{formatDateWithWeekday(resolvedNextDate)}</span>
+          </p>
+        ) : null}
+
+        {!timingOpen ? (
+          <button
+            type="button"
+            onClick={() => setTimingOpen(true)}
+            className="self-start rounded text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          >
+            Adjust timing
+          </button>
+        ) : (
+          <fieldset className="flex flex-col gap-3 border-t border-hairline pt-4">
+            <legend className="text-sm font-medium text-ink-secondary">
+              When does the money actually move?
+            </legend>
+            <TimingRadioList
+              name="timing_mode"
+              value={timingMode}
+              onChange={setTimingMode}
+              options={TIMING_MODE_OPTIONS}
+            />
+
+            {timingMode === "nearest" ? (
+              <div className="flex items-center gap-2 pl-1">
+                <span className="text-sm text-ink-secondary">Shift it</span>
+                <SegmentedControl
+                  name="timing_direction"
+                  value={nearestDirection}
+                  onChange={setNearestDirection}
+                  options={NEAREST_DIRECTION_OPTIONS}
+                />
+              </div>
+            ) : null}
+
+            {timingMode === "after" ? (
+              <div className="pl-1">
+                <FormField label="How many business days?" htmlFor="timing_count">
+                  <Input
+                    id="timing_count"
+                    name="timing_count"
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    max="10"
+                    required
+                    value={afterCount}
+                    onChange={(e) => setAfterCount(Number(e.target.value))}
+                    className="w-20"
+                  />
+                </FormField>
+              </div>
+            ) : null}
+          </fieldset>
+        )}
       </div>
 
       <div className="flex flex-col gap-4 rounded-xl border border-hairline p-4">

@@ -23,6 +23,7 @@ export function RecurringRow({
   incomeCategories,
   expenseCategories,
   accounts,
+  holidays = [],
   estimatedAmount,
   today,
 }: {
@@ -30,6 +31,8 @@ export function RecurringRow({
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
   accounts: TransactionAccountOption[];
+  /** ISO dates, for RecurringForm's live timing preview -- see its own doc comment. */
+  holidays?: string[];
   /** Live card-balance estimate -- only meaningful while amount_is_variable and unconfirmed. */
   estimatedAmount: number;
   /** todayISO(), for deciding whether an unconfirmed variable schedule is already overdue. */
@@ -90,6 +93,8 @@ export function RecurringRow({
       end_date: recurring.end_date,
       amount_is_variable: recurring.amount_is_variable,
       statement_day: recurring.statement_day,
+      business_day_offset: recurring.business_day_offset,
+      non_business_day_rule: recurring.non_business_day_rule,
     };
     return (
       <li className="p-4">
@@ -98,6 +103,7 @@ export function RecurringRow({
           incomeCategories={incomeCategories}
           expenseCategories={expenseCategories}
           accounts={accounts}
+          holidays={holidays}
           onSuccess={() => setEditing(false)}
           onCancel={() => setEditing(false)}
         />
@@ -213,7 +219,7 @@ export function RecurringRow({
       ) : null}
 
       <p className="text-sm text-ink-muted">
-        Next due {formatDate(recurring.next_run_date)}
+        Next due {formatDate(recurring.next_due_date)}
         {endCondition ? ` · ${endCondition.charAt(0).toLowerCase()}${endCondition.slice(1)}` : ""}
       </p>
 

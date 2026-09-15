@@ -21,6 +21,14 @@ const FREQUENCIES = ["Monthly", "Weekly", "Yearly"] as const;
 const ENDS_MODES = ["never", "count", "date"] as const;
 const KINDS = ["Expense", "Income", "Transfer"] as const;
 
+// RecurringForm's plain-language timing control -- see its own
+// TIMING_MODE_OPTIONS/NEAREST_DIRECTION_OPTIONS. Absent entirely when the
+// "Adjust timing" panel is collapsed (the fields it holds aren't rendered,
+// so they aren't submitted); "exact" here means exactly that, same as an
+// explicit choice of it.
+const TIMING_MODES = ["exact", "nearest", "after"] as const;
+const NEAREST_DIRECTIONS = ["earlier", "later"] as const;
+
 type ParsedRecurringFields = {
   description: string;
   amount: number;
@@ -38,6 +46,11 @@ type ParsedRecurringFields = {
   // amount_is_variable is (rectx_variable_requires_statement_day).
   amount_is_variable: boolean;
   statement_day: number | null;
+  // Business-day resolution (20260914000024_24_recurring_business_day_rules.sql)
+  // -- derived from RecurringForm's timing_mode/timing_direction/timing_count
+  // below, never read directly from those raw field names past this function.
+  business_day_offset: number;
+  non_business_day_rule: string;
 };
 
 // Shared by create and update -- both forms offer the exact same fields.
@@ -159,6 +172,30 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
     }
   }
 
+  // "exact" (the collapsed-panel default) maps to offset 0 / rule 'none' --
+  // identical to what every row already meant before this control existed.
+  const timingMode = String(formData.get("timing_mode") ?? "exact");
+  if (!TIMING_MODES.includes(timingMode as (typeof TIMING_MODES)[number])) {
+    return { error: "Choose a valid timing option." };
+  }
+
+  let business_day_offset = 0;
+  let non_business_day_rule = "none";
+
+  if (timingMode === "after") {
+    const countInput = String(formData.get("timing_count") ?? "").trim();
+    business_day_offset = Math.trunc(Number(countInput));
+    if (!Number.isFinite(business_day_offset) || business_day_offset < 1 || business_day_offset > 10) {
+      return { error: "Enter how many business days, from 1 to 10." };
+    }
+  } else if (timingMode === "nearest") {
+    const direction = String(formData.get("timing_direction") ?? "earlier");
+    if (!NEAREST_DIRECTIONS.includes(direction as (typeof NEAREST_DIRECTIONS)[number])) {
+      return { error: "Choose a valid shift direction." };
+    }
+    non_business_day_rule = direction === "earlier" ? "before" : "after";
+  }
+
   return {
     description,
     amount,
@@ -172,6 +209,8 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
     end_date,
     amount_is_variable,
     statement_day,
+    business_day_offset,
+    non_business_day_rule,
   };
 }
 
@@ -200,6 +239,8 @@ export async function createRecurringAction(
     end_date: parsed.end_date,
     amount_is_variable: parsed.amount_is_variable,
     statement_day: parsed.statement_day,
+    business_day_offset: parsed.business_day_offset,
+    non_business_day_rule: parsed.non_business_day_rule,
   });
 
   if (error) {
@@ -261,6 +302,8 @@ export async function updateRecurringAction(
     end_date: parsed.end_date,
     amount_is_variable: parsed.amount_is_variable,
     statement_day: parsed.statement_day,
+    business_day_offset: parsed.business_day_offset,
+    non_business_day_rule: parsed.non_business_day_rule,
     ...(clearPendingConfirmation ? { next_amount: null, next_amount_confirmed_at: null } : {}),
   });
 

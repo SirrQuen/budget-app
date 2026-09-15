@@ -10,11 +10,14 @@ export function CreateRecurringForm({
   incomeCategories,
   expenseCategories,
   accounts,
+  holidays = [],
   label = "Add schedule",
 }: {
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
   accounts: TransactionAccountOption[];
+  /** ISO dates, for RecurringForm's live timing preview -- see its own doc comment. */
+  holidays?: string[];
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -32,6 +35,7 @@ export function CreateRecurringForm({
       incomeCategories={incomeCategories}
       expenseCategories={expenseCategories}
       accounts={accounts}
+      holidays={holidays}
       onSuccess={() => setOpen(false)}
       onCancel={() => setOpen(false)}
     />

@@ -1,6 +1,7 @@
 import { listRecurring } from "@/lib/db/recurring";
 import { listAccounts, listAccountBalances } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
+import { getBankHolidays } from "@/lib/db/holidays";
 import { estimateCardPaymentDue } from "@/lib/accountOptions";
 import { todayISO } from "@/lib/date";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -12,14 +13,27 @@ import { RecurringRow } from "./RecurringRow";
 import type { TransactionAccountOption } from "../transactions/AddTransactionForm";
 
 export default async function RecurringPage() {
-  const [recurringResult, accountsResult, balancesResult, incomeCategoriesResult, expenseCategoriesResult] =
-    await Promise.all([
-      listRecurring(),
-      listAccounts({ is_active: true }),
-      listAccountBalances(),
-      listCategoriesForType("Income"),
-      listCategoriesForType("Expense"),
-    ]);
+  const [
+    recurringResult,
+    accountsResult,
+    balancesResult,
+    incomeCategoriesResult,
+    expenseCategoriesResult,
+    holidaysResult,
+  ] = await Promise.all([
+    listRecurring(),
+    listAccounts({ is_active: true }),
+    listAccountBalances(),
+    listCategoriesForType("Income"),
+    listCategoriesForType("Expense"),
+    getBankHolidays(),
+  ]);
+
+  // RecurringForm's live timing preview degrades to "weekend-aware only"
+  // (no holidays) if this fails to load -- what actually gets saved is
+  // still resolved authoritatively server-side (lib/db/recurring.ts), so a
+  // failed read here is a preview inconvenience, not a correctness issue.
+  const holidays = holidaysResult.data ? Array.from(holidaysResult.data) : [];
 
   if (recurringResult.error !== null) {
     return (
@@ -73,6 +87,7 @@ export default async function RecurringPage() {
                 incomeCategories={incomeCategories}
                 expenseCategories={expenseCategories}
                 accounts={accounts}
+                holidays={holidays}
                 label="Add your first schedule"
               />
             ) : undefined
@@ -93,6 +108,7 @@ export default async function RecurringPage() {
         incomeCategories={incomeCategories}
         expenseCategories={expenseCategories}
         accounts={accounts}
+        holidays={holidays}
       />
 
       {/* Paused schedules stay in this one list, dimmed and badged, rather
@@ -115,6 +131,7 @@ export default async function RecurringPage() {
               incomeCategories={incomeCategories}
               expenseCategories={expenseCategories}
               accounts={accounts}
+              holidays={holidays}
               estimatedAmount={estimateCardPaymentDue(cardBalance)}
               today={today}
             />

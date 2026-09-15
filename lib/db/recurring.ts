@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import { describeReadError, describeWriteError, logDbError } from "@/lib/db/errors";
 import { todayISO, addDaysISO } from "@/lib/date";
+import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
+import { getBankHolidays } from "@/lib/db/holidays";
 
 type RecurringRow = Database["public"]["Tables"]["recurring_transactions"]["Row"];
 type RecurringInsert = Database["public"]["Tables"]["recurring_transactions"]["Insert"];
@@ -190,9 +192,30 @@ export async function getRecurring(id: string): Promise<DbResult<RecurringWithRe
   return { data: flatten(data), error: null };
 }
 
+// Shared by createRecurring/updateRecurring: next_due_date is the resolved
+// (business-day-adjusted) date derived from next_run_date/
+// business_day_offset/non_business_day_rule -- see
+// 20260914000024_24_recurring_business_day_rules.sql for why this is
+// written by the app rather than computed live in SQL. lib/businessDays.ts
+// is the actual implementation; this just supplies it with the holiday set.
+async function computeNextDueDate(
+  nextRunDateISO: string,
+  businessDayOffset: number,
+  nonBusinessDayRule: string,
+): Promise<string> {
+  const holidaysRes = await getBankHolidays();
+  const holidays = holidaysRes.data ?? new Set<string>();
+  return resolveDueDate(
+    nextRunDateISO,
+    businessDayOffset,
+    nonBusinessDayRule as NonBusinessDayRule,
+    holidays,
+  );
+}
+
 export type CreateRecurringInput = Omit<
   RecurringInsert,
-  "userid" | "id" | "created_at" | "is_active"
+  "userid" | "id" | "created_at" | "is_active" | "next_due_date"
 >;
 
 export async function createRecurring(
@@ -210,9 +233,15 @@ export async function createRecurring(
     };
   }
 
+  const next_due_date = await computeNextDueDate(
+    input.next_run_date,
+    input.business_day_offset ?? 0,
+    input.non_business_day_rule ?? "none",
+  );
+
   const { data, error } = await supabase
     .from("recurring_transactions")
-    .insert({ ...input, userid })
+    .insert({ ...input, userid, next_due_date })
     .select()
     .single();
 
@@ -223,17 +252,36 @@ export async function createRecurring(
   return { data, error: null };
 }
 
-export type UpdateRecurringPatch = Omit<RecurringUpdate, "id" | "userid" | "created_at">;
+export type UpdateRecurringPatch = Omit<
+  RecurringUpdate,
+  "id" | "userid" | "created_at" | "next_due_date"
+>;
 
+// Recomputes next_due_date whenever the patch touches next_run_date -- the
+// one field every real edit submits (RecurringForm always sends it,
+// alongside business_day_offset/non_business_day_rule together -- see
+// lib/actions/recurring.ts's parseRecurringFields). A hypothetical future
+// caller that changes business_day_offset/non_business_day_rule WITHOUT
+// next_run_date would leave next_due_date stale; v_integrity_issues'
+// recurring_due_date_stale branch exists to catch exactly that.
 export async function updateRecurring(
   id: string,
   patch: UpdateRecurringPatch,
 ): Promise<DbResult<RecurringRow>> {
   const supabase = await createClient();
 
+  const fullPatch: RecurringUpdate = { ...patch };
+  if (patch.next_run_date !== undefined) {
+    fullPatch.next_due_date = await computeNextDueDate(
+      patch.next_run_date,
+      patch.business_day_offset ?? 0,
+      patch.non_business_day_rule ?? "none",
+    );
+  }
+
   const { data, error } = await supabase
     .from("recurring_transactions")
-    .update(patch)
+    .update(fullPatch)
     .eq("id", id)
     .select()
     .single();
@@ -381,6 +429,10 @@ type DueRecurringRow = {
   frequency: string;
   interval_count: number;
   occurrence_limit: number | null;
+  // Business-day resolution (20260914000024_24_recurring_business_day_rules.sql)
+  // -- see lib/businessDays.ts's resolveDueDate for what these mean.
+  business_day_offset: number;
+  non_business_day_rule: string;
   category: { category_type: string } | null;
   // Variable-amount schedule (20260912000023_23_recurring_variable_amount.sql)
   // -- amount_is_variable only ever true alongside to_accountid set
@@ -440,20 +492,37 @@ export const generateDueOccurrences = cache(async (): Promise<
 
   const today = todayISO();
 
+  // A raw next_run_date past today can still be DUE today once resolved --
+  // non_business_day_rule = 'before' can shift the resolved date earlier
+  // than the raw one (e.g. a Saturday anchor shifting back to Friday). This
+  // prefilter is a coarse net, not the correctness boundary: the loop below
+  // re-checks the resolved date against `today` before posting anything.
+  // 7 days safely covers the longest holiday+weekend cluster in the seeded
+  // bank_holidays calendar (e.g. a Friday-observed Christmas running into
+  // the weekend).
+  const BUSINESS_DAY_QUERY_BUFFER_DAYS = 7;
+
   // RLS scopes this to the caller's own rows already -- no manual userid
   // filter needed (see CLAUDE.md "Data layer rules").
   const { data: due, error: dueError } = await supabase
     .from("recurring_transactions")
     .select(
-      "id, description, amount, accountid, categoryid, to_accountid, next_run_date, start_date, end_date, frequency, interval_count, occurrence_limit, category:categories(category_type), amount_is_variable, next_amount, next_amount_confirmed_at",
+      "id, description, amount, accountid, categoryid, to_accountid, next_run_date, start_date, end_date, frequency, interval_count, occurrence_limit, business_day_offset, non_business_day_rule, category:categories(category_type), amount_is_variable, next_amount, next_amount_confirmed_at",
     )
     .eq("is_active", true)
-    .lte("next_run_date", today)
+    .lte("next_run_date", addDaysISO(today, BUSINESS_DAY_QUERY_BUFFER_DAYS))
     .returns<DueRecurringRow[]>();
 
   if (dueError) {
     return { data: null, error: describeReadError(dueError, "recurring transactions") };
   }
+
+  // Fetched once for the whole batch -- resolveDueDate is a pure in-memory
+  // call from here on, no per-occurrence round trip. A failed read degrades
+  // to an empty holiday set (every schedule resolves as if no holidays
+  // exist -- still weekend-aware) rather than blocking catch-up entirely.
+  const holidaysRes = await getBankHolidays();
+  const holidays = holidaysRes.data ?? new Set<string>();
 
   const created: GeneratedOccurrence[] = [];
 
@@ -488,12 +557,30 @@ export const generateDueOccurrences = cache(async (): Promise<
       remaining = template.occurrence_limit - (count ?? 0);
     }
 
-    while (cursor <= today && remaining > 0) {
+    while (remaining > 0) {
       // Mirrors v_upcoming_recurring's own end-date guard: a template that
       // has already ended isn't due again even if next_run_date wasn't
       // advanced past it. Leave next_run_date as-is -- there's nothing left
-      // to catch up.
+      // to catch up. Deliberately keyed off the raw cursor, not the
+      // resolved due date -- the same simplification 25_bank_holidays.sql's
+      // v_upcoming_recurring guard makes; the two can differ by at most a
+      // few days right at a schedule's last occurrence.
       if (template.end_date && cursor > template.end_date) break;
+
+      // The date money actually moves for this occurrence -- see
+      // lib/businessDays.ts's resolveDueDate. cursor itself keeps stepping
+      // through the raw cadence below (nextOccurrenceISO), never this
+      // adjusted value -- resolving cursor before advancing would drift a
+      // Monthly/Quarterly/Yearly schedule's day-of-month the moment a
+      // business-day shift crosses a month boundary (same hazard
+      // addMonthsClampedISO's own comment warns about for a clamped date).
+      const dueDate = resolveDueDate(
+        cursor,
+        template.business_day_offset,
+        template.non_business_day_rule as NonBusinessDayRule,
+        holidays,
+      );
+      if (dueDate > today) break;
 
       // A variable schedule (credit card payment) can't post without a
       // confirmed amount for this occurrence -- rectx_next_amount_requires_
@@ -529,7 +616,7 @@ export const generateDueOccurrences = cache(async (): Promise<
                   categoryid: null,
                   amount: occurrenceAmount,
                   transaction_type: "Expense",
-                  transaction_date: cursor,
+                  transaction_date: dueDate,
                   description: template.description,
                   recurringid: template.id,
                   transfer_group_id,
@@ -540,7 +627,7 @@ export const generateDueOccurrences = cache(async (): Promise<
                   categoryid: null,
                   amount: occurrenceAmount,
                   transaction_type: "Income",
-                  transaction_date: cursor,
+                  transaction_date: dueDate,
                   description: template.description,
                   recurringid: template.id,
                   transfer_group_id,
@@ -557,7 +644,7 @@ export const generateDueOccurrences = cache(async (): Promise<
                 // categories with categoryid not null (rectx_category_required
                 // guarantees it), so category is always present here.
                 transaction_type: template.category!.category_type,
-                transaction_date: cursor,
+                transaction_date: dueDate,
                 description: template.description,
                 recurringid: template.id,
               },
@@ -583,7 +670,7 @@ export const generateDueOccurrences = cache(async (): Promise<
         }
 
         logDbError(
-          `[db:recurring] failed generating occurrence for ${template.id} on ${cursor}:`,
+          `[db:recurring] failed generating occurrence for ${template.id} on ${dueDate}:`,
           insertError,
         );
         break;
@@ -605,7 +692,15 @@ export const generateDueOccurrences = cache(async (): Promise<
       // means the confirmed next_amount was just consumed (posted, or
       // already posted by a racing request -- see the 23505 branch above),
       // so it's cleared for the next cycle to prompt again.
-      const patch: RecurringUpdate = { next_run_date: cursor };
+      const patch: RecurringUpdate = {
+        next_run_date: cursor,
+        next_due_date: resolveDueDate(
+          cursor,
+          template.business_day_offset,
+          template.non_business_day_rule as NonBusinessDayRule,
+          holidays,
+        ),
+      };
       if (template.amount_is_variable) {
         patch.next_amount = null;
         patch.next_amount_confirmed_at = null;
@@ -639,8 +734,8 @@ export async function getUpcoming(daysAhead: number): Promise<DbResult<UpcomingR
   const { data, error } = await supabase
     .from("v_upcoming_recurring")
     .select("*")
-    .lte("next_run_date", horizon)
-    .order("next_run_date", { ascending: true });
+    .lte("next_due_date", horizon)
+    .order("next_due_date", { ascending: true });
 
   if (error) {
     return { data: null, error: describeReadError(error, "upcoming transactions") };

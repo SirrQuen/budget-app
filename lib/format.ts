@@ -35,6 +35,14 @@ const shortDate = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
 });
 
+// Composed from two formatters rather than one -- Intl has no en-US option
+// for "weekday, day month" (day-before-month) ordering, only "weekday,
+// month day[, year]". en-GB's day/month order gives the "3 October" half
+// plain (no ordinal suffix, no comma); weekday stays en-US for the same
+// spelled-out weekday name every other formatter here uses.
+const weekdayLong = new Intl.DateTimeFormat("en-US", { weekday: "long" });
+const dayMonthLong = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long" });
+
 const ISO_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 // Postgres `date` columns (transaction_date, opening_date, budget periods,
@@ -99,6 +107,38 @@ export function formatDateShort(date: string | Date): string {
   try {
     const parsed = parseDisplayDate(date);
     return parsed ? shortDate.format(parsed) : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * "Friday 3 October" -- weekday + day + month, no year. For the
+ * safe-to-spend hero's window line and RecurringForm's live timing
+ * preview, where the weekday is the point (it's what a user actually
+ * checks against their own bank). Same never-throws contract as
+ * formatDate.
+ */
+export function formatDateWithWeekday(date: string | Date): string {
+  try {
+    const parsed = parseDisplayDate(date);
+    return parsed ? `${weekdayLong.format(parsed)} ${dayMonthLong.format(parsed)}` : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * "30 September" -- day + month, no weekday, no year. The safe-to-spend
+ * hero's end-of-month fallback ("through 30 September") deliberately drops
+ * the weekday formatDateWithWeekday adds for a real payday -- the month
+ * boundary isn't a date a user checks against anything. Same never-throws
+ * contract as formatDate.
+ */
+export function formatDayMonth(date: string | Date): string {
+  try {
+    const parsed = parseDisplayDate(date);
+    return parsed ? dayMonthLong.format(parsed) : "";
   } catch {
     return "";
   }

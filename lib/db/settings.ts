@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { coerceTheme, type Theme } from "@/lib/theme";
+import { coerceSafeToSpendWindowPref, type SafeToSpendWindowPref } from "@/lib/safeToSpendWindow";
 import type { Database } from "@/lib/database.types";
 import { describeReadError } from "@/lib/db/errors";
 
@@ -39,6 +40,45 @@ export const getTheme = cache(async (): Promise<Theme> => {
   const result = await getSettings();
   return coerceTheme(result.data?.theme);
 });
+
+// Never throws and never surfaces an error, same contract as getTheme --
+// a settings read failing isn't a reason to fail the dashboard, and null
+// (unset) is itself a legitimate, meaningful value here (see
+// lib/safeToSpendWindow.ts): it means "use the dynamic default," not "we
+// don't know."
+export const getSafeToSpendWindowPref = cache(async (): Promise<SafeToSpendWindowPref | null> => {
+  const result = await getSettings();
+  return coerceSafeToSpendWindowPref(result.data?.safe_to_spend_window);
+});
+
+export async function updateSafeToSpendWindowPref(
+  pref: SafeToSpendWindowPref,
+): Promise<DbResult<SafeToSpendWindowPref>> {
+  const supabase = await createClient();
+
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  const userid = claimsData?.claims?.sub;
+
+  if (claimsError || !userid) {
+    return {
+      data: null,
+      error: "Your session's expired. Log in again to pick up where you left off.",
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("settings")
+    .update({ safe_to_spend_window: pref, updated_at: new Date().toISOString() })
+    .eq("userid", userid)
+    .select("safe_to_spend_window")
+    .single();
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "settings") };
+  }
+
+  return { data: coerceSafeToSpendWindowPref(data.safe_to_spend_window) ?? pref, error: null };
+}
 
 export async function updateTheme(theme: Theme): Promise<DbResult<Theme>> {
   const supabase = await createClient();

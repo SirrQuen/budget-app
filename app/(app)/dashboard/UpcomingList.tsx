@@ -34,7 +34,7 @@ export function UpcomingList({ items }: { items: UpcomingRow[] }) {
               )}
               <span className="min-w-0 flex-1 truncate text-ink">{r.description}</span>
               <span className="shrink-0 tabular-nums text-ink-secondary">
-                {r.next_run_date ? formatDateShort(r.next_run_date) : "—"}
+                {r.next_due_date ? formatDateShort(r.next_due_date) : "—"}
               </span>
               <span className="shrink-0 tabular-nums font-medium text-ink">
                 {formatCurrency(r.amount ?? 0)}
