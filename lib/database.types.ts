@@ -1342,6 +1342,7 @@ export type Database = {
           start_date: string | null
           statement_day: number | null
           to_account_name: string | null
+          to_account_type: string | null
           to_accountid: string | null
           userid: string | null
         }

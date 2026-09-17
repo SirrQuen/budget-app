@@ -6,6 +6,7 @@ import { todayISO, addDaysISO, endOfMonthISO, daysBetweenInclusive } from "@/lib
 import type { DashboardRange } from "@/lib/dashboardRange";
 import { describeReadError } from "@/lib/db/errors";
 import { getSafeToSpendWindowPref } from "@/lib/db/settings";
+import { isSafeToSpendCommitment } from "@/lib/safeToSpend";
 
 type DashboardKpisRow = Database["public"]["Views"]["v_dashboard_kpis"]["Row"];
 type NetWorthRow = Database["public"]["Views"]["v_net_worth"]["Row"];
@@ -620,12 +621,12 @@ export type SafeToSpendIncome = {
 
 export type SafeToSpend = {
   /**
-   * Balance across spendable cash accounts only -- Checking, Savings, Cash.
-   * Investment is excluded: a 401k or IRA can't be spent without penalty
-   * and tax, and counting it inflates the figure past usefulness. Credit
-   * Card and Loan are excluded too. This is v_dashboard_kpis.cash_balance,
-   * which sums exactly those active account balances in SQL. Investment
-   * accounts still count toward net worth, which this does not feed.
+   * Sum of v_account_balances.balance for active Checking/Savings accounts
+   * only -- see isSpendableAccountType in lib/safeToSpend.ts. Investment,
+   * Cash, Credit Card and Loan are all excluded by the safe-to-spend rule:
+   * Investment can't be spent without penalty/tax, and Credit Card/Loan
+   * are liabilities, not cash. Investment still counts toward net worth,
+   * which this does not feed.
    */
   cashOnHand: number;
   /**
@@ -670,7 +671,11 @@ type UpcomingCommitmentRow = {
   next_due_date: string;
   // Null for a transfer template -- see the kind filter below.
   category_type: string | null;
+  account_type: string;
   to_accountid: string | null;
+  // Null for an Expense row (no destination account); always set for a
+  // Transfer -- see isSafeToSpendCommitment in lib/safeToSpend.ts.
+  to_account_type: string | null;
   is_estimated_amount: boolean;
 };
 
@@ -720,9 +725,34 @@ export const getSoonestIncomeOccurrence = cache(
   },
 );
 
-// "Safe to spend" = spendable cash, minus the recurring bills still to
-// land before the window closes. Deliberately no budget term -- see
-// SafeToSpend.safeToSpend.
+// "Safe to spend" = cash on hand, minus the commitments still due before
+// the window closes. Deliberately no budget term, and no expected income --
+// see SafeToSpend.safeToSpend. The commitment RULE is spelled out once, in
+// full, right here rather than split across the query and a filter
+// elsewhere -- this function gets re-read, so the whole shape needs to be
+// visible in one place:
+//
+//   Cash on hand = sum of v_account_balances.balance for active accounts
+//   with account_type in ('Checking', 'Savings'). Investment, Cash, Credit
+//   Card and Loan never contribute -- see SafeToSpend.cashOnHand.
+//
+//   Commitments = every upcoming recurring row due between today and the
+//   window's end (inclusive) that moves money OUT of that same
+//   Checking/Savings set:
+//     - an Expense charged to Checking or Savings -> subtract
+//     - a Transfer out of Checking/Savings to an account outside that set
+//       (Investment, Cash, Credit Card, Loan) -> subtract
+//     - a Transfer between two Checking/Savings accounts -> NOT a
+//       commitment, the money is still spendable, just elsewhere
+//     - anything drawn from Cash, Investment, Credit Card or Loan -> NOT a
+//       commitment, including an Expense charged to a credit card (no cash
+//       moves until the card is paid, and that payment's own commitment
+//       covers it)
+//   isSafeToSpendCommitment (lib/safeToSpend.ts) is the pure decision table
+//   for this, unit-tested against all seven row shapes above.
+//
+//   No expected income is ever added. Safe-to-spend is conservative by
+//   design.
 //
 // The window itself defaults to the next payday (the soonest upcoming
 // Income schedule landing in Checking/Savings), falling back to end of
@@ -730,17 +760,14 @@ export const getSoonestIncomeOccurrence = cache(
 // 20260914000026_26_safe_to_spend_window_setting.sql. A user can pin it to
 // end-of-month or a rolling 30 days instead.
 //
-// cash comes from v_dashboard_kpis.cash_balance -- SQL-summed over active
-// Checking / Savings / Cash accounts only, never Investment. The recurring
-// side reads v_upcoming_recurring (21_upcoming_recurring_category_type),
-// not the base table -- the view already carries is_active, the end-date
-// guard, AND the occurrence_limit-exhaustion guard (19_recurring_transfers)
-// that a direct base-table query has no way to apply: an exhausted
-// schedule's next_run_date freezes on whatever date the generator last
-// advanced it to (see lib/db/recurring.ts), which can still fall inside
-// this window even though that occurrence will never actually post.
+// The recurring side reads v_upcoming_recurring
+// (27_safe_to_spend_to_account_type), not the base table -- the view
+// already carries is_active, the end-date guard, the
+// occurrence_limit-exhaustion guard (19_recurring_transfers) a direct
+// base-table query has no way to apply, AND both legs' account_type,
+// needed by isSafeToSpendCommitment.
 //
-// The one subtraction and the commitment sum run in integer cents, never JS
+// Every subtraction and the commitment sum run in integer cents, never JS
 // floats -- amount is exact `numeric` and this figure is shown to the cent
 // (same rule TransactionsList's selected-total already follows).
 export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
@@ -749,7 +776,11 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   const today = todayISO();
 
   const [cashRes, incomeRes, windowPref] = await Promise.all([
-    supabase.from("v_dashboard_kpis").select("cash_balance").maybeSingle(),
+    supabase
+      .from("v_account_balances")
+      .select("balance")
+      .eq("is_active", true)
+      .in("account_type", ["Checking", "Savings"]),
     getSoonestIncomeOccurrence(),
     getSafeToSpendWindowPref(),
   ]);
@@ -787,7 +818,7 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   const recurringRes = await supabase
     .from("v_upcoming_recurring")
     .select(
-      "recurring_id, description, amount, next_due_date, category_type, to_accountid, is_estimated_amount",
+      "recurring_id, description, amount, next_due_date, category_type, account_type, to_accountid, to_account_type, is_estimated_amount",
     )
     .gte("next_due_date", today)
     .lte("next_due_date", windowEnd)
@@ -799,12 +830,17 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   }
 
   const commitments: SafeToSpendCommitment[] = recurringRes.data
-    // Outflows only. An Income category schedule funds the account, it
-    // doesn't draw it down -- and a transfer (to_accountid set, category_type
-    // null) always draws down its source account, the same way "Make a
-    // payment" already does for a one-off transfer: it's cash leaving
-    // accountid regardless of what the destination is.
+    // Income rows fund an account, they don't draw it down -- excluded up
+    // front rather than fed to the classifier, which only knows about
+    // Expense/Transfer. Everything else runs through the shared rule.
     .filter((row) => row.to_accountid !== null || row.category_type === "Expense")
+    .filter((row) =>
+      isSafeToSpendCommitment({
+        transactionType: row.to_accountid !== null ? "Transfer" : "Expense",
+        fromAccountType: row.account_type,
+        toAccountType: row.to_account_type,
+      }),
+    )
     .map((row) => ({
       recurringId: row.recurring_id,
       name: row.description,
@@ -813,7 +849,10 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
       isEstimate: row.is_estimated_amount,
     }));
 
-  const cashCents = Math.round((cashRes.data?.cash_balance ?? 0) * 100);
+  const cashCents = (cashRes.data ?? []).reduce(
+    (cents, row) => cents + Math.round((row.balance ?? 0) * 100),
+    0,
+  );
   const committedCents = commitments.reduce(
     (cents, c) => cents + Math.round(c.amount * 100),
     0,
