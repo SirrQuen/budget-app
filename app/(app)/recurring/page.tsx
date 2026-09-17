@@ -12,6 +12,13 @@ import { CreateRecurringForm } from "./CreateRecurringForm";
 import { RecurringRow } from "./RecurringRow";
 import type { TransactionAccountOption } from "../transactions/AddTransactionForm";
 
+// Name, schedule, next due, amount, actions -- identical on every row on
+// this screen, same reasoning as ACCOUNT_ROW_GRID in the accounts screen.
+// One flat list here (no type-groups to subgrid across), so RecurringRow's
+// <li> subgrids straight off this <ul>.
+const RECURRING_ROW_GRID =
+  "sm:grid sm:grid-cols-[minmax(0,min(28rem,1fr))_auto_auto_max-content_max-content] sm:gap-x-4 sm:px-4";
+
 export default async function RecurringPage() {
   const [
     recurringResult,
@@ -98,7 +105,7 @@ export default async function RecurringPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <PageHeader
         title="Recurring"
         description="Bills and paychecks that repeat -- posted automatically on their due date."
@@ -115,7 +122,9 @@ export default async function RecurringPage() {
           than dropping out of sight behind a toggle (AccountsPage hides
           archived accounts this way -- a paused schedule is meant to be
           easy to find again and resume). */}
-      <ul className="divide-y divide-hairline rounded-2xl border border-hairline bg-surface">
+      <ul
+        className={`divide-y divide-gridline rounded-2xl border border-hairline bg-surface ${RECURRING_ROW_GRID}`}
+      >
         {schedules.map((recurring) => {
           // Only meaningful when amount_is_variable and unconfirmed --
           // RecurringRow ignores it otherwise. listAccountBalances() above

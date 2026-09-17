@@ -66,7 +66,7 @@ export function AccountRow({
 
   if (editing) {
     return (
-      <li className="p-4">
+      <li className="p-4 sm:col-span-4">
         <AccountForm
           account={account}
           onSuccess={() => setEditing(false)}
@@ -78,36 +78,41 @@ export function AccountRow({
 
   return (
     <li
-      className={`flex flex-col gap-2 px-4 py-3 transition-colors duration-150 hover:bg-surface-raised sm:flex-row sm:items-center sm:gap-3 ${account.is_active ? "" : "opacity-60"}`}
+      className={`flex flex-col gap-2 px-4 py-3 transition-colors duration-150 hover:bg-surface-raised sm:col-span-4 sm:grid sm:grid-cols-subgrid sm:items-center sm:gap-y-0 sm:px-0 sm:py-0 sm:min-h-[52px] ${account.is_active ? "" : "opacity-60"}`}
     >
       {/* Below sm the actions drop onto their own line: on a liability row,
           balance + "Make a payment" + Edit + Archive on one line crushed the
           account name to nothing. `sm:contents` dissolves these wrappers from
-          sm up so the original single-line layout is unchanged. */}
+          sm up so their children land directly in the row's four subgrid
+          columns (name, type, balance, actions) instead of nesting inside
+          them. */}
       <div className="flex items-start justify-between gap-3 sm:contents">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium text-ink">{account.account_name}</span>
-            <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-secondary">
-              {account.account_type}
-            </span>
-            {!account.is_active ? (
-              <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
-                Archived
-              </span>
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:contents">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-sm font-medium text-ink">{account.account_name}</span>
+              {!account.is_active ? (
+                <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
+                  Archived
+                </span>
+              ) : null}
+            </div>
+            {account.institution ? (
+              <p className="mt-0.5 truncate text-sm text-ink-muted">{account.institution}</p>
             ) : null}
           </div>
-          {account.institution ? (
-            <p className="mt-0.5 truncate text-sm text-ink-muted">{account.institution}</p>
-          ) : null}
+
+          <span className="shrink-0 justify-self-start rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-secondary">
+            {account.account_type}
+          </span>
         </div>
 
-        <span className="shrink-0 text-sm font-medium tabular-nums text-ink">
+        <span className="shrink-0 justify-self-end text-right text-sm font-medium tabular-nums text-ink">
           {formatAccountBalance(account.balance ?? 0, account.account_type ?? "")}
         </span>
       </div>
 
-      <div className="-mx-2 flex shrink-0 items-center gap-1 sm:contents">
+      <div className="-mx-2 flex shrink-0 items-center gap-1 sm:col-start-4 sm:mx-0 sm:justify-self-end">
         {archiveError ? <span className="px-2 text-sm text-critical sm:px-0">{archiveError}</span> : null}
         {canMakePayment ? (
           <button

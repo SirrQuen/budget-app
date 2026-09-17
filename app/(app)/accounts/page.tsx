@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { listAccountBalances, listAccounts, getMostUsedAssetAccountId } from "@/lib/db/accounts";
 import { getNetWorth } from "@/lib/db/dashboard";
@@ -18,6 +19,21 @@ import type { TransactionAccountOption } from "../transactions/AddTransactionFor
 type AccountBalanceRow = Database["public"]["Views"]["v_account_balances"]["Row"] & {
   opening_date: string | null;
 };
+
+// Name, type, balance, actions -- identical on every row on this screen so
+// values fall into a real column instead of drifting per row. The name
+// track behaves like 1fr (grows to fill, shrinks to 0) but never grows past
+// 28rem: min() inside minmax() caps it without giving up the flex.
+// AccountRow's <li> and each group's <ul> pick this up via
+// grid-cols-subgrid rather than restating it, so "auto"/"max-content"
+// resolve against every row in the section at once -- across group
+// boundaries, not just within one.
+// px-4 lives here, not on each row/heading, at sm+: a subgridded row (see
+// AccountRow) inherits column-line positions straight from this container,
+// and giving the row its own padding too would inset its subgrid from
+// those lines by a second, compounding amount. One inset, in one place.
+export const ACCOUNT_ROW_GRID =
+  "sm:grid sm:grid-cols-[minmax(0,min(28rem,1fr))_auto_max-content_max-content] sm:gap-x-4 sm:px-4";
 
 function isNamedAccount<T extends AccountBalanceRow>(
   a: T,
@@ -131,16 +147,24 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
   const assetGroups = typeGroups.filter((group) => !isLiabilityAccountType(group.type));
   const liabilityGroups = typeGroups.filter((group) => isLiabilityAccountType(group.type));
 
-  function renderGroup(group: (typeof typeGroups)[number]) {
+  // isFirst suppresses the divider above the very first group in a section
+  // -- every other group gets one so its heading doesn't fuse into the
+  // previous group's last row.
+  function renderGroup(group: (typeof typeGroups)[number], isFirst: boolean) {
     return (
-      <div key={group.type}>
-        <h3 className="px-4 py-2 text-sm font-semibold text-ink-secondary">
+      // A Fragment, not a div -- h3 and ul need to be direct children of
+      // the section's grid below so they can span/subgrid its columns.
+      // A wrapping div would itself become a single ungridded cell.
+      <Fragment key={group.type}>
+        <h3
+          className={`px-4 py-2 text-sm font-semibold text-ink-secondary sm:col-span-4 sm:px-0 ${isFirst ? "" : "border-t border-hairline"}`}
+        >
           {group.type} <span className="text-ink-muted">·</span>{" "}
           <span className="tabular-nums text-ink">
             {formatAccountBalance(group.subtotal, group.type)}
           </span>
         </h3>
-        <ul className="divide-y divide-hairline">
+        <ul className="divide-y divide-gridline sm:col-span-4 sm:grid sm:grid-cols-subgrid">
           {group.accounts.map((account) => (
             <AccountRow
               key={account.account_id}
@@ -152,12 +176,14 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
             />
           ))}
         </ul>
-      </div>
+      </Fragment>
     );
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    // 72rem cap, centred -- on a wide screen the extra width becomes page
+    // margin instead of stretching the row grid's gap between columns.
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <PageHeader title="Accounts" description="Every place your money lives, in one list." />
 
       <StatTile
@@ -205,8 +231,10 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
               <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-ink-muted">
                 What you have
               </h2>
-              <div className="divide-y divide-hairline rounded-2xl border border-hairline bg-surface">
-                {assetGroups.map(renderGroup)}
+              <div
+                className={`rounded-2xl border border-hairline bg-surface ${ACCOUNT_ROW_GRID}`}
+              >
+                {assetGroups.map((group, i) => renderGroup(group, i === 0))}
               </div>
             </section>
           ) : null}
@@ -220,8 +248,10 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
               <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-ink-muted">
                 What you owe
               </h2>
-              <div className="divide-y divide-hairline rounded-2xl border border-hairline bg-surface">
-                {liabilityGroups.map(renderGroup)}
+              <div
+                className={`rounded-2xl border border-hairline bg-surface ${ACCOUNT_ROW_GRID}`}
+              >
+                {liabilityGroups.map((group, i) => renderGroup(group, i === 0))}
               </div>
             </section>
           ) : null}

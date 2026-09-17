@@ -15,6 +15,48 @@ export type CategoryWithGroup = CategoryRow & {
 
 export type DbResult<T> = { data: T; error: null } | { data: null; error: string };
 
+export type CategoryActivity = {
+  categoryId: string;
+  /** Sum of amount for this category's own transactions this calendar
+   * month -- always the category's own direction (Expense spent /
+   * Income earned), never signed -- see v_category_activity. */
+  currentMonthTotal: number;
+  /** All-time, not just this month -- 0 means the category has never been
+   * used, the "Not used yet" state the categories screen shows instead of
+   * an amount. */
+  lifetimeTransactionCount: number;
+  lastTransactionDate: string | null;
+};
+
+// The categories screen's "This month" column -- kept separate from
+// listCategories/listCategoryGroups (and from v_category_spending, which
+// is Expense-only and feeds the dashboard) so a category with zero
+// activity this month is still distinguishable from one that's never been
+// used at all.
+export async function listCategoryActivity(): Promise<DbResult<CategoryActivity[]>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("v_category_activity")
+    .select("category_id, current_month_total, lifetime_transaction_count, last_transaction_date");
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "categories") };
+  }
+
+  return {
+    data: data
+      .filter((row): row is typeof row & { category_id: string } => row.category_id !== null)
+      .map((row) => ({
+        categoryId: row.category_id,
+        currentMonthTotal: row.current_month_total ?? 0,
+        lifetimeTransactionCount: row.lifetime_transaction_count ?? 0,
+        lastTransactionDate: row.last_transaction_date,
+      })),
+    error: null,
+  };
+}
+
 export type ListCategoriesOptions = {
   category_type?: TransactionType;
   is_active?: boolean;

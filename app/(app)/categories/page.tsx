@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { listCategories, listCategoryGroups, type CategoryWithGroup } from "@/lib/db/categories";
+import {
+  listCategories,
+  listCategoryActivity,
+  listCategoryGroups,
+  type CategoryActivity,
+  type CategoryWithGroup,
+} from "@/lib/db/categories";
 import type { TransactionType } from "@/lib/db/transactions";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -13,6 +19,16 @@ const TYPE_FILTERS: { label: string; value: TransactionType | "all" }[] = [
   { label: "Income", value: "Income" },
   { label: "Expense", value: "Expense" },
 ];
+
+// Name, group, this month, actions -- identical on every group's list on
+// this screen so the money column reads as a real column, same reasoning
+// as ACCOUNT_ROW_GRID in the accounts screen. Each group here is its own
+// separate card (no shared section wrapping several groups the way
+// accounts nests type-groups inside "What you have"), so this template is
+// applied independently per group rather than subgridded across all of
+// them -- see CategoryRow's own grid-cols-subgrid for the row level.
+const CATEGORY_ROW_GRID =
+  "sm:grid sm:grid-cols-[minmax(0,min(28rem,1fr))_auto_max-content_max-content] sm:gap-x-4 sm:px-4";
 
 function buildHref(type: TransactionType | "all", archived: boolean) {
   const params = new URLSearchParams();
@@ -28,16 +44,23 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/categ
     params.type === "Income" || params.type === "Expense" ? params.type : "all";
   const showArchived = params.archived === "1";
 
-  const [categoriesResult, groupsResult] = await Promise.all([
+  const [categoriesResult, groupsResult, activityResult] = await Promise.all([
     listCategories({
       ...(type !== "all" ? { category_type: type } : {}),
       ...(showArchived ? {} : { is_active: true }),
     }),
     listCategoryGroups(),
+    // "This month" only -- a failure here shouldn't take down the whole
+    // categories list, so it's deliberately left out of the error check
+    // below. CategoryRow treats a missing entry as zero activity.
+    listCategoryActivity(),
   ]);
+  const activityByCategoryId = new Map(
+    (activityResult.data ?? []).map((a) => [a.categoryId, a]),
+  );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <PageHeader
         title="Categories"
         description="Organize how your spending and income are grouped."
@@ -87,7 +110,11 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/categ
       ) : (
         <>
           <CreateCategoryForm groups={groupsResult.data} />
-          <CategoryGroups categories={categoriesResult.data} groups={groupsResult.data} />
+          <CategoryGroups
+            categories={categoriesResult.data}
+            groups={groupsResult.data}
+            activityByCategoryId={activityByCategoryId}
+          />
         </>
       )}
     </div>
@@ -97,9 +124,11 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/categ
 function CategoryGroups({
   categories,
   groups,
+  activityByCategoryId,
 }: {
   categories: CategoryWithGroup[];
   groups: { id: string; name: string }[];
+  activityByCategoryId: Map<string, CategoryActivity>;
 }) {
   const byGroup = new Map<string, CategoryWithGroup[]>();
   for (const category of categories) {
@@ -130,12 +159,29 @@ function CategoryGroups({
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Roughly, not precisely, over the money column of each card below --
+          each group's own grid sizes its columns off its own content, so a
+          single page-level caption can't subgrid into all of them the way
+          AccountRow's does within one section. Naming the "This month"
+          column once here beats repeating the label inside every card. */}
+      <div className="hidden items-center justify-between px-1 text-xs font-semibold uppercase tracking-wide text-ink-muted sm:flex">
+        <span>Category</span>
+        <span>This month</span>
+      </div>
+
       {visibleGroups.map((group) => (
         <section key={group.id} className="flex flex-col gap-2">
           <h2 className="px-1 text-sm font-semibold text-ink-secondary">{group.name}</h2>
-          <ul className="divide-y divide-hairline rounded-2xl border border-hairline bg-surface">
+          <ul
+            className={`divide-y divide-gridline rounded-2xl border border-hairline bg-surface ${CATEGORY_ROW_GRID}`}
+          >
             {(byGroup.get(group.id) ?? []).map((category) => (
-              <CategoryRow key={category.id} category={category} groups={groups} />
+              <CategoryRow
+                key={category.id}
+                category={category}
+                groups={groups}
+                activity={activityByCategoryId.get(category.id) ?? null}
+              />
             ))}
           </ul>
         </section>

@@ -133,6 +133,13 @@ export type Database = {
             foreignKeyName: "budgets_categoryid_fkey"
             columns: ["categoryid"]
             isOneToOne: false
+            referencedRelation: "v_category_activity"
+            referencedColumns: ["category_id"]
+          },
+          {
+            foreignKeyName: "budgets_categoryid_fkey"
+            columns: ["categoryid"]
+            isOneToOne: false
             referencedRelation: "v_category_spending"
             referencedColumns: ["category_id"]
           },
@@ -647,6 +654,13 @@ export type Database = {
             foreignKeyName: "recurring_transactions_categoryid_fkey"
             columns: ["categoryid"]
             isOneToOne: false
+            referencedRelation: "v_category_activity"
+            referencedColumns: ["category_id"]
+          },
+          {
+            foreignKeyName: "recurring_transactions_categoryid_fkey"
+            columns: ["categoryid"]
+            isOneToOne: false
             referencedRelation: "v_category_spending"
             referencedColumns: ["category_id"]
           },
@@ -876,6 +890,13 @@ export type Database = {
             foreignKeyName: "transactions_categoryid_fkey"
             columns: ["categoryid"]
             isOneToOne: false
+            referencedRelation: "v_category_activity"
+            referencedColumns: ["category_id"]
+          },
+          {
+            foreignKeyName: "transactions_categoryid_fkey"
+            columns: ["categoryid"]
+            isOneToOne: false
             referencedRelation: "v_category_spending"
             referencedColumns: ["category_id"]
           },
@@ -988,6 +1009,31 @@ export type Database = {
           },
           {
             foreignKeyName: "budgets_userid_fkey"
+            columns: ["userid"]
+            isOneToOne: false
+            referencedRelation: "v_dashboard_kpis"
+            referencedColumns: ["userid"]
+          },
+        ]
+      }
+      v_category_activity: {
+        Row: {
+          category_id: string | null
+          current_month_total: number | null
+          last_transaction_date: string | null
+          lifetime_transaction_count: number | null
+          userid: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_userid_fkey"
+            columns: ["userid"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "categories_userid_fkey"
             columns: ["userid"]
             isOneToOne: false
             referencedRelation: "v_dashboard_kpis"
@@ -1373,6 +1419,13 @@ export type Database = {
             columns: ["categoryid"]
             isOneToOne: false
             referencedRelation: "v_budget_vs_actual"
+            referencedColumns: ["category_id"]
+          },
+          {
+            foreignKeyName: "recurring_transactions_categoryid_fkey"
+            columns: ["categoryid"]
+            isOneToOne: false
+            referencedRelation: "v_category_activity"
             referencedColumns: ["category_id"]
           },
           {
