@@ -8,6 +8,7 @@ import { describeReadError } from "@/lib/db/errors";
 import { getSafeToSpendWindowPref } from "@/lib/db/settings";
 import { isSafeToSpendCommitment } from "@/lib/safeToSpend";
 import { paydayWindowEnd } from "@/lib/recurringSchedule";
+import { deriveLoggingStreak, type LoggingStreakSummary } from "@/lib/streak";
 
 type DashboardKpisRow = Database["public"]["Views"]["v_dashboard_kpis"]["Row"];
 type NetWorthRow = Database["public"]["Views"]["v_net_worth"]["Row"];
@@ -480,72 +481,11 @@ export async function getCashflowChart(days = 90): Promise<DbResult<CashflowPoin
   return { data: points, error: null };
 }
 
-export type LoggingStreak = {
-  /** Consecutive days ending today or yesterday -- 0 once a day is missed. */
-  current: number;
-  /** Longest consecutive run found in the 90-day window, current included. */
-  best: number;
-  /** Whether today already has a logged transaction. */
-  loggedToday: boolean;
-};
-
 function localISODate(d: Date): string {
   // Local calendar day, not UTC -- see AddTransactionForm's todayISO for why
   // the offset adjustment matters near midnight.
   const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
   return local.toISOString().slice(0, 10);
-}
-
-// True when b is exactly the calendar day after a ("YYYY-MM-DD" strings).
-// Epoch-math on Date.UTC is safe here since these are date-only values with
-// no time-of-day or DST to account for.
-function isNextCalendarDay(a: string, b: string): boolean {
-  const [ay, am, ad] = a.split("-").map(Number);
-  const [by, bm, bd] = b.split("-").map(Number);
-  return Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad) === 86_400_000;
-}
-
-// Calendar day before `dateISO` ("YYYY-MM-DD"). Same UTC-epoch approach as
-// isNextCalendarDay -- dateISO is already a plain calendar date with no
-// time-of-day, so this stays pure and doesn't need to reason about DST.
-function previousCalendarDay(dateISO: string): string {
-  const [y, m, d] = dateISO.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d) - 86_400_000).toISOString().slice(0, 10);
-}
-
-// Pure so it's testable without a DB round trip. dates need not be sorted
-// or deduped -- both happen here -- so callers can pass raw query results
-// straight through. Multiple transactions on one day collapse to one day
-// via the Set; a day with none simply isn't in `dates`, which is what
-// breaks a run (isNextCalendarDay only holds for actual next-day pairs).
-export function computeLoggingStreak(dates: string[], todayISO: string): LoggingStreak {
-  const sorted = [...new Set(dates)].sort();
-
-  let best = 0;
-  let run = 0;
-  for (let i = 0; i < sorted.length; i++) {
-    run = i > 0 && isNextCalendarDay(sorted[i - 1], sorted[i]) ? run + 1 : 1;
-    best = Math.max(best, run);
-  }
-
-  // Yesterday still counts as "current" so the streak doesn't visibly
-  // break at 12:00am before the user has had a chance to log today.
-  const yesterdayISO = previousCalendarDay(todayISO);
-  const last = sorted[sorted.length - 1];
-
-  let current = 0;
-  if (last === todayISO || last === yesterdayISO) {
-    current = 1;
-    for (let i = sorted.length - 1; i > 0; i--) {
-      if (isNextCalendarDay(sorted[i - 1], sorted[i])) {
-        current += 1;
-      } else {
-        break;
-      }
-    }
-  }
-
-  return { current, best, loggedToday: last === todayISO };
 }
 
 // Dates only, no money -- streaks are computed in JS from distinct
@@ -554,10 +494,18 @@ export function computeLoggingStreak(dates: string[], todayISO: string): Logging
 // the transactions table on every read, so there's no counter to drift
 // out of sync with reality.
 //
-// Cached per-request: the app layout, the dashboard page, and
-// getReturnSummaryFacts each ask for the streak, and without this that's
-// three identical 90-day scans on one dashboard render.
-export const getLoggingStreak = cache(async (): Promise<DbResult<LoggingStreak>> => {
+// Cached per-request: the app layout (sidebar StreakBadge), the dashboard
+// page (Right now mark strip), and getReturnSummaryFacts each ask for the
+// streak, and without this that's three identical 90-day scans on one
+// dashboard render. The one calculation -- deriveLoggingStreak in
+// lib/streak.ts -- feeds all three, so they can never disagree the way a
+// second, separately-maintained implementation could drift.
+//
+// graceDates is empty until the "nothing to log" / grace-ledger tables
+// exist (see lib/streak.ts's module comment on how those are meant to slot
+// in later without changing this function's shape); until then every gap
+// is just uncovered.
+export const getLoggingStreak = cache(async (): Promise<DbResult<LoggingStreakSummary>> => {
   const supabase = await createClient();
 
   const today = new Date();
@@ -573,12 +521,13 @@ export const getLoggingStreak = cache(async (): Promise<DbResult<LoggingStreak>>
     return { data: null, error: describeReadError(error, "streak") };
   }
 
-  const streak = computeLoggingStreak(
+  const summary = deriveLoggingStreak(
     data.map((row) => row.transaction_date),
+    [],
     localISODate(today),
   );
 
-  return { data: streak, error: null };
+  return { data: summary, error: null };
 });
 
 export type SafeToSpendCommitment = {

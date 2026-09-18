@@ -17,17 +17,22 @@ import {
   type MerchantCategorySuggestion,
 } from "@/lib/db/transactions";
 import { getLoggingStreak } from "@/lib/db/dashboard";
+import { milestoneReached } from "@/lib/streak";
 
 // "kind" is a plain string, not the icon itself -- Server Action results
 // cross the server/client boundary as serialized data, so the client picks
 // the icon from this discriminator rather than receiving a React node.
-export type Milestone = { kind: "first-transaction" | "streak-7"; message: string };
+// "streak" covers all four milestones in lib/streak.ts's milestoneReached
+// (7/30/100/365) -- the client always shows the same flame regardless of
+// which one, so kind doesn't need to carry the day count; message does.
+export type Milestone = { kind: "first-transaction" | "streak"; message: string };
 
 export type ActionState = { error?: string; milestone?: Milestone } | undefined;
 
 // Checked after every successful create, in priority order -- a first-ever
-// transaction can't also be a 7-day streak, so there's no real conflict, but
-// the order still reads as "most foundational achievement first."
+// transaction can't also be a logging-streak milestone, so there's no real
+// conflict, but the order still reads as "most foundational achievement
+// first."
 async function detectTransactionMilestone(): Promise<Milestone | undefined> {
   const countResult = await getTransactionCount();
   if (countResult.data === 1) {
@@ -35,8 +40,9 @@ async function detectTransactionMilestone(): Promise<Milestone | undefined> {
   }
 
   const streakResult = await getLoggingStreak();
-  if (streakResult.data?.current === 7) {
-    return { kind: "streak-7", message: "7-day streak" };
+  const days = streakResult.data ? milestoneReached(streakResult.data.current) : null;
+  if (days) {
+    return { kind: "streak", message: `${days}-day streak` };
   }
 
   return undefined;

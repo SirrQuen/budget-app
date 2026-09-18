@@ -39,7 +39,7 @@ export function AppShell({
 }: {
   userEmail: string;
   /** null once a user has never logged a transaction -- nothing to show yet. */
-  streak: { current: number; best: number; loggedToday: boolean } | null;
+  streak: { current: number; longest: number; loggedToday: boolean } | null;
   /** null if any of its data failed to load -- the page still renders without it. */
   quickAdd: QuickAddData | null;
   children: React.ReactNode;
@@ -79,7 +79,7 @@ export function AppShell({
               EverNest Finance
             </span>
             {streak ? (
-              <StreakBadge days={streak.current} best={streak.best} loggedToday={streak.loggedToday} />
+              <StreakBadge days={streak.current} longest={streak.longest} loggedToday={streak.loggedToday} />
             ) : null}
             <nav className="flex flex-col gap-1">
               {NAV_ITEMS.map((item) => {

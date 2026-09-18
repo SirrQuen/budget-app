@@ -17,11 +17,11 @@ function isPastNudgeHour(d: Date): boolean {
 
 export function StreakBadge({
   days,
-  best,
+  longest,
   loggedToday,
 }: {
   days: number;
-  best: number;
+  longest: number;
   loggedToday: boolean;
 }) {
   // Starts false to match server-rendered markup, then corrects itself on
@@ -54,7 +54,7 @@ export function StreakBadge({
         <span className="text-xl font-semibold text-ink">{days}</span>
         <span className="text-sm text-ink-secondary">day{days === 1 ? "" : "s"}</span>
       </div>
-      <p className="text-xs text-ink-muted">best: {best}</p>
+      <p className="text-xs text-ink-muted">longest: {longest}</p>
       {nudge ? <span className="sr-only">Keep your {days}-day streak going</span> : null}
     </div>
   );

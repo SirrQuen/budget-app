@@ -44,7 +44,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // streak window yet -- the badge would just read "0 days," which isn't
   // encouraging, it's a non-event.
   const streak =
-    streakResult.data && (streakResult.data.current > 0 || streakResult.data.best > 0)
+    streakResult.data && (streakResult.data.current > 0 || streakResult.data.longest > 0)
       ? streakResult.data
       : null;
 

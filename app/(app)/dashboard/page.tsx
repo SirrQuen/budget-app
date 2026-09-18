@@ -22,6 +22,7 @@ import { resolveDashboardRange } from "@/lib/dashboardRange";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatTile } from "@/components/ui/StatTile";
 import { ReturnSummaryStrip } from "@/components/ui/ReturnSummaryStrip";
+import { LoggingStreakStrip } from "@/components/ui/LoggingStreakStrip";
 import { GeneratedOccurrencesBanner } from "./GeneratedOccurrencesBanner";
 import { VariableAmountPrompt } from "./VariableAmountPrompt";
 import { IncomeConfirmPrompt } from "./IncomeConfirmPrompt";
@@ -133,10 +134,6 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     ? `Welcome to EverNest${namePart}.`
     : `Welcome back${namePart}.`;
 
-  const streak =
-    streakResult.data && (streakResult.data.current > 0 || streakResult.data.best > 0)
-      ? streakResult.data
-      : null;
   const rangeStats = rangeStatsResult.data;
 
   // Nothing to plot until there's at least one day of activity in the window.
@@ -199,11 +196,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       dueDate: r.next_due_date!,
     }));
 
-  const showTiles =
-    netWorthStatResult.error != null ||
-    netWorthStatResult.data != null ||
-    streakResult.error != null ||
-    streak != null;
+  const showTiles = netWorthStatResult.error != null || netWorthStatResult.data != null;
   const showPanels =
     budgetResult.error != null ||
     topBudgets.length > 0 ||
@@ -220,6 +213,16 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         <h2 id="dash-right-now" className="text-sm font-medium text-ink-secondary">
           Right now
         </h2>
+
+        {streakResult.error ? (
+          <SectionError label="Logging streak" />
+        ) : streakResult.data ? (
+          <LoggingStreakStrip
+            current={streakResult.data.current}
+            longest={streakResult.data.longest}
+            segments={streakResult.data.segments}
+          />
+        ) : null}
 
         {previousLoginAt && returnFacts.length > 0 ? (
           <ReturnSummaryStrip since={previousLoginAt} facts={returnFacts} />
@@ -257,17 +260,6 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
                   goodWhen: "up",
                 }}
                 trend={netWorthStatResult.data.points}
-              />
-            ) : null}
-            {streakResult.error ? (
-              <SectionError label="Logging streak" />
-            ) : streak ? (
-              <StatTile
-                id="dashboard-streak"
-                label="Logging streak"
-                value={streak.current}
-                format="number"
-                footnote={`Best: ${streak.best} day${streak.best === 1 ? "" : "s"}`}
               />
             ) : null}
           </div>

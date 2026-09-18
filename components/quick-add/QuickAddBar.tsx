@@ -152,7 +152,7 @@ export function QuickAddBar({
         : parsed.ok
           ? `Logged ${formatCurrency(parsed.amount)} ${verb} ${parsed.merchant}`
           : "Logged";
-      const icon = milestone?.kind === "streak-7" ? <FlameIcon className="h-4 w-4" /> : "✓";
+      const icon = milestone?.kind === "streak" ? <FlameIcon className="h-4 w-4" /> : "✓";
       setCelebrateMessage(message);
       setCelebrateIcon(icon);
       setCelebrate(true);

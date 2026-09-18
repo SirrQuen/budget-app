@@ -259,7 +259,7 @@ export function AddTransactionForm({
             : `Logged ${formatCurrency(loggedAmount)}`
           : "Logged";
       setCelebrateMessage(milestone?.message ?? loggedMessage);
-      setCelebrateIcon(milestone?.kind === "streak-7" ? <FlameIcon className="h-4 w-4" /> : "✓");
+      setCelebrateIcon(milestone?.kind === "streak" ? <FlameIcon className="h-4 w-4" /> : "✓");
       setCelebrate(true);
       // Fires only on user-initiated create. Recurring catch-up runs
       // server-side in the layout and has no path here -- keep it that
