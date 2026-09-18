@@ -15,7 +15,7 @@ const primaryAction =
 
 function greeting(firstName: string | undefined, isFirstLogin: boolean): string {
   const name = firstName ? `, ${firstName}` : "";
-  return isFirstLogin ? `Welcome to EverNest${name}.` : `Welcome back${name}.`;
+  return isFirstLogin ? `Welcome to Sorrel${name}.` : `Welcome back${name}.`;
 }
 
 // Stage 1: no accounts. Nothing else on the dashboard means anything until
@@ -26,12 +26,12 @@ export function NoAccountsView({ firstName }: { firstName?: string }) {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Dashboard"
-        description={firstName ? `Welcome to EverNest, ${firstName}.` : "Welcome to EverNest."}
+        description={firstName ? `Welcome to Sorrel, ${firstName}.` : "Welcome to Sorrel."}
       />
       <EmptyState
         icon={<WalletIcon className="h-10 w-10" />}
         heading="Add your first account"
-        message="EverNest keeps your accounts, spending, budgets and goals in one place. It starts with an account — checking, savings, a card, or the cash in your pocket."
+        message="Sorrel keeps your accounts, spending, budgets and goals in one place. It starts with an account — checking, savings, a card, or the cash in your pocket."
         action={
           <Link href="/accounts" className={primaryAction}>
             <PlusIcon className="h-4 w-4" aria-hidden="true" />

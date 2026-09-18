@@ -24,9 +24,7 @@ const WEEKDAY_INITIAL = new Intl.DateTimeFormat(undefined, { weekday: "narrow" }
 export function LoggingStreakStrip({ current, longest, segments, graceDisclosure }: LoggingStreakStripProps) {
   return (
     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
-      {/* TODO: milestone mark -- Sorrel trefoil, once the rename lands and
-          an asset exists. Do not reuse the EverNest nest logo.svg for this;
-          it belongs to the old brand. Would sit just before the count. */}
+      {/* TODO: milestone mark -- SorrelMark, size ~16, before the count. */}
       <div className="flex items-center gap-3">
         <div className="flex flex-col gap-1">
           <div className="flex gap-2">

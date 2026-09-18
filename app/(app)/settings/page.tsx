@@ -27,7 +27,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Settings" description="How EverNest looks and behaves for you." />
+      <PageHeader title="Settings" description="How Sorrel looks and behaves for you." />
 
       <section
         aria-labelledby="appearance-heading"

@@ -14,13 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EverNest Finance",
+  title: "Sorrel",
   description: "Your wealth, your legacy.",
-  icons: {
-    icon: "/logo.svg",
-  },
   openGraph: {
-    title: "EverNest Finance",
+    title: "Sorrel",
     description: "Your wealth, your legacy.",
     type: "website",
   },

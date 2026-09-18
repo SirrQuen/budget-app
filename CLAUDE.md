@@ -121,7 +121,7 @@ Pick the form from the data's job, before any colour decision.
 | "This one moved" | Emphasis: one accent hue, rest grey | Categorical |
 | More than ~7 classes | A table | More colours |
 
-### Categories in charts (EverNest-specific)
+### Categories in charts (Sorrel-specific)
 
 - Category charts aggregate by **category group** (11), not by category (57).
   Drilling into a group shows its categories.
@@ -194,10 +194,8 @@ view. Same for warning and serious, which always ship with icon + label.
 
 ## Repo layout
 
-Not its own git repo — nested two levels inside `evernest/`, the actual git
-root (`supabase/migrations/`, `src/types/database.ts`, `DATABASE.md` live
-there). `git log`/`git status` here reflect the whole `evernest` repo, not
-just this app.
+Its own git repo — `supabase/migrations/` and `lib/database.types.ts` live
+here directly. `git log`/`git status` reflect this repo only.
 
 ## Backend contract
 

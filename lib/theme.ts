@@ -23,7 +23,7 @@ export function coerceTheme(value: unknown): Theme {
   return isTheme(value) ? value : DEFAULT_THEME;
 }
 
-export const THEME_STORAGE_KEY = "evernest-theme";
+export const THEME_STORAGE_KEY = "sorrel-theme";
 
 export const THEME_LABELS: Record<Theme, string> = {
   light: "Light",

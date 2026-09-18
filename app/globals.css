@@ -102,6 +102,7 @@
   --splash: #131322;
   --splash-ink: #ffffff;
   --splash-ink-secondary: #c3c2b7;
+  --splash-gold: #e9b949;
 
   /* Scrim behind modals, dialogs and the mobile quick-add sheet. Lighter
      than the dark-mode scrim: the same wash reads heavier over pale
@@ -319,6 +320,7 @@
   --color-splash: var(--splash);
   --color-splash-ink: var(--splash-ink);
   --color-splash-ink-secondary: var(--splash-ink-secondary);
+  --color-splash-gold: var(--splash-gold);
 
   --color-cat-1: var(--cat-1);
   --color-cat-2: var(--cat-2);

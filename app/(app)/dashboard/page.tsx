@@ -131,7 +131,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   const showTrend = stage === "full";
   const namePart = firstName ? `, ${firstName}` : "";
   const description = isFirstLogin
-    ? `Welcome to EverNest${namePart}.`
+    ? `Welcome to Sorrel${namePart}.`
     : `Welcome back${namePart}.`;
 
   const rangeStats = rangeStatsResult.data;

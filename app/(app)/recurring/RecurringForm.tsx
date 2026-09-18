@@ -403,7 +403,7 @@ export function RecurringForm({
             label="Statement day"
             htmlFor="statement_day"
             required
-            hint="EverNest asks for the amount once the statement posts on this day each month, and estimates from the card's current balance until then."
+            hint="Sorrel asks for the amount once the statement posts on this day each month, and estimates from the card's current balance until then."
           >
             <Input
               id="statement_day"

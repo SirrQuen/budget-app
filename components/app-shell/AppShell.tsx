@@ -59,7 +59,7 @@ export function AppShell({
           Skip to main content
         </a>
         <header className="flex items-center justify-between border-b border-hairline bg-page px-4 py-3 md:hidden">
-          <span className="text-lg font-semibold">EverNest Finance</span>
+          <span className="text-lg font-semibold">Sorrel</span>
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -76,7 +76,7 @@ export function AppShell({
         >
           <div className="flex flex-col gap-6">
             <span className="hidden px-2 text-lg font-semibold text-ink md:block">
-              EverNest Finance
+              Sorrel
             </span>
             {streak ? (
               <StreakBadge days={streak.current} longest={streak.longest} loggedToday={streak.loggedToday} />
