@@ -10,7 +10,7 @@
 // can diverge.
 
 import { formatDate, formatDateShort } from "@/lib/format";
-import { parseLocalDate } from "@/lib/date";
+import { parseLocalDate, addDaysISO } from "@/lib/date";
 
 // No explicit timeZone -- anchorDateISO is parsed to local midnight via
 // parseLocalDate (matching lib/format.ts's date formatters), so formatting
@@ -125,4 +125,42 @@ export function isAwaitingStatementAmount(
 ): boolean {
   const statementDateISO = statementDateForCycle(dueDateISO, statementDay);
   return statementDateISO <= todayISO && todayISO <= dueDateISO;
+}
+
+// Phase 6.75 item 6 -- a variable-date Income schedule's paycheck can land
+// EARLIER than its anchor (next_due_date), never later by design (a bill
+// posts late; in this model a paycheck doesn't). date_tolerance_days'
+// two readers round in OPPOSITE directions:
+//
+//   - the confirmation prompt opens EARLY (anchor - tolerance), so an
+//     early paycheck can be confirmed the day it actually lands.
+//   - the payday window (getSafeToSpend's "next payday" end, item 5) is
+//     the LATEST plausible date (anchor + tolerance), so a commitment due
+//     between the earliest and latest guess is never dropped out of the
+//     window -- using anchor - tolerance there would shorten the window
+//     and understate what's committed, inflating the safe-to-spend hero.
+//
+// Never swap these two -- paydayWindowEnd(anchor, N) must never land
+// before incomeConfirmationOpensAt(anchor, N) for the same inputs. Pinned
+// by lib/recurringSchedule.test.ts.
+export function incomeConfirmationOpensAt(anchorISO: string, toleranceDays: number): string {
+  return addDaysISO(anchorISO, -toleranceDays);
+}
+
+export function paydayWindowEnd(anchorISO: string, toleranceDays: number): string {
+  return addDaysISO(anchorISO, toleranceDays);
+}
+
+// Whether today falls inside the "did your paycheck land?" window for an
+// Income schedule -- open-ended, no upper bound. generateDueOccurrences
+// never auto-posts an Income occurrence (CLAUDE.md "Auto-create outflows.
+// Confirm inflows."), so unlike isAwaitingStatementAmount there is no due
+// date past which the schedule stops needing a prompt -- it just gets more
+// overdue until the user confirms it.
+export function isAwaitingIncomeConfirmation(
+  todayISO: string,
+  anchorISO: string,
+  toleranceDays: number,
+): boolean {
+  return todayISO >= incomeConfirmationOpensAt(anchorISO, toleranceDays);
 }

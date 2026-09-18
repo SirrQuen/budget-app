@@ -1,4 +1,4 @@
-import { listRecurring } from "@/lib/db/recurring";
+import { listRecurring, estimateIncomeAmount } from "@/lib/db/recurring";
 import { listAccounts, listAccountBalances } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { getBankHolidays } from "@/lib/db/holidays";
@@ -73,6 +73,22 @@ export default async function RecurringPage() {
   const cardBalanceByAccountId = new Map(
     (balancesResult.data ?? []).map((b) => [b.account_id, b.balance ?? 0]),
   );
+
+  // Same idea for a variable-amount Income schedule -- estimate_income_amount
+  // (called via .rpc(), never aggregated in JS -- CLAUDE.md) independent of
+  // is_active, same reason cardBalanceByAccountId above doesn't depend on
+  // v_upcoming_recurring either: a paused schedule still needs an estimate.
+  const incomeVariableSchedules = schedules.filter(
+    (r) => r.amount_is_variable && r.to_accountid === null,
+  );
+  const incomeEstimateEntries = await Promise.all(
+    incomeVariableSchedules.map(async (r) => {
+      const result = await estimateIncomeAmount(r.id, Number(r.amount));
+      return [r.id, result.data ?? Number(r.amount)] as const;
+    }),
+  );
+  const incomeEstimateById = new Map(incomeEstimateEntries);
+
   const today = todayISO();
 
   // Nothing to manage and no account to schedule against yet -- same
@@ -133,6 +149,9 @@ export default async function RecurringPage() {
           const cardBalance = recurring.to_accountid
             ? (cardBalanceByAccountId.get(recurring.to_accountid) ?? 0)
             : 0;
+          const estimatedAmount = recurring.to_accountid
+            ? estimateCardPaymentDue(cardBalance)
+            : (incomeEstimateById.get(recurring.id) ?? Number(recurring.amount));
           return (
             <RecurringRow
               key={recurring.id}
@@ -141,7 +160,7 @@ export default async function RecurringPage() {
               expenseCategories={expenseCategories}
               accounts={accounts}
               holidays={holidays}
-              estimatedAmount={estimateCardPaymentDue(cardBalance)}
+              estimatedAmount={estimatedAmount}
               today={today}
             />
           );

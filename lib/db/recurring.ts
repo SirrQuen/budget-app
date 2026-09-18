@@ -407,6 +407,147 @@ export async function confirmVariableAmount(
   return { data, error: null };
 }
 
+// Mean of the last three confirmed Income transactions linked by
+// recurringid, falling back to the schedule's own `amount` with fewer than
+// three -- the one canonical implementation (estimate_income_amount,
+// 29_recurring_income_confirmation.sql), called here via .rpc() for the
+// recurring list page, which reads the base recurring_transactions table
+// rather than v_upcoming_recurring (that view already calls the same
+// function for every other reader -- dashboard, safe-to-spend, the
+// upcoming list -- so a paused schedule, which the view's is_active filter
+// excludes, still gets an estimate here). CLAUDE.md: never aggregate money
+// in JavaScript -- this stays a single SQL round trip, never a client-side
+// average over fetched rows.
+export async function estimateIncomeAmount(
+  recurringId: string,
+  fallbackAmount: number,
+): Promise<DbResult<number>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("estimate_income_amount", {
+    p_recurring_id: recurringId,
+    p_fallback_amount: fallbackAmount,
+  });
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "recurring transactions") };
+  }
+
+  return { data: data ?? fallbackAmount, error: null };
+}
+
+type IncomeConfirmScheduleRow = {
+  id: string;
+  description: string;
+  accountid: string;
+  categoryid: string | null;
+  next_run_date: string;
+  start_date: string | null;
+  frequency: string;
+  interval_count: number;
+  business_day_offset: number;
+  non_business_day_rule: string;
+  requires_confirmation: boolean;
+  category: { category_type: string } | null;
+};
+
+// The ONLY way an Income occurrence ever posts (CLAUDE.md "Auto-create
+// outflows. Confirm inflows.") -- generateDueOccurrences always skips a
+// requires_confirmation template (see its own comment), so this is the
+// dedicated write path for it, reachable from the dashboard prompt, the
+// upcoming list, and the recurring row (see ConfirmIncomeSheet).
+//
+// Unlike confirmVariableAmount (which just records next_amount and waits
+// for the due date to arrive naturally -- fine when the date itself is
+// certain, as a card statement's is), this writes the transaction
+// immediately and never touches next_amount/next_amount_confirmed_at: a
+// variable-DATE paycheck can land before its own anchor, and there is no
+// later "due date" moment to defer posting to. transaction_date is always
+// today -- the day the user is actually confirming money landed, not the
+// schedule's anchor (shown to them only for context), which may still be a
+// few days off in either direction.
+export async function confirmIncomeOccurrence(
+  id: string,
+  amount: number,
+): Promise<DbResult<TransactionRow>> {
+  const supabase = await createClient();
+
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  const userid = claimsData?.claims?.sub;
+
+  if (claimsError || !userid) {
+    return {
+      data: null,
+      error: "Your session's expired. Log in again to pick up where you left off.",
+    };
+  }
+
+  const { data: template, error: readError } = await supabase
+    .from("recurring_transactions")
+    .select(
+      "id, description, accountid, categoryid, next_run_date, start_date, frequency, interval_count, business_day_offset, non_business_day_rule, requires_confirmation, category:categories(category_type)",
+    )
+    .eq("id", id)
+    .single()
+    .returns<IncomeConfirmScheduleRow>();
+
+  if (readError) {
+    return { data: null, error: describeReadError(readError, "recurring transaction") };
+  }
+
+  if (!template.requires_confirmation || template.category?.category_type !== "Income") {
+    return { data: null, error: "This schedule doesn't need a confirmation." };
+  }
+
+  const { data: rows, error: insertError } = await supabase
+    .from("transactions")
+    .insert({
+      userid,
+      accountid: template.accountid,
+      categoryid: template.categoryid,
+      amount,
+      transaction_type: "Income",
+      transaction_date: todayISO(),
+      description: template.description,
+      recurringid: template.id,
+    })
+    .select();
+
+  if (insertError) {
+    return { data: null, error: describeWriteError(insertError, "transaction") };
+  }
+
+  // Advances exactly one cycle, same as confirmVariableAmount/
+  // generateDueOccurrences -- a schedule missed for several cycles needs
+  // one confirmation per cycle, not a silent multi-cycle skip.
+  const anchor = template.start_date ?? template.next_run_date;
+  const nextRunDate = nextOccurrenceISO(
+    template.next_run_date,
+    template.frequency,
+    template.interval_count,
+    anchor,
+  );
+  const next_due_date = await computeNextDueDate(
+    nextRunDate,
+    template.business_day_offset,
+    template.non_business_day_rule,
+  );
+
+  const { error: advanceError } = await supabase
+    .from("recurring_transactions")
+    .update({ next_run_date: nextRunDate, next_due_date })
+    .eq("id", id);
+
+  if (advanceError) {
+    logDbError(
+      `[db:recurring] failed advancing next_run_date after income confirmation for ${id}:`,
+      advanceError,
+    );
+  }
+
+  return { data: rows[0], error: null };
+}
+
 /** A transaction row that was posted from a schedule, for the "we added N transactions while you were away" summary. */
 export type GeneratedOccurrence = TransactionRow;
 
@@ -434,13 +575,16 @@ type DueRecurringRow = {
   business_day_offset: number;
   non_business_day_rule: string;
   category: { category_type: string } | null;
-  // Variable-amount schedule (20260912000023_23_recurring_variable_amount.sql)
-  // -- amount_is_variable only ever true alongside to_accountid set
-  // (rectx_variable_requires_transfer), so it's read for every row but only
-  // meaningful for a transfer template.
+  // Variable-amount schedule (20260912000023_23_recurring_variable_amount.sql,
+  // widened by 29_recurring_income_confirmation.sql to also allow a
+  // variable-amount Income category schedule, not just a transfer).
   amount_is_variable: boolean;
   next_amount: number | null;
   next_amount_confirmed_at: string | null;
+  // True for every Income schedule (29_recurring_income_confirmation.sql) --
+  // see CLAUDE.md "Auto-create outflows. Confirm inflows." Never true for
+  // an Expense or Transfer template.
+  requires_confirmation: boolean;
 };
 
 // Lazy catch-up, run when a user opens the app -- there is no scheduler.
@@ -507,7 +651,7 @@ export const generateDueOccurrences = cache(async (): Promise<
   const { data: due, error: dueError } = await supabase
     .from("recurring_transactions")
     .select(
-      "id, description, amount, accountid, categoryid, to_accountid, next_run_date, start_date, end_date, frequency, interval_count, occurrence_limit, business_day_offset, non_business_day_rule, category:categories(category_type), amount_is_variable, next_amount, next_amount_confirmed_at",
+      "id, description, amount, accountid, categoryid, to_accountid, next_run_date, start_date, end_date, frequency, interval_count, occurrence_limit, business_day_offset, non_business_day_rule, category:categories(category_type), amount_is_variable, next_amount, next_amount_confirmed_at, requires_confirmation",
     )
     .eq("is_active", true)
     .lte("next_run_date", addDaysISO(today, BUSINESS_DAY_QUERY_BUFFER_DAYS))
@@ -582,16 +726,27 @@ export const generateDueOccurrences = cache(async (): Promise<
       );
       if (dueDate > today) break;
 
-      // A variable schedule (credit card payment) can't post without a
-      // confirmed amount for this occurrence -- rectx_next_amount_requires_
-      // variable and rectx_next_amount_confirmed_together guarantee
-      // next_amount is set whenever next_amount_confirmed_at is. Stop this
-      // template's loop entirely rather than posting a guess; it surfaces
-      // as "needs your amount" (v_upcoming_recurring.is_estimated_amount)
-      // instead of a transaction. Nothing further is due until the user
-      // confirms, so there's no occurrence past this one to catch up on
-      // either.
-      if (template.amount_is_variable && !hasConfirmedAmount) {
+      // A variable-amount schedule (credit card payment, or a variable-
+      // amount Income schedule) can't post without a confirmed amount for
+      // this occurrence -- rectx_next_amount_requires_variable and
+      // rectx_next_amount_confirmed_together guarantee next_amount is set
+      // whenever next_amount_confirmed_at is.
+      //
+      // requires_confirmation is the separate, unconditional gate CLAUDE.md
+      // "Auto-create outflows. Confirm inflows." requires: every Income
+      // schedule carries it (29_recurring_income_confirmation.sql),
+      // regardless of amount_is_variable/date_tolerance_days, and
+      // confirmIncomeOccurrence -- the only way an Income occurrence ever
+      // posts -- writes the transaction directly rather than setting
+      // next_amount_confirmed_at, so hasConfirmedAmount is always false for
+      // an Income template here. That means this branch always breaks for
+      // one, every time -- lazy catch-up must never auto-generate income.
+      //
+      // Either way: stop this template's loop entirely rather than posting
+      // a guess/unconfirmed row; it surfaces as "needs confirming" instead
+      // of a transaction. Nothing further is due until the user confirms,
+      // so there's no occurrence past this one to catch up on either.
+      if ((template.amount_is_variable || template.requires_confirmation) && !hasConfirmedAmount) {
         break;
       }
 

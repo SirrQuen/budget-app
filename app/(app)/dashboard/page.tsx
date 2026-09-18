@@ -17,13 +17,14 @@ import { listAccountBalances } from "@/lib/db/accounts";
 import { generateDueOccurrences } from "@/lib/db/recurring";
 import { getReturnSummaryFacts } from "@/lib/actions/activity";
 import { todayISO } from "@/lib/date";
-import { isAwaitingStatementAmount } from "@/lib/recurringSchedule";
+import { isAwaitingStatementAmount, isAwaitingIncomeConfirmation } from "@/lib/recurringSchedule";
 import { resolveDashboardRange } from "@/lib/dashboardRange";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatTile } from "@/components/ui/StatTile";
 import { ReturnSummaryStrip } from "@/components/ui/ReturnSummaryStrip";
 import { GeneratedOccurrencesBanner } from "./GeneratedOccurrencesBanner";
 import { VariableAmountPrompt } from "./VariableAmountPrompt";
+import { IncomeConfirmPrompt } from "./IncomeConfirmPrompt";
 import { SafeToSpendHero } from "./SafeToSpendHero";
 import { ScopedRegion } from "./ScopedRegion";
 import { CashflowChart } from "./CashflowChart";
@@ -176,6 +177,28 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       dueDate: r.next_run_date!,
     }));
 
+  // Every Income schedule requires confirmation (CLAUDE.md "Auto-create
+  // outflows. Confirm inflows.") -- the prompt opens EARLY, at
+  // next_due_date - date_tolerance_days, never the other way round (see
+  // lib/recurringSchedule.ts's incomeConfirmationOpensAt/paydayWindowEnd),
+  // and stays open indefinitely once due, unlike the card prompt above,
+  // since nothing ever auto-posts it closed.
+  const incomeConfirmPrompts = (recurringResult.data ?? [])
+    .filter(
+      (r) =>
+        r.to_accountid === null &&
+        r.requires_confirmation === true &&
+        r.next_due_date != null &&
+        isAwaitingIncomeConfirmation(today, r.next_due_date, r.date_tolerance_days ?? 0),
+    )
+    .map((r) => ({
+      id: r.recurring_id ?? "",
+      name: r.description ?? "",
+      estimatedAmount: r.amount ?? 0,
+      isEstimate: r.is_estimated_amount ?? false,
+      dueDate: r.next_due_date!,
+    }));
+
   const showTiles =
     netWorthStatResult.error != null ||
     netWorthStatResult.data != null ||
@@ -209,6 +232,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         ) : null}
 
         <VariableAmountPrompt items={variableAmountPrompts} />
+        <IncomeConfirmPrompt items={incomeConfirmPrompts} />
 
         {safeToSpendResult.error ? (
           <SectionError label="Safe to spend" />

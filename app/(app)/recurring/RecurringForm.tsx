@@ -130,6 +130,8 @@ export type EditableRecurring = {
   end_date: string | null;
   amount_is_variable: boolean;
   statement_day: number | null;
+  /** "Date varies" -- Income only. 0 means it doesn't (see rectx_date_tolerance_range). */
+  date_tolerance_days: number;
   business_day_offset: number;
   non_business_day_rule: string;
 };
@@ -304,8 +306,16 @@ export function RecurringForm({
   const toAccount = accounts.find((a) => a.id === toAccountId);
   const toAccountIsCreditCard = toAccount?.account_type === "Credit Card";
   const [amountIsVariable, setAmountIsVariable] = useState(recurring?.amount_is_variable ?? false);
-  const showVariableToggle = kind === "Transfer" && toAccountIsCreditCard;
-  const showVariableFields = showVariableToggle && amountIsVariable;
+  const showCardVariableToggle = kind === "Transfer" && toAccountIsCreditCard;
+  const showCardVariableFields = showCardVariableToggle && amountIsVariable;
+  // "Amount changes each time" / "Date varies" -- Income only, independent
+  // of each other and of the card-payment toggle above (see
+  // lib/actions/recurring.ts's parseRecurringFields). amountIsVariable is
+  // shared with the card checkbox -- kind alone decides which one renders,
+  // so only one is ever in play at a time.
+  const showIncomeVariability = kind === "Income";
+  const [dateVaries, setDateVaries] = useState((recurring?.date_tolerance_days ?? 0) > 0);
+  const [dateToleranceDays, setDateToleranceDays] = useState(recurring?.date_tolerance_days || 2);
   const [repeats, setRepeats] = useState<Repeats>(
     recurring ? repeatsFromFrequency(recurring.frequency) : "Monthly",
   );
@@ -388,7 +398,7 @@ export function RecurringForm({
           />
         </FormField>
 
-        {showVariableFields ? (
+        {showCardVariableFields ? (
           <FormField
             label="Statement day"
             htmlFor="statement_day"
@@ -437,7 +447,7 @@ export function RecurringForm({
             onToAccountChange={setToAccountId}
           />
 
-          {showVariableToggle ? (
+          {showCardVariableToggle ? (
             <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-secondary">
               <input
                 type="checkbox"
@@ -504,6 +514,49 @@ export function RecurringForm({
           </FormField>
         </div>
       )}
+
+      {showIncomeVariability ? (
+        <div className="flex flex-col gap-2">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-secondary">
+            <input
+              type="checkbox"
+              name="amount_is_variable"
+              checked={amountIsVariable}
+              onChange={(e) => setAmountIsVariable(e.target.checked)}
+              className="h-4 w-4 rounded border-hairline text-action focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action"
+            />
+            Amount changes each time
+          </label>
+
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-secondary">
+            <input
+              type="checkbox"
+              name="date_varies"
+              checked={dateVaries}
+              onChange={(e) => setDateVaries(e.target.checked)}
+              className="h-4 w-4 rounded border-hairline text-action focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action"
+            />
+            Date varies
+          </label>
+
+          {dateVaries ? (
+            <FormField label="Give or take how many days?" htmlFor="date_tolerance_days">
+              <Input
+                id="date_tolerance_days"
+                name="date_tolerance_days"
+                type="number"
+                inputMode="numeric"
+                min="0"
+                max="14"
+                required
+                value={dateToleranceDays}
+                onChange={(e) => setDateToleranceDays(Number(e.target.value))}
+                className="w-20"
+              />
+            </FormField>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-4 rounded-xl border border-hairline p-4">
         <div className="flex flex-wrap items-end gap-4">

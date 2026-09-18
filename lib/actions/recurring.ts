@@ -9,6 +9,7 @@ import {
   resumeRecurring,
   getRecurring,
   confirmVariableAmount,
+  confirmIncomeOccurrence,
 } from "@/lib/db/recurring";
 
 export type ActionState = { error?: string } | undefined;
@@ -40,12 +41,23 @@ type ParsedRecurringFields = {
   next_run_date: string;
   occurrence_limit: number | null;
   end_date: string | null;
-  // Variable-amount transfer (credit card payment) -- see
-  // 20260912000023_23_recurring_variable_amount.sql. Only ever true
-  // alongside to_accountid set; statement_day is required exactly when
-  // amount_is_variable is (rectx_variable_requires_statement_day).
+  // Variable amount -- a transfer (credit card payment,
+  // 20260912000023_23_recurring_variable_amount.sql) or an Income category
+  // schedule (29_recurring_income_confirmation.sql), never a bare Expense.
+  // statement_day is required exactly when amount_is_variable is set
+  // alongside a transfer (rectx_variable_requires_statement_day) -- an
+  // Income schedule never has one.
   amount_is_variable: boolean;
   statement_day: number | null;
+  // "Date varies" -- Income only, independent of amount_is_variable (a
+  // paycheck can have a fixed date but variable hours, or the reverse). 0
+  // when not set: identical in effect to "doesn't vary" (see
+  // rectx_date_tolerance_range / lib/recurringSchedule.ts), never null.
+  date_tolerance_days: number;
+  // True for every Income schedule, forced here rather than read from the
+  // form -- CLAUDE.md "Auto-create outflows. Confirm inflows." is not a
+  // user preference.
+  requires_confirmation: boolean;
   // Business-day resolution (20260914000024_24_recurring_business_day_rules.sql)
   // -- derived from RecurringForm's timing_mode/timing_direction/timing_count
   // below, never read directly from those raw field names past this function.
@@ -74,6 +86,7 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
   let to_accountid: string | null = null;
   let amount_is_variable = false;
   let statement_day: number | null = null;
+  let date_tolerance_days = 0;
 
   if (kind === "Transfer") {
     // "accountid" doubles as the transfer's source ("from") account --
@@ -116,14 +129,36 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
     if (!accountid) {
       return { error: "Choose an account." };
     }
+
+    // "Amount changes each time" / "Date varies" -- Income only (the
+    // checkboxes only render there, same trust-the-client reasoning as the
+    // Transfer branch's own amount_is_variable read above; enforce_recurring_
+    // variability_scope rejects either one on a non-Income category
+    // regardless). Independent of each other -- a paycheck can vary in
+    // amount, in date, in both, or in neither.
+    if (kind === "Income") {
+      amount_is_variable = formData.get("amount_is_variable") === "on";
+      const dateVaries = formData.get("date_varies") === "on";
+      if (dateVaries) {
+        const toleranceInput = String(formData.get("date_tolerance_days") ?? "").trim();
+        date_tolerance_days = Math.trunc(Number(toleranceInput));
+        if (!Number.isFinite(date_tolerance_days) || date_tolerance_days < 0 || date_tolerance_days > 14) {
+          return { error: "Enter a tolerance between 0 and 14 days." };
+        }
+      }
+    }
   }
 
-  // A variable schedule's real amount only ever comes from a confirmed
+  // A card payment's real amount only ever comes from a confirmed
   // next_amount or a live card-balance estimate (see
   // estimateCardPaymentDue/v_upcoming_recurring) -- amount stays 0, an
-  // unused placeholder the NOT NULL column still needs.
+  // unused placeholder the NOT NULL column still needs. An Income schedule
+  // always keeps its amount input, even while amount_is_variable: it's the
+  // fallback estimate (estimate_income_amount) until three confirmed
+  // occurrences exist, never an unused placeholder the way a card's is.
+  const amountInputHidden = kind === "Transfer" && amount_is_variable;
   let amount = 0;
-  if (!amount_is_variable) {
+  if (!amountInputHidden) {
     const amountInput = String(formData.get("amount") ?? "").trim();
     amount = Number(amountInput);
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -209,6 +244,8 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
     end_date,
     amount_is_variable,
     statement_day,
+    date_tolerance_days,
+    requires_confirmation: kind === "Income",
     business_day_offset,
     non_business_day_rule,
   };
@@ -239,6 +276,8 @@ export async function createRecurringAction(
     end_date: parsed.end_date,
     amount_is_variable: parsed.amount_is_variable,
     statement_day: parsed.statement_day,
+    date_tolerance_days: parsed.date_tolerance_days,
+    requires_confirmation: parsed.requires_confirmation,
     business_day_offset: parsed.business_day_offset,
     non_business_day_rule: parsed.non_business_day_rule,
   });
@@ -302,6 +341,8 @@ export async function updateRecurringAction(
     end_date: parsed.end_date,
     amount_is_variable: parsed.amount_is_variable,
     statement_day: parsed.statement_day,
+    date_tolerance_days: parsed.date_tolerance_days,
+    requires_confirmation: parsed.requires_confirmation,
     business_day_offset: parsed.business_day_offset,
     non_business_day_rule: parsed.non_business_day_rule,
     ...(clearPendingConfirmation ? { next_amount: null, next_amount_confirmed_at: null } : {}),
@@ -373,6 +414,34 @@ export async function confirmVariableAmountAction(
   }
 
   const { error } = await confirmVariableAmount(id, amount);
+  if (error) {
+    return { error };
+  }
+
+  revalidatePath("/recurring");
+  revalidatePath("/dashboard");
+}
+
+// Confirming an Income schedule writes the transaction immediately (see
+// confirmIncomeOccurrence) rather than staging a pending amount -- reachable
+// from the same three places as confirmVariableAmountAction: the upcoming
+// list, the recurring row, and the dashboard prompt (see ConfirmIncomeSheet).
+export async function confirmIncomeAction(
+  _prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const id = String(formData.get("id") ?? "");
+  if (!id) {
+    return { error: "Missing schedule id." };
+  }
+
+  const amountInput = String(formData.get("amount") ?? "").trim();
+  const amount = Number(amountInput);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { error: "Enter an amount greater than zero." };
+  }
+
+  const { error } = await confirmIncomeOccurrence(id, amount);
   if (error) {
     return { error };
   }

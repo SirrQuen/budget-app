@@ -1,9 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { TransferIcon, InfoIcon } from "@/components/ui/icons";
 import { formatCurrency, formatDateShort } from "@/lib/format";
 import type { Database } from "@/lib/database.types";
 import { ConfirmVariableAmountSheet } from "../recurring/ConfirmVariableAmountSheet";
+import { ConfirmIncomeSheet } from "../recurring/ConfirmIncomeSheet";
 
 type UpcomingRow = Database["public"]["Views"]["v_upcoming_recurring"]["Row"];
 
@@ -45,7 +48,7 @@ export function UpcomingList({ items }: { items: UpcomingRow[] }) {
                 next_amount yet -- the figure above is a live guess off the
                 card's balance, never presented as a known one (CLAUDE.md
                 "Display"). */}
-            {r.is_estimated_amount ? (
+            {r.to_accountid !== null && r.is_estimated_amount ? (
               <div className="flex items-center justify-between gap-2 pl-7 text-xs text-ink-muted">
                 <span className="inline-flex items-center gap-1">
                   <InfoIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
@@ -58,6 +61,40 @@ export function UpcomingList({ items }: { items: UpcomingRow[] }) {
                     estimatedAmount: r.amount ?? 0,
                     statementDay: r.statement_day ?? 1,
                     dueDate: r.next_run_date ?? "",
+                  }}
+                  trigger={(open) => (
+                    <button
+                      type="button"
+                      onClick={open}
+                      className="font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                    >
+                      Confirm
+                    </button>
+                  )}
+                />
+              </div>
+            ) : null}
+
+            {/* requires_confirmation -- every Income row, always (CLAUDE.md
+                "Auto-create outflows. Confirm inflows."), not just a
+                variable-amount one -- unlike the card chip above. */}
+            {r.to_accountid === null && r.requires_confirmation ? (
+              <div className="flex items-center justify-between gap-2 pl-7 text-xs text-ink-muted">
+                <span className="inline-flex items-center gap-1">
+                  <InfoIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  {r.is_overdue
+                    ? "Should have landed by now"
+                    : r.is_estimated_amount
+                      ? "Estimate"
+                      : "Awaiting confirmation"}
+                </span>
+                <ConfirmIncomeSheet
+                  target={{
+                    id: r.recurring_id ?? "",
+                    name: r.description ?? "",
+                    estimatedAmount: r.amount ?? 0,
+                    isEstimate: r.is_estimated_amount ?? false,
+                    dueDate: r.next_due_date ?? "",
                   }}
                   trigger={(open) => (
                     <button

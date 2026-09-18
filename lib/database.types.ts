@@ -556,6 +556,7 @@ export type Database = {
           business_day_offset: number
           categoryid: string | null
           created_at: string
+          date_tolerance_days: number
           description: string
           end_date: string | null
           frequency: string
@@ -568,6 +569,7 @@ export type Database = {
           next_run_date: string
           non_business_day_rule: string
           occurrence_limit: number | null
+          requires_confirmation: boolean
           start_date: string | null
           statement_day: number | null
           to_accountid: string | null
@@ -580,6 +582,7 @@ export type Database = {
           business_day_offset?: number
           categoryid?: string | null
           created_at?: string
+          date_tolerance_days?: number
           description: string
           end_date?: string | null
           frequency?: string
@@ -592,6 +595,7 @@ export type Database = {
           next_run_date: string
           non_business_day_rule?: string
           occurrence_limit?: number | null
+          requires_confirmation?: boolean
           start_date?: string | null
           statement_day?: number | null
           to_accountid?: string | null
@@ -604,6 +608,7 @@ export type Database = {
           business_day_offset?: number
           categoryid?: string | null
           created_at?: string
+          date_tolerance_days?: number
           description?: string
           end_date?: string | null
           frequency?: string
@@ -616,6 +621,7 @@ export type Database = {
           next_run_date?: string
           non_business_day_rule?: string
           occurrence_limit?: number | null
+          requires_confirmation?: boolean
           start_date?: string | null
           statement_day?: number | null
           to_accountid?: string | null
@@ -1372,6 +1378,7 @@ export type Database = {
           category_name: string | null
           category_type: string | null
           categoryid: string | null
+          date_tolerance_days: number | null
           days_until: number | null
           description: string | null
           end_date: string | null
@@ -1385,6 +1392,7 @@ export type Database = {
           next_run_date: string | null
           occurrence_limit: number | null
           recurring_id: string | null
+          requires_confirmation: boolean | null
           start_date: string | null
           statement_day: number | null
           to_account_name: string | null
@@ -1484,6 +1492,10 @@ export type Database = {
       }
       delete_own_account: { Args: never; Returns: undefined }
       email_for_username: { Args: { p_username: string }; Returns: string }
+      estimate_income_amount: {
+        Args: { p_fallback_amount: number; p_recurring_id: string }
+        Returns: number
+      }
       is_business_day: { Args: { d: string }; Returns: boolean }
       record_login: {
         Args: never

@@ -7,6 +7,7 @@ import type { DashboardRange } from "@/lib/dashboardRange";
 import { describeReadError } from "@/lib/db/errors";
 import { getSafeToSpendWindowPref } from "@/lib/db/settings";
 import { isSafeToSpendCommitment } from "@/lib/safeToSpend";
+import { paydayWindowEnd } from "@/lib/recurringSchedule";
 
 type DashboardKpisRow = Database["public"]["Views"]["v_dashboard_kpis"]["Row"];
 type NetWorthRow = Database["public"]["Views"]["v_net_worth"]["Row"];
@@ -615,8 +616,20 @@ export type SafeToSpendIncome = {
   recurringId: string;
   name: string;
   amount: number;
-  /** next_due_date of the soonest upcoming Income schedule. */
+  /** next_due_date of the soonest upcoming Income schedule -- the anchor. */
   date: string;
+  /**
+   * date_tolerance_days -- 0 for a fixed-date schedule. Feeds the payday
+   * window's end (anchor + tolerance, never anchor - tolerance -- see
+   * lib/recurringSchedule.ts's paydayWindowEnd), never the display date
+   * above, which stays the anchor itself.
+   */
+  dateToleranceDays: number;
+  /**
+   * True when amount is a guess (amount_is_variable, unconfirmed) rather
+   * than a known figure -- CLAUDE.md "Display": always mark an estimate.
+   */
+  isEstimate: boolean;
 };
 
 export type SafeToSpend = {
@@ -684,6 +697,8 @@ type UpcomingIncomeRow = {
   description: string;
   amount: number;
   next_due_date: string;
+  date_tolerance_days: number;
+  is_estimated_amount: boolean;
 };
 
 // Shared by getSafeToSpend (full detail, for the context line) and the
@@ -699,7 +714,7 @@ export const getSoonestIncomeOccurrence = cache(
 
     const { data, error } = await supabase
       .from("v_upcoming_recurring")
-      .select("recurring_id, description, amount, next_due_date")
+      .select("recurring_id, description, amount, next_due_date, date_tolerance_days, is_estimated_amount")
       .eq("category_type", "Income")
       .in("account_type", ["Checking", "Savings"])
       .order("next_due_date", { ascending: true })
@@ -718,6 +733,8 @@ export const getSoonestIncomeOccurrence = cache(
             name: data.description,
             amount: data.amount,
             date: data.next_due_date,
+            dateToleranceDays: data.date_tolerance_days,
+            isEstimate: data.is_estimated_amount,
           }
         : null,
       error: null,
@@ -803,7 +820,11 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   let windowEnd: string;
   let reason: SafeToSpendWindowReason;
   if (effectivePref === "next_payday" && nextIncome) {
-    windowEnd = nextIncome.date;
+    // The LATE end of the tolerance window, never the anchor alone and
+    // never the early (prompt-opening) end -- see lib/recurringSchedule.ts's
+    // paydayWindowEnd. A fixed-date schedule (dateToleranceDays 0) reduces
+    // to nextIncome.date exactly, unchanged from before item 6.
+    windowEnd = paydayWindowEnd(nextIncome.date, nextIncome.dateToleranceDays);
     reason = "next_payday";
   } else if (effectivePref === "next_30_days") {
     windowEnd = addDaysISO(today, 30);

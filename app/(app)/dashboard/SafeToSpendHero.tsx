@@ -125,7 +125,8 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
               subtracted or added. */}
           {data.nextIncome ? (
             <p className="mt-3 border-t border-hairline pt-3 text-xs text-ink-muted">
-              Expected: {formatCurrency(data.nextIncome.amount)} from {data.nextIncome.name} on{" "}
+              Expected: {formatCurrency(data.nextIncome.amount)}
+              {data.nextIncome.isEstimate ? " (estimate)" : ""} from {data.nextIncome.name} on{" "}
               {formatDateShort(data.nextIncome.date)} — not counted above.
             </p>
           ) : (

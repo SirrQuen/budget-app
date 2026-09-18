@@ -39,6 +39,9 @@ scaffold — no data layer built yet. Path alias `@/*` -> project root.
   depends on this. Collect a positive number from users and negate on write;
   display the absolute value with "owed". Never sum account balances as
   absolute values.
+- Auto-create outflows. Confirm inflows. Assuming money left when it didn't
+  makes the user cautious; assuming money arrived when it didn't makes them
+  overspend.
 
 ## Design language
 
