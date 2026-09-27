@@ -5,7 +5,7 @@ import { listCategoriesForType } from "@/lib/db/categories";
 import { getChronicOverBudgetInsight } from "@/lib/budgetInsights";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { LoadError } from "@/components/ui/LoadError";
 import { PieIcon } from "@/components/ui/icons";
 import { CreateBudgetForm } from "./CreateBudgetForm";
 import { BudgetRow } from "./BudgetRow";
@@ -58,8 +58,7 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
           title="Budgets"
           description="Set a monthly envelope for each category and watch it fill."
         />
-        <ErrorMessage
-          severity="critical"
+        <LoadError
           message={
             progressResult.error ??
             historyResult.error ??

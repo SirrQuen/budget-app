@@ -9,7 +9,7 @@ import {
 import { listCategoriesForType, getCategory } from "@/lib/db/categories";
 import { listAccounts, getAccount } from "@/lib/db/accounts";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { LoadError } from "@/components/ui/LoadError";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { WalletIcon } from "@/components/ui/icons";
 import { AddTransactionForm } from "../../AddTransactionForm";
@@ -105,8 +105,7 @@ export default async function EditTransactionPage({
     return (
       <div className="flex flex-col gap-6">
         <PageHeader title="Edit transaction" />
-        <ErrorMessage
-          severity="critical"
+        <LoadError
           message={
             incomeCategoriesResult.error ??
             expenseCategoriesResult.error ??

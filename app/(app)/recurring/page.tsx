@@ -6,7 +6,7 @@ import { estimateCardPaymentDue } from "@/lib/accountOptions";
 import { todayISO } from "@/lib/date";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { LoadError } from "@/components/ui/LoadError";
 import { RepeatIcon } from "@/components/ui/icons";
 import { CreateRecurringForm } from "./CreateRecurringForm";
 import { RecurringRow } from "./RecurringRow";
@@ -49,7 +49,7 @@ export default async function RecurringPage() {
           title="Recurring"
           description="Bills and paychecks that repeat -- posted automatically on their due date."
         />
-        <ErrorMessage severity="critical" message={recurringResult.error} />
+        <LoadError message={recurringResult.error} />
       </div>
     );
   }

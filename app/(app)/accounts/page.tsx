@@ -5,7 +5,7 @@ import { getNetWorth } from "@/lib/db/dashboard";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { LoadError } from "@/components/ui/LoadError";
 import { StatTile } from "@/components/ui/StatTile";
 import { WalletIcon } from "@/components/ui/icons";
 import { formatAccountBalance } from "@/lib/format";
@@ -73,8 +73,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
     return (
       <div className="flex flex-col gap-6">
         <PageHeader title="Accounts" description="Every place your money lives, in one list." />
-        <ErrorMessage
-          severity="critical"
+        <LoadError
           message={
             accountsResult.error ??
             netWorthResult.error ??

@@ -9,7 +9,7 @@ import {
 import type { TransactionType } from "@/lib/db/transactions";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { LoadError } from "@/components/ui/LoadError";
 import { TagIcon } from "@/components/ui/icons";
 import { CreateCategoryForm } from "./CreateCategoryForm";
 import { CategoryRow } from "./CategoryRow";
@@ -99,8 +99,7 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/categ
       </div>
 
       {categoriesResult.error !== null || groupsResult.error !== null ? (
-        <ErrorMessage
-          severity="critical"
+        <LoadError
           message={
             categoriesResult.error ??
             groupsResult.error ??

@@ -6,6 +6,7 @@ export function ErrorMessage({
   message,
   severity = "notice",
   onRetry,
+  retrying = false,
 }: {
   message: string;
   /**
@@ -18,6 +19,8 @@ export function ErrorMessage({
    */
   severity?: "notice" | "critical";
   onRetry?: () => void;
+  /** A retry is in flight: the button disables and says so. */
+  retrying?: boolean;
 }) {
   const critical = severity === "critical";
   const Icon = critical ? WarningIcon : InfoIcon;
@@ -38,9 +41,10 @@ export function ErrorMessage({
         <button
           type="button"
           onClick={onRetry}
-          className="shrink-0 text-sm font-medium text-action hover:text-action-hover hover:underline"
+          disabled={retrying}
+          className="shrink-0 text-sm font-medium text-action hover:text-action-hover hover:underline disabled:text-ink-muted disabled:no-underline"
         >
-          Try again
+          {retrying ? "Trying again…" : "Try again"}
         </button>
       ) : null}
     </div>

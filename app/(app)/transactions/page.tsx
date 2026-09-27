@@ -7,7 +7,7 @@ import {
 import { listCategories, listCategoriesForType } from "@/lib/db/categories";
 import { listAccounts } from "@/lib/db/accounts";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { LoadError } from "@/components/ui/LoadError";
 import { InfoIcon } from "@/components/ui/icons";
 import { AddTransactionForm } from "./AddTransactionForm";
 import { TransactionsList } from "./TransactionsList";
@@ -61,8 +61,7 @@ export default async function TransactionsPage({
     return (
       <div className="flex flex-col gap-6">
         <PageHeader title="Transactions" description="Every dollar in and out, newest first." />
-        <ErrorMessage
-          severity="critical"
+        <LoadError
           message={
             transactionsResult.error ??
             categoriesResult.error ??

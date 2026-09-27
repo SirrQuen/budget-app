@@ -1,7 +1,7 @@
 import { getGoalProgress, getGoalsSummary } from "@/lib/db/dashboard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { LoadError } from "@/components/ui/LoadError";
 import { StatTile } from "@/components/ui/StatTile";
 import { TargetIcon } from "@/components/ui/icons";
 import { CreateGoalForm } from "./CreateGoalForm";
@@ -20,8 +20,7 @@ export default async function GoalsPage() {
           title="Goals"
           description="What you're saving toward, and how close you are."
         />
-        <ErrorMessage
-          severity="critical"
+        <LoadError
           message={
             progressResult.error ??
             summaryResult.error ??
