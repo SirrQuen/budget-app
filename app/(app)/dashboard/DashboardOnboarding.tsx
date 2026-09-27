@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionError } from "./SectionError";
 import { SorrelMark } from "@/components/SorrelMark";
-import { ListIcon, PlusIcon } from "@/components/ui/icons";
+import { PlusIcon } from "@/components/ui/icons";
 import { formatAccountBalance, formatCompactNumber } from "@/lib/format";
 import type { Database } from "@/lib/database.types";
 
@@ -68,42 +68,20 @@ export function NoTransactionsView({
     <div className="flex flex-col gap-6">
       <PageHeader title="Dashboard" description={greeting(firstName, isFirstLogin)} />
 
-      {accountsError ? (
-        <SectionError label="Your accounts" />
-      ) : (
-        <>
-          {netWorth !== null ? (
-            <div className="rounded-2xl border border-hairline bg-surface p-4">
-              <p className="text-sm font-medium text-ink-secondary">Total across accounts</p>
-              <p className="mt-1 text-5xl font-semibold text-ink">
-                {formatCompactNumber(netWorth, { currency: true })}
-              </p>
-            </div>
-          ) : null}
+      {!accountsError && netWorth !== null ? (
+        <div className="rounded-2xl border border-hairline bg-surface p-4">
+          <p className="text-sm font-medium text-ink-secondary">Total across accounts</p>
+          <p className="mt-1 text-5xl font-semibold text-ink">
+            {formatCompactNumber(netWorth, { currency: true })}
+          </p>
+        </div>
+      ) : null}
 
-          <section className="rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
-            <h2 className="mb-3 text-sm font-medium text-ink-secondary">Your accounts</h2>
-            <ul className="divide-y divide-hairline">
-              {accounts.map((a) => (
-                <li
-                  key={a.account_id}
-                  className="flex items-center justify-between gap-3 py-2.5 text-sm"
-                >
-                  <span className="min-w-0 truncate text-ink">{a.account_name}</span>
-                  <span className="shrink-0 font-medium tabular-nums text-ink">
-                    {formatAccountBalance(a.balance ?? 0, a.account_type ?? "")}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        </>
-      )}
-
+      {/* Above the account list, not after it: logging is the one thing
+          this stage asks for, and below a list its CTA falls off a 375px
+          screen once there's more than an account or two. */}
       <EmptyState
-        // Not the mark: this rung sits under the hero and account list, and
-        // the mark's extra 64px pushes the CTA below a 375px-wide fold.
-        icon={<ListIcon className="h-10 w-10" />}
+        icon={ladderMark}
         heading="Log your first transaction"
         message="Your cash flow, budgets, streak and spending trends all build from what you log. Add a few transactions and this dashboard fills in."
         action={
@@ -113,6 +91,27 @@ export function NoTransactionsView({
           </Link>
         }
       />
+
+      {accountsError ? (
+        <SectionError label="Your accounts" />
+      ) : (
+        <section className="rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
+          <h2 className="mb-3 text-sm font-medium text-ink-secondary">Your accounts</h2>
+          <ul className="divide-y divide-hairline">
+            {accounts.map((a) => (
+              <li
+                key={a.account_id}
+                className="flex items-center justify-between gap-3 py-2.5 text-sm"
+              >
+                <span className="min-w-0 truncate text-ink">{a.account_name}</span>
+                <span className="shrink-0 font-medium tabular-nums text-ink">
+                  {formatAccountBalance(a.balance ?? 0, a.account_type ?? "")}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }
