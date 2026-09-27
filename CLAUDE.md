@@ -90,6 +90,10 @@ data contexts.
 
 - Red is the Sorrel mark colour only. It never appears on data, status, text,
   or controls. Theme accents remain gold (dark) and navy (light).
+- The mark's colour follows the surface it sits on, not the theme setting.
+  Its two tokens are named for the ground: `--mark-on-dark`, `--mark-on-light`.
+  A fixed-ground surface (the auth splash, the OG image) uses the matching one
+  directly. Never add a per-location alias (`--splash-mark`, `--og-mark`).
 - Text never wears a data colour. Values, labels and legends use ink tokens;
   a coloured dot beside the text carries identity.
 - Status colour never appears alone — always icon + label too.

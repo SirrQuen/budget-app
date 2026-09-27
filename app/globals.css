@@ -96,24 +96,32 @@
      reason it is deliberately NOT registered in @theme below, so no
      bg-/text-/border-/ring-mark utility exists to reach for.
      Two values, not one: a single deep crimson is 2.86:1 on --dk-surface,
-     under the 3:1 non-text minimum, so the dark value runs brighter.
-       --mark     light  #c41230  5.79:1 on #fbfaf7
-       --dk-mark  dark   #e63946  4.05:1 on #1b1b2f */
-  --mark: #c41230;
+     under the 3:1 non-text minimum, so the dark-ground value runs brighter.
+       --mark-on-light  #c41230  5.79:1 on #fbfaf7
+       --mark-on-dark   #e63946  4.05:1 on #1b1b2f, 4.40:1 on #131322
+
+     The mark's colour follows the surface it sits on, not the theme
+     setting, so the two values are named after the ground, not the theme
+     (hence no --dk- prefix) or the place they are used. --mark is the
+     theme's default ground; anything with a fixed ground (the splash, the
+     OG image) takes the matching --mark-on-* directly. Never add a
+     per-location alias like --splash-mark or --og-mark. */
+  --mark-on-light: #c41230;
+  --mark-on-dark: #e63946;
+  --mark: var(--mark-on-light);
 
   /* Splash -- the auth brand panel, and the ONLY surface that does not
      flip with the theme. It is brand chrome ("logo, nav, primary buttons,
      splash"). Pinning the ground to the brand navy gives light mode
      somewhere the identity actually lives, and keeps the mark on the
      ground it was validated against. Because the ground never flips,
-     neither does the mark on it: --splash-mark is the dark mark value in
-     both themes (4.40:1 on #131322; the light value would be 3.04:1).
+     neither does the mark on it: the splash uses --mark-on-dark in both
+     themes (4.40:1 on #131322; --mark-on-light would be 3.04:1).
      Deliberately defined once -- the dark blocks below do not override
      these, because there is nothing to swap. */
   --splash: #131322;
   --splash-ink: #ffffff;
   --splash-ink-secondary: #c3c2b7;
-  --splash-mark: var(--dk-mark);
 
   /* Scrim behind modals, dialogs and the mobile quick-add sheet. Lighter
      than the dark-mode scrim: the same wash reads heavier over pale
@@ -166,8 +174,6 @@
   --dk-action-hover: #f2c866;
   --dk-action-pressed: #d4a32f;
   --dk-action-ink: #0b0b0b;
-
-  --dk-mark: #e63946;
 
   --dk-pulse-peak: 0.55;
   --dk-pulse-peak-income: 0.72;
@@ -224,7 +230,7 @@
     --action-pressed: var(--dk-action-pressed);
     --action-ink: var(--dk-action-ink);
 
-    --mark: var(--dk-mark);
+    --mark: var(--mark-on-dark);
 
     --pulse-peak: var(--dk-pulse-peak);
     --pulse-peak-income: var(--dk-pulse-peak-income);
@@ -275,7 +281,7 @@
   --action-pressed: var(--dk-action-pressed);
   --action-ink: var(--dk-action-ink);
 
-  --mark: var(--dk-mark);
+  --mark: var(--mark-on-dark);
 
   --pulse-peak: var(--dk-pulse-peak);
   --pulse-peak-income: var(--dk-pulse-peak-income);
