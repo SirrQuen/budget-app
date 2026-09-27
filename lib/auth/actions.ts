@@ -1,10 +1,11 @@
 "use server";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { authErrorMessage } from "@/lib/auth/errors";
+import { SIGNED_IN_COOKIE, SIGNED_IN_MAX_AGE_S } from "@/lib/auth/signedInFlag";
 
 export type ActionState = { error?: string; success?: string } | undefined;
 
@@ -25,6 +26,13 @@ export async function login(
   if (error) {
     return { error: authErrorMessage(error) };
   }
+
+  // The dashboard's mark plays its sign-in fold once, on this flag.
+  (await cookies()).set(SIGNED_IN_COOKIE, "1", {
+    maxAge: SIGNED_IN_MAX_AGE_S,
+    path: "/",
+    sameSite: "lax",
+  });
 
   revalidatePath("/", "layout");
   redirect("/dashboard");

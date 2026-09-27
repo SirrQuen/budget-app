@@ -604,3 +604,70 @@ body {
     opacity: calc(var(--pulse-peak) / 2);
   }
 }
+
+/* =====================================================================
+   SORREL MARK -- open / folded
+   =====================================================================
+
+   components/SorrelMark.tsx is the only consumer. Folded is a closing
+   umbrella: each leaflet rotates toward pointing down and narrows along
+   its own axis. rotate() comes BEFORE scale(), so the narrowing happens in
+   the leaflet's own frame and then gets rotated -- reordering them narrows
+   in screen space and skews the fold. The 171/180/189 spread and the
+   uneven scaleY are deliberate; a symmetric fold looks dead.
+
+   Rotation lives in CSS, not the path's transform attribute, so open and
+   folded are one transform list each and interpolate function by function.
+   The origin is the viewBox centre (50 50) for every leaflet.
+
+   All three converge downward from 50,50, so the folded shape's centroid
+   sits ~22 units low. .sorrel-leaves lifts it back to the middle so the
+   mark doesn't appear to fall as it closes. It is a separate UNROTATED
+   wrapper on purpose: a translate inside each leaflet's transform would
+   run in that leaflet's rotated frame and scatter them. */
+.sorrel-leaves {
+  transform-box: view-box;
+  transition: transform 600ms cubic-bezier(0.34, 0.02, 0.24, 1);
+}
+.sorrel-mark--folded .sorrel-leaves {
+  transform: translateY(-22px);
+}
+
+.sorrel-leaf {
+  transform-box: view-box;
+  transform-origin: 50px 50px;
+  transition: transform 600ms cubic-bezier(0.34, 0.02, 0.24, 1);
+}
+
+.sorrel-leaf--1 {
+  transform: rotate(0deg) scaleX(1) scaleY(1);
+}
+.sorrel-leaf--2 {
+  transform: rotate(120deg) scaleX(1) scaleY(1);
+  transition-delay: 45ms;
+}
+.sorrel-leaf--3 {
+  transform: rotate(240deg) scaleX(1) scaleY(1);
+  transition-delay: 90ms;
+}
+
+.sorrel-mark--folded .sorrel-leaf--1 {
+  transform: rotate(171deg) scaleX(0.62) scaleY(0.9);
+}
+.sorrel-mark--folded .sorrel-leaf--2 {
+  transform: rotate(180deg) scaleX(0.62) scaleY(0.95);
+}
+.sorrel-mark--folded .sorrel-leaf--3 {
+  transform: rotate(189deg) scaleX(0.62) scaleY(0.9);
+}
+
+/* The state still changes; it just doesn't travel. `transition: none`
+   rather than leaning on the global safety net, which shortens durations
+   but leaves transition-delay alone -- the stagger would otherwise hold
+   the second and third leaflets back for 45/90ms. */
+@media (prefers-reduced-motion: reduce) {
+  .sorrel-leaves,
+  .sorrel-leaf {
+    transition: none !important;
+  }
+}

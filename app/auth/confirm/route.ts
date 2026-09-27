@@ -1,7 +1,9 @@
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { type NextRequest } from "next/server";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { SIGNED_IN_COOKIE, SIGNED_IN_MAX_AGE_S } from "@/lib/auth/signedInFlag";
 
 // The email-link callback for both signup confirmation and password recovery.
 //
@@ -51,13 +53,28 @@ export async function GET(request: NextRequest) {
 
   const supabase = await createClient();
 
+  // A confirmed signup is a brand-new user's first sight of the app, so the
+  // dashboard mark plays its sign-in fold. A recovery link does not: someone
+  // resetting a password is mid-task, and the flourish would be noise.
+  const signedIn = async () => {
+    if (isRecovery) return;
+    (await cookies()).set(SIGNED_IN_COOKIE, "1", {
+      maxAge: SIGNED_IN_MAX_AGE_S,
+      path: "/",
+      sameSite: "lax",
+    });
+  };
+
   // --- Shape 2: custom template — token_hash + type -> verifyOtp ----------
   if (tokenHash && type) {
     const { error } = await supabase.auth.verifyOtp({
       type,
       token_hash: tokenHash,
     });
-    if (!error) redirect(next);
+    if (!error) {
+      await signedIn();
+      redirect(next);
+    }
     // Spent or expired token. On a signup link that almost always means a
     // scanner already confirmed the address.
     if (!isRecovery) redirect(ALREADY_CONFIRMED);
@@ -68,7 +85,10 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) redirect(next);
+    if (!error) {
+      await signedIn();
+      redirect(next);
+    }
 
     // Supabase's verify endpoint issued this code, so the address is already
     // confirmed — the exchange only failed to open a session *here*. That

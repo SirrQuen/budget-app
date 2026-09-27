@@ -35,6 +35,7 @@ import { GoalMeters } from "./GoalMeters";
 import { UpcomingList } from "./UpcomingList";
 import { SectionError } from "./SectionError";
 import { NoAccountsView, NoTransactionsView } from "./DashboardOnboarding";
+import { DayNightMark } from "@/components/DayNightMark";
 
 // Auth is already enforced by app/(app)/layout.tsx's requireUser() before
 // this page renders.
@@ -210,9 +211,14 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       {/* ── Right now: as-of-today and forward-looking; not scoped by the filter ── */}
       <section className="flex flex-col gap-6" aria-labelledby="dash-right-now">
         <PageHeader title="Dashboard" description={description} />
-        <h2 id="dash-right-now" className="text-sm font-medium text-ink-secondary">
-          Right now
-        </h2>
+        {/* The mark is ambient -- day/night for "right now" -- and kept out
+            of the hero's row so nothing competes with that figure. */}
+        <div className="flex items-center justify-between gap-4">
+          <h2 id="dash-right-now" className="text-sm font-medium text-ink-secondary">
+            Right now
+          </h2>
+          <DayNightMark size={56} />
+        </div>
 
         {streakResult.error ? (
           <SectionError label="Logging streak" />

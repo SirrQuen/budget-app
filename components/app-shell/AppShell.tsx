@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { QuickAddBar } from "@/components/quick-add/QuickAddBar";
 import { OptimisticTransactionsProvider } from "@/components/quick-add/OptimisticTransactionsContext";
 import { ConfirmPulseProvider } from "@/components/ui/ConfirmPulse";
+import { SorrelMark } from "@/components/SorrelMark";
 import type { TransactionAccountOption } from "@/app/(app)/transactions/AddTransactionForm";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 
@@ -55,7 +56,7 @@ export function AppShell({
           Skip to main content
         </a>
         <header className="flex items-center justify-between border-b border-hairline bg-page px-4 py-3 md:hidden">
-          <span className="text-lg font-semibold">Sorrel</span>
+          <Wordmark />
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -71,9 +72,9 @@ export function AppShell({
           className={`${open ? "flex" : "hidden"} flex-col gap-6 border-b border-hairline bg-page px-4 pb-4 md:sticky md:top-0 md:flex md:h-dvh md:w-60 md:shrink-0 md:border-b-0 md:border-r md:py-6`}
         >
           <div className="flex flex-col gap-6">
-            <span className="hidden px-2 text-lg font-semibold text-ink md:block">
-              Sorrel
-            </span>
+            <div className="hidden px-2 md:block">
+              <Wordmark />
+            </div>
             <nav className="flex flex-col gap-1">
               {NAV_ITEMS.map((item) => {
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -133,5 +134,18 @@ export function AppShell({
         </main>
       </div>
     </ConfirmPulseProvider>
+  );
+}
+
+// The identity anchor: always open, never animated. The mark is hidden from
+// assistive tech because the word beside it already says "Sorrel".
+function Wordmark() {
+  return (
+    <span className="flex items-center gap-2 text-lg font-semibold text-ink">
+      <span aria-hidden="true">
+        <SorrelMark size={24} />
+      </span>
+      Sorrel
+    </span>
   );
 }
