@@ -10,6 +10,7 @@ import {
   getRecurring,
   confirmVariableAmount,
   confirmIncomeOccurrence,
+  resolveOverdueOccurrence,
 } from "@/lib/db/recurring";
 
 export type ActionState = { error?: string } | undefined;
@@ -449,5 +450,26 @@ export async function confirmIncomeAction(
   }
 
   revalidatePath("/recurring");
+  revalidatePath("/dashboard");
+}
+
+// The safe-to-spend breakdown's "did it go out?" line for an overdue bill
+// (see resolveOverdueOccurrence). Bound per button with .bind(null, id,
+// outcome), so there's no form field to validate beyond these two.
+export async function resolveOverdueBillAction(
+  id: string,
+  outcome: "posted" | "skipped",
+): Promise<ActionState> {
+  if (!id || (outcome !== "posted" && outcome !== "skipped")) {
+    return { error: "We couldn't tell which bill that was." };
+  }
+
+  const { error } = await resolveOverdueOccurrence(id, outcome);
+  if (error) {
+    return { error };
+  }
+
+  revalidatePath("/recurring");
+  revalidatePath("/transactions");
   revalidatePath("/dashboard");
 }

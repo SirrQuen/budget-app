@@ -80,6 +80,73 @@ export async function updateSafeToSpendWindowPref(
   return { data: coerceSafeToSpendWindowPref(data.safe_to_spend_window) ?? pref, error: null };
 }
 
+export type SafeToSpendCushion = {
+  /** Dollars -- the stored choice when there is one, else the suggestion. */
+  amount: number;
+  /** True when nothing's stored and `amount` is the suggestion. */
+  isDefault: boolean;
+  /** suggested_safe_to_spend_cushion() -- what "use the suggestion" resets to. */
+  suggested: number;
+};
+
+// settings.safe_to_spend_cushion, or suggested_safe_to_spend_cushion() when
+// it's null (see 32_safe_to_spend_projection.sql). Unlike the window pref
+// this does surface an error: the cushion is part of the hero's arithmetic,
+// and guessing it would show a figure that isn't what the user set.
+export const getSafeToSpendCushion = cache(async (): Promise<DbResult<SafeToSpendCushion>> => {
+  const supabase = await createClient();
+
+  const [settingsRes, suggestedRes] = await Promise.all([
+    getSettings(),
+    supabase.rpc("suggested_safe_to_spend_cushion"),
+  ]);
+
+  if (settingsRes.error) {
+    return { data: null, error: settingsRes.error };
+  }
+  if (suggestedRes.error) {
+    return { data: null, error: describeReadError(suggestedRes.error, "settings") };
+  }
+
+  const stored = settingsRes.data?.safe_to_spend_cushion ?? null;
+  const suggested = suggestedRes.data ?? 200;
+
+  return {
+    data: { amount: stored ?? suggested, isDefault: stored === null, suggested },
+    error: null,
+  };
+});
+
+/** null clears the stored value, going back to the suggestion. */
+export async function updateSafeToSpendCushion(
+  amount: number | null,
+): Promise<DbResult<number | null>> {
+  const supabase = await createClient();
+
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  const userid = claimsData?.claims?.sub;
+
+  if (claimsError || !userid) {
+    return {
+      data: null,
+      error: "Your session's expired. Log in again to pick up where you left off.",
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("settings")
+    .update({ safe_to_spend_cushion: amount, updated_at: new Date().toISOString() })
+    .eq("userid", userid)
+    .select("safe_to_spend_cushion")
+    .single();
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "settings") };
+  }
+
+  return { data: data.safe_to_spend_cushion, error: null };
+}
+
 export async function updateTheme(theme: Theme): Promise<DbResult<Theme>> {
   const supabase = await createClient();
 

@@ -708,6 +708,7 @@ export type Database = {
           default_budget_month: number | null
           id: string
           notifications_enabled: boolean
+          safe_to_spend_cushion: number | null
           safe_to_spend_window: string | null
           theme: string
           updated_at: string
@@ -721,6 +722,7 @@ export type Database = {
           default_budget_month?: number | null
           id?: string
           notifications_enabled?: boolean
+          safe_to_spend_cushion?: number | null
           safe_to_spend_window?: string | null
           theme?: string
           updated_at?: string
@@ -734,6 +736,7 @@ export type Database = {
           default_budget_month?: number | null
           id?: string
           notifications_enabled?: boolean
+          safe_to_spend_cushion?: number | null
           safe_to_spend_window?: string | null
           theme?: string
           updated_at?: string
@@ -1376,6 +1379,8 @@ export type Database = {
           accountid: string | null
           amount: number | null
           amount_is_variable: boolean | null
+          amount_low: number | null
+          business_day_offset: number | null
           category_color: string | null
           category_icon: string | null
           category_name: string | null
@@ -1393,7 +1398,9 @@ export type Database = {
           next_amount_confirmed_at: string | null
           next_due_date: string | null
           next_run_date: string | null
+          non_business_day_rule: string | null
           occurrence_limit: number | null
+          occurrences_remaining: number | null
           recurring_id: string | null
           requires_confirmation: boolean | null
           start_date: string | null
@@ -1503,6 +1510,10 @@ export type Database = {
         Args: { p_fallback_amount: number; p_recurring_id: string }
         Returns: number
       }
+      estimate_income_amount_low: {
+        Args: { p_fallback_amount: number; p_recurring_id: string }
+        Returns: number
+      }
       is_business_day: { Args: { d: string }; Returns: boolean }
       record_login: {
         Args: never
@@ -1523,6 +1534,7 @@ export type Database = {
         Args: { p_amount: number; p_type: string }
         Returns: number
       }
+      suggested_safe_to_spend_cushion: { Args: never; Returns: number }
       username_is_available: { Args: { p_username: string }; Returns: boolean }
     }
     Enums: {

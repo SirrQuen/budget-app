@@ -1,10 +1,11 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { getAccountDeletionSummary } from "@/lib/db/profile";
-import { getSafeToSpendWindowPref } from "@/lib/db/settings";
+import { getSafeToSpendWindowPref, getSafeToSpendCushion } from "@/lib/db/settings";
 import { getSoonestIncomeOccurrence } from "@/lib/db/dashboard";
 import { DeleteAccountSection } from "./DeleteAccountSection";
 import { SafeToSpendWindowToggle } from "./SafeToSpendWindowToggle";
+import { SafeToSpendCushionForm } from "./SafeToSpendCushionForm";
 import { Wordmark } from "@/components/Wordmark";
 import pkg from "@/package.json";
 
@@ -24,9 +25,10 @@ export default async function SettingsPage() {
   // that resolution has to happen -- getSoonestIncomeOccurrence() is
   // cache()'d, so this doesn't cost a second query if getSafeToSpend()
   // already ran this request.
-  const [windowPref, nextIncome] = await Promise.all([
+  const [windowPref, nextIncome, cushion] = await Promise.all([
     getSafeToSpendWindowPref(),
     getSoonestIncomeOccurrence(),
+    getSafeToSpendCushion(),
   ]);
   const resolvedWindowPref = windowPref ?? (nextIncome.data ? "next_payday" : "end_of_month");
 
@@ -59,8 +61,26 @@ export default async function SettingsPage() {
           Safe to spend
         </h2>
         <p className="mt-1 max-w-prose text-sm text-ink-secondary">
-          What the dashboard hero counts down to. Next payday follows your soonest upcoming income
-          schedule, falling back to end of month when you don&apos;t have one.
+          The dashboard looks ahead through your payday after next (at least five weeks) and finds
+          the lowest your balance gets. Safe to spend is that low point, minus a cushion you keep
+          in reserve.
+        </p>
+
+        {cushion.data ? (
+          <SafeToSpendCushionForm
+            amount={cushion.data.amount}
+            isDefault={cushion.data.isDefault}
+            suggested={cushion.data.suggested}
+          />
+        ) : (
+          <p className="mt-4 text-sm text-ink-muted">
+            We couldn&apos;t load your cushion right now. Refresh to try again.
+          </p>
+        )}
+
+        <h3 className="mt-6 text-sm font-semibold text-ink">Without a paycheck</h3>
+        <p className="mt-1 max-w-prose text-sm text-ink-secondary">
+          With no income schedule to look ahead to, safe to spend counts down to this instead.
         </p>
 
         <SafeToSpendWindowToggle initialPref={resolvedWindowPref} className="mt-4" />

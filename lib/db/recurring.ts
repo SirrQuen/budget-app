@@ -6,6 +6,7 @@ import { describeReadError, describeWriteError, logDbError } from "@/lib/db/erro
 import { todayISO, addDaysISO } from "@/lib/date";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
 import { getBankHolidays } from "@/lib/db/holidays";
+import { nextOccurrenceISO } from "@/lib/recurringCadence";
 
 type RecurringRow = Database["public"]["Tables"]["recurring_transactions"]["Row"];
 type RecurringInsert = Database["public"]["Tables"]["recurring_transactions"]["Insert"];
@@ -60,91 +61,6 @@ function flatten(row: RawRecurringRow): RecurringWithRelations {
     account_name: account?.account_name ?? null,
     to_account_name: to_account?.account_name ?? null,
   };
-}
-
-// ---------------------------------------------------------------------------
-// Cadence math
-//
-// frequency is validated by rectx_frequency_check --
-// Daily/Weekly/Biweekly/Monthly/Quarterly/Yearly (see CLAUDE.md "Recurring
-// transactions"). Day-of-month/weekday isn't stored anywhere: the schedule is
-// entirely "one cadence step from next_run_date", so this is the one place
-// that owns the calendar edge cases. Both generateDueOccurrences and any
-// future "preview the next occurrence" UI should go through this rather than
-// re-deriving it.
-// ---------------------------------------------------------------------------
-
-// Adds whole months to an ISO date, landing on anchorDay -- clamped to the
-// target month's last day when anchorDay doesn't exist there (anchorDay 31,
-// target month Feb -> the 28th/29th, not rolled into March).
-//
-// anchorDay is deliberately NOT derived from dateISO's own day. Doing that
-// would drift the schedule permanently downward the first time a short
-// month clamps it: Jan 31 -> Feb 28 (correct), then Feb 28 + 1 month -> Mar
-// 28 forever, never back to the 31st a 31-day month actually has. Passing a
-// fixed anchorDay (the caller reads it from start_date, which the generator
-// never advances) means a July 31 occurrence, three months after a Feb
-// clamp, is still the 31st -- and the same guards a Yearly Feb 29 schedule
-// from getting stuck on the 28th once it crosses a non-leap year.
-function addMonthsClampedISO(dateISO: string, months: number, anchorDay: number): string {
-  const [year, month] = dateISO.split("-").map(Number);
-  const total = month - 1 + months;
-  const targetYear = year + Math.floor(total / 12);
-  const targetMonth = ((total % 12) + 12) % 12;
-  const lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
-  const d = new Date(targetYear, targetMonth, Math.min(anchorDay, lastDayOfTargetMonth));
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function dayOfMonth(dateISO: string): number {
-  return Number(dateISO.split("-")[2]);
-}
-
-// intervalCount is the N in "every N weeks" -- meaningful for Weekly only.
-// anchorDateISO is the schedule's stable reference point for Monthly/
-// Quarterly/Yearly (see addMonthsClampedISO) -- callers pass
-// template.start_date, never the cursor being advanced. Weekly/Biweekly
-// don't need it: +7*N days never drifts off the original weekday the way
-// month-length clamping drifts off a day-of-month, so cursor arithmetic
-// alone is exact.
-//
-// Not exported: this file is server-only, and lib/recurringSchedule.ts (the
-// client-safe copy of this same cadence, for the schedule picker and each
-// row's display text) has to duplicate the switch rather than import it --
-// keep the two in sync by hand if a case here ever changes.
-//
-// Daily/Biweekly/Quarterly are still handled here for any row already
-// carrying one of those values -- rectx_frequency_check still allows them --
-// but the schedule picker no longer writes them: "every N weeks" (Weekly +
-// interval_count) folds Biweekly's job in, and Daily/Quarterly turned out to
-// be exotic enough nobody used them.
-function nextOccurrenceISO(
-  dateISO: string,
-  frequency: string,
-  intervalCount: number,
-  anchorDateISO: string,
-): string {
-  switch (frequency) {
-    case "Daily":
-      return addDaysISO(dateISO, 1);
-    case "Weekly":
-      return addDaysISO(dateISO, 7 * intervalCount);
-    case "Biweekly":
-      return addDaysISO(dateISO, 14);
-    case "Monthly":
-      return addMonthsClampedISO(dateISO, 1, dayOfMonth(anchorDateISO));
-    case "Quarterly":
-      return addMonthsClampedISO(dateISO, 3, dayOfMonth(anchorDateISO));
-    case "Yearly":
-      return addMonthsClampedISO(dateISO, 12, dayOfMonth(anchorDateISO));
-    default:
-      // rectx_frequency_check should make this unreachable -- fail loudly
-      // rather than silently stalling a schedule on a value the DB let through.
-      throw new Error(`Unknown recurring frequency: ${frequency}`);
-  }
 }
 
 export type ListRecurringOptions = {
@@ -574,6 +490,9 @@ export async function confirmIncomeOccurrence(
 /** A transaction row that was posted from a schedule, for the "we added N transactions while you were away" summary. */
 export type GeneratedOccurrence = TransactionRow;
 
+const DUE_RECURRING_SELECT =
+  "id, description, amount, accountid, categoryid, to_accountid, next_run_date, next_due_date, start_date, end_date, frequency, interval_count, occurrence_limit, business_day_offset, non_business_day_rule, category:categories(category_type), amount_is_variable, next_amount, next_amount_confirmed_at, requires_confirmation";
+
 type DueRecurringRow = {
   id: string;
   description: string;
@@ -584,6 +503,8 @@ type DueRecurringRow = {
   categoryid: string | null;
   to_accountid: string | null;
   next_run_date: string;
+  // Resolved date of the occurrence at next_run_date -- see resolveDueDate.
+  next_due_date: string;
   // The schedule's stable anchor for Monthly/Quarterly/Yearly's day-of-month
   // -- see nextOccurrenceISO. Nullable in the schema; falls back to
   // next_run_date below for a row somehow missing it rather than crashing
@@ -611,6 +532,63 @@ type DueRecurringRow = {
   // an Expense or Transfer template.
   requires_confirmation: boolean;
 };
+
+// The transaction row(s) one occurrence posts. A transfer template posts
+// both legs in one insert statement -- one call, one transaction, so a
+// failure can't land only one leg (same reason createTransfer batches its
+// two legs together). Shared by generateDueOccurrences and
+// resolveOverdueOccurrence so the two can never post different shapes.
+function occurrenceRows(
+  template: DueRecurringRow,
+  userid: string,
+  amount: number,
+  dueDate: string,
+  isEstimated: boolean,
+): TransactionInsert[] {
+  if (template.to_accountid !== null) {
+    const transfer_group_id = crypto.randomUUID();
+    return [
+      {
+        userid,
+        accountid: template.accountid,
+        categoryid: null,
+        amount,
+        transaction_type: "Expense",
+        transaction_date: dueDate,
+        description: template.description,
+        recurringid: template.id,
+        transfer_group_id,
+      },
+      {
+        userid,
+        accountid: template.to_accountid,
+        categoryid: null,
+        amount,
+        transaction_type: "Income",
+        transaction_date: dueDate,
+        description: template.description,
+        recurringid: template.id,
+        transfer_group_id,
+      },
+    ];
+  }
+  return [
+    {
+      userid,
+      accountid: template.accountid,
+      categoryid: template.categoryid,
+      amount,
+      // Non-null: a category template's select embeds categories with
+      // categoryid not null (rectx_category_required guarantees it), so
+      // category is always present here.
+      transaction_type: template.category!.category_type,
+      transaction_date: dueDate,
+      description: template.description,
+      recurringid: template.id,
+      is_estimated: isEstimated,
+    },
+  ];
+}
 
 // Lazy catch-up, run when a user opens the app -- there is no scheduler.
 // A category schedule carries no transaction_type of its own; direction
@@ -675,9 +653,7 @@ export const generateDueOccurrences = cache(async (): Promise<
   // filter needed (see CLAUDE.md "Data layer rules").
   const { data: due, error: dueError } = await supabase
     .from("recurring_transactions")
-    .select(
-      "id, description, amount, accountid, categoryid, to_accountid, next_run_date, start_date, end_date, frequency, interval_count, occurrence_limit, business_day_offset, non_business_day_rule, category:categories(category_type), amount_is_variable, next_amount, next_amount_confirmed_at, requires_confirmation",
-    )
+    .select(DUE_RECURRING_SELECT)
     .eq("is_active", true)
     .lte("next_run_date", addDaysISO(today, BUSINESS_DAY_QUERY_BUFFER_DAYS))
     .returns<DueRecurringRow[]>();
@@ -810,54 +786,7 @@ export const generateDueOccurrences = cache(async (): Promise<
         occurrenceAmount = template.amount;
       }
 
-      // A transfer template posts both legs in one insert statement -- one
-      // call, one transaction, so a failure can't land only one leg (same
-      // reason createTransfer batches its two legs together).
-      const insertRows: TransactionInsert[] =
-        template.to_accountid !== null
-          ? (() => {
-              const transfer_group_id = crypto.randomUUID();
-              return [
-                {
-                  userid,
-                  accountid: template.accountid,
-                  categoryid: null,
-                  amount: occurrenceAmount,
-                  transaction_type: "Expense",
-                  transaction_date: dueDate,
-                  description: template.description,
-                  recurringid: template.id,
-                  transfer_group_id,
-                },
-                {
-                  userid,
-                  accountid: template.to_accountid,
-                  categoryid: null,
-                  amount: occurrenceAmount,
-                  transaction_type: "Income",
-                  transaction_date: dueDate,
-                  description: template.description,
-                  recurringid: template.id,
-                  transfer_group_id,
-                },
-              ];
-            })()
-          : [
-              {
-                userid,
-                accountid: template.accountid,
-                categoryid: template.categoryid,
-                amount: occurrenceAmount,
-                // Non-null: a category template's select above embeds
-                // categories with categoryid not null (rectx_category_required
-                // guarantees it), so category is always present here.
-                transaction_type: template.category!.category_type,
-                transaction_date: dueDate,
-                description: template.description,
-                recurringid: template.id,
-                is_estimated: isEstimated,
-              },
-            ];
+      const insertRows = occurrenceRows(template, userid, occurrenceAmount, dueDate, isEstimated);
 
       const { data: rows, error: insertError } = await supabase
         .from("transactions")
@@ -928,6 +857,133 @@ export const generateDueOccurrences = cache(async (): Promise<
 
   return { data: created, error: null };
 });
+
+export type OverdueOutcome = "posted" | "skipped";
+
+// The safe-to-spend breakdown's "Rent was due 3 days ago -- did it go
+// out?" An outflow is only overdue-and-unposted when catch-up couldn't
+// post it (an insert failed, or a card payment is still waiting on its
+// amount), and until it's resolved the projection subtracts it today --
+// so a stale one would depress safe-to-spend forever with no visible
+// cause. Two answers:
+//
+//   posted   it went out: post this one occurrence, dated its due date,
+//            exactly as catch-up would have, then advance the schedule.
+//   skipped  it didn't: advance the schedule past this occurrence without
+//            posting anything.
+//
+// Income never comes through here -- confirmIncomeOccurrence owns that
+// ("Confirm inflows"). A card payment's "posted" needs its amount
+// confirmed first (ConfirmVariableAmountSheet); catch-up then posts it.
+//
+// Safe to double-submit: the advance only applies while next_run_date is
+// still the one this call read, and a duplicate insert is the same 23505
+// catch-up already treats as success.
+export async function resolveOverdueOccurrence(
+  id: string,
+  outcome: OverdueOutcome,
+): Promise<DbResult<{ id: string }>> {
+  const supabase = await createClient();
+
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  const userid = claimsData?.claims?.sub;
+
+  if (claimsError || !userid) {
+    return {
+      data: null,
+      error: "Your session's expired. Log in again to pick up where you left off.",
+    };
+  }
+
+  const { data: template, error: readError } = await supabase
+    .from("recurring_transactions")
+    .select(DUE_RECURRING_SELECT)
+    .eq("id", id)
+    .maybeSingle()
+    .returns<DueRecurringRow>();
+
+  if (readError) {
+    return { data: null, error: describeReadError(readError, "recurring transactions") };
+  }
+  if (!template) {
+    return { data: null, error: "That schedule isn't there anymore." };
+  }
+  if (template.requires_confirmation) {
+    return { data: null, error: "Paychecks are confirmed with their own amount, not here." };
+  }
+
+  // Already resolved (another tab, or a second click) -- nothing to do.
+  if (template.next_due_date >= todayISO()) {
+    return { data: { id }, error: null };
+  }
+
+  if (outcome === "posted") {
+    const isCardVariable = template.amount_is_variable && template.to_accountid !== null;
+    let amount = template.amount;
+    let isEstimated = false;
+
+    if (isCardVariable) {
+      if (template.next_amount_confirmed_at === null || template.next_amount === null) {
+        return { data: null, error: "Confirm this payment's amount first." };
+      }
+      amount = template.next_amount;
+    } else if (template.amount_is_variable) {
+      const estimateRes = await supabase.rpc("estimate_expense_amount", {
+        p_recurring_id: template.id,
+        p_fallback_amount: template.amount,
+      });
+      if (estimateRes.error) {
+        return { data: null, error: describeReadError(estimateRes.error, "recurring transactions") };
+      }
+      amount = estimateRes.data ?? template.amount;
+      isEstimated = true;
+    }
+
+    const { error: insertError } = await supabase
+      .from("transactions")
+      .insert(occurrenceRows(template, userid, amount, template.next_due_date, isEstimated));
+
+    if (insertError && insertError.code !== "23505") {
+      return { data: null, error: describeWriteError(insertError, "transaction") };
+    }
+  }
+
+  const holidaysRes = await getBankHolidays();
+  const holidays = holidaysRes.data ?? new Set<string>();
+  const anchor = template.start_date ?? template.next_run_date;
+  const cursor = nextOccurrenceISO(
+    template.next_run_date,
+    template.frequency,
+    template.interval_count,
+    anchor,
+  );
+
+  const patch: RecurringUpdate = {
+    next_run_date: cursor,
+    next_due_date: resolveDueDate(
+      cursor,
+      template.business_day_offset,
+      template.non_business_day_rule as NonBusinessDayRule,
+      holidays,
+    ),
+  };
+  if (template.amount_is_variable) {
+    patch.next_amount = null;
+    patch.next_amount_confirmed_at = null;
+  }
+
+  const { error: advanceError } = await supabase
+    .from("recurring_transactions")
+    .update(patch)
+    .eq("id", id)
+    .eq("next_run_date", template.next_run_date);
+
+  if (advanceError) {
+    return { data: null, error: describeWriteError(advanceError, "recurring") };
+  }
+
+  return { data: { id }, error: null };
+}
 
 // Wraps v_upcoming_recurring, bounded to a horizon -- the view itself has no
 // date window (see CLAUDE.md "Recurring transactions"). No lower bound: an
