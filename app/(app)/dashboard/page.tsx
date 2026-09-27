@@ -34,6 +34,7 @@ import { BudgetMeters } from "./BudgetMeters";
 import { GoalMeters } from "./GoalMeters";
 import { UpcomingList } from "./UpcomingList";
 import { SectionError } from "./SectionError";
+import { LoadError } from "@/components/ui/LoadError";
 import { NoAccountsView, NoTransactionsView } from "./DashboardOnboarding";
 import { DayNightMark } from "@/components/DayNightMark";
 
@@ -197,13 +198,49 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       dueDate: r.next_due_date!,
     }));
 
-  const showTiles = netWorthStatResult.error != null || netWorthStatResult.data != null;
+  // Every section that renders a SectionError on failure, by its label.
+  const failedSections = (
+    [
+      ["Logging streak", streakResult.error],
+      ["Safe to spend", safeToSpendResult.error],
+      ["Net worth", netWorthStatResult.error],
+      ["Budgets", budgetResult.error],
+      ["Goals", goalResult.error],
+      ["Upcoming", recurringResult.error],
+      ["Income and spending", rangeStatsResult.error],
+      ["Cash flow", cashflowResult.error],
+      ["Category movement", movementResult.error],
+    ] as const
+  )
+    .filter(([, error]) => error != null)
+    .map(([label]) => label);
+
+  // One failure: that section says so in place, with its own retry -- the
+  // rest of the page works, so don't send the user through a reload. Two or
+  // more almost always share a cause, so one page-level notice with one
+  // retry replaces them; the failed slots render nothing.
+  //
+  // Logged by section either way. lib/db already logs each underlying error,
+  // but under coarse resource tags ("dashboard", "cash flow") shared across
+  // sections -- this line is what shows a single broken query hiding inside
+  // a general outage.
+  const pageLevelError = failedSections.length >= 2;
+  if (failedSections.length > 0) {
+    console.error(
+      `[dashboard] ${failedSections.length} section(s) failed to load: ${failedSections.join(", ")}`,
+    );
+  }
+  const sectionError = (label: (typeof failedSections)[number]) =>
+    pageLevelError ? null : <SectionError label={label} />;
+  const showsError = (error: string | null) => error != null && !pageLevelError;
+
+  const showTiles = showsError(netWorthStatResult.error) || netWorthStatResult.data != null;
   const showPanels =
-    budgetResult.error != null ||
+    showsError(budgetResult.error) ||
     topBudgets.length > 0 ||
-    goalResult.error != null ||
+    showsError(goalResult.error) ||
     activeGoals.length > 0 ||
-    recurringResult.error != null ||
+    showsError(recurringResult.error) ||
     upcoming.length > 0;
 
   return (
@@ -211,6 +248,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       {/* ── Right now: as-of-today and forward-looking; not scoped by the filter ── */}
       <section className="flex flex-col gap-6" aria-labelledby="dash-right-now">
         <PageHeader title="Dashboard" description={description} />
+        {pageLevelError ? <LoadError message="We couldn’t load parts of your dashboard." /> : null}
         {/* The mark is ambient -- day/night for "right now" -- and kept out
             of the hero's row so nothing competes with that figure. */}
         <div className="flex items-center justify-between gap-4">
@@ -221,7 +259,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         </div>
 
         {streakResult.error ? (
-          <SectionError label="Logging streak" />
+          sectionError("Logging streak")
         ) : streakResult.data ? (
           <LoggingStreakStrip
             current={streakResult.data.current}
@@ -244,7 +282,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         <IncomeConfirmPrompt items={incomeConfirmPrompts} />
 
         {safeToSpendResult.error ? (
-          <SectionError label="Safe to spend" />
+          sectionError("Safe to spend")
         ) : safeToSpendResult.data ? (
           <SafeToSpendHero data={safeToSpendResult.data} />
         ) : null}
@@ -252,7 +290,13 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         {showTiles ? (
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {netWorthStatResult.error ? (
-              <SectionError label="Net worth" />
+              // Full row: a half-width tile squeezes the notice and its
+              // retry to a word per line on a phone.
+              pageLevelError ? null : (
+                <div className="col-span-2 lg:col-span-4">
+                  <SectionError label="Net worth" />
+                </div>
+              )
             ) : netWorthStatResult.data ? (
               <StatTile
                 id="dashboard-net-worth"
@@ -274,27 +318,33 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         {showPanels ? (
           <div className="flex flex-col gap-4 lg:flex-row">
             {budgetResult.error ? (
-              <div className="min-w-0 lg:flex-1 lg:basis-0">
-                <SectionError label="Budgets" />
-              </div>
+              pageLevelError ? null : (
+                <div className="min-w-0 lg:flex-1 lg:basis-0">
+                  <SectionError label="Budgets" />
+                </div>
+              )
             ) : topBudgets.length > 0 ? (
               <div className="min-w-0 lg:flex-1 lg:basis-0">
                 <BudgetMeters budgets={topBudgets} />
               </div>
             ) : null}
             {goalResult.error ? (
-              <div className="min-w-0 lg:flex-1 lg:basis-0">
-                <SectionError label="Goals" />
-              </div>
+              pageLevelError ? null : (
+                <div className="min-w-0 lg:flex-1 lg:basis-0">
+                  <SectionError label="Goals" />
+                </div>
+              )
             ) : activeGoals.length > 0 ? (
               <div className="min-w-0 lg:flex-1 lg:basis-0">
                 <GoalMeters goals={activeGoals} />
               </div>
             ) : null}
             {recurringResult.error ? (
-              <div className="min-w-0 lg:flex-1 lg:basis-0">
-                <SectionError label="Upcoming" />
-              </div>
+              pageLevelError ? null : (
+                <div className="min-w-0 lg:flex-1 lg:basis-0">
+                  <SectionError label="Upcoming" />
+                </div>
+              )
             ) : upcoming.length > 0 ? (
               <div className="min-w-0 lg:flex-1 lg:basis-0">
                 <UpcomingList items={upcoming} />
@@ -307,7 +357,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       {/* ── Over time: everything the date-range filter scopes ── */}
       <ScopedRegion range={range}>
         {rangeStatsResult.error ? (
-          <SectionError label="Income and spending" />
+          sectionError("Income and spending")
         ) : rangeStats ? (
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatTile
@@ -344,13 +394,13 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
             load failure always surfaces in place, even early, never hidden
             behind that note. */}
         {cashflowResult.error ? (
-          <SectionError label="Cash flow" />
+          sectionError("Cash flow")
         ) : showTrend && cashflow ? (
           <CashflowChart points={cashflow} shadeFrom={range.from} shadeTo={range.to} />
         ) : null}
 
         {movementResult.error ? (
-          <SectionError label="Category movement" />
+          sectionError("Category movement")
         ) : showTrend && movement ? (
           <GroupMovementChart data={movement} />
         ) : null}
