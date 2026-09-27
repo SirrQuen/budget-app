@@ -2,7 +2,8 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionError } from "./SectionError";
-import { WalletIcon, ListIcon, PlusIcon } from "@/components/ui/icons";
+import { SorrelMark } from "@/components/SorrelMark";
+import { ListIcon, PlusIcon } from "@/components/ui/icons";
 import { formatAccountBalance, formatCompactNumber } from "@/lib/format";
 import type { Database } from "@/lib/database.types";
 
@@ -12,6 +13,11 @@ type AccountBalanceRow = Database["public"]["Views"]["v_account_balances"]["Row"
 // <button>, for the one CTA these screens are built around.
 const primaryAction =
   "inline-flex items-center justify-center gap-1.5 rounded-full bg-action px-4 py-2 text-sm font-semibold text-action-ink transition-all duration-150 ease-out hover:-translate-y-0.5 hover:bg-action-hover hover:shadow-md active:translate-y-0 active:scale-[0.97] active:bg-action-pressed active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page";
+
+// The open trefoil as texture above the ladder's copy -- at 8% it sits in
+// the surface rather than competing with the heading. EmptyState already
+// hides its icon slot from assistive tech, so the mark's own label is moot.
+const ladderMark = <SorrelMark size={104} className="opacity-[0.08]" />;
 
 function greeting(firstName: string | undefined, isFirstLogin: boolean): string {
   const name = firstName ? `, ${firstName}` : "";
@@ -29,7 +35,7 @@ export function NoAccountsView({ firstName }: { firstName?: string }) {
         description={firstName ? `Welcome to Sorrel, ${firstName}.` : "Welcome to Sorrel."}
       />
       <EmptyState
-        icon={<WalletIcon className="h-10 w-10" />}
+        icon={ladderMark}
         heading="Add your first account"
         message="Sorrel keeps your accounts, spending, budgets and goals in one place. It starts with an account — checking, savings, a card, or the cash in your pocket."
         action={
@@ -95,6 +101,8 @@ export function NoTransactionsView({
       )}
 
       <EmptyState
+        // Not the mark: this rung sits under the hero and account list, and
+        // the mark's extra 64px pushes the CTA below a 375px-wide fold.
         icon={<ListIcon className="h-10 w-10" />}
         heading="Log your first transaction"
         message="Your cash flow, budgets, streak and spending trends all build from what you log. Add a few transactions and this dashboard fills in."

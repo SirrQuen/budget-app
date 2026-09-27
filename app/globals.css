@@ -671,3 +671,86 @@ body {
     transition: none !important;
   }
 }
+
+/* =====================================================================
+   SORREL MARK -- looping fold (loading indicator)
+   =====================================================================
+
+   state="looping" on SorrelMark: open -> folded -> open on a 1.6s cycle,
+   the same transforms as the one-shot fold above, eased out of and into
+   both ends (ease-in-out per half) so it breathes rather than bounces.
+   The 45/90ms leaflet stagger carries over as animation-delay.
+
+   Every delay is offset by --sorrel-loop-start (components/SorrelLoader
+   sets it to the reveal delay), so the first frame anyone actually sees is
+   the open mark beginning to fold -- not a mark caught mid-cycle. */
+.sorrel-mark--looping {
+  --sorrel-loop: 1600ms;
+  --sorrel-loop-ease: cubic-bezier(0.45, 0, 0.55, 1);
+}
+.sorrel-mark--looping .sorrel-leaves {
+  animation: sorrel-loop-lift var(--sorrel-loop) var(--sorrel-loop-ease)
+    var(--sorrel-loop-start, 0ms) infinite;
+}
+.sorrel-mark--looping .sorrel-leaf--1 {
+  animation: sorrel-loop-1 var(--sorrel-loop) var(--sorrel-loop-ease)
+    var(--sorrel-loop-start, 0ms) infinite;
+}
+.sorrel-mark--looping .sorrel-leaf--2 {
+  animation: sorrel-loop-2 var(--sorrel-loop) var(--sorrel-loop-ease)
+    calc(var(--sorrel-loop-start, 0ms) + 45ms) infinite;
+}
+.sorrel-mark--looping .sorrel-leaf--3 {
+  animation: sorrel-loop-3 var(--sorrel-loop) var(--sorrel-loop-ease)
+    calc(var(--sorrel-loop-start, 0ms) + 90ms) infinite;
+}
+
+@keyframes sorrel-loop-lift {
+  50% {
+    transform: translateY(-22px);
+  }
+}
+@keyframes sorrel-loop-1 {
+  50% {
+    transform: rotate(171deg) scaleX(0.62) scaleY(0.9);
+  }
+}
+@keyframes sorrel-loop-2 {
+  50% {
+    transform: rotate(180deg) scaleX(0.62) scaleY(0.95);
+  }
+}
+@keyframes sorrel-loop-3 {
+  50% {
+    transform: rotate(189deg) scaleX(0.62) scaleY(0.9);
+  }
+}
+
+/* No loop at all -- not a slower one. A looping animation is exactly what
+   this preference exists to suppress; SorrelLoader shows the static open
+   mark with a visible label instead. !important to clear the global safety
+   net, which would otherwise play one 0.01ms iteration. */
+@media (prefers-reduced-motion: reduce) {
+  .sorrel-mark--looping .sorrel-leaves,
+  .sorrel-mark--looping .sorrel-leaf {
+    animation: none !important;
+  }
+}
+
+/* The loader's reveal. Hidden, then shown after --sorrel-loop-start, in
+   CSS rather than a JS timer: a route-level loading.tsx is streamed as
+   server HTML and paints before hydration, so a useEffect delay would
+   arrive too late to stop an 80ms flash. visibility (not opacity) so the
+   status text is also out of the accessibility tree until it's shown --
+   a screen reader shouldn't announce a load that finished in 80ms either.
+   Not motion, so reduced motion keeps the same delay. */
+.sorrel-loader {
+  --sorrel-loop-start: 300ms;
+  visibility: hidden;
+  animation: sorrel-loader-reveal 0s linear var(--sorrel-loop-start) forwards;
+}
+@keyframes sorrel-loader-reveal {
+  to {
+    visibility: visible;
+  }
+}

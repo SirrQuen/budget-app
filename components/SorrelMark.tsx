@@ -4,14 +4,16 @@ type SorrelMarkProps = {
   // "folded" is the closing-umbrella silhouette (see .sorrel-mark in
   // app/globals.css). Changing the prop is the whole animation -- the
   // transition lives in CSS, so every caller gets the same fold.
-  state?: "open" | "folded";
+  // "looping" folds and reopens continuously -- the loading indicator
+  // (components/SorrelLoader.tsx); reduced motion holds it open.
+  state?: "open" | "folded" | "looping";
 };
 
 const PETAL =
   "M 50 50 C 44 36, 24 32, 24 18 C 24 8, 36 2, 44 8 C 47 10, 48.5 12, 50 16 C 51.5 12, 53 10, 56 8 C 64 2, 76 8, 76 18 C 76 32, 56 36, 50 50 Z";
 
 export function SorrelMark({ size = 24, className, state = "open" }: SorrelMarkProps) {
-  const stateClass = state === "folded" ? "sorrel-mark--folded" : "";
+  const stateClass = state === "open" ? "" : `sorrel-mark--${state}`;
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
