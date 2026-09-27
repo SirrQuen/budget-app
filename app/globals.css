@@ -129,8 +129,8 @@
   /* Status -- reserved, never used as a series colour.
      --good and --critical are rendered as actual text (an income figure in
      Amount, the delete affordances), so both clear 4.5:1 on --page, their
-     worst ground. --warning never is: it appears only as the streak flame
-     icon and as a Meter fill, both of which are marks needing 3:1. Holding
+     worst ground. --warning never is: it appears only as a Meter fill, a
+     mark needing 3:1. Holding
      it to the text bar forced it down to a muddy brown that stopped
      reading as caution at all -- the over-budget meter looked like a
      colour, not a warning. It sits at the brightest amber that still
@@ -367,20 +367,6 @@
   }
   100% {
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 0%, transparent);
-  }
-}
-
-/* StreakBadge's afternoon nudge -- an invitation, not an alarm, so it's a
-   slow, low-contrast breathing glow behind the flame rather than the sharp
-   one-shot ring goal-pulse uses. Loops for as long as the nudge condition
-   holds; gold reads fine here since this is chrome, not a data mark. */
-@keyframes streak-nudge {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold) 22%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--gold) 0%, transparent);
   }
 }
 

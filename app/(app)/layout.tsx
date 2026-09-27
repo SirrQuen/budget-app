@@ -1,6 +1,5 @@
 import { requireUser } from "@/lib/auth/dal";
 import { recordLogin } from "@/lib/db/profile";
-import { getLoggingStreak } from "@/lib/db/dashboard";
 import { listAccounts } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { getMostRecentTransactionAccountId } from "@/lib/db/transactions";
@@ -13,14 +12,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Every authenticated route runs this layout -- lazy catch-up (see
   // CLAUDE.md "Recurring transactions") belongs here, not just on
   // /dashboard, or a schedule goes stale for anyone who always lands
-  // straight on /transactions. Must finish before getLoggingStreak() and
-  // getMostRecentTransactionAccountId() below, both of which read
-  // transactions and would otherwise race its inserts. cache()d (like
+  // straight on /transactions. Must finish before
+  // getMostRecentTransactionAccountId() below, which reads transactions
+  // and would otherwise race its inserts. cache()d (like
   // recordLogin), so DashboardPage's own call for the created list, to
   // build its banner, is free -- both resolve to this one run.
   await generateDueOccurrences();
 
-  const [user, , streakResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme] =
+  const [user, , accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme] =
     await Promise.all([
       requireUser(),
       // Every authenticated route runs this layout, including the
@@ -29,7 +28,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       // read-before-write has to happen here, not there. recordLogin is
       // request-cached, so DashboardPage re-reading it below is free.
       recordLogin(),
-      getLoggingStreak(),
       listAccounts({ is_active: true }),
       listCategoriesForType("Income"),
       listCategoriesForType("Expense"),
@@ -40,16 +38,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       getTheme(),
     ]);
 
-  // Nothing worth showing for a user who hasn't logged anything in the
-  // streak window yet -- the badge would just read "0 days," which isn't
-  // encouraging, it's a non-event.
-  const streak =
-    streakResult.data && (streakResult.data.current > 0 || streakResult.data.longest > 0)
-      ? streakResult.data
-      : null;
-
-  // Same graceful-degradation shape as streak -- a load failure here just
-  // means no quick-add bar for this request, not a broken page.
+  // A load failure here just means no quick-add bar for this request, not a
+  // broken page.
   const quickAdd =
     accountsResult.data && incomeCategoriesResult.data && expenseCategoriesResult.data
       ? {
@@ -62,7 +52,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <ThemeProvider stored={theme}>
-      <AppShell userEmail={user.email ?? "Signed in"} streak={streak} quickAdd={quickAdd}>
+      <AppShell userEmail={user.email ?? "Signed in"} quickAdd={quickAdd}>
         {children}
       </AppShell>
     </ThemeProvider>

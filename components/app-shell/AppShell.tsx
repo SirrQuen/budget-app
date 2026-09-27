@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { logout } from "@/lib/auth/actions";
-import { StreakBadge } from "@/components/ui/StreakBadge";
 import { HomeIcon, ListIcon, WalletIcon, TagIcon, PieIcon, TargetIcon, RepeatIcon, SettingsIcon, MenuIcon, CloseIcon, type IconProps } from "@/components/ui/icons";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { QuickAddBar } from "@/components/quick-add/QuickAddBar";
@@ -33,13 +32,10 @@ const NAV_ITEMS: { href: string; label: string; icon: (props: IconProps) => Reac
 
 export function AppShell({
   userEmail,
-  streak,
   quickAdd,
   children,
 }: {
   userEmail: string;
-  /** null once a user has never logged a transaction -- nothing to show yet. */
-  streak: { current: number; longest: number; loggedToday: boolean } | null;
   /** null if any of its data failed to load -- the page still renders without it. */
   quickAdd: QuickAddData | null;
   children: React.ReactNode;
@@ -78,9 +74,6 @@ export function AppShell({
             <span className="hidden px-2 text-lg font-semibold text-ink md:block">
               Sorrel
             </span>
-            {streak ? (
-              <StreakBadge days={streak.current} longest={streak.longest} loggedToday={streak.loggedToday} />
-            ) : null}
             <nav className="flex flex-col gap-1">
               {NAV_ITEMS.map((item) => {
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);

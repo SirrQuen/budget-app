@@ -494,11 +494,11 @@ function localISODate(d: Date): string {
 // the transactions table on every read, so there's no counter to drift
 // out of sync with reality.
 //
-// Cached per-request: the app layout (sidebar StreakBadge), the dashboard
-// page (Right now mark strip), and getReturnSummaryFacts each ask for the
-// streak, and without this that's three identical 90-day scans on one
-// dashboard render. The one calculation -- deriveLoggingStreak in
-// lib/streak.ts -- feeds all three, so they can never disagree the way a
+// Cached per-request: the dashboard page (Right now mark strip) and
+// getReturnSummaryFacts both ask for the streak, and without this that's
+// two identical 90-day scans on one dashboard render. The one calculation
+// -- deriveLoggingStreak in lib/streak.ts -- feeds both, so they can never
+// disagree the way a
 // second, separately-maintained implementation could drift.
 //
 // graceDates is empty until the "nothing to log" / grace-ledger tables
