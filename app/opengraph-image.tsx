@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { Wordmark } from "@/components/Wordmark";
 
 export const alt = "Sorrel";
 export const size = { width: 1200, height: 630 };
@@ -32,8 +33,10 @@ export default function OpengraphImage() {
           />
         </svg>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-          <div style={{ fontSize: 64, fontWeight: 700, color: "#ffffff" }}>Sorrel</div>
-          <div style={{ fontSize: 28, color: "#c3c2b7" }}>Your wealth, your legacy.</div>
+          {/* display: flex -- ImageResponse requires it on any element with
+              more than one child, and the wordmark has two with the ™. */}
+          <Wordmark tm style={{ display: "flex", fontSize: 64, fontWeight: 700, color: "#ffffff" }} />
+          <div style={{ fontSize: 28, color: "#c3c2b7" }}>Grows in any soil.</div>
         </div>
       </div>
     ),

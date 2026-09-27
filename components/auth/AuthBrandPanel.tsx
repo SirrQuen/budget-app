@@ -1,4 +1,5 @@
 import { SorrelMark } from "@/components/SorrelMark";
+import { Wordmark } from "@/components/Wordmark";
 
 export function AuthBrandPanel() {
   return (
@@ -10,10 +11,10 @@ export function AuthBrandPanel() {
       <SorrelMark size={112} className="h-14 w-14 md:h-28 md:w-28" />
       <div>
         <p className="text-lg font-semibold tracking-tight text-splash-ink md:text-3xl">
-          Sorrel
+          <Wordmark tm />
         </p>
         <p className="mt-2 text-sm text-splash-ink-secondary md:mt-3 md:text-base">
-          Your wealth, your legacy.
+          Grows in any soil.
         </p>
       </div>
     </div>

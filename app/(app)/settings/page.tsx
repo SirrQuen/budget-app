@@ -5,6 +5,11 @@ import { getSafeToSpendWindowPref } from "@/lib/db/settings";
 import { getSoonestIncomeOccurrence } from "@/lib/db/dashboard";
 import { DeleteAccountSection } from "./DeleteAccountSection";
 import { SafeToSpendWindowToggle } from "./SafeToSpendWindowToggle";
+import { Wordmark } from "@/components/Wordmark";
+import pkg from "@/package.json";
+
+const LEGAL_LINK =
+  "rounded transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 
 export default async function SettingsPage() {
   // The breakdown of what deletion removes -- null when the count query
@@ -59,6 +64,38 @@ export default async function SettingsPage() {
         </p>
 
         <SafeToSpendWindowToggle initialPref={resolvedWindowPref} className="mt-4" />
+      </section>
+
+      <section
+        aria-labelledby="about-heading"
+        className="rounded-2xl border border-hairline bg-surface p-5"
+      >
+        <h2 id="about-heading" className="text-base font-semibold text-ink">
+          About
+        </h2>
+        {/* No ™ here: this is behind login, and the ™ goes on first public
+            use only (the auth splash and OG image). */}
+        <p className="mt-1 text-sm text-ink-secondary">
+          <Wordmark className="font-semibold text-ink" /> · Version {pkg.version}
+        </p>
+        <p className="mt-1 text-sm text-ink-muted">
+          © {new Date().getFullYear()} Sorrel. All rights reserved.
+        </p>
+
+        <ul className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-ink-secondary">
+          {/* TODO(launch blocker): point these at the real Privacy Policy and
+              Terms of Service once they exist. "#" is a placeholder. */}
+          <li>
+            <a href="#" className={LEGAL_LINK}>
+              Privacy Policy
+            </a>
+          </li>
+          <li>
+            <a href="#" className={LEGAL_LINK}>
+              Terms of Service
+            </a>
+          </li>
+        </ul>
       </section>
 
       {/* Last, below everything else. Always rendered -- summary is null if
