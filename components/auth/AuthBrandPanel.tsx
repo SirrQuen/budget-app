@@ -13,8 +13,12 @@ export function AuthBrandPanel() {
         <p className="text-lg font-semibold tracking-tight text-splash-ink md:text-3xl">
           <Wordmark tm />
         </p>
+        {/* One phrase per line when narrow, one line when wide. The nbsp
+            keeps each pair whole, so "Your" never ends a line alone. */}
         <p className="mt-2 text-sm text-splash-ink-secondary md:mt-3 md:text-base">
-          Grows in any soil.
+          <span className="block lg:inline">Your&nbsp;Money.</span>{" "}
+          <span className="block lg:inline">Your&nbsp;Roots.</span>{" "}
+          <span className="block lg:inline">Your&nbsp;Growth.</span>
         </p>
       </div>
     </div>

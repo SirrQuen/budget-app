@@ -15,10 +15,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Sorrel",
-  description: "Grows in any soil.",
+  description: "Your Money. Your Roots. Your Growth.",
   openGraph: {
     title: "Sorrel",
-    description: "Grows in any soil.",
+    description: "Your Money. Your Roots. Your Growth.",
     type: "website",
   },
 };
