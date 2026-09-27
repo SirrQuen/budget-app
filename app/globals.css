@@ -90,19 +90,30 @@
   --gridline: #d8d8e2;
   --baseline: #c2c2d0;
 
+  /* The Sorrel mark -- components/SorrelMark.tsx, and nothing else. Red is
+     the mark colour ONLY: never data, status, text, buttons, borders,
+     links, charts or focus rings. Theme accents stay gold/navy. For that
+     reason it is deliberately NOT registered in @theme below, so no
+     bg-/text-/border-/ring-mark utility exists to reach for.
+     Two values, not one: a single deep crimson is 2.86:1 on --dk-surface,
+     under the 3:1 non-text minimum, so the dark value runs brighter.
+       --mark     light  #c41230  5.79:1 on #fbfaf7
+       --dk-mark  dark   #e63946  4.05:1 on #1b1b2f */
+  --mark: #c41230;
+
   /* Splash -- the auth brand panel, and the ONLY surface that does not
      flip with the theme. It is brand chrome ("logo, nav, primary buttons,
-     splash"), and the logo is a fixed-gold SVG asset that no stylesheet
-     can restep: on a light ground that mark is 1.72:1 and washes out, and
-     the panel stops reading as the brand at all. Pinning the ground to
-     the brand navy keeps the gold mark at its validated contrast in both
-     modes and gives light mode somewhere the identity actually lives.
+     splash"). Pinning the ground to the brand navy gives light mode
+     somewhere the identity actually lives, and keeps the mark on the
+     ground it was validated against. Because the ground never flips,
+     neither does the mark on it: --splash-mark is the dark mark value in
+     both themes (4.40:1 on #131322; the light value would be 3.04:1).
      Deliberately defined once -- the dark blocks below do not override
      these, because there is nothing to swap. */
   --splash: #131322;
   --splash-ink: #ffffff;
   --splash-ink-secondary: #c3c2b7;
-  --splash-gold: #e9b949;
+  --splash-mark: var(--dk-mark);
 
   /* Scrim behind modals, dialogs and the mobile quick-add sheet. Lighter
      than the dark-mode scrim: the same wash reads heavier over pale
@@ -155,6 +166,8 @@
   --dk-action-hover: #f2c866;
   --dk-action-pressed: #d4a32f;
   --dk-action-ink: #0b0b0b;
+
+  --dk-mark: #e63946;
 
   --dk-pulse-peak: 0.55;
   --dk-pulse-peak-income: 0.72;
@@ -211,6 +224,8 @@
     --action-pressed: var(--dk-action-pressed);
     --action-ink: var(--dk-action-ink);
 
+    --mark: var(--dk-mark);
+
     --pulse-peak: var(--dk-pulse-peak);
     --pulse-peak-income: var(--dk-pulse-peak-income);
 
@@ -259,6 +274,8 @@
   --action-hover: var(--dk-action-hover);
   --action-pressed: var(--dk-action-pressed);
   --action-ink: var(--dk-action-ink);
+
+  --mark: var(--dk-mark);
 
   --pulse-peak: var(--dk-pulse-peak);
   --pulse-peak-income: var(--dk-pulse-peak-income);
@@ -320,7 +337,6 @@
   --color-splash: var(--splash);
   --color-splash-ink: var(--splash-ink);
   --color-splash-ink-secondary: var(--splash-ink-secondary);
-  --color-splash-gold: var(--splash-gold);
 
   --color-cat-1: var(--cat-1);
   --color-cat-2: var(--cat-2);

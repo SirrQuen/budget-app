@@ -88,6 +88,8 @@ data contexts.
 
 ### Hard rules
 
+- Red is the Sorrel mark colour only. It never appears on data, status, text,
+  or controls. Theme accents remain gold (dark) and navy (light).
 - Text never wears a data colour. Values, labels and legends use ink tokens;
   a coloured dot beside the text carries identity.
 - Status colour never appears alone — always icon + label too.

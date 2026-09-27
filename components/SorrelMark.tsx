@@ -17,6 +17,10 @@ export function SorrelMark({ size = 24, className }: SorrelMarkProps) {
       role="img"
       aria-label="Sorrel"
       className={className}
+      // --mark is the one place the mark red lives, and it is theme-scoped
+      // (see app/globals.css). Set here rather than left to callers so the
+      // mark can't be recoloured, and no caller needs a colour utility for it.
+      style={{ color: "var(--mark)" }}
     >
       <path d={PETAL} />
       <path transform="rotate(120 50 50)" d={PETAL} />
