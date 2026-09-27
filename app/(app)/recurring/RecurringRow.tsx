@@ -96,6 +96,13 @@ export function RecurringRow({
   // override, not gated to the dashboard prompt's own confirmation window.
   const needsIncomeConfirmation = !isTransfer && recurring.requires_confirmation;
   const isOverdueNeedsConfirmation = needsIncomeConfirmation && recurring.next_due_date <= today;
+  // A variable-amount Expense schedule (31_recurring_expense_variability.sql)
+  // never needs confirmation -- CLAUDE.md "Auto-create outflows." -- so it
+  // gets no chip of its own below, unlike the card/Income cases above. Still
+  // needs SOME visible marker that displayAmount is a guess rather than a
+  // known figure (CLAUDE.md "Display"), hence this inline label instead.
+  const isEstimatedExpenseSchedule =
+    !isTransfer && recurring.category_type === "Expense" && recurring.amount_is_variable;
 
   if (editing) {
     const editable: EditableRecurring = {
@@ -172,6 +179,9 @@ export function RecurringRow({
 
           <span className="shrink-0 text-right text-sm font-medium tabular-nums text-ink sm:col-start-4 sm:justify-self-end">
             {formatCurrency(displayAmount)}
+            {isEstimatedExpenseSchedule ? (
+              <span className="ml-1 text-xs font-normal text-ink-muted">est.</span>
+            ) : null}
           </span>
         </div>
 

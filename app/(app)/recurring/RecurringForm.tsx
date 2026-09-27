@@ -130,7 +130,7 @@ export type EditableRecurring = {
   end_date: string | null;
   amount_is_variable: boolean;
   statement_day: number | null;
-  /** "Date varies" -- Income only. 0 means it doesn't (see rectx_date_tolerance_range). */
+  /** "Date varies" -- Income or Expense. 0 means it doesn't (see rectx_date_tolerance_range). */
   date_tolerance_days: number;
   business_day_offset: number;
   non_business_day_rule: string;
@@ -308,12 +308,13 @@ export function RecurringForm({
   const [amountIsVariable, setAmountIsVariable] = useState(recurring?.amount_is_variable ?? false);
   const showCardVariableToggle = kind === "Transfer" && toAccountIsCreditCard;
   const showCardVariableFields = showCardVariableToggle && amountIsVariable;
-  // "Amount changes each time" / "Date varies" -- Income only, independent
-  // of each other and of the card-payment toggle above (see
-  // lib/actions/recurring.ts's parseRecurringFields). amountIsVariable is
-  // shared with the card checkbox -- kind alone decides which one renders,
-  // so only one is ever in play at a time.
-  const showIncomeVariability = kind === "Income";
+  // "Amount changes each time" / "Date varies" -- Income and Expense (not a
+  // card-payment transfer, which keeps its own toggle above and stays
+  // confirm-required), independent of each other and of the card-payment
+  // toggle above (see lib/actions/recurring.ts's parseRecurringFields).
+  // amountIsVariable is shared with the card checkbox -- kind alone decides
+  // which one renders, so only one is ever in play at a time.
+  const showVariabilityToggles = kind === "Income" || kind === "Expense";
   const [dateVaries, setDateVaries] = useState((recurring?.date_tolerance_days ?? 0) > 0);
   const [dateToleranceDays, setDateToleranceDays] = useState(recurring?.date_tolerance_days || 2);
   const [repeats, setRepeats] = useState<Repeats>(
@@ -515,7 +516,7 @@ export function RecurringForm({
         </div>
       )}
 
-      {showIncomeVariability ? (
+      {showVariabilityToggles ? (
         <div className="flex flex-col gap-2">
           <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-secondary">
             <input

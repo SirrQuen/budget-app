@@ -75,6 +75,18 @@ export function UpcomingList({ items }: { items: UpcomingRow[] }) {
               </div>
             ) : null}
 
+            {/* A variable-amount Expense row (31_recurring_expense_variability.sql)
+                never requires confirmation -- CLAUDE.md "Auto-create
+                outflows." -- so it gets no Confirm action, just the same
+                "never present a guess as a known figure" label the chips
+                above carry for their own variable rows. */}
+            {r.to_accountid === null && !r.requires_confirmation && r.is_estimated_amount ? (
+              <div className="flex items-center gap-1.5 pl-7 text-xs text-ink-muted">
+                <InfoIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
+                Estimate
+              </div>
+            ) : null}
+
             {/* requires_confirmation -- every Income row, always (CLAUDE.md
                 "Auto-create outflows. Confirm inflows."), not just a
                 variable-amount one -- unlike the card chip above. */}

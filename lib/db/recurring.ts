@@ -436,6 +436,29 @@ export async function estimateIncomeAmount(
   return { data: data ?? fallbackAmount, error: null };
 }
 
+// Same as estimateIncomeAmount, but the Expense counterpart
+// (estimate_expense_amount, 31_recurring_expense_variability.sql) -- also
+// called directly from generateDueOccurrences below, since an Expense
+// occurrence posts at this estimate immediately rather than waiting on a
+// confirmation the way a card payment or Income does.
+export async function estimateExpenseAmount(
+  recurringId: string,
+  fallbackAmount: number,
+): Promise<DbResult<number>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("estimate_expense_amount", {
+    p_recurring_id: recurringId,
+    p_fallback_amount: fallbackAmount,
+  });
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "recurring transactions") };
+  }
+
+  return { data: data ?? fallbackAmount, error: null };
+}
+
 type IncomeConfirmScheduleRow = {
   id: string;
   description: string;
@@ -576,8 +599,10 @@ type DueRecurringRow = {
   non_business_day_rule: string;
   category: { category_type: string } | null;
   // Variable-amount schedule (20260912000023_23_recurring_variable_amount.sql,
-  // widened by 29_recurring_income_confirmation.sql to also allow a
-  // variable-amount Income category schedule, not just a transfer).
+  // widened by 29_recurring_income_confirmation.sql to allow a variable-
+  // amount Income category schedule, then by
+  // 31_recurring_expense_variability.sql to allow Expense too -- see
+  // isCardVariable below for how the three now diverge at generation time).
   amount_is_variable: boolean;
   next_amount: number | null;
   next_amount_confirmed_at: string | null;
@@ -726,12 +751,17 @@ export const generateDueOccurrences = cache(async (): Promise<
       );
       if (dueDate > today) break;
 
-      // A variable-amount schedule (credit card payment, or a variable-
-      // amount Income schedule) can't post without a confirmed amount for
-      // this occurrence -- rectx_next_amount_requires_variable and
-      // rectx_next_amount_confirmed_together guarantee next_amount is set
-      // whenever next_amount_confirmed_at is.
-      //
+      // A variable-amount CARD PAYMENT can't post without a confirmed
+      // amount for this occurrence -- rectx_next_amount_requires_variable
+      // and rectx_next_amount_confirmed_together guarantee next_amount is
+      // set whenever next_amount_confirmed_at is. A variable-amount
+      // EXPENSE category schedule is deliberately NOT gated the same way
+      // (see occurrenceAmount below) -- CLAUDE.md "Auto-create outflows.
+      // Confirm inflows." means an outflow's guess is good enough to post,
+      // unlike a card payment's, which the user set up expecting to review
+      // each cycle.
+      const isCardVariable = template.amount_is_variable && template.to_accountid !== null;
+
       // requires_confirmation is the separate, unconditional gate CLAUDE.md
       // "Auto-create outflows. Confirm inflows." requires: every Income
       // schedule carries it (29_recurring_income_confirmation.sql),
@@ -746,16 +776,39 @@ export const generateDueOccurrences = cache(async (): Promise<
       // a guess/unconfirmed row; it surfaces as "needs confirming" instead
       // of a transaction. Nothing further is due until the user confirms,
       // so there's no occurrence past this one to catch up on either.
-      if ((template.amount_is_variable || template.requires_confirmation) && !hasConfirmedAmount) {
+      if ((isCardVariable || template.requires_confirmation) && !hasConfirmedAmount) {
         break;
       }
 
-      // A confirmed variable amount is this occurrence's real amount --
-      // template.amount is an unused placeholder for a variable schedule
-      // (see the 23_recurring_variable_amount migration).
-      const occurrenceAmount = template.amount_is_variable
-        ? template.next_amount!
-        : template.amount;
+      // A confirmed card-payment amount is this occurrence's real amount --
+      // template.amount is an unused placeholder for a variable transfer
+      // (see the 23_recurring_variable_amount migration). A variable-amount
+      // EXPENSE schedule instead posts at a live estimate
+      // (estimate_expense_amount, 31_recurring_expense_variability.sql) --
+      // the mean of its last three generated Expense transactions, or the
+      // setup amount with fewer than three -- and the posted row is marked
+      // is_estimated so it stays visibly a guess until someone edits it.
+      let occurrenceAmount: number;
+      let isEstimated = false;
+      if (isCardVariable) {
+        occurrenceAmount = template.next_amount!;
+      } else if (template.amount_is_variable) {
+        const estimateRes = await supabase.rpc("estimate_expense_amount", {
+          p_recurring_id: template.id,
+          p_fallback_amount: template.amount,
+        });
+        if (estimateRes.error) {
+          logDbError(
+            `[db:recurring] failed estimating expense amount for ${template.id}:`,
+            estimateRes.error,
+          );
+          break;
+        }
+        occurrenceAmount = estimateRes.data ?? template.amount;
+        isEstimated = true;
+      } else {
+        occurrenceAmount = template.amount;
+      }
 
       // A transfer template posts both legs in one insert statement -- one
       // call, one transaction, so a failure can't land only one leg (same
@@ -802,6 +855,7 @@ export const generateDueOccurrences = cache(async (): Promise<
                 transaction_date: dueDate,
                 description: template.description,
                 recurringid: template.id,
+                is_estimated: isEstimated,
               },
             ];
 

@@ -164,3 +164,23 @@ export function isAwaitingIncomeConfirmation(
 ): boolean {
   return todayISO >= incomeConfirmationOpensAt(anchorISO, toleranceDays);
 }
+
+// Phase 6.76 -- the EXPENSE mirror of incomeConfirmationOpensAt/
+// paydayWindowEnd, and deliberately the OPPOSITE edge from paydayWindowEnd
+// for a reason that looks like a bug if it isn't spelled out: a variable-
+// date Income schedule's paycheck can only land EARLY (payroll doesn't
+// pay late), so getSafeToSpend widens its window to the LATE edge (anchor +
+// tolerance) so a pending-but-not-yet-early paycheck isn't dropped. A
+// variable-date EXPENSE schedule is the mirror image -- a bill can only
+// post EARLY (an autopay or a subscription charges ahead of its due date;
+// it doesn't arrive "late", it just becomes overdue) -- so safe-to-spend
+// must start treating it as a commitment from the EARLY edge (anchor -
+// tolerance), or a bill that's about to charge early would still read as
+// "not due yet" and safe-to-spend would overstate what's actually
+// available. Same formula as incomeConfirmationOpensAt, different caller,
+// different reason -- do not fold the two together or a future edit to one
+// will silently change the other's meaning. Pinned by
+// lib/recurringSchedule.test.ts alongside paydayWindowEnd.
+export function expenseCommitmentDate(anchorISO: string, toleranceDays: number): string {
+  return addDaysISO(anchorISO, -toleranceDays);
+}

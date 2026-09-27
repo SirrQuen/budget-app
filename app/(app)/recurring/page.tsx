@@ -1,4 +1,4 @@
-import { listRecurring, estimateIncomeAmount } from "@/lib/db/recurring";
+import { listRecurring, estimateIncomeAmount, estimateExpenseAmount } from "@/lib/db/recurring";
 import { listAccounts, listAccountBalances } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { getBankHolidays } from "@/lib/db/holidays";
@@ -74,20 +74,27 @@ export default async function RecurringPage() {
     (balancesResult.data ?? []).map((b) => [b.account_id, b.balance ?? 0]),
   );
 
-  // Same idea for a variable-amount Income schedule -- estimate_income_amount
-  // (called via .rpc(), never aggregated in JS -- CLAUDE.md) independent of
-  // is_active, same reason cardBalanceByAccountId above doesn't depend on
+  // Same idea for a variable-amount Income or Expense schedule --
+  // estimate_income_amount/estimate_expense_amount (called via .rpc(),
+  // never aggregated in JS -- CLAUDE.md) independent of is_active, same
+  // reason cardBalanceByAccountId above doesn't depend on
   // v_upcoming_recurring either: a paused schedule still needs an estimate.
-  const incomeVariableSchedules = schedules.filter(
+  // Split by category_type -- each function only ever means one direction's
+  // transactions, so calling the wrong one on the other's recurringid would
+  // silently return the fallback instead of a real average.
+  const variableCategorySchedules = schedules.filter(
     (r) => r.amount_is_variable && r.to_accountid === null,
   );
-  const incomeEstimateEntries = await Promise.all(
-    incomeVariableSchedules.map(async (r) => {
-      const result = await estimateIncomeAmount(r.id, Number(r.amount));
+  const categoryEstimateEntries = await Promise.all(
+    variableCategorySchedules.map(async (r) => {
+      const result =
+        r.category_type === "Expense"
+          ? await estimateExpenseAmount(r.id, Number(r.amount))
+          : await estimateIncomeAmount(r.id, Number(r.amount));
       return [r.id, result.data ?? Number(r.amount)] as const;
     }),
   );
-  const incomeEstimateById = new Map(incomeEstimateEntries);
+  const categoryEstimateById = new Map(categoryEstimateEntries);
 
   const today = todayISO();
 
@@ -151,7 +158,7 @@ export default async function RecurringPage() {
             : 0;
           const estimatedAmount = recurring.to_accountid
             ? estimateCardPaymentDue(cardBalance)
-            : (incomeEstimateById.get(recurring.id) ?? Number(recurring.amount));
+            : (categoryEstimateById.get(recurring.id) ?? Number(recurring.amount));
           return (
             <RecurringRow
               key={recurring.id}

@@ -223,7 +223,12 @@ export async function updateTransactionAction(
   }
 
   // No updated_at here -- set_updated_at handles it at the DB layer.
-  const { error } = await updateTransaction(id, parsed);
+  // is_estimated always clears on a save, whether or not the amount itself
+  // changed -- a row a user has opened and resubmitted is a reviewed figure,
+  // not a guess anymore (CLAUDE.md "Recurring transactions": a variable-
+  // amount Expense schedule's generated row is "freely editable", with no
+  // separate "confirm" step the way a card payment or Income has).
+  const { error } = await updateTransaction(id, { ...parsed, is_estimated: false });
 
   if (error) {
     return { error };

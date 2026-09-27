@@ -7,7 +7,7 @@ import type { DashboardRange } from "@/lib/dashboardRange";
 import { describeReadError } from "@/lib/db/errors";
 import { getSafeToSpendWindowPref } from "@/lib/db/settings";
 import { isSafeToSpendCommitment } from "@/lib/safeToSpend";
-import { paydayWindowEnd } from "@/lib/recurringSchedule";
+import { paydayWindowEnd, expenseCommitmentDate } from "@/lib/recurringSchedule";
 import { deriveLoggingStreak, type LoggingStreakSummary } from "@/lib/streak";
 
 type DashboardKpisRow = Database["public"]["Views"]["v_dashboard_kpis"]["Row"];
@@ -639,6 +639,12 @@ type UpcomingCommitmentRow = {
   // Transfer -- see isSafeToSpendCommitment in lib/safeToSpend.ts.
   to_account_type: string | null;
   is_estimated_amount: boolean;
+  // 0 for a Transfer (never legal to set otherwise -- see
+  // enforce_recurring_variability_scope) or a fixed-date Expense. Feeds the
+  // EARLY edge of a variable-date Expense's window
+  // (lib/recurringSchedule.ts's expenseCommitmentDate) -- the opposite
+  // direction from nextIncome's own date_tolerance_days above.
+  date_tolerance_days: number;
 };
 
 type UpcomingIncomeRow = {
@@ -785,13 +791,19 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
 
   const daysRemaining = daysBetweenInclusive(today, windowEnd);
 
+  // rectx_date_tolerance_range's ceiling -- a variable-date Expense's early
+  // edge (see the filter below) can pull a row whose own next_due_date sits
+  // up to this many days past windowEnd into the commitments list, so the
+  // query has to fetch that far past windowEnd to see it at all.
+  const MAX_DATE_TOLERANCE_DAYS = 14;
+
   const recurringRes = await supabase
     .from("v_upcoming_recurring")
     .select(
-      "recurring_id, description, amount, next_due_date, category_type, account_type, to_accountid, to_account_type, is_estimated_amount",
+      "recurring_id, description, amount, next_due_date, category_type, account_type, to_accountid, to_account_type, is_estimated_amount, date_tolerance_days",
     )
     .gte("next_due_date", today)
-    .lte("next_due_date", windowEnd)
+    .lte("next_due_date", addDaysISO(windowEnd, MAX_DATE_TOLERANCE_DAYS))
     .order("next_due_date", { ascending: true })
     .returns<UpcomingCommitmentRow[]>();
 
@@ -811,6 +823,17 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
         toAccountType: row.to_account_type,
       }),
     )
+    // A variable-date EXPENSE schedule can post EARLIER than its anchor
+    // (next_due_date), never later in this model -- see
+    // lib/recurringSchedule.ts's expenseCommitmentDate. Safe-to-spend has to
+    // start counting it from that early edge, or a bill that's about to
+    // charge a few days early would still read as "not due yet" and
+    // overstate what's actually available -- the opposite direction from
+    // nextIncome's own late-edge widening (paydayWindowEnd) above, which
+    // widens the window so a pending paycheck isn't dropped. date_tolerance_days
+    // is 0 for every Transfer row (never legal otherwise), so this is a
+    // no-op for a card payment and only changes anything for Expense.
+    .filter((row) => expenseCommitmentDate(row.next_due_date, row.date_tolerance_days) <= windowEnd)
     .map((row) => ({
       recurringId: row.recurring_id,
       name: row.description,

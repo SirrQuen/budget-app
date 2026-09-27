@@ -533,7 +533,18 @@ export function TransactionsList({
                   <td className="whitespace-nowrap px-4 py-3 text-ink-secondary">
                     {formatDate(tx.transaction_date)}
                   </td>
-                  <td className="px-4 py-3 text-ink">{tx.description}</td>
+                  <td className="px-4 py-3 text-ink">
+                    {tx.description}
+                    {/* A variable-amount Expense schedule's generated row --
+                        auto-posted at a live estimate, never confirmed, so
+                        it stays visibly a guess until someone edits it
+                        (updateTransactionAction clears this on save). */}
+                    {tx.is_estimated ? (
+                      <span className="ml-2 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
+                        Estimate
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-2 text-ink-secondary">
                       <span

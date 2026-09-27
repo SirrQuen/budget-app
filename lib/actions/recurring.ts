@@ -42,14 +42,15 @@ type ParsedRecurringFields = {
   occurrence_limit: number | null;
   end_date: string | null;
   // Variable amount -- a transfer (credit card payment,
-  // 20260912000023_23_recurring_variable_amount.sql) or an Income category
-  // schedule (29_recurring_income_confirmation.sql), never a bare Expense.
-  // statement_day is required exactly when amount_is_variable is set
-  // alongside a transfer (rectx_variable_requires_statement_day) -- an
-  // Income schedule never has one.
+  // 20260912000023_23_recurring_variable_amount.sql), an Income category
+  // schedule (29_recurring_income_confirmation.sql), or an Expense category
+  // schedule (31_recurring_expense_variability.sql). statement_day is
+  // required exactly when amount_is_variable is set alongside a transfer
+  // (rectx_variable_requires_statement_day) -- an Income/Expense schedule
+  // never has one.
   amount_is_variable: boolean;
   statement_day: number | null;
-  // "Date varies" -- Income only, independent of amount_is_variable (a
+  // "Date varies" -- Income or Expense, independent of amount_is_variable (a
   // paycheck can have a fixed date but variable hours, or the reverse). 0
   // when not set: identical in effect to "doesn't vary" (see
   // rectx_date_tolerance_range / lib/recurringSchedule.ts), never null.
@@ -130,13 +131,13 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
       return { error: "Choose an account." };
     }
 
-    // "Amount changes each time" / "Date varies" -- Income only (the
+    // "Amount changes each time" / "Date varies" -- Income or Expense (the
     // checkboxes only render there, same trust-the-client reasoning as the
     // Transfer branch's own amount_is_variable read above; enforce_recurring_
-    // variability_scope rejects either one on a non-Income category
-    // regardless). Independent of each other -- a paycheck can vary in
-    // amount, in date, in both, or in neither.
-    if (kind === "Income") {
+    // variability_scope rejects either one on any other category
+    // regardless). Independent of each other -- a bill can vary in amount,
+    // in date, in both, or in neither, same as a paycheck.
+    if (kind === "Income" || kind === "Expense") {
       amount_is_variable = formData.get("amount_is_variable") === "on";
       const dateVaries = formData.get("date_varies") === "on";
       if (dateVaries) {
@@ -152,10 +153,11 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
   // A card payment's real amount only ever comes from a confirmed
   // next_amount or a live card-balance estimate (see
   // estimateCardPaymentDue/v_upcoming_recurring) -- amount stays 0, an
-  // unused placeholder the NOT NULL column still needs. An Income schedule
-  // always keeps its amount input, even while amount_is_variable: it's the
-  // fallback estimate (estimate_income_amount) until three confirmed
-  // occurrences exist, never an unused placeholder the way a card's is.
+  // unused placeholder the NOT NULL column still needs. An Income or
+  // Expense schedule always keeps its amount input, even while
+  // amount_is_variable: it's the fallback estimate (estimate_income_amount/
+  // estimate_expense_amount) until three linked transactions exist, never
+  // an unused placeholder the way a card's is.
   const amountInputHidden = kind === "Transfer" && amount_is_variable;
   let amount = 0;
   if (!amountInputHidden) {
