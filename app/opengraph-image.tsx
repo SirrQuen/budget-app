@@ -36,12 +36,8 @@ export default function OpengraphImage() {
           {/* display: flex -- ImageResponse requires it on any element with
               more than one child, and the wordmark has two with the ™. */}
           <Wordmark tm style={{ display: "flex", fontSize: 64, fontWeight: 700, color: "#ffffff" }} />
-          {/* Stacked, one phrase per div: ImageResponse lays out with flex,
-              not inline wrapping, so each phrase is its own unbreakable row. */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", fontSize: 28, lineHeight: 1.3, color: "#c3c2b7" }}>
-            <div>Your&nbsp;Money.</div>
-            <div>Your&nbsp;Roots.</div>
-            <div>Your&nbsp;Growth.</div>
+          <div style={{ fontSize: 28, lineHeight: 1.3, color: "#c3c2b7" }}>
+            Built to Grow Through Any Season
           </div>
         </div>
       </div>
