@@ -1,4 +1,6 @@
 import { recordLogin } from "@/lib/db/profile";
+import { isFirstSession } from "@/lib/auth/firstSession";
+import { welcomeMessage } from "@/lib/displayName";
 import {
   getDashboardOnboarding,
   classifyDashboardStage,
@@ -71,6 +73,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   // of not adding a waterfall for the common full-dashboard case.
   const [
     greetingResult,
+    firstSession,
     onboardingResult,
     safeToSpendResult,
     netWorthStatResult,
@@ -86,6 +89,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     netWorthResult,
   ] = await Promise.all([
     greetingPromise,
+    // Decided when the session started -- see lib/auth/firstSession.ts.
+    isFirstSession(),
     getDashboardOnboarding(),
     getSafeToSpend(),
     getNetWorthStat(),
@@ -101,8 +106,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     getNetWorth(),
   ]);
 
-  const firstName = greetingResult.data?.firstName;
-  const isFirstLogin = greetingResult.data?.isFirstLogin ?? false;
+  // A failed profile read just means no name -- "Welcome back" alone.
+  const welcome = welcomeMessage(greetingResult.data ?? {}, firstSession);
   const previousLoginAt = greetingResult.data?.previousLoginAt ?? null;
 
   // If the snapshot itself failed we can't tell which stage the user is in --
@@ -113,14 +118,13 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     : "full";
 
   if (stage === "no-accounts") {
-    return <NoAccountsView firstName={firstName} />;
+    return <NoAccountsView welcome={welcome} />;
   }
 
   if (stage === "no-transactions") {
     return (
       <NoTransactionsView
-        firstName={firstName}
-        isFirstLogin={isFirstLogin}
+        welcome={welcome}
         accounts={balancesResult.data ?? []}
         accountsError={balancesResult.error}
         netWorth={netWorthResult.data?.net_worth ?? null}
@@ -131,10 +135,6 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   // stage is "early" or "full". Real numbers either way; the 90-day trend
   // charts only make sense once there's a fortnight of history behind them.
   const showTrend = stage === "full";
-  const namePart = firstName ? `, ${firstName}` : "";
-  const description = isFirstLogin
-    ? `Welcome to Sorrel${namePart}.`
-    : `Welcome back${namePart}.`;
 
   const rangeStats = rangeStatsResult.data;
 
@@ -247,7 +247,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     <div className="flex flex-col gap-10">
       {/* ── Right now: as-of-today and forward-looking; not scoped by the filter ── */}
       <section className="flex flex-col gap-6" aria-labelledby="dash-right-now">
-        <PageHeader title="Dashboard" description={description} />
+        <PageHeader title="Dashboard" description={welcome} />
         {pageLevelError ? <LoadError message="We couldn’t load parts of your dashboard." /> : null}
         {/* The mark is ambient -- day/night for "right now" -- and kept out
             of the hero's row so nothing competes with that figure. */}

@@ -517,6 +517,7 @@ export type Database = {
           last_name: string
           lastlogin: string | null
           phone: string | null
+          preferred_name: string | null
           subscription_plan: string | null
           subscription_status: string | null
           updated_at: string
@@ -529,6 +530,7 @@ export type Database = {
           last_name: string
           lastlogin?: string | null
           phone?: string | null
+          preferred_name?: string | null
           subscription_plan?: string | null
           subscription_status?: string | null
           updated_at?: string
@@ -541,6 +543,7 @@ export type Database = {
           last_name?: string
           lastlogin?: string | null
           phone?: string | null
+          preferred_name?: string | null
           subscription_plan?: string | null
           subscription_status?: string | null
           updated_at?: string
@@ -1519,6 +1522,8 @@ export type Database = {
         Args: never
         Returns: {
           first_name: string
+          last_name: string
+          preferred_name: string
           previous_login_at: string
         }[]
       }

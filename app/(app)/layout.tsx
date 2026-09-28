@@ -6,6 +6,7 @@ import { getMostRecentTransactionAccountId } from "@/lib/db/transactions";
 import { generateDueOccurrences } from "@/lib/db/recurring";
 import { getTheme } from "@/lib/db/settings";
 import { AppShell } from "@/components/app-shell/AppShell";
+import { identityName } from "@/lib/displayName";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -19,14 +20,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // build its banner, is free -- both resolve to this one run.
   await generateDueOccurrences();
 
-  const [user, , accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme] =
+  const [user, loginResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme] =
     await Promise.all([
       requireUser(),
       // Every authenticated route runs this layout, including the
       // email-confirmation redirect straight into /dashboard that never
       // touches lib/auth/actions.ts login() -- so the lastlogin
-      // read-before-write has to happen here, not there. recordLogin is
-      // request-cached, so DashboardPage re-reading it below is free.
+      // stamp has to happen here, not there. recordLogin is request-cached,
+      // so DashboardPage re-reading it is free. It also carries the name
+      // fields for the sidebar.
       recordLogin(),
       listAccounts({ is_active: true }),
       listCategoriesForType("Income"),
@@ -50,9 +52,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         }
       : null;
 
+  // A failed profile read degrades to the email's local part, then
+  // "Your account" -- never the full address, never blank.
+  const accountName = identityName({ ...loginResult.data, email: user.email });
+
   return (
     <ThemeProvider stored={theme}>
-      <AppShell userEmail={user.email ?? "Signed in"} quickAdd={quickAdd}>
+      <AppShell accountName={accountName} quickAdd={quickAdd}>
         {children}
       </AppShell>
     </ThemeProvider>

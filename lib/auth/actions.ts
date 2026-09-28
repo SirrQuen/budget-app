@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { authErrorMessage } from "@/lib/auth/errors";
 import { SIGNED_IN_COOKIE, SIGNED_IN_MAX_AGE_S } from "@/lib/auth/signedInFlag";
+import { markSessionStart, clearSessionStart } from "@/lib/auth/firstSession";
+import { clean, nameLength, PREFERRED_NAME_MAX } from "@/lib/displayName";
 
 export type ActionState = { error?: string; success?: string } | undefined;
 
@@ -27,6 +29,9 @@ export async function login(
     return { error: authErrorMessage(error) };
   }
 
+  // Before the redirect: the dashboard load that follows stamps lastlogin.
+  await markSessionStart(supabase);
+
   // The dashboard's mark plays its sign-in fold once, on this flag.
   (await cookies()).set(SIGNED_IN_COOKIE, "1", {
     maxAge: SIGNED_IN_MAX_AGE_S,
@@ -38,11 +43,10 @@ export async function login(
   redirect("/dashboard");
 }
 
-// Only collects email/password, per the current signup form. profiles.first_name/
-// last_name/username all tolerate missing signup metadata (see
-// handle_new_user() in 20260805000003_03_signup_pipeline.sql) — they land
-// blank/null rather than failing signup, so this is safe to ship without a
-// fuller onboarding form.
+// Collects email/password plus an optional preferred name. First and last
+// name are left to Settings -- profiles.first_name/last_name/username all
+// tolerate missing signup metadata (see handle_new_user(), migration 34) and
+// land blank/null rather than failing signup.
 export async function signup(
   _prevState: ActionState,
   formData: FormData,
@@ -50,13 +54,20 @@ export async function signup(
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const confirmPassword = String(formData.get("confirmPassword") ?? "");
+  const preferredName = clean(String(formData.get("preferredName") ?? ""));
 
   if (!email || !password || !confirmPassword) {
-    return { error: "All fields are required." };
+    return { error: "Email and both password fields are required." };
   }
 
   if (password !== confirmPassword) {
     return { error: "Passwords do not match." };
+  }
+
+  // The DB check would reject this too, but as an opaque "Database error
+  // saving new user" -- catch it here with a message that says what to fix.
+  if (preferredName && nameLength(preferredName) > PREFERRED_NAME_MAX) {
+    return { error: `Keep your preferred name to ${PREFERRED_NAME_MAX} characters or fewer.` };
   }
 
   const supabase = await createClient();
@@ -67,6 +78,8 @@ export async function signup(
     password,
     options: {
       emailRedirectTo: `${origin}/auth/confirm?next=/dashboard`,
+      // Read by handle_new_user(); omitted entirely when blank.
+      data: preferredName ? { preferred_name: preferredName } : undefined,
     },
   });
 
@@ -139,6 +152,7 @@ export async function updatePassword(
 export async function logout() {
   const supabase = await createClient();
   await supabase.auth.signOut();
+  await clearSessionStart();
   revalidatePath("/", "layout");
   redirect("/login");
 }

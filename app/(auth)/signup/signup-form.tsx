@@ -7,6 +7,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { PREFERRED_NAME_MAX } from "@/lib/displayName";
 
 export function SignupForm() {
   const [state, action, pending] = useActionState(signup, undefined);
@@ -19,6 +20,20 @@ export function SignupForm() {
     <form action={action} className="flex flex-col gap-4">
       <FormField label="Email" htmlFor="email" required>
         <Input id="email" name="email" type="email" autoComplete="email" required />
+      </FormField>
+
+      <FormField
+        label="Preferred name"
+        htmlFor="preferredName"
+        hint="What should we call you? Optional."
+      >
+        <Input
+          id="preferredName"
+          name="preferredName"
+          type="text"
+          autoComplete="nickname"
+          maxLength={PREFERRED_NAME_MAX}
+        />
       </FormField>
 
       <FormField label="Password" htmlFor="password" required>

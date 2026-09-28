@@ -1,11 +1,13 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
-import { getAccountDeletionSummary } from "@/lib/db/profile";
+import { getAccountDeletionSummary, getProfile } from "@/lib/db/profile";
+import { requireUser } from "@/lib/auth/dal";
 import { getSafeToSpendWindowPref, getSafeToSpendCushion } from "@/lib/db/settings";
 import { getSoonestIncomeOccurrence } from "@/lib/db/dashboard";
 import { DeleteAccountSection } from "./DeleteAccountSection";
 import { SafeToSpendWindowToggle } from "./SafeToSpendWindowToggle";
 import { SafeToSpendCushionForm } from "./SafeToSpendCushionForm";
+import { ProfileForm } from "./ProfileForm";
 import { Wordmark } from "@/components/Wordmark";
 import pkg from "@/package.json";
 
@@ -25,16 +27,46 @@ export default async function SettingsPage() {
   // that resolution has to happen -- getSoonestIncomeOccurrence() is
   // cache()'d, so this doesn't cost a second query if getSafeToSpend()
   // already ran this request.
-  const [windowPref, nextIncome, cushion] = await Promise.all([
+  const [windowPref, nextIncome, cushion, user, profile] = await Promise.all([
     getSafeToSpendWindowPref(),
     getSoonestIncomeOccurrence(),
     getSafeToSpendCushion(),
+    // cache()d -- the layout already resolved it for this request.
+    requireUser(),
+    getProfile(),
   ]);
   const resolvedWindowPref = windowPref ?? (nextIncome.data ? "next_payday" : "end_of_month");
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Settings" description="How Sorrel looks and behaves for you." />
+
+      <section
+        aria-labelledby="profile-heading"
+        className="rounded-2xl border border-hairline bg-surface p-5"
+      >
+        <h2 id="profile-heading" className="text-base font-semibold text-ink">
+          Profile
+        </h2>
+        {/* The one place the full address is shown -- the sidebar uses the
+            name instead (see identityName in lib/displayName.ts). */}
+        <dl className="mt-3 text-sm">
+          <dt className="font-medium text-ink-secondary">Email</dt>
+          <dd className="mt-1 break-all text-ink">{user.email ?? "No email on file"}</dd>
+        </dl>
+
+        {profile.data ? (
+          <ProfileForm
+            firstName={profile.data.first_name}
+            lastName={profile.data.last_name}
+            preferredName={profile.data.preferred_name}
+          />
+        ) : (
+          <p className="mt-4 text-sm text-ink-muted">
+            We couldn&apos;t load your name right now. Refresh to try again.
+          </p>
+        )}
+      </section>
 
       <section
         aria-labelledby="appearance-heading"

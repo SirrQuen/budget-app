@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SIGNED_IN_COOKIE, SIGNED_IN_MAX_AGE_S } from "@/lib/auth/signedInFlag";
+import { markSessionStart } from "@/lib/auth/firstSession";
 
 // The email-link callback for both signup confirmation and password recovery.
 //
@@ -56,8 +57,13 @@ export async function GET(request: NextRequest) {
   // A confirmed signup is a brand-new user's first sight of the app, so the
   // dashboard mark plays its sign-in fold. A recovery link does not: someone
   // resetting a password is mid-task, and the flourish would be noise.
+  //
+  // This route opens a session without going through login(), so it
+  // captures first-session state too -- for a new signup it's the usual
+  // way in.
   const signedIn = async () => {
     if (isRecovery) return;
+    await markSessionStart(supabase);
     (await cookies()).set(SIGNED_IN_COOKIE, "1", {
       maxAge: SIGNED_IN_MAX_AGE_S,
       path: "/",

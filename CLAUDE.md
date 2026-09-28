@@ -263,8 +263,13 @@ Read `../../DATABASE.md` before writing any query or signup flow:
 - Never aggregate money in JavaScript. Use the v_* views, or sum
   signed_amount(amount, transaction_type) in SQL.
 - profiles: SELECT plus UPDATE on only first_name, last_name, username,
-  phone, lastlogin, updated_at. Nothing else is writable — subscription_plan
-  and subscription_status included.
+  phone, preferred_name, lastlogin, updated_at. Nothing else is writable —
+  subscription_plan and subscription_status included.
+- Never display a user's name or email ad hoc — resolve it through
+  `lib/displayName.ts` (greeting vs sidebar identity). The full email is
+  shown only in Settings.
+- "First login" is decided when the session starts (`lib/auth/firstSession.ts`),
+  never from `lastlogin`, which `record_login()` stamps on every request.
 - Tier is profiles.subscription_plan / subscription_status, via getPlan().
   subscriptions is a separate table of Stripe billing records, read via
   getStripeSubscription(); it is empty until a user pays and null there

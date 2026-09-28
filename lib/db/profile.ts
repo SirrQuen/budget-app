@@ -1,8 +1,9 @@
 import "server-only";
 import { cache } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
-import { describeReadError, describeWriteError } from "@/lib/db/errors";
+import { describeReadError, describeWriteError, logDbError } from "@/lib/db/errors";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
@@ -18,7 +19,7 @@ export type DbResult<T> = { data: T; error: null } | { data: null; error: string
 // surprise.
 export type UpdateProfilePatch = Pick<
   ProfileUpdate,
-  "first_name" | "last_name" | "username" | "phone" | "lastlogin" | "updated_at"
+  "first_name" | "last_name" | "username" | "phone" | "preferred_name" | "lastlogin" | "updated_at"
 >;
 
 // No `.eq("id", ...)` needed: the profiles RLS policy already scopes
@@ -37,8 +38,11 @@ export async function getProfile(): Promise<DbResult<ProfileRow>> {
 }
 
 export type LoginGreeting = {
+  // Raw profile values -- '' / null when unset. Resolve them through
+  // lib/displayName.ts, never directly.
   firstName: string;
-  isFirstLogin: boolean;
+  lastName: string;
+  preferredName: string | null;
   /**
    * lastlogin as it stood *before* this request bumped it -- i.e. when the
    * user was last active. null on the very first login. The dashboard's
@@ -56,10 +60,15 @@ export type LoginGreeting = {
 // entirely). The dashboard page calls it again to read the greeting values
 // without a second round trip.
 //
-// The read-then-write is a single round trip: record_login() (migration
-// 17) captures the prior first_name / lastlogin, stamps lastlogin = now(),
-// and returns the old values -- all in one call, on the critical path of
-// every authenticated route.
+// The read-then-write is a single round trip: record_login() (migrations
+// 17, 34) captures the name fields and prior lastlogin, stamps lastlogin =
+// now(), and returns the old values -- all in one call, on the critical
+// path of every authenticated route.
+//
+// Not the source of "is this their first login": lastlogin is stamped on
+// every request, so previousLoginAt is null only on the account's very
+// first page load. That's decided once per session instead -- see
+// hasLoggedInBefore() and lib/auth/firstSession.ts.
 export const recordLogin = cache(async (): Promise<DbResult<LoginGreeting>> => {
   const supabase = await createClient();
 
@@ -78,19 +87,47 @@ export const recordLogin = cache(async (): Promise<DbResult<LoginGreeting>> => {
     };
   }
 
-  // record_login() returns SQL NULL here on a first-ever login; the
-  // generated type widens timestamptz to a non-null string, so annotate.
+  // record_login() returns SQL NULL for these; the generated types widen
+  // RETURNS TABLE columns to non-null strings, so annotate.
   const previousLoginAt: string | null = data.previous_login_at;
+  const preferredName: string | null = data.preferred_name;
 
   return {
     data: {
       firstName: data.first_name,
-      isFirstLogin: previousLoginAt === null,
+      lastName: data.last_name,
+      preferredName,
       previousLoginAt,
     },
     error: null,
   };
 });
+
+// Whether this user had used the app before the session that was just
+// created. Called by login() and the email-confirmation route straight
+// after they establish a session, before any authenticated page load runs
+// record_login() and overwrites lastlogin -- so null here means "first
+// session ever".
+//
+// Takes the client that just signed in rather than creating one: the new
+// session lives on that instance, and a fresh createClient() would read
+// the request's incoming cookies, which predate it.
+//
+// Errs towards "yes": if the read fails, a returning user must never be
+// told "Welcome" as if they were new, while a new user being greeted
+// "Welcome back" is harmless.
+export async function hasLoggedInBefore(
+  supabase: SupabaseClient<Database>,
+): Promise<boolean> {
+  const { data, error } = await supabase.from("profiles").select("lastlogin").maybeSingle();
+
+  if (error) {
+    logDbError("[db:read:profile] prior login check:", error);
+    return true;
+  }
+
+  return data?.lastlogin != null;
+}
 
 export async function updateProfile(
   patch: UpdateProfilePatch,

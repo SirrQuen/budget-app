@@ -19,21 +19,16 @@ const primaryAction =
 // hides its icon slot from assistive tech, so the mark's own label is moot.
 const ladderMark = <SorrelMark size={104} className="opacity-[0.08]" />;
 
-function greeting(firstName: string | undefined, isFirstLogin: boolean): string {
-  const name = firstName ? `, ${firstName}` : "";
-  return isFirstLogin ? `Welcome to Sorrel${name}.` : `Welcome back${name}.`;
-}
+// `welcome` is the resolved greeting from welcomeMessage() in
+// lib/displayName.ts -- built once in the page, shared by every stage.
 
 // Stage 1: no accounts. Nothing else on the dashboard means anything until
 // there's an account to log against, so the whole view is one welcome and
 // one action -- no $0 hero, no empty charts, no zeroed tiles.
-export function NoAccountsView({ firstName }: { firstName?: string }) {
+export function NoAccountsView({ welcome }: { welcome: string }) {
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Dashboard"
-        description={firstName ? `Welcome to Sorrel, ${firstName}.` : "Welcome to Sorrel."}
-      />
+      <PageHeader title="Dashboard" description={welcome} />
       <EmptyState
         icon={ladderMark}
         heading="Add your first account"
@@ -52,21 +47,19 @@ export function NoAccountsView({ firstName }: { firstName?: string }) {
 // Stage 2: accounts, but nothing logged yet. The balances are real, so show
 // them. Everything time-based is a promise, not a figure.
 export function NoTransactionsView({
-  firstName,
-  isFirstLogin,
+  welcome,
   accounts,
   accountsError,
   netWorth,
 }: {
-  firstName?: string;
-  isFirstLogin: boolean;
+  welcome: string;
   accounts: AccountBalanceRow[];
   accountsError: string | null;
   netWorth: number | null;
 }) {
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Dashboard" description={greeting(firstName, isFirstLogin)} />
+      <PageHeader title="Dashboard" description={welcome} />
 
       {!accountsError && netWorth !== null ? (
         <div className="rounded-2xl border border-hairline bg-surface p-4">

@@ -32,11 +32,12 @@ const NAV_ITEMS: { href: string; label: string; icon: (props: IconProps) => Reac
 ];
 
 export function AppShell({
-  userEmail,
+  accountName,
   quickAdd,
   children,
 }: {
-  userEmail: string;
+  /** Resolved by identityName() -- never the full email address. */
+  accountName: string;
   /** null if any of its data failed to load -- the page still renders without it. */
   quickAdd: QuickAddData | null;
   children: React.ReactNode;
@@ -106,7 +107,7 @@ export function AppShell({
             <div className="px-3 pb-3">
               <ThemeToggle variant="compact" />
             </div>
-            <p className="truncate px-3 text-sm text-ink-secondary">{userEmail}</p>
+            <p className="truncate px-3 text-sm text-ink-secondary">{accountName}</p>
             <form action={logout}>
               <button
                 type="submit"
