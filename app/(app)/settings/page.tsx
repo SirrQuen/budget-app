@@ -1,15 +1,19 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { getAccountDeletionSummary, getProfile } from "@/lib/db/profile";
 import { requireUser } from "@/lib/auth/dal";
 import { getSafeToSpendWindowPref, getSafeToSpendCushion } from "@/lib/db/settings";
-import { getSoonestIncomeOccurrence } from "@/lib/db/dashboard";
+import { getIncomeSchedules } from "@/lib/db/dashboard";
 import { DeleteAccountSection } from "./DeleteAccountSection";
 import { SafeToSpendWindowToggle } from "./SafeToSpendWindowToggle";
 import { SafeToSpendCushionForm } from "./SafeToSpendCushionForm";
 import { ProfileForm } from "./ProfileForm";
 import { Wordmark } from "@/components/Wordmark";
 import pkg from "@/package.json";
+
+const INLINE_LINK =
+  "rounded font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 
 const LEGAL_LINK =
   "rounded transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
@@ -24,18 +28,28 @@ export default async function SettingsPage() {
   // applies (lib/db/dashboard.ts): next payday when an income schedule
   // exists, end of month otherwise. The toggle only ever shows one of the
   // three concrete options, never a 4th "auto" state, so this is where
-  // that resolution has to happen -- getSoonestIncomeOccurrence() is
-  // cache()'d, so this doesn't cost a second query if getSafeToSpend()
-  // already ran this request.
-  const [windowPref, nextIncome, cushion, user, profile] = await Promise.all([
+  // that resolution has to happen -- getIncomeSchedules() is cache()'d,
+  // so this doesn't cost a second query if getSafeToSpend() already ran
+  // this request.
+  const [windowPref, income, cushion, user, profile] = await Promise.all([
     getSafeToSpendWindowPref(),
-    getSoonestIncomeOccurrence(),
+    getIncomeSchedules(),
     getSafeToSpendCushion(),
     // cache()d -- the layout already resolved it for this request.
     requireUser(),
     getProfile(),
   ]);
-  const resolvedWindowPref = windowPref ?? (nextIncome.data ? "next_payday" : "end_of_month");
+  const resolvedWindowPref = windowPref ?? (income.data?.soonest ? "next_payday" : "end_of_month");
+  // Why the fallback is or isn't in use. A failed read (already logged by
+  // describeReadError) is none of these -- the toggle stays live with no
+  // line, making no claim either way.
+  const paycheck = !income.data
+    ? null
+    : income.data.soonest
+      ? "tracked"
+      : income.data.anyIncome
+        ? "untracked"
+        : "none";
 
   return (
     <div className="flex flex-col gap-6">
@@ -114,8 +128,34 @@ export default async function SettingsPage() {
         <p className="mt-1 max-w-prose text-sm text-ink-secondary">
           With no income schedule to look ahead to, safe to spend counts down to this instead.
         </p>
+        {paycheck === "none" ? (
+          <p className="mt-2 max-w-prose text-sm text-ink-secondary">
+            Sorrel can&apos;t project forward without a paycheck. Add one in{" "}
+            <Link href="/recurring" className={INLINE_LINK}>
+              Recurring
+            </Link>{" "}
+            to get your true lowest point.
+          </p>
+        ) : paycheck === "untracked" ? (
+          // Not "add a paycheck" -- they have one; it just lands somewhere
+          // getSoonestIncomeOccurrence() doesn't count.
+          <p className="mt-2 max-w-prose text-sm text-ink-secondary">
+            Your income goes to an account safe to spend doesn&apos;t track, so Sorrel can&apos;t
+            project forward from it. Point a paycheck at a checking or savings account in{" "}
+            <Link href="/recurring" className={INLINE_LINK}>
+              Recurring
+            </Link>{" "}
+            to get your true lowest point.
+          </p>
+        ) : null}
 
-        <SafeToSpendWindowToggle initialPref={resolvedWindowPref} className="mt-4" />
+        {/* Never hidden: with a paycheck scheduled it sits idle and says why,
+            rather than vanishing and reappearing as schedules come and go. */}
+        <SafeToSpendWindowToggle
+          initialPref={resolvedWindowPref}
+          held={paycheck === "tracked"}
+          className="mt-4"
+        />
       </section>
 
       <section

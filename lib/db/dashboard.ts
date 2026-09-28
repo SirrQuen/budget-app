@@ -628,46 +628,72 @@ type UpcomingIncomeRow = {
   next_due_date: string;
   date_tolerance_days: number;
   is_estimated_amount: boolean;
+  account_type: string | null;
 };
 
-// Shared by getSafeToSpend (the context line beneath the total) and the
-// settings page (existence check only, to pre-select the fallback window
-// toggle when the stored preference is unset -- see
-// lib/safeToSpendWindow.ts). account_type comes from v_upcoming_recurring's
-// own join to accounts -- an Income category schedule's accountid is where
-// the money lands, same as any category schedule (see lib/db/recurring.ts's
-// generateDueOccurrences).
-export const getSoonestIncomeOccurrence = cache(
-  async (): Promise<DbResult<SafeToSpendIncome | null>> => {
-    const supabase = await createClient();
+export type IncomeSchedules = {
+  /** The soonest Income schedule paying into Checking or Savings. */
+  soonest: SafeToSpendIncome | null;
+  /**
+   * Any active Income schedule exists, whatever account it pays into. With
+   * soonest null, this is what separates "no paycheck at all" from "a
+   * paycheck safe to spend doesn't track" on the settings page.
+   */
+  anyIncome: boolean;
+};
 
-    const { data, error } = await supabase
-      .from("v_upcoming_recurring")
-      .select("recurring_id, description, amount, next_due_date, date_tolerance_days, is_estimated_amount")
-      .eq("category_type", "Income")
-      .in("account_type", ["Checking", "Savings"])
-      .order("next_due_date", { ascending: true })
-      .limit(1)
-      .maybeSingle()
-      .returns<UpcomingIncomeRow>();
+// One read, both facts. Every Income schedule comes back (a handful of
+// rows) rather than only Checking/Savings ones, so the settings page can
+// tell the two idle cases apart without a second round trip. account_type
+// comes from v_upcoming_recurring's own join to accounts -- an Income
+// category schedule's accountid is where the money lands, same as any
+// category schedule (see lib/db/recurring.ts's generateDueOccurrences).
+export const getIncomeSchedules = cache(async (): Promise<DbResult<IncomeSchedules>> => {
+  const supabase = await createClient();
 
-    if (error) {
-      return { data: null, error: describeReadError(error, "dashboard") };
-    }
+  const { data, error } = await supabase
+    .from("v_upcoming_recurring")
+    .select(
+      "recurring_id, description, amount, next_due_date, date_tolerance_days, is_estimated_amount, account_type",
+    )
+    .eq("category_type", "Income")
+    .order("next_due_date", { ascending: true })
+    .returns<UpcomingIncomeRow[]>();
 
-    return {
-      data: data
+  if (error) {
+    return { data: null, error: describeReadError(error, "dashboard") };
+  }
+
+  const row = data.find((r) => r.account_type === "Checking" || r.account_type === "Savings");
+
+  return {
+    data: {
+      soonest: row
         ? {
-            recurringId: data.recurring_id,
-            name: data.description,
-            amount: data.amount,
-            date: data.next_due_date,
-            dateToleranceDays: data.date_tolerance_days,
-            isEstimate: data.is_estimated_amount,
+            recurringId: row.recurring_id,
+            name: row.description,
+            amount: row.amount,
+            date: row.next_due_date,
+            dateToleranceDays: row.date_tolerance_days,
+            isEstimate: row.is_estimated_amount,
           }
         : null,
-      error: null,
-    };
+      anyIncome: data.length > 0,
+    },
+    error: null,
+  };
+});
+
+// Shared by getSafeToSpend (the context line beneath the total) and the
+// settings page (to pre-select the fallback window toggle when the stored
+// preference is unset -- see lib/safeToSpendWindow.ts). A view over
+// getIncomeSchedules(), so the two share one cache()'d query per request.
+export const getSoonestIncomeOccurrence = cache(
+  async (): Promise<DbResult<SafeToSpendIncome | null>> => {
+    const result = await getIncomeSchedules();
+    return result.error !== null
+      ? { data: null, error: result.error }
+      : { data: result.data.soonest, error: null };
   },
 );
 
