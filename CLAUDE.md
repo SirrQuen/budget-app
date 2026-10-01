@@ -39,9 +39,34 @@ scaffold — no data layer built yet. Path alias `@/*` -> project root.
   depends on this. Collect a positive number from users and negate on write;
   display the absolute value with "owed". Never sum account balances as
   absolute values.
-- Auto-create outflows. Confirm inflows. Assuming money left when it didn't
-  makes the user cautious; assuming money arrived when it didn't makes them
-  overspend.
+
+## Money rules — invariants
+
+These have each caused a real bug. Do not relax one without asking.
+
+**Confirmation gates transaction creation. It never gates the projection.**
+Every expected income occurrence in the horizon appears in the safe-to-spend
+projection whether or not it is confirmed — unconfirmed ones at the low end of
+the amount estimate and the late edge of the date tolerance; confirmed ones at
+their confirmed values. Obligations already project across the full horizon
+without confirmation; income is symmetric with them.
+
+**Auto-create outflows. Confirm inflows.**
+Applies to writing rows into the ledger only. Never to forecasting.
+Assuming money left when it didn't makes the user cautious; assuming money
+arrived when it didn't makes them overspend.
+
+**Uncertainty always pushes the forecast down.**
+Income: low amount, late date. Obligations: high amount, early date.
+
+**One "leaves the set" classifier, three consumers.**
+Spendable Cash, the projection, and the cushion suggestion all call the same
+function. Never reimplement it — they will drift.
+Checking→savings is NOT money leaving. Card purchases are NOT counted here;
+the card payment obligation already captures them.
+
+**Never discourage the user about spending.**
+Forecast copy states facts, names days, names causes. No alarm language.
 
 ## Design language
 
@@ -88,8 +113,9 @@ data contexts.
 
 ### Hard rules
 
-- Red is the Sorrel mark colour only. It never appears on data, status, text,
-  or controls. Theme accents remain gold (dark) and navy (light).
+- **Red is the Sorrel mark only.** Never data, status, text, errors, negative
+  amounts, controls, or charts. Theme accents remain gold (dark) and navy
+  (light).
 - The mark's colour follows the surface it sits on, not the theme setting.
   Its two tokens are named for the ground: `--mark-on-dark`, `--mark-on-light`.
   A fixed-ground surface (the auth splash, the OG image) uses the matching one
