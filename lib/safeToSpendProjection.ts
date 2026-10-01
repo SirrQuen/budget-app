@@ -174,6 +174,31 @@ export type SafeToSpendProjection = {
    * today, and surfaced for the same reason. One per schedule, earliest.
    */
   overdueObligations: OverdueOccurrence[];
+  /** Every run below the cushion, chronological. Empty when there are none. */
+  episodes: SqueezeEpisode[];
+};
+
+/**
+ * A run of consecutive days the projection sits below the cushion. A day
+ * is judged at its low -- after its obligations, before its income, the
+ * same instant the trough is measured at -- so the trough always falls
+ * inside an episode whenever it's below the cushion.
+ */
+export type SqueezeEpisode = {
+  startDate: string;
+  endDate: string;
+  /** "shortfall" if any day in the run goes below zero, else "tight". */
+  severity: "shortfall" | "tight";
+  /** Lowest point in the run; earliest day wins a tie, as for the trough. */
+  lowPoint: { amount: number; date: string };
+  /** Obligations landing inside the run, largest first. */
+  drivers: ProjectedObligation[];
+  /** The income that lifts the balance back to the cushion; null when open-ended. */
+  recovery: { date: string; description: string } | null;
+  /** Still below the cushion at the end of the horizon. */
+  openEnded: boolean;
+  /** This run holds the overall trough. */
+  containsTrough: boolean;
 };
 
 export type OverdueOccurrence = {
@@ -397,9 +422,9 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
   for (const o of obligations) {
     outByDay.set(o.date, [...(outByDay.get(o.date) ?? []), o]);
   }
-  const inByDay = new Map<string, number>();
+  const inByDay = new Map<string, ProjectedIncome[]>();
   for (const i of incomes) {
-    inByDay.set(i.date, (inByDay.get(i.date) ?? 0) + toCents(i.amount));
+    inByDay.set(i.date, [...(inByDay.get(i.date) ?? []), i]);
   }
 
   const cashCents = toCents(input.cash);
@@ -407,10 +432,11 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
   let troughCents = cashCents;
   let troughDate = today;
   let troughObligations: ProjectedObligation[] = [];
+  const days: WalkedDay[] = [];
 
   for (let day = today; day <= horizonEnd; day = addDaysISO(day, 1)) {
-    const out = outByDay.get(day);
-    if (out) {
+    const out = outByDay.get(day) ?? [];
+    if (out.length > 0) {
       balance -= out.reduce((sum, o) => sum + toCents(o.amount), 0);
       if (balance < troughCents) {
         troughCents = balance;
@@ -418,7 +444,10 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
         troughObligations = out;
       }
     }
-    balance += inByDay.get(day) ?? 0;
+    const lowCents = balance;
+    const income = inByDay.get(day) ?? [];
+    balance += income.reduce((sum, i) => sum + toCents(i.amount), 0);
+    days.push({ date: day, lowCents, endCents: balance, out, income });
   }
 
   const cushionCents = Math.max(0, toCents(input.cushion));
@@ -440,5 +469,59 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
     perDay: safeCents > 0 ? safeCents / daysRemaining / 100 : null,
     unconfirmedIncome,
     overdueObligations,
+    episodes: findSqueezeEpisodes(days, cushionCents, troughDate),
   };
+}
+
+type WalkedDay = {
+  date: string;
+  /** After the day's obligations, before its income. */
+  lowCents: number;
+  /** After its income -- what the next day opens on. */
+  endCents: number;
+  out: ProjectedObligation[];
+  income: ProjectedIncome[];
+};
+
+// Group the walk's days into runs below the cushion. A day exactly at the
+// cushion is clear; a day exactly at zero is tight, not short.
+//
+// Money only comes back in as income, so a run ends on the day income
+// lifts the balance back to the cushion -- that day is still in the run
+// (its low comes before the paycheck), and that income is the recovery.
+// When the final day's income does that, the run has a recovery inside
+// the horizon and isn't open-ended.
+function findSqueezeEpisodes(days: WalkedDay[], cushionCents: number, troughDate: string): SqueezeEpisode[] {
+  const episodes: SqueezeEpisode[] = [];
+  let run: WalkedDay[] = [];
+
+  const close = (recovered: boolean) => {
+    const first = run[0];
+    const last = run[run.length - 1];
+    const low = run.reduce((min, d) => (d.lowCents < min.lowCents ? d : min));
+    episodes.push({
+      startDate: first.date,
+      endDate: last.date,
+      severity: run.some((d) => d.lowCents < 0) ? "shortfall" : "tight",
+      lowPoint: { amount: toDollars(low.lowCents), date: low.date },
+      drivers: run
+        .flatMap((d) => d.out)
+        .sort((a, b) => b.amount - a.amount || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
+      recovery: recovered
+        ? { date: last.date, description: last.income.map((i) => i.name).join(" and ") }
+        : null,
+      openEnded: !recovered,
+      containsTrough: first.date <= troughDate && troughDate <= last.date,
+    });
+    run = [];
+  };
+
+  for (const d of days) {
+    if (d.lowCents >= cushionCents) continue;
+    run.push(d);
+    if (d.endCents >= cushionCents) close(true);
+  }
+  if (run.length > 0) close(false);
+
+  return episodes;
 }

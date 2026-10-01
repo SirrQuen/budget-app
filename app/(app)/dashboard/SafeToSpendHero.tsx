@@ -16,6 +16,7 @@ import { ConfirmVariableAmountSheet } from "../recurring/ConfirmVariableAmountSh
 import type { HorizonReason } from "@/lib/safeToSpendProjection";
 import { Amount } from "@/components/ui/Amount";
 import { useCountUp } from "@/components/ui/useCountUp";
+import { whatsAhead } from "@/lib/whatsAhead";
 import {
   formatCurrency,
   formatDateShort,
@@ -183,6 +184,43 @@ function OverdueBillLine({ item }: { item: SafeToSpendOverdueBill }) {
   );
 }
 
+// Every run below the cushion, in date order. The run holding the low
+// point is marked inline rather than repeated -- it and the "Low point"
+// line above are one forecast with one number. Ink tokens only: severity
+// lives in the wording, never in colour or an icon.
+function WhatsAheadBlock({ data }: { data: SafeToSpend }) {
+  const headingId = useId();
+  const view = whatsAhead(data);
+  return (
+    <section aria-labelledby={headingId} className="mt-3 border-t border-hairline pt-3">
+      <h3 id={headingId} className="text-xs font-medium text-ink-secondary">
+        What&apos;s ahead
+      </h3>
+      {view.kind === "clear" ? (
+        <p className="mt-1 text-xs text-ink-muted">{view.line}</p>
+      ) : (
+        <>
+          <ol className="mt-2 flex flex-col gap-2.5">
+            {view.items.map((item) => (
+              <li key={item.key} className="text-xs">
+                <p className="text-ink">
+                  <span className="text-ink-muted">{item.when} · </span>
+                  {item.headline}
+                  {item.isLowestPoint ? <span className="text-ink-muted"> · your lowest point</span> : null}
+                </p>
+                <p className="mt-0.5 text-ink-secondary">
+                  {item.cause} {item.recovery}
+                </p>
+              </li>
+            ))}
+          </ol>
+          {view.more ? <p className="mt-2 text-xs text-ink-muted">{view.more}</p> : null}
+        </>
+      )}
+    </section>
+  );
+}
+
 // The one hero figure on the dashboard (design language: >=48px, exactly one
 // per view, proportional figures, same sans as everything else). Positive
 // renders through <Amount> as income-toned; $0 is plain ink -- a trough
@@ -302,6 +340,8 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
               <dd className="font-semibold text-ink">{formatCurrency(data.safeToSpend)}</dd>
             </div>
           </dl>
+
+          <WhatsAheadBlock data={data} />
 
           {/* Expected income is context, never part of the breakdown's
               arithmetic -- it sits below the total in its own separated
