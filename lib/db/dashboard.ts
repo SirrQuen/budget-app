@@ -601,10 +601,13 @@ type UpcomingProjectionRow = {
   is_estimated_amount: boolean;
   // Null for a transfer template.
   category_type: string | null;
+  accountid: string;
   account_type: string;
   to_accountid: string | null;
   // Null for a category schedule; always set for a Transfer.
   to_account_type: string | null;
+  // What the destination card owes today; set only for a variable card payment.
+  card_balance_owed: number | null;
   next_run_date: string;
   next_due_date: string;
   start_date: string | null;
@@ -714,8 +717,18 @@ function toProjectionSchedule(row: UpcomingProjectionRow): ProjectionSchedule | 
     recurringId: row.recurring_id,
     name: row.description,
     kind,
+    accountId: row.accountid,
     fromAccountType: row.account_type,
+    toAccountId: row.to_accountid,
     toAccountType: row.to_account_type,
+    statementDay: row.statement_day,
+    cardPayment:
+      row.card_balance_owed !== null
+        ? {
+            amountConfirmed: row.next_amount_confirmed_at !== null,
+            balanceOwed: row.card_balance_owed,
+          }
+        : null,
     amount: row.amount,
     amountLow: row.amount_low,
     isEstimate: row.is_estimated_amount,
@@ -765,7 +778,7 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
     supabase
       .from("v_upcoming_recurring")
       .select(
-        "recurring_id, description, amount, amount_low, is_estimated_amount, category_type, account_type, to_accountid, to_account_type, next_run_date, next_due_date, start_date, end_date, frequency, interval_count, business_day_offset, non_business_day_rule, date_tolerance_days, occurrences_remaining, amount_is_variable, next_amount_confirmed_at, statement_day, to_account_name",
+        "recurring_id, description, amount, amount_low, is_estimated_amount, category_type, accountid, account_type, to_accountid, to_account_type, card_balance_owed, next_run_date, next_due_date, start_date, end_date, frequency, interval_count, business_day_offset, non_business_day_rule, date_tolerance_days, occurrences_remaining, amount_is_variable, next_amount_confirmed_at, statement_day, to_account_name",
       )
       .returns<UpcomingProjectionRow[]>(),
     getSoonestIncomeOccurrence(),

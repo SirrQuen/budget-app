@@ -16,7 +16,9 @@
 //   - income counts on the LATE edge of its date tolerance
 //     (paydayWindowEnd) at its LOW amount estimate;
 //   - obligations count on the EARLY edge (expenseCommitmentDate) at their
-//     expected amount.
+//     expected amount. A variable card payment's later occurrences are
+//     priced from that card's charges per statement cycle, never by
+//     repeating the next payment's figure (see cardPaymentCents).
 //
 // Which rows are income and which are obligations is not decided here --
 // isSpendableAccountType / isSafeToSpendCommitment (lib/safeToSpend.ts)
@@ -32,7 +34,7 @@
 import { addDaysISO, daysBetweenInclusive } from "@/lib/date";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
 import { nextOccurrenceISO } from "@/lib/recurringCadence";
-import { expenseCommitmentDate, paydayWindowEnd } from "@/lib/recurringSchedule";
+import { expenseCommitmentDate, paydayWindowEnd, statementDateForCycle } from "@/lib/recurringSchedule";
 import { isSafeToSpendCommitment, isSpendableAccountType } from "@/lib/safeToSpend";
 
 /** Minimum projection length, in days past today. */
@@ -55,11 +57,31 @@ export type ProjectionSchedule = {
   name: string;
   /** Income/Expense for a category schedule, Transfer for a transfer template. */
   kind: "Income" | "Expense" | "Transfer";
+  /** accountid -- matches a card's recurring charges to its payment. */
+  accountId: string;
   /** accountid's type -- where Income lands, where an outflow leaves from. */
   fromAccountType: string;
+  /** to_accountid for a Transfer; null otherwise. */
+  toAccountId: string | null;
   /** to_accountid's type for a Transfer; null otherwise. */
   toAccountType: string | null;
-  /** Expected amount per occurrence, dollars (v_upcoming_recurring.amount). */
+  /** The card's statement day-of-month, for a variable card payment. */
+  statementDay: number | null;
+  /**
+   * Set only for a variable-amount card payment (amount_is_variable with a
+   * to_accountid). `amount` is then the NEXT payment only -- the confirmed
+   * statement amount, or the whole balance owed when unconfirmed -- and
+   * later occurrences are built from the card's own charges instead.
+   */
+  cardPayment: {
+    amountConfirmed: boolean;
+    /** What the card owes today, dollars, >= 0. */
+    balanceOwed: number;
+  } | null;
+  /**
+   * Expected amount per occurrence, dollars (v_upcoming_recurring.amount).
+   * For a variable card payment, the next occurrence's amount only.
+   */
   amount: number;
   /** Low estimate, dollars -- only read for Income. Null means "same as amount". */
   amountLow: number | null;
@@ -167,12 +189,19 @@ export type OverdueOccurrence = {
 const toCents = (dollars: number) => Math.round(dollars * 100);
 const toDollars = (cents: number) => cents / 100;
 
-// Every resolved due date of a schedule, starting with its stored
-// next_due_date, until one passes `until`. Mirrors generateDueOccurrences'
-// loop (lib/db/recurring.ts): the raw cursor steps, the resolved date is
+type Occurrence = {
+  /** Raw cadence date -- what statementDateForCycle is keyed on. */
+  cursor: string;
+  /** Business-day-resolved due date. */
+  due: string;
+};
+
+// Every occurrence of a schedule, starting with its stored next_due_date,
+// until one passes `until`. Mirrors generateDueOccurrences' loop
+// (lib/db/recurring.ts): the raw cursor steps, the resolved date is
 // derived, end_date is checked against the raw cursor.
-function expandDueDates(s: ProjectionSchedule, until: string, holidays: ReadonlySet<string>): string[] {
-  const out: string[] = [];
+function expandOccurrences(s: ProjectionSchedule, until: string, holidays: ReadonlySet<string>): Occurrence[] {
+  const out: Occurrence[] = [];
   let cursor = s.nextRunDate;
   let due = s.nextDueDate;
   let remaining = s.occurrencesRemaining ?? Infinity;
@@ -180,13 +209,66 @@ function expandDueDates(s: ProjectionSchedule, until: string, holidays: Readonly
   while (remaining > 0 && out.length < MAX_OCCURRENCES_PER_SCHEDULE) {
     if (s.endDate && cursor > s.endDate) break;
     if (due > until) break;
-    out.push(due);
+    out.push({ cursor, due });
     remaining -= 1;
     cursor = nextOccurrenceISO(cursor, s.frequency, s.intervalCount, s.anchorDate);
     due = resolveDueDate(cursor, s.businessDayOffset, s.nonBusinessDayRule, holidays);
   }
 
   return out;
+}
+
+function expandDueDates(s: ProjectionSchedule, until: string, holidays: ReadonlySet<string>): string[] {
+  return expandOccurrences(s, until, holidays).map((o) => o.due);
+}
+
+// Cents for each occurrence of a variable card payment, in order.
+//
+// A card payment pays one statement cycle. Pricing every occurrence at
+// the next payment's figure paid today's balance once per month in the
+// horizon. Instead:
+//
+//   first payment   the confirmed statement amount; or, unconfirmed, the
+//                   whole balance owed today plus the card's recurring
+//                   charges up to its statement date.
+//   later payments  the card's recurring charges dated inside that
+//                   payment's statement cycle (previous statement date,
+//                   this one]. The second payment also carries what the
+//                   card owes beyond a confirmed statement amount -- posted
+//                   after that statement closed -- and any charge that was
+//                   due by the first statement but hadn't posted yet.
+//
+// So each dollar on the card is paid exactly once. Charges are the card's
+// own Expense schedules at their expected amounts; everyday card spending
+// isn't scheduled anywhere and is covered by the cushion, the same as
+// everyday debit spending.
+function cardPaymentCents(
+  s: ProjectionSchedule,
+  occurrences: Occurrence[],
+  cardCharges: { due: string; cents: number }[],
+): number[] {
+  const card = s.cardPayment!;
+  const statementDay = s.statementDay!;
+  const statements = occurrences.map((o) => statementDateForCycle(o.cursor, statementDay));
+  const chargesThrough = (from: string | null, to: string) =>
+    cardCharges
+      .filter((c) => (from === null || c.due > from) && c.due <= to)
+      .reduce((sum, c) => sum + c.cents, 0);
+
+  const owedCents = toCents(card.balanceOwed);
+  const nextCents = toCents(s.amount);
+  const beforeFirstStatement = statements.length > 0 ? chargesThrough(null, statements[0]) : 0;
+
+  return statements.map((statement, k) => {
+    if (k === 0) {
+      return card.amountConfirmed ? nextCents : owedCents + beforeFirstStatement;
+    }
+    const cycle = chargesThrough(statements[k - 1], statement);
+    if (k === 1 && card.amountConfirmed) {
+      return Math.max(0, owedCents - nextCents) + beforeFirstStatement + cycle;
+    }
+    return cycle;
+  });
 }
 
 function isIncomeSchedule(s: ProjectionSchedule): boolean {
@@ -276,21 +358,36 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
   const overdueObligations: OverdueOccurrence[] = [];
   const obligationSearchEnd = addDaysISO(horizonEnd, MAX_DATE_TOLERANCE_DAYS);
   for (const s of schedules.filter(isObligationSchedule)) {
-    for (const due of expandDueDates(s, obligationSearchEnd, holidays)) {
+    const occurrences = expandOccurrences(s, obligationSearchEnd, holidays);
+    const amountsCents =
+      s.cardPayment && s.statementDay !== null
+        ? cardPaymentCents(
+            s,
+            occurrences,
+            schedules
+              .filter((c) => c.kind === "Expense" && c.accountId === s.toAccountId)
+              .flatMap((c) =>
+                expandDueDates(c, obligationSearchEnd, holidays).map((due) => ({ due, cents: toCents(c.amount) })),
+              ),
+          )
+        : occurrences.map(() => toCents(s.amount));
+
+    occurrences.forEach(({ due }, k) => {
       if (due < today && !overdueObligations.some((o) => o.recurringId === s.recurringId)) {
         overdueObligations.push(overdue(s, due));
       }
       const early = expenseCommitmentDate(due, s.dateToleranceDays);
       const date = early < today ? today : early;
-      if (date > horizonEnd) continue;
+      if (date > horizonEnd) return;
       obligations.push({
         recurringId: s.recurringId,
         name: s.name,
-        amount: s.amount,
+        amount: toDollars(amountsCents[k]),
         date,
-        isEstimate: s.isEstimate,
+        // Past the next payment, a card payment is always built from estimates.
+        isEstimate: s.isEstimate || (s.cardPayment !== null && k > 0),
       });
-    }
+    });
   }
   obligations.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 

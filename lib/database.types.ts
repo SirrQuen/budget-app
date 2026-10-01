@@ -1384,6 +1384,7 @@ export type Database = {
           amount_is_variable: boolean | null
           amount_low: number | null
           business_day_offset: number | null
+          card_balance_owed: number | null
           category_color: string | null
           category_icon: string | null
           category_name: string | null

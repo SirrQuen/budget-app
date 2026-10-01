@@ -12,8 +12,12 @@ function schedule(overrides: Partial<ProjectionSchedule> & Pick<ProjectionSchedu
   return {
     recurringId: overrides.name ?? overrides.kind,
     name: overrides.kind,
+    accountId: "checking",
     fromAccountType: "Checking",
+    toAccountId: null,
     toAccountType: null,
+    statementDay: null,
+    cardPayment: null,
     amountLow: null,
     isEstimate: false,
     nextRunDate: next,
@@ -272,4 +276,203 @@ test("nothing overdue -> both attention lists empty", () => {
   const result = run([paycheck, rent]);
   assert.deepEqual(result.unconfirmedIncome, []);
   assert.deepEqual(result.overdueObligations, []);
+});
+
+// Income projects across the whole horizon, exactly like obligations do.
+// Confirmation gates writing a transaction, never the forecast (CLAUDE.md
+// "Money rules -- invariants").
+
+test("semi-monthly income (1st + 15th) over a 35-day horizon -> 3 income events, not 1", () => {
+  // No semi-monthly cadence exists; it's two Monthly schedules.
+  const first = schedule({ kind: "Income", name: "Pay 1st", amount: 1000, nextDueDate: TODAY });
+  const fifteenth = schedule({ kind: "Income", name: "Pay 15th", amount: 1000, nextDueDate: "2026-10-15" });
+  const result = run([first, fifteenth]);
+
+  assert.equal(result.horizonEnd, day(35));
+  assert.deepEqual(
+    result.incomes.map((i) => [i.name, i.date]),
+    [
+      ["Pay 1st", "2026-10-01"],
+      ["Pay 15th", "2026-10-15"],
+      ["Pay 1st", "2026-11-01"],
+    ],
+  );
+});
+
+test("weekly income over a 35-day horizon -> 5 income events", () => {
+  const weekly = schedule({ kind: "Income", name: "Weekly pay", amount: 400, frequency: "Weekly", nextDueDate: day(7) });
+  const result = run([weekly]);
+
+  assert.equal(result.horizonEnd, day(35));
+  assert.deepEqual(
+    result.incomes.map((i) => i.date),
+    [day(7), day(14), day(21), day(28), day(35)],
+  );
+});
+
+test("monthly income, horizon extended to the payday after next -> 2 income events", () => {
+  const monthly = schedule({ kind: "Income", name: "Paycheck", amount: 3000, nextDueDate: day(5) });
+  const result = run([monthly]);
+
+  assert.equal(result.horizonReason, "payday_after_next");
+  assert.equal(result.horizonEnd, "2026-11-06");
+  assert.deepEqual(
+    result.incomes.map((i) => i.date),
+    [day(5), "2026-11-06"],
+  );
+});
+
+test("unconfirmed variable income -> every occurrence at the LOW amount and the LATE date", () => {
+  const variable = schedule({
+    kind: "Income",
+    name: "Paycheck",
+    amount: 1500,
+    amountLow: 1200,
+    isEstimate: true,
+    frequency: "Weekly",
+    intervalCount: 2,
+    dateToleranceDays: 2,
+    nextDueDate: day(3),
+  });
+  const result = run([variable]);
+
+  // Due days 3, 17, 31 -> counted on their late edges 5, 19, 33.
+  assert.deepEqual(
+    result.incomes.map((i) => [i.date, i.amount, i.isEstimate]),
+    [
+      [day(5), 1200, true],
+      [day(19), 1200, true],
+      [day(33), 1200, true],
+    ],
+  );
+});
+
+test("a confirmed paycheck uses its confirmed values, not the estimate", () => {
+  // Income has no "confirmed but not yet posted" state: confirming writes
+  // the transaction at the confirmed amount (so it's in cash) and advances
+  // the schedule one cycle. The confirmed $1,650 must count exactly once --
+  // in cash -- not again at the $1,200 low estimate, and the rest of the
+  // schedule keeps projecting.
+  const confirmedAmount = 1650;
+  const afterConfirming = schedule({
+    kind: "Income",
+    name: "Paycheck",
+    amount: 1500,
+    amountLow: 1200,
+    isEstimate: true,
+    frequency: "Weekly",
+    intervalCount: 2,
+    nextDueDate: day(14),
+  });
+  const result = run([afterConfirming], 500 + confirmedAmount, 0);
+
+  assert.equal(result.cashOnHand, 2150);
+  assert.ok(!result.incomes.some((i) => i.date === TODAY));
+  assert.deepEqual(
+    result.incomes.map((i) => [i.date, i.amount]),
+    [
+      [day(14), 1200],
+      [day(28), 1200],
+    ],
+  );
+});
+
+test("regression guard: with recurring income the trough does not land on the horizon's last day", () => {
+  // Pay covers bills week to week, so the low point is the first bill.
+  // If income stopped after one payday while bills continued, the balance
+  // would fall all the way to the end and the trough would sit on the
+  // final day -- the signature of income being dropped from the forecast.
+  const weeklyPay = schedule({ kind: "Income", name: "Pay", amount: 500, frequency: "Weekly", nextDueDate: day(7) });
+  const weeklyBill = schedule({ kind: "Expense", name: "Bill", amount: 450, frequency: "Weekly", nextDueDate: day(6) });
+  const finalDayBill = schedule({ kind: "Expense", name: "Gym", amount: 40, nextDueDate: day(35), occurrencesRemaining: 1 });
+  const result = run([weeklyPay, weeklyBill, finalDayBill], 1000, 0);
+
+  assert.equal(result.horizonEnd, day(35));
+  assert.equal(result.incomes.length, 5);
+  assert.notEqual(result.trough.date, result.horizonEnd);
+  assert.equal(result.trough.date, day(6));
+  assert.equal(result.trough.amount, 550);
+});
+
+// A variable card payment's first occurrence pays what's owed today; each
+// later one pays only its own statement cycle's charges. Today's balance
+// is never paid twice.
+
+const CARD = "card-1";
+const netflix = schedule({
+  kind: "Expense",
+  name: "Netflix",
+  amount: 20,
+  fromAccountType: "Credit Card",
+  accountId: CARD,
+  nextDueDate: "2026-10-12",
+});
+
+function cardPayment(overrides: Partial<ProjectionSchedule>): ProjectionSchedule {
+  return schedule({
+    kind: "Transfer",
+    name: "Card payment",
+    amount: 900,
+    isEstimate: true,
+    toAccountType: "Credit Card",
+    toAccountId: CARD,
+    statementDay: 28,
+    nextDueDate: "2026-10-22",
+    cardPayment: { amountConfirmed: false, balanceOwed: 900 },
+    ...overrides,
+  });
+}
+
+// Long horizon so two payments land inside it: monthly pay on day 5 makes
+// the payday after next 2026-11-06; a second, later paycheck pushes it on.
+const latePay = schedule({ kind: "Income", name: "Pay", amount: 5000, nextDueDate: "2026-10-25" });
+
+test("unconfirmed card payment: the balance is paid once, the next payment is the next cycle's charges", () => {
+  const result = run([latePay, cardPayment({}), netflix], 5000, 0);
+
+  // Statement 09-28 -> due 10-22 pays the $900 owed. Statement 10-28 ->
+  // due 11-22 pays the Netflix charge from 10-12 (the cycle 09-28..10-28).
+  assert.equal(result.horizonEnd, "2026-11-25");
+  assert.deepEqual(
+    result.obligations.filter((o) => o.name === "Card payment").map((o) => [o.date, o.amount, o.isEstimate]),
+    [
+      ["2026-10-22", 900, true],
+      ["2026-11-22", 20, true],
+    ],
+  );
+  // Netflix itself is charged to the card -- only the payment moves cash.
+  assert.ok(!result.obligations.some((o) => o.name === "Netflix"));
+});
+
+test("confirmed card payment: confirmed amount first, then what's posted since the statement plus new charges", () => {
+  // Statement says $700; the card owes $900 today, so $200 posted after
+  // the statement closed -- that belongs to the next payment.
+  const confirmed = cardPayment({
+    amount: 700,
+    isEstimate: false,
+    cardPayment: { amountConfirmed: true, balanceOwed: 900 },
+  });
+  const result = run([latePay, confirmed, netflix], 5000, 0);
+
+  assert.deepEqual(
+    result.obligations.filter((o) => o.name === "Card payment").map((o) => [o.date, o.amount, o.isEstimate]),
+    [
+      ["2026-10-22", 700, false],
+      ["2026-11-22", 220, true],
+    ],
+  );
+});
+
+test("unconfirmed card payment with its statement still ahead: charges before the statement join the first payment", () => {
+  // Due 10-22 with statement day 15 -> statement 10-15, after today, so the
+  // 10-12 Netflix charge lands on THIS statement, not the next.
+  const result = run([latePay, cardPayment({ statementDay: 15 }), netflix], 5000, 0);
+
+  assert.deepEqual(
+    result.obligations.filter((o) => o.name === "Card payment").map((o) => [o.date, o.amount]),
+    [
+      ["2026-10-22", 920],
+      ["2026-11-22", 20],
+    ],
+  );
 });
