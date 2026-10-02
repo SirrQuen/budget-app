@@ -34,7 +34,8 @@ import { CashflowChart } from "./CashflowChart";
 import { GroupMovementChart } from "./GroupMovementChart";
 import { BudgetMeters } from "./BudgetMeters";
 import { GoalMeters } from "./GoalMeters";
-import { UpcomingList } from "./UpcomingList";
+import { UpcomingList, type UpcomingScheduleMeta } from "./UpcomingList";
+import { buildUpcomingOccurrences } from "@/lib/upcomingOccurrences";
 import { SectionError } from "./SectionError";
 import { LoadError } from "@/components/ui/LoadError";
 import { NoAccountsView, NoTransactionsView } from "./DashboardOnboarding";
@@ -153,7 +154,48 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     budgetResult.data?.filter((b) => b.budget_id !== null).slice(0, 3) ?? [];
   const activeGoals =
     goalResult.data?.filter((g) => g.status === "Active").slice(0, 3) ?? [];
-  const upcoming = recurringResult.data?.slice(0, 5) ?? [];
+  // Built from the projection, not from v_upcoming_recurring's one-row-per-
+  // schedule: the list sits beside the safe-to-spend figure and has to
+  // show exactly what that figure counted. The view only supplies each
+  // schedule's icon and its Confirm target.
+  const upcoming = safeToSpendResult.data ? buildUpcomingOccurrences(safeToSpendResult.data, today) : null;
+  const upcomingSchedules: Record<string, UpcomingScheduleMeta> = Object.fromEntries(
+    (recurringResult.data ?? []).map((r) => [
+      r.recurring_id ?? "",
+      {
+        categoryIcon: r.category_icon,
+        isTransfer: r.to_accountid !== null,
+        confirm:
+          r.next_due_date == null
+            ? null
+            : r.to_accountid === null && r.requires_confirmation
+              ? {
+                  kind: "income" as const,
+                  dueDate: r.next_due_date,
+                  target: {
+                    id: r.recurring_id ?? "",
+                    name: r.description ?? "",
+                    estimatedAmount: r.amount ?? 0,
+                    isEstimate: r.is_estimated_amount ?? false,
+                    dueDate: r.next_due_date,
+                  },
+                }
+              : r.to_accountid !== null && r.is_estimated_amount
+                ? {
+                    kind: "card" as const,
+                    dueDate: r.next_due_date,
+                    target: {
+                      id: r.recurring_id ?? "",
+                      cardName: r.to_account_name ?? "the card",
+                      estimatedAmount: r.amount ?? 0,
+                      statementDay: r.statement_day ?? 1,
+                      dueDate: r.next_run_date ?? "",
+                    },
+                  }
+                : null,
+      },
+    ]),
+  );
 
   // The nudge to confirm a card's statement amount runs from the statement
   // date through the due date (see CLAUDE.md "Prompt timing") -- scanned
@@ -241,7 +283,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     showsError(goalResult.error) ||
     activeGoals.length > 0 ||
     showsError(recurringResult.error) ||
-    upcoming.length > 0;
+    (upcoming !== null && upcoming.items.length > 0);
 
   return (
     <div className="flex flex-col gap-10">
@@ -345,9 +387,13 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
                   <SectionError label="Upcoming" />
                 </div>
               )
-            ) : upcoming.length > 0 ? (
+            ) : upcoming !== null && upcoming.items.length > 0 ? (
               <div className="min-w-0 lg:flex-1 lg:basis-0">
-                <UpcomingList items={upcoming} />
+                <UpcomingList
+                  data={upcoming}
+                  unconfirmedIncome={safeToSpendResult.data?.unconfirmedIncome ?? []}
+                  schedules={upcomingSchedules}
+                />
               </div>
             ) : null}
           </div>

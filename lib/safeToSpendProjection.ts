@@ -124,7 +124,18 @@ export type ProjectedIncome = {
   amount: number;
   /** The day the projection adds it -- the late edge of its tolerance. */
   date: string;
+  /** The occurrence's own due date -- with recurringId, the row's identity. */
+  dueDate: string;
   isEstimate: boolean;
+};
+
+/** One day of the walk, dollars. */
+export type ProjectedDay = {
+  date: string;
+  /** After the day's obligations, before its income -- what the trough reads. */
+  low: number;
+  /** After its income -- what the next day opens on. */
+  end: number;
 };
 
 export type HorizonReason =
@@ -181,6 +192,8 @@ export type SafeToSpendProjection = {
   overdueObligations: OverdueOccurrence[];
   /** Every run below the cushion, chronological. Empty when there are none. */
   episodes: SqueezeEpisode[];
+  /** The day-by-day walk, today through horizonEnd. */
+  daily: ProjectedDay[];
 };
 
 /**
@@ -351,6 +364,7 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
         name: s.name,
         amount: s.amountLow ?? s.amount,
         date,
+        dueDate: due,
         isEstimate: s.isEstimate || (s.amountLow !== null && s.amountLow !== s.amount),
       });
     }
@@ -476,6 +490,7 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
     unconfirmedIncome,
     overdueObligations,
     episodes: findSqueezeEpisodes(days, cushionCents, troughDate),
+    daily: days.map((d) => ({ date: d.date, low: toDollars(d.lowCents), end: toDollars(d.endCents) })),
   };
 }
 

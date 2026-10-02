@@ -1,23 +1,68 @@
 "use client";
 
+import { useId, useState } from "react";
 import Link from "next/link";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
-import { TransferIcon, InfoIcon } from "@/components/ui/icons";
-import { formatCurrency, formatDateShort } from "@/lib/format";
-import type { Database } from "@/lib/database.types";
-import { ConfirmVariableAmountSheet } from "../recurring/ConfirmVariableAmountSheet";
-import { ConfirmIncomeSheet } from "../recurring/ConfirmIncomeSheet";
+import { TransferIcon } from "@/components/ui/icons";
+import { Amount } from "@/components/ui/Amount";
+import { formatDateShort } from "@/lib/format";
+import type { OverdueOccurrence } from "@/lib/safeToSpendProjection";
+import {
+  UPCOMING_DEFAULT_DAYS,
+  type UpcomingOccurrence,
+  type UpcomingOccurrences,
+} from "@/lib/upcomingOccurrences";
+import { ConfirmVariableAmountSheet, type VariableAmountTarget } from "../recurring/ConfirmVariableAmountSheet";
+import { ConfirmIncomeSheet, type IncomeConfirmTarget } from "../recurring/ConfirmIncomeSheet";
+import { INLINE_ACTION, UnconfirmedIncomeNote } from "./UnconfirmedIncomeNote";
 
-type UpcomingRow = Database["public"]["Views"]["v_upcoming_recurring"]["Row"];
+/** Per-schedule display details the projection doesn't carry. */
+export type UpcomingScheduleMeta = {
+  categoryIcon: string | null;
+  isTransfer: boolean;
+  /**
+   * The Confirm action, when this schedule has one. It belongs to exactly
+   * one occurrence -- the schedule's next_due_date, the one confirming acts
+   * on -- so it's matched by dueDate, never shown on every row.
+   */
+  confirm:
+    | { kind: "income"; dueDate: string; target: IncomeConfirmTarget }
+    | { kind: "card"; dueDate: string; target: VariableAmountTarget }
+    | null;
+};
 
-// A handful of dated items is a list, not a chart. Each row: what it is, when
-// it's due, how much. v_upcoming_recurring carries no Income/Expense
-// direction, so the amount shows unsigned.
-export function UpcomingList({ items }: { items: UpcomingRow[] }) {
+// Every occurrence the safe-to-spend projection counts, bills and income
+// mixed by date, so this list explains the number beside it rather than
+// contradicting it. Opens on the next UPCOMING_DEFAULT_DAYS days -- labelled
+// as such -- with the rest of the horizon behind an expander.
+export function UpcomingList({
+  data,
+  unconfirmedIncome,
+  schedules,
+}: {
+  data: UpcomingOccurrences;
+  /** The projection's missed paychecks -- what a "missed" row describes. */
+  unconfirmedIncome: OverdueOccurrence[];
+  schedules: Record<string, UpcomingScheduleMeta>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const listId = useId();
+
+  const inWindow = data.items.filter((i) => i.date <= data.windowEnd);
+  const later = data.items.length - inWindow.length;
+  const shown = expanded ? data.items : inWindow;
+
   return (
     <section className="rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
       <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-medium text-ink-secondary">Upcoming</h2>
+        <div>
+          <h2 className="text-sm font-medium text-ink-secondary">Upcoming</h2>
+          <p className="text-xs text-ink-muted">
+            {expanded
+              ? `Through ${formatDateShort(data.horizonEnd)}`
+              : `Next ${UPCOMING_DEFAULT_DAYS} days · through ${formatDateShort(data.windowEnd)}`}
+          </p>
+        </div>
         <Link
           href="/transactions"
           className="text-xs text-ink-muted transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
@@ -26,103 +71,105 @@ export function UpcomingList({ items }: { items: UpcomingRow[] }) {
         </Link>
       </div>
 
-      <ul className="divide-y divide-hairline">
-        {items.map((r) => (
-          <li key={r.recurring_id} className="flex flex-col gap-1 py-2.5 text-sm">
-            <div className="flex items-center gap-3">
-              {r.to_accountid !== null ? (
-                <TransferIcon className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
+      <div id={listId}>
+        {shown.length === 0 ? (
+          <p className="py-2.5 text-sm text-ink-secondary">
+            Nothing due in the next {UPCOMING_DEFAULT_DAYS} days.
+          </p>
+        ) : (
+          <ul className="divide-y divide-hairline">
+            {shown.map((item) =>
+              item.status === "missed" ? (
+                <MissedRow key={item.key} item={item} unconfirmedIncome={unconfirmedIncome} />
               ) : (
-                <CategoryIcon icon={r.category_icon} className="h-4 w-4 shrink-0 text-ink-muted" />
-              )}
-              <span className="min-w-0 flex-1 truncate text-ink">{r.description}</span>
-              <span className="shrink-0 tabular-nums text-ink-secondary">
-                {r.next_due_date ? formatDateShort(r.next_due_date) : "—"}
-              </span>
-              <span className="shrink-0 tabular-nums font-medium text-ink">
-                {formatCurrency(r.amount ?? 0)}
-              </span>
-            </div>
+                <OccurrenceRow key={item.key} item={item} meta={schedules[item.recurringId]} />
+              ),
+            )}
+          </ul>
+        )}
+      </div>
 
-            {/* is_estimated_amount: a variable schedule with no confirmed
-                next_amount yet -- the figure above is a live guess off the
-                card's balance, never presented as a known one (CLAUDE.md
-                "Display"). */}
-            {r.to_accountid !== null && r.is_estimated_amount ? (
-              <div className="flex items-center justify-between gap-2 pl-7 text-xs text-ink-muted">
-                <span className="inline-flex items-center gap-1">
-                  <InfoIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
-                  {r.is_overdue ? "Needs your amount" : "Estimate"}
-                </span>
-                <ConfirmVariableAmountSheet
-                  target={{
-                    id: r.recurring_id ?? "",
-                    cardName: r.to_account_name ?? "the card",
-                    estimatedAmount: r.amount ?? 0,
-                    statementDay: r.statement_day ?? 1,
-                    dueDate: r.next_run_date ?? "",
-                  }}
-                  trigger={(open) => (
-                    <button
-                      type="button"
-                      onClick={open}
-                      className="font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-                    >
-                      Confirm
-                    </button>
-                  )}
-                />
-              </div>
-            ) : null}
-
-            {/* A variable-amount Expense row (31_recurring_expense_variability.sql)
-                never requires confirmation -- CLAUDE.md "Auto-create
-                outflows." -- so it gets no Confirm action, just the same
-                "never present a guess as a known figure" label the chips
-                above carry for their own variable rows. */}
-            {r.to_accountid === null && !r.requires_confirmation && r.is_estimated_amount ? (
-              <div className="flex items-center gap-1.5 pl-7 text-xs text-ink-muted">
-                <InfoIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
-                Estimate
-              </div>
-            ) : null}
-
-            {/* requires_confirmation -- every Income row, always (CLAUDE.md
-                "Auto-create outflows. Confirm inflows."), not just a
-                variable-amount one -- unlike the card chip above. */}
-            {r.to_accountid === null && r.requires_confirmation ? (
-              <div className="flex items-center justify-between gap-2 pl-7 text-xs text-ink-muted">
-                <span className="inline-flex items-center gap-1">
-                  <InfoIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
-                  {r.is_overdue
-                    ? "Should have landed by now"
-                    : r.is_estimated_amount
-                      ? "Estimate"
-                      : "Awaiting confirmation"}
-                </span>
-                <ConfirmIncomeSheet
-                  target={{
-                    id: r.recurring_id ?? "",
-                    name: r.description ?? "",
-                    estimatedAmount: r.amount ?? 0,
-                    isEstimate: r.is_estimated_amount ?? false,
-                    dueDate: r.next_due_date ?? "",
-                  }}
-                  trigger={(open) => (
-                    <button
-                      type="button"
-                      onClick={open}
-                      className="font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-                    >
-                      Confirm
-                    </button>
-                  )}
-                />
-              </div>
-            ) : null}
-          </li>
-        ))}
-      </ul>
+      {later > 0 ? (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={listId}
+          onClick={() => setExpanded((e) => !e)}
+          className={`mt-2 ${INLINE_ACTION}`}
+        >
+          {expanded
+            ? `Show the next ${UPCOMING_DEFAULT_DAYS} days only`
+            : `+ ${later} more through ${formatDateShort(data.horizonEnd)}`}
+        </button>
+      ) : null}
     </section>
+  );
+}
+
+function MissedRow({
+  item,
+  unconfirmedIncome,
+}: {
+  item: UpcomingOccurrence;
+  unconfirmedIncome: OverdueOccurrence[];
+}) {
+  const missed = unconfirmedIncome.find((u) => u.recurringId === item.recurringId && u.dueDate === item.dueDate);
+  if (!missed) return null;
+  return (
+    <li className="py-2.5 text-xs text-ink-secondary">
+      <UnconfirmedIncomeNote item={missed} />
+    </li>
+  );
+}
+
+function OccurrenceRow({ item, meta }: { item: UpcomingOccurrence; meta: UpcomingScheduleMeta | undefined }) {
+  const confirm = meta?.confirm && meta.confirm.dueDate === item.dueDate ? meta.confirm : null;
+
+  return (
+    <li className="flex flex-col gap-1 py-2.5 text-sm">
+      <div className="flex items-center gap-3">
+        {meta?.isTransfer ? (
+          <TransferIcon className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
+        ) : (
+          <CategoryIcon icon={meta?.categoryIcon ?? null} className="h-4 w-4 shrink-0 text-ink-muted" />
+        )}
+        <span className="min-w-0 flex-1 truncate text-ink">
+          {item.name}
+          {/* Quiet on purpose: no colour, no icon. A known bill carries nothing. */}
+          {item.status === "expected" ? <span className="ml-1.5 text-xs text-ink-muted">expected</span> : null}
+        </span>
+        <span className="shrink-0 tabular-nums text-ink-secondary">{formatDateShort(item.date)}</span>
+        <Amount
+          amount={item.amount}
+          type={item.direction === "income" ? "Income" : "Expense"}
+          column
+          className="shrink-0"
+        />
+      </div>
+
+      {confirm ? (
+        <div className="flex justify-end pl-7">
+          {confirm.kind === "income" ? (
+            <ConfirmIncomeSheet
+              target={confirm.target}
+              trigger={(open) => (
+                <button type="button" onClick={open} className={INLINE_ACTION}>
+                  Confirm
+                </button>
+              )}
+            />
+          ) : (
+            <ConfirmVariableAmountSheet
+              target={confirm.target}
+              trigger={(open) => (
+                <button type="button" onClick={open} className={INLINE_ACTION}>
+                  Confirm
+                </button>
+              )}
+            />
+          )}
+        </div>
+      ) : null}
+    </li>
   );
 }

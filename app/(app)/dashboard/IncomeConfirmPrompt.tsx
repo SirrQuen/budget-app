@@ -22,7 +22,8 @@ export function IncomeConfirmPrompt({ items }: { items: IncomeConfirmTarget[] })
               onClick={open}
               className="w-full rounded-xl border border-hairline bg-surface px-4 py-3 text-left text-sm text-ink-secondary transition-colors duration-150 hover:bg-surface-raised hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
             >
-              Did your {item.name} paycheck land?
+              {/* The name alone -- "your Paycheck paycheck" otherwise. */}
+              Did your {item.name} land?
             </button>
           )}
         />

@@ -11,8 +11,8 @@ import type {
 import type { OverdueOccurrence } from "@/lib/safeToSpendProjection";
 import { resolveOverdueBillAction } from "@/lib/actions/recurring";
 import { daysBetweenInclusive, todayISO } from "@/lib/date";
-import { ConfirmIncomeSheet } from "../recurring/ConfirmIncomeSheet";
 import { ConfirmVariableAmountSheet } from "../recurring/ConfirmVariableAmountSheet";
+import { INLINE_ACTION, UnconfirmedIncomeNote } from "./UnconfirmedIncomeNote";
 import type { HorizonReason } from "@/lib/safeToSpendProjection";
 import { Amount } from "@/components/ui/Amount";
 import { useCountUp } from "@/components/ui/useCountUp";
@@ -93,31 +93,10 @@ function ObligationRow({ c, indent = false }: { c: SafeToSpendCommitment; indent
   );
 }
 
-const INLINE_ACTION =
-  "rounded text-xs font-medium text-ink underline underline-offset-2 transition-colors duration-150 hover:text-ink-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action disabled:opacity-50";
-
-// A paycheck the projection left out because it was never confirmed. The
-// maths is right to drop it; the user still needs to see why the figure
-// is lower than they expect, and a way to fix it in place.
 function UnconfirmedIncomeLine({ item }: { item: OverdueOccurrence }) {
   return (
     <li className="text-xs text-ink-secondary">
-      Your {formatDateShort(item.dueDate)} {item.name} paycheck hasn&apos;t been confirmed, so it
-      isn&apos;t counted.{" "}
-      <ConfirmIncomeSheet
-        target={{
-          id: item.recurringId,
-          name: item.name,
-          estimatedAmount: item.amount,
-          isEstimate: item.isEstimate,
-          dueDate: item.dueDate,
-        }}
-        trigger={(open) => (
-          <button type="button" onClick={open} className={INLINE_ACTION}>
-            Confirm it
-          </button>
-        )}
-      />
+      <UnconfirmedIncomeNote item={item} />
     </li>
   );
 }
