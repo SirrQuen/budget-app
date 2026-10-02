@@ -272,6 +272,19 @@ test("an overdue unposted bill is subtracted today and surfaced", () => {
   ]);
 });
 
+test("two missed weekly occurrences share today's date but keep distinct due dates", () => {
+  // Both clamp to today, so (recurringId, date) can't identify a row --
+  // the dashboard keys obligation rows by (recurringId, dueDate) instead.
+  const gym = schedule({ kind: "Expense", name: "Gym", amount: 20, frequency: "Weekly", nextDueDate: day(-10) });
+  const result = run([paycheck, gym], 2000, 0);
+
+  const today = result.obligations.filter((o) => o.name === "Gym" && o.date === TODAY);
+  assert.deepEqual(
+    today.map((o) => o.dueDate),
+    [day(-10), day(-3)],
+  );
+});
+
 test("nothing overdue -> both attention lists empty", () => {
   const result = run([paycheck, rent]);
   assert.deepEqual(result.unconfirmedIncome, []);

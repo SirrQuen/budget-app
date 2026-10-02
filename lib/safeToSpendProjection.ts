@@ -109,6 +109,11 @@ export type ProjectedObligation = {
   amount: number;
   /** The day the projection subtracts it -- the early edge, never before today. */
   date: string;
+  /**
+   * The occurrence's own due date. With recurringId this identifies the
+   * row: `date` can't, since every past-due occurrence clamps to today.
+   */
+  dueDate: string;
   isEstimate: boolean;
 };
 
@@ -409,6 +414,7 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
         name: s.name,
         amount: toDollars(amountsCents[k]),
         date,
+        dueDate: due,
         // Past the next payment, a card payment is always built from estimates.
         isEstimate: s.isEstimate || (s.cardPayment !== null && k > 0),
       });

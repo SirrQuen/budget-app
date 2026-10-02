@@ -139,7 +139,9 @@ export function CashflowChart({
     points.map((p, i) => `L${x(i).toFixed(1)},${y(p[key]).toFixed(1)}`).join(" ") +
     ` L${x(n - 1).toFixed(1)},${PLOT_B} Z`;
 
-  const xTickIdx = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * (n - 1)));
+  // Deduped: on a short series several fractions round to the same day, and
+  // two labels at one x would overprint (and collide as keys).
+  const xTickIdx = [...new Set([0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * (n - 1))))];
 
   // Endpoint labels: nudge apart only if they'd otherwise collide.
   const lastY = { income: y(points[n - 1].income), expenses: y(points[n - 1].expenses) };
@@ -229,11 +231,13 @@ export function CashflowChart({
                 height={PLOT_H}
                 fill="var(--color-surface-raised)"
               />
-              {[shade.start, shade.end].map((i) => (
+              {/* A one-day band has both edges at the same x -- draw it once.
+                  Keyed by edge, not by value: the values can coincide. */}
+              {(shade.start === shade.end ? [shade.start] : [shade.start, shade.end]).map((value, edge) => (
                 <line
-                  key={i}
-                  x1={x(i)}
-                  x2={x(i)}
+                  key={edge}
+                  x1={x(value)}
+                  x2={x(value)}
                   y1={PLOT_T}
                   y2={PLOT_B}
                   stroke="var(--color-hairline)"

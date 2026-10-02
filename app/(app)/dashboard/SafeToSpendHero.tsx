@@ -308,11 +308,11 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
                   </dd>
                 </div>
                 {data.trough.obligations.map((c) => (
-                  <ObligationRow key={`${c.recurringId}-${c.date}`} c={c} indent />
+                  <ObligationRow key={`${c.recurringId}-${c.dueDate}`} c={c} indent />
                 ))}
               </>
             ) : data.obligations.length > 0 ? (
-              data.obligations.map((c) => <ObligationRow key={`${c.recurringId}-${c.date}`} c={c} />)
+              data.obligations.map((c) => <ObligationRow key={`${c.recurringId}-${c.dueDate}`} c={c} />)
             ) : (
               <div className="flex items-baseline justify-between gap-4">
                 <dt className="text-ink-secondary">No recurring commitments due in this window</dt>
