@@ -86,9 +86,7 @@ function ObligationRow({ c, indent = false }: { c: SafeToSpendCommitment; indent
         {c.name} <span className="text-ink-muted">· {formatDateShort(c.date)}</span>
         {c.isEstimate ? <EstimateTag /> : null}
       </dt>
-      <dd className="shrink-0">
-        <Amount amount={c.amount} type="Expense" />
-      </dd>
+      <dd className="shrink-0 font-medium text-ink">{formatCurrency(c.amount)}</dd>
     </div>
   );
 }
@@ -268,6 +266,9 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
             </ul>
           ) : null}
 
+          {/* Label and value, unsigned throughout -- every line goes
+              through formatCurrency, never the signed <Amount>, so a
+              subtracted line doesn't read "−$300.00" beside "$2,400.00". */}
           <dl className="flex flex-col gap-2 text-sm">
             <div className="flex items-baseline justify-between gap-4">
               <dt className="text-ink-secondary">Cash on hand</dt>
@@ -309,9 +310,7 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
                   {data.cushionIsDefault ? "suggested · change" : "change"}
                 </Link>
               </dt>
-              <dd className="shrink-0">
-                <Amount amount={data.cushion} type="Expense" />
-              </dd>
+              <dd className="shrink-0 font-medium text-ink">{formatCurrency(data.cushion)}</dd>
             </div>
 
             <div className="mt-1 flex items-baseline justify-between gap-4 border-t border-hairline pt-2">
