@@ -10,7 +10,7 @@ import type { BudgetProgressRow } from "@/lib/db/budgets";
 // spent, what's left -- never a verdict.
 export function BudgetMeters({ budgets }: { budgets: BudgetProgressRow[] }) {
   return (
-    <section className="rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
+    <section className="h-full rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
       <div className="mb-4 flex items-baseline justify-between gap-2">
         <h2 className="text-sm font-medium text-ink-secondary">Budgets</h2>
         <Link

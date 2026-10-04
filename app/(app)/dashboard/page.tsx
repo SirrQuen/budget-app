@@ -277,11 +277,13 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   const showsError = (error: string | null) => error != null && !pageLevelError;
 
   const showTiles = showsError(netWorthStatResult.error) || netWorthStatResult.data != null;
-  const showPanels =
+  const showMeters =
     showsError(budgetResult.error) ||
     topBudgets.length > 0 ||
     showsError(goalResult.error) ||
-    activeGoals.length > 0 ||
+    activeGoals.length > 0;
+  const showPanels =
+    showMeters ||
     showsError(recurringResult.error) ||
     (upcoming !== null && upcoming.items.length > 0);
 
@@ -358,43 +360,45 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         ) : null}
 
         {showPanels ? (
-          <div className="flex flex-col gap-4 lg:flex-row">
-            {budgetResult.error ? (
-              pageLevelError ? null : (
-                <div className="min-w-0 lg:flex-1 lg:basis-0">
-                  <SectionError label="Budgets" />
-                </div>
-              )
-            ) : topBudgets.length > 0 ? (
-              <div className="min-w-0 lg:flex-1 lg:basis-0">
-                <BudgetMeters budgets={topBudgets} />
-              </div>
-            ) : null}
-            {goalResult.error ? (
-              pageLevelError ? null : (
-                <div className="min-w-0 lg:flex-1 lg:basis-0">
-                  <SectionError label="Goals" />
-                </div>
-              )
-            ) : activeGoals.length > 0 ? (
-              <div className="min-w-0 lg:flex-1 lg:basis-0">
-                <GoalMeters goals={activeGoals} />
+          <div className="flex flex-col gap-4">
+            {/* Budgets and Goals pair up; Upcoming takes its own full-width
+                row below -- its rows carry the longest names on the page
+                ("Payment to Active Cash Visa Card") plus a date and an
+                amount, and a third of the width truncates them. */}
+            {showMeters ? (
+              <div className="flex flex-col gap-4 lg:flex-row">
+                {budgetResult.error ? (
+                  pageLevelError ? null : (
+                    <div className="min-w-0 lg:flex-1 lg:basis-0">
+                      <SectionError label="Budgets" />
+                    </div>
+                  )
+                ) : topBudgets.length > 0 ? (
+                  <div className="min-w-0 lg:flex-1 lg:basis-0">
+                    <BudgetMeters budgets={topBudgets} />
+                  </div>
+                ) : null}
+                {goalResult.error ? (
+                  pageLevelError ? null : (
+                    <div className="min-w-0 lg:flex-1 lg:basis-0">
+                      <SectionError label="Goals" />
+                    </div>
+                  )
+                ) : activeGoals.length > 0 ? (
+                  <div className="min-w-0 lg:flex-1 lg:basis-0">
+                    <GoalMeters goals={activeGoals} />
+                  </div>
+                ) : null}
               </div>
             ) : null}
             {recurringResult.error ? (
-              pageLevelError ? null : (
-                <div className="min-w-0 lg:flex-1 lg:basis-0">
-                  <SectionError label="Upcoming" />
-                </div>
-              )
+              sectionError("Upcoming")
             ) : upcoming !== null && upcoming.items.length > 0 ? (
-              <div className="min-w-0 lg:flex-1 lg:basis-0">
-                <UpcomingList
-                  data={upcoming}
-                  unconfirmedIncome={safeToSpendResult.data?.unconfirmedIncome ?? []}
-                  schedules={upcomingSchedules}
-                />
-              </div>
+              <UpcomingList
+                data={upcoming}
+                unconfirmedIncome={safeToSpendResult.data?.unconfirmedIncome ?? []}
+                schedules={upcomingSchedules}
+              />
             ) : null}
           </div>
         ) : null}

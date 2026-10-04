@@ -180,9 +180,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
   }
 
   return (
-    // 72rem cap, centred -- on a wide screen the extra width becomes page
-    // margin instead of stretching the row grid's gap between columns.
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <PageHeader title="Accounts" description="Every place your money lives, in one list." />
 
       <StatTile

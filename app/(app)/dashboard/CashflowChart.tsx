@@ -23,6 +23,11 @@ const PLOT_H_MOBILE = 160;
 const PLOT_H_DESKTOP = 220;
 const DESKTOP_MIN_WIDTH = 640;
 const PAD = { top: 12, right: 64, bottom: 28, left: 48 };
+// Minimum px between neighbouring x-axis date labels. A label ("Sep 12" at
+// 11px) is ~40px wide; the endpoints are anchored start/end, so between an
+// endpoint and a centred neighbour the free space is spacing - 1.5 x width.
+// 72 leaves at least 12px clear.
+const MIN_X_TICK_SPACING = 72;
 // First paint / SSR, before ResizeObserver has measured the container.
 const FALLBACK_WIDTH = 720;
 
@@ -139,9 +144,17 @@ export function CashflowChart({
     points.map((p, i) => `L${x(i).toFixed(1)},${y(p[key]).toFixed(1)}`).join(" ") +
     ` L${x(n - 1).toFixed(1)},${PLOT_B} Z`;
 
+  // As many date labels as the plot has room for: five where they fit, else
+  // three, else just the endpoints -- on a phone five overprint each other.
   // Deduped: on a short series several fractions round to the same day, and
   // two labels at one x would overprint (and collide as keys).
-  const xTickIdx = [...new Set([0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * (n - 1))))];
+  const xTickFractions =
+    PLOT_W / 4 >= MIN_X_TICK_SPACING
+      ? [0, 0.25, 0.5, 0.75, 1]
+      : PLOT_W / 2 >= MIN_X_TICK_SPACING
+        ? [0, 0.5, 1]
+        : [0, 1];
+  const xTickIdx = [...new Set(xTickFractions.map((f) => Math.round(f * (n - 1))))];
 
   // Endpoint labels: nudge apart only if they'd otherwise collide.
   const lastY = { income: y(points[n - 1].income), expenses: y(points[n - 1].expenses) };

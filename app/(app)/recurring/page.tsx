@@ -128,7 +128,7 @@ export default async function RecurringPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <PageHeader
         title="Recurring"
         description="Bills and paychecks that repeat -- posted automatically on their due date."

@@ -13,7 +13,7 @@ function TileSkeleton() {
 function PanelSkeleton() {
   return (
     <div className="min-w-0 lg:flex-1 lg:basis-0">
-      <div className="rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
+      <div className="h-full rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
         <LoadingSkeleton className="h-4 w-20 bg-surface-raised" />
         <div className="mt-4 flex flex-col gap-4">
           {[0, 1, 2].map((i) => (
@@ -51,9 +51,12 @@ export default function DashboardLoading() {
           <TileSkeleton />
         </div>
 
-        <div className="flex flex-col gap-4 lg:flex-row">
-          <PanelSkeleton />
-          <PanelSkeleton />
+        {/* budgets + goals, then upcoming on its own row */}
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 lg:flex-row">
+            <PanelSkeleton />
+            <PanelSkeleton />
+          </div>
           <PanelSkeleton />
         </div>
       </section>

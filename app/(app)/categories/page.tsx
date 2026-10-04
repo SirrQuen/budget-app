@@ -60,7 +60,7 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/categ
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <PageHeader
         title="Categories"
         description="Organize how your spending and income are grouped."

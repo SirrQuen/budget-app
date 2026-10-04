@@ -119,19 +119,27 @@ export function AppShell({
           </div>
         </aside>
 
-        <main id="main-content" tabIndex={-1} className="flex-1 px-4 py-6 outline-none md:px-8 md:py-8">
-          <OptimisticTransactionsProvider>
-            {quickAdd ? (
-              <QuickAddBar
-                accounts={quickAdd.accounts}
-                incomeCategories={quickAdd.incomeCategories}
-                expenseCategories={quickAdd.expenseCategories}
-                defaultAccountId={quickAdd.defaultAccountId}
-                navOpen={open}
-              />
-            ) : null}
-            {children}
-          </OptimisticTransactionsProvider>
+        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 px-4 py-6 outline-none md:px-8 md:py-8">
+          {/* The one content width for every authenticated screen: 72rem,
+              centred, so on a wide monitor the extra width becomes margin
+              instead of stretching row grids and panels apart. Pages, their
+              loading skeletons and error states all inherit it -- no page
+              sets its own max-width. The quick-add bar sits inside it
+              so its desktop sticky form lines up with the page below. */}
+          <div className="mx-auto w-full max-w-6xl">
+            <OptimisticTransactionsProvider>
+              {quickAdd ? (
+                <QuickAddBar
+                  accounts={quickAdd.accounts}
+                  incomeCategories={quickAdd.incomeCategories}
+                  expenseCategories={quickAdd.expenseCategories}
+                  defaultAccountId={quickAdd.defaultAccountId}
+                  navOpen={open}
+                />
+              ) : null}
+              {children}
+            </OptimisticTransactionsProvider>
+          </div>
         </main>
       </div>
     </ConfirmPulseProvider>
