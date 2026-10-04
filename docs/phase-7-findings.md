@@ -4,7 +4,7 @@
 
 | Path | Purpose | Added | Status |
 |---|---|---|---|
-| `app/(app)/dev-projection/page.tsx` | Prints the signed-in user's safe-to-spend projection (income, obligations, daily balance, trough, cushion, result) to check it against real data. Dev-only (`notFound()` in production); reads through `getSafeToSpend()` under the user's session and RLS. | 2026-10-02 | **Present -- delete this session** |
+| `app/(app)/dev-projection/page.tsx` | Prints the signed-in user's safe-to-spend projection (income, obligations, daily balance, trough, cushion, result) to check it against real data. Dev-only (`notFound()` in production); reads through `getSafeToSpend()` under the user's session and RLS. | 2026-10-02 | Deleted 2026-10-04 (never committed) |
 
 ## "fiber.reset is not a function" in the dev overlay (2026-10-04)
 
