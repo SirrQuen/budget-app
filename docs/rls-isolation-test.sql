@@ -41,6 +41,9 @@
 --   6  Same-user writes
 --                 A writes to A's own parents in every shape the app
 --                 uses: the guard against a WITH CHECK that's too strict
+--   7  Trigger oracles
+--                 DEFINER triggers must answer the same for another
+--                 user's category as for a made-up id
 --   5  Coverage   every public table/view is tested here or exempted
 --   2d Function grants (Phase 7)
 --
@@ -165,6 +168,9 @@ select u.k || '_' || v.k, v.id
    union all
    select 'rent', c.id from public.categories c
     where c.userid = u.id and c.category_name = 'Rent'
+   union all
+   select 'salary', c.id from public.categories c
+    where c.userid = u.id and c.category_name = 'Paychecks/Salary'
  ) as v(k, id)
  where u.k in ('A', 'B');
 
@@ -545,6 +551,86 @@ begin
       format('accepted, %s rows', r.rows_expected),
       coalesce('accepted, ' || w.n::text || ' rows', 'REJECTED ' || w.state || ': ' || w.msg),
       w.n = r.rows_expected);
+  end loop;
+end
+$$;
+
+
+-- ---------------------------------------------------------------------
+-- 7 Trigger oracles
+--
+-- enforce_category_type() and enforce_recurring_variability_scope() are
+-- SECURITY DEFINER BEFORE triggers, so they run before RLS checks the
+-- new row. If they can see another user's category, their answer differs
+-- for a foreign id vs a made-up one -- telling B the id exists and its
+-- type. Each pair below must get the SAME response for A's category as
+-- for a random uuid (ids masked before comparing).
+--
+-- Guards: the triggers must still do their job on the user's own
+-- categories.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  a uuid := pg_temp.fx('A');
+  b uuid := pg_temp.fx('B');
+  r record;
+  w_foreign record;
+  w_bogus   record;
+  v_f text;
+  v_b text;
+  w record;
+  v_bogus_id uuid := gen_random_uuid();
+begin
+  for r in
+    select * from (values
+      ('transactions', 'Expense on A''s Income category',
+        format('insert into public.transactions (userid, accountid, categoryid, description, amount, transaction_type, transaction_date) values (%L, %L, %%L, ''rls'', 1, ''Expense'', current_date)', b, pg_temp.fx('B_acct')),
+        pg_temp.fx('A_salary')),
+      ('transactions', 'Expense on A''s Expense category',
+        format('insert into public.transactions (userid, accountid, categoryid, description, amount, transaction_type, transaction_date) values (%L, %L, %%L, ''rls'', 1, ''Expense'', current_date)', b, pg_temp.fx('B_acct')),
+        pg_temp.fx('A_groceries')),
+      ('recurring_transactions', 'requires_confirmation on A''s Income category',
+        format('insert into public.recurring_transactions (userid, accountid, categoryid, description, amount, frequency, next_run_date, next_due_date, requires_confirmation) values (%L, %L, %%L, ''rls'', 1, ''Monthly'', current_date + 5, current_date + 5, true)', b, pg_temp.fx('B_acct')),
+        pg_temp.fx('A_salary')),
+      ('recurring_transactions', 'requires_confirmation on A''s Expense category',
+        format('insert into public.recurring_transactions (userid, accountid, categoryid, description, amount, frequency, next_run_date, next_due_date, requires_confirmation) values (%L, %L, %%L, ''rls'', 1, ''Monthly'', current_date + 5, current_date + 5, true)', b, pg_temp.fx('B_acct')),
+        pg_temp.fx('A_groceries')),
+      ('recurring_transactions', 'date_tolerance_days on A''s Expense category',
+        format('insert into public.recurring_transactions (userid, accountid, categoryid, description, amount, frequency, next_run_date, next_due_date, date_tolerance_days) values (%L, %L, %%L, ''rls'', 1, ''Monthly'', current_date + 5, current_date + 5, 3)', b, pg_temp.fx('B_acct')),
+        pg_temp.fx('A_groceries')),
+      ('recurring_transactions', 'amount_is_variable on A''s Expense category',
+        format('insert into public.recurring_transactions (userid, accountid, categoryid, description, amount, frequency, next_run_date, next_due_date, amount_is_variable) values (%L, %L, %%L, ''rls'', 1, ''Monthly'', current_date + 5, current_date + 5, true)', b, pg_temp.fx('B_acct')),
+        pg_temp.fx('A_groceries'))
+    ) as t(rel, what, sql_tmpl, foreign_id)
+  loop
+    select * into w_foreign from pg_temp.try_as(b, format(r.sql_tmpl, r.foreign_id));
+    select * into w_bogus   from pg_temp.try_as(b, format(r.sql_tmpl, v_bogus_id));
+    v_f := coalesce(w_foreign.state || ': ' || regexp_replace(w_foreign.msg, '[0-9a-f-]{36}', '<id>', 'g'), 'ACCEPTED');
+    v_b := coalesce(w_bogus.state   || ': ' || regexp_replace(w_bogus.msg,   '[0-9a-f-]{36}', '<id>', 'g'), 'ACCEPTED');
+    perform pg_temp.rec('7 trigger oracles', r.rel, 'B: ' || r.what || ' vs random id',
+      'same rejection for both',
+      case when v_f = v_b then 'same: ' || v_f else 'A''s: ' || v_f || ' | random: ' || v_b end,
+      v_f = v_b and w_foreign.state is not null);
+  end loop;
+
+  -- Guards: own-category checks still enforced, legitimate shape still accepted.
+  for r in
+    select * from (values
+      ('transactions', 'A: Expense on own Income category', 'rejected 23514',
+        format('insert into public.transactions (userid, accountid, categoryid, description, amount, transaction_type, transaction_date) values (%L, %L, %L, ''rls'', 1, ''Expense'', current_date)', a, pg_temp.fx('A_acct'), pg_temp.fx('A_salary'))),
+      ('recurring_transactions', 'A: requires_confirmation on own Expense category', 'rejected 23514',
+        format('insert into public.recurring_transactions (userid, accountid, categoryid, description, amount, frequency, next_run_date, next_due_date, requires_confirmation) values (%L, %L, %L, ''rls'', 1, ''Monthly'', current_date + 5, current_date + 5, true)', a, pg_temp.fx('A_acct'), pg_temp.fx('A_groceries'))),
+      ('recurring_transactions', 'A: requires_confirmation on own Income category', 'accepted',
+        format('insert into public.recurring_transactions (userid, accountid, categoryid, description, amount, frequency, next_run_date, next_due_date, requires_confirmation) values (%L, %L, %L, ''rls'', 1, ''Monthly'', current_date + 5, current_date + 5, true)', a, pg_temp.fx('A_acct'), pg_temp.fx('A_salary'))),
+      ('recurring_transactions', 'A: variable date + amount on own Expense category', 'accepted',
+        format('insert into public.recurring_transactions (userid, accountid, categoryid, description, amount, frequency, next_run_date, next_due_date, date_tolerance_days, amount_is_variable) values (%L, %L, %L, ''rls'', 1, ''Monthly'', current_date + 5, current_date + 5, 3, true)', a, pg_temp.fx('A_acct'), pg_temp.fx('A_groceries')))
+    ) as t(rel, what, expected, sql)
+  loop
+    select * into w from pg_temp.try_as(a, r.sql);
+    perform pg_temp.rec('7 trigger oracles', r.rel, r.what, r.expected,
+      coalesce('rejected ' || w.state || ': ' || w.msg, 'accepted'),
+      case r.expected when 'accepted' then w.state is null
+                      else w.state = '23514' end);
   end loop;
 end
 $$;

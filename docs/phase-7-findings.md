@@ -54,8 +54,8 @@ row's own `userid`. So user B can insert a transaction with
    rolls back. A's account cannot be deleted.
 
 Side effect of the same gap: `enforce_category_type()` is SECURITY DEFINER,
-so its error message reveals whether a foreign `categoryid` is Income or
-Expense.
+so its error message revealed whether a foreign `categoryid` is Income or
+Expense. Fixed in migration 38 -- see "Mitigation".
 
 `goal_contributions` checked its goal's owner but not its
 `transactionid -> transactions(id)` (CASCADE) reference, which had the same
@@ -100,14 +100,20 @@ What it does NOT cover -- why composite FKs remain a launch blocker:
   support-side fix, an import, or a future DEFINER function reopens the
   hole silently. A composite FK is enforced for every role in every
   context.
-- **The category-type oracle survives.** `enforce_category_type()` is a
-  BEFORE trigger, and BEFORE triggers run before RLS checks the new row.
-  A foreign `categoryid` whose type mismatches the transaction still gets
-  "Category is Income but transaction is Expense" instead of the RLS
-  rejection -- revealing that the id exists and its type. Composite FKs
-  don't fix this either (FKs are checked after the trigger); the trigger
-  should look up the category with `userid = new.userid`, or run as
-  invoker.
+- **Category-type oracle -- fixed separately in migration 38
+  (2026-10-04).** `enforce_category_type()` and
+  `enforce_recurring_variability_scope()` are SECURITY DEFINER BEFORE
+  triggers, which run before RLS checks the new row, and they looked up
+  categories by id alone. A foreign `categoryid` got a different response
+  from a made-up one (4 cases confirmed: one via transactions, three via
+  recurring `requires_confirmation`/`date_tolerance_days`/
+  `amount_is_variable`), revealing that the id exists and its type. Both
+  lookups are now scoped to `userid = new.userid`; harness section 7
+  asserts each pair gets an identical response, and that the triggers
+  still reject mismatches on the user's own categories.
+  Trade-off that adds to the case for composite FKs: a write that
+  bypasses RLS with a cross-user `categoryid` now skips the type check
+  rather than applying it against the other user's category.
 
 ### Structural fix (not built yet)
 
