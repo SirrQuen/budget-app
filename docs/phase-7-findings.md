@@ -2,7 +2,13 @@
 
 ## LAUNCH BLOCKER: Cross-user foreign keys can make an account undeletable (2026-10-04)
 
-**Status: open. Do not launch until fixed.**
+**Status: mitigated in RLS (migration 37, 2026-10-04). Structural fix
+(composite FKs) still required before launch. Do not launch until it
+ships.**
+
+Section 4 of `docs/rls-isolation-test.sql` going green does NOT close this
+entry. It proves the RLS mitigation only; see "Mitigation" below for what
+it does not cover.
 
 ### Consequence (this is what sets the severity)
 
@@ -34,6 +40,7 @@ and carries no ownership check:
 | `budgets` | `categoryid -> categories(id)` | CASCADE |
 | `goals` | `accountid -> accounts(id)` | SET NULL |
 | `categories` | `groupid -> category_groups(id)` | RESTRICT |
+| `goal_contributions` | `transactionid -> transactions(id)` | CASCADE |
 
 FK checks run without RLS, and the INSERT/UPDATE policies only check the
 row's own `userid`. So user B can insert a transaction with
@@ -50,10 +57,59 @@ Side effect of the same gap: `enforce_category_type()` is SECURITY DEFINER,
 so its error message reveals whether a foreign `categoryid` is Income or
 Expense.
 
-`goal_contributions` is the only child table that already checks the
-parent's owner (its policies `EXISTS` against `goals.userid`).
+`goal_contributions` checked its goal's owner but not its
+`transactionid -> transactions(id)` (CASCADE) reference, which had the same
+gap.
 
-### Fix (not built yet)
+A second consequence, found by the harness: `recurring_tx_no_double_post`
+is unique on (recurringid, occurrence date). B's row carrying A's
+`recurringid` takes that slot, and A's own posting of the occurrence is
+then rejected with 23505 -- another user could stop A's rent from posting.
+
+**Confirmed reachable** (2026-10-04): `docs/rls-isolation-test.sql`
+section 4 -- all 11 cross-user references accepted for an authenticated
+user through the same path PostgREST uses.
+
+**No existing cross-user rows** (2026-10-04):
+`docs/cross-user-references-audit.sql` checked all 13 FKs between
+user-owned tables -- 0 mismatched rows each. The audit was itself proven
+by planting one mismatch in a rolled-back transaction and seeing it
+reported.
+
+### Mitigation: migration 37 (shipped 2026-10-04)
+
+`20261004000037_37_with_check_parent_ownership.sql` adds an ownership
+`EXISTS` for every non-null reference to the WITH CHECK of each affected
+INSERT and UPDATE policy. Verified:
+
+- Harness: 205/205, section 4 all rejected with 42501 (was 11 accepted).
+- Section 6 (new): 20 same-user writes in every shape the app uses --
+  nullable references null and set, transfer legs, edits on an archived
+  account -- all accepted.
+- App end to end, in the UI against production on the test account:
+  create account, create transaction, edit it (amount, description,
+  category), create a recurring schedule, create a budget. All succeeded;
+  test rows removed afterwards.
+
+What it does NOT cover -- why composite FKs remain a launch blocker:
+
+- **It lives only in RLS.** `service_role`, the table owner, and any
+  SECURITY DEFINER function write straight past it. Today nothing does,
+  but only because of CLAUDE.md rules ("never use the service role key in
+  application code"). Those are rules, not guarantees -- a billing sync, a
+  support-side fix, an import, or a future DEFINER function reopens the
+  hole silently. A composite FK is enforced for every role in every
+  context.
+- **The category-type oracle survives.** `enforce_category_type()` is a
+  BEFORE trigger, and BEFORE triggers run before RLS checks the new row.
+  A foreign `categoryid` whose type mismatches the transaction still gets
+  "Category is Income but transaction is Expense" instead of the RLS
+  rejection -- revealing that the id exists and its type. Composite FKs
+  don't fix this either (FKs are checked after the trigger); the trigger
+  should look up the category with `userid = new.userid`, or run as
+  invoker.
+
+### Structural fix (not built yet)
 
 Composite FKs so a child can only reference its own user's parent:
 `unique (userid, id)` on each parent, then each FK rewritten as
@@ -61,7 +117,11 @@ Composite FKs so a child can only reference its own user's parent:
 each FK's existing ON DELETE action. `SET NULL` FKs need the column-list form
 (`on delete set null (goalid)`) so the cascade doesn't null `userid` too.
 Check for existing cross-user rows first -- `ADD CONSTRAINT` fails on them,
-and any found are exactly the stuck-deletion case.
+and any found are exactly the stuck-deletion case. Run
+`docs/cross-user-references-audit.sql` immediately before applying (0 on
+2026-10-04; migration 37 should keep it at 0 for PostgREST writes).
+`goal_contributions` has no `userid`, so its `transactionid` FK needs a
+different shape (a `userid` column, or a trigger) -- decide when building.
 
 This is a significant migration on live tables: unique constraints plus
 rewritten FKs. **Validate it on a Supabase preview branch before it goes
@@ -73,7 +133,10 @@ near production.**
 ON DELETE RESTRICT. Section 5 must test deletion **with a foreign row
 present** (another user's transaction pointing at the deleting user's
 account), not only the clean path. Before the fix that test should fail;
-after it, the foreign row cannot exist to begin with.
+after it, the foreign row cannot exist to begin with. Since migration 37
+the foreign row can't be created through PostgREST, so the test has to
+plant it as the table owner -- which is exactly the RLS-bypassing path the
+composite FKs exist for.
 
 ## Fixed: `seed_default_categories` callable by anyone (2026-10-04)
 
