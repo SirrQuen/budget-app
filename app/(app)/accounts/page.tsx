@@ -156,7 +156,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
       // A wrapping div would itself become a single ungridded cell.
       <Fragment key={group.type}>
         <h3
-          className={`px-4 py-2 text-sm font-semibold text-ink-secondary sm:col-span-4 sm:px-0 ${isFirst ? "" : "border-t border-hairline"}`}
+          className={`px-4 pb-1 text-sm font-semibold text-ink-secondary sm:col-span-4 sm:px-0 ${isFirst ? "pt-2" : "border-t border-hairline pt-5"}`}
         >
           {group.type} <span className="text-ink-muted">·</span>{" "}
           <span className="tabular-nums text-ink">
