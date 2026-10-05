@@ -11,7 +11,7 @@ const MESSAGES: Record<string, string> = {
   email_exists:
     "An account with this email already exists. Try logging in instead.",
   weak_password:
-    "That password is too weak. Use at least 8 characters, mixing letters, numbers, and symbols.",
+    "That password needs 8 or more characters, with an uppercase letter, a lowercase letter, a number and a symbol.",
   same_password: "Your new password must be different from your current one.",
   over_email_send_rate_limit:
     "Too many attempts. Please wait a few minutes and try again.",

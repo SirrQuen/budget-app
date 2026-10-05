@@ -235,8 +235,10 @@ Read `../../DATABASE.md` before writing any query or signup flow:
 
 - Balances are computed, not stored — read from views (`v_account_balances`,
   `v_goal_progress`), never balance columns.
-- Signup must pass `first_name`/`last_name`/`username`/`phone` via
-  `auth.signUp()`'s `options.data`.
+- Signup passes `first_name` (required) and, when given, `last_name` and
+  `preferred_name` via `auth.signUp()`'s `options.data`. Signup collects
+  nothing else -- no username, phone, or other personal data. Rules live in
+  `lib/signupValidation.ts`, shared by the form and the server action.
 - On signup, the `on_auth_user_created` trigger calls `handle_new_user()`
   (`AFTER INSERT ON auth.users`), which creates the `profiles` row, the
   `settings` row, and default `category_groups`/`categories`. App code must

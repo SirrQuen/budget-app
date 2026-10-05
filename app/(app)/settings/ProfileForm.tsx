@@ -58,7 +58,7 @@ export function ProfileForm({
       </div>
 
       <FormField
-        label="Preferred name"
+        label="Nickname"
         htmlFor={preferredId}
         hint="What should we call you? Optional."
         error={fieldError("preferredName")}

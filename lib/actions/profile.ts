@@ -29,7 +29,7 @@ export async function updateProfileNamesAction(
   if (preferredName && nameLength(preferredName) > PREFERRED_NAME_MAX) {
     return {
       field: "preferredName",
-      error: `Keep your preferred name to ${PREFERRED_NAME_MAX} characters or fewer.`,
+      error: `Keep your nickname to ${PREFERRED_NAME_MAX} characters or fewer.`,
     };
   }
 

@@ -7,7 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import { authErrorMessage } from "@/lib/auth/errors";
 import { SIGNED_IN_COOKIE, SIGNED_IN_MAX_AGE_S } from "@/lib/auth/signedInFlag";
 import { markSessionStart, clearSessionStart } from "@/lib/auth/firstSession";
-import { clean, nameLength, PREFERRED_NAME_MAX } from "@/lib/displayName";
+import { clean } from "@/lib/displayName";
+import { validateSignup, type SignupField, type SignupValues } from "@/lib/signupValidation";
 
 export type ActionState = { error?: string; success?: string } | undefined;
 
@@ -43,48 +44,64 @@ export async function login(
   redirect("/dashboard");
 }
 
-// Collects email/password plus an optional preferred name. First and last
-// name are left to Settings -- profiles.first_name/last_name/username all
-// tolerate missing signup metadata (see handle_new_user(), migration 34) and
-// land blank/null rather than failing signup.
+export type SignupActionState =
+  | { error?: string; field?: SignupField; success?: string }
+  | undefined;
+
+// Collects everything a new account needs, so nobody finishes setup in
+// Settings: email, password, first name (required), last name and nickname
+// (optional). Nothing else -- every extra field is data we'd then hold.
+//
+// The form validates the same rules inline (lib/signupValidation.ts); this is
+// the authoritative pass, and the one a no-JS submit gets.
 export async function signup(
-  _prevState: ActionState,
+  _prevState: SignupActionState,
   formData: FormData,
-): Promise<ActionState> {
-  const email = String(formData.get("email") ?? "").trim();
-  const password = String(formData.get("password") ?? "");
-  const confirmPassword = String(formData.get("confirmPassword") ?? "");
-  const preferredName = clean(String(formData.get("preferredName") ?? ""));
+): Promise<SignupActionState> {
+  const values: SignupValues = {
+    email: String(formData.get("email") ?? ""),
+    firstName: String(formData.get("firstName") ?? ""),
+    lastName: String(formData.get("lastName") ?? ""),
+    preferredName: String(formData.get("preferredName") ?? ""),
+    password: String(formData.get("password") ?? ""),
+    confirmPassword: String(formData.get("confirmPassword") ?? ""),
+  };
 
-  if (!email || !password || !confirmPassword) {
-    return { error: "Email and both password fields are required." };
+  const errors = validateSignup(values);
+  const firstInvalid = (Object.keys(errors) as SignupField[]).find((field) => errors[field]);
+  if (firstInvalid) {
+    return { field: firstInvalid, error: errors[firstInvalid]! };
   }
 
-  if (password !== confirmPassword) {
-    return { error: "Passwords do not match." };
-  }
-
-  // The DB check would reject this too, but as an opaque "Database error
-  // saving new user" -- catch it here with a message that says what to fix.
-  if (preferredName && nameLength(preferredName) > PREFERRED_NAME_MAX) {
-    return { error: `Keep your preferred name to ${PREFERRED_NAME_MAX} characters or fewer.` };
-  }
+  const email = clean(values.email)!;
+  const firstName = clean(values.firstName)!;
+  const lastName = clean(values.lastName);
+  const preferredName = clean(values.preferredName);
 
   const supabase = await createClient();
   const origin = (await headers()).get("origin");
 
   const { error } = await supabase.auth.signUp({
     email,
-    password,
+    password: values.password,
     options: {
       emailRedirectTo: `${origin}/auth/confirm?next=/dashboard`,
-      // Read by handle_new_user(); omitted entirely when blank.
-      data: preferredName ? { preferred_name: preferredName } : undefined,
+      // Read by handle_new_user() (migration 34), which already maps these
+      // keys -- no trigger change. Optional keys are omitted when blank: the
+      // trigger stores a missing last_name as '' and preferred_name as null.
+      data: {
+        first_name: firstName,
+        ...(lastName ? { last_name: lastName } : {}),
+        ...(preferredName ? { preferred_name: preferredName } : {}),
+      },
     },
   });
 
   if (error) {
-    return { error: authErrorMessage(error) };
+    return {
+      error: authErrorMessage(error),
+      ...(error.code === "weak_password" ? { field: "password" as const } : {}),
+    };
   }
 
   return {
