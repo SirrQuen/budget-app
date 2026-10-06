@@ -489,3 +489,97 @@ test("unconfirmed card payment with its statement still ahead: charges before th
     ],
   );
 });
+
+// Edges of the walk: the horizon boundary, same-day ordering, the cushion
+// floor, and variable income's pessimistic edges.
+
+test("obligation falling exactly on the horizon boundary -> included, not dropped", () => {
+  // Weekly pay from day 3: paydays 3, 10 -> payday after next is day 10, so
+  // the horizon is the 35-day minimum. The bill is due on day 35 itself.
+  const weekly = schedule({ kind: "Income", name: "Weekly pay", amount: 400, frequency: "Weekly", nextDueDate: day(3) });
+  const boundaryBill = schedule({
+    kind: "Expense",
+    name: "Insurance",
+    amount: 2500,
+    nextDueDate: day(35),
+    occurrencesRemaining: 1,
+  });
+  const result = run([weekly, boundaryBill], 1000, 0);
+
+  assert.equal(result.horizonEnd, day(35));
+  assert.deepEqual(
+    result.obligations.map((o) => [o.name, o.date, o.amount]),
+    [["Insurance", day(35), 2500]],
+  );
+  // 1000 + 5 x 400 (days 3..31) = 3000, then -2500 on day 35.
+  assert.equal(result.trough.amount, 500);
+  assert.equal(result.trough.date, day(35));
+  assert.equal(result.safeToSpend, 500);
+});
+
+test("income and an obligation on the same day -> the obligation is applied first", () => {
+  // A paycheck that posts in the afternoon doesn't cover a payment that
+  // cleared that morning. Income-first would read 1000 -> 2500 -> 1300 and
+  // never dip; obligation-first reads 1000 -> -200 -> 1300.
+  const sameDayBill = schedule({
+    kind: "Expense",
+    name: "Car payment",
+    amount: 1200,
+    nextDueDate: day(5),
+    occurrencesRemaining: 1,
+  });
+  const result = run([paycheck, sameDayBill], 1000, 0);
+
+  assert.equal(result.trough.amount, -200);
+  assert.equal(result.trough.date, day(5));
+  assert.deepEqual(result.shortfall, { amount: 200, date: day(5) });
+  assert.equal(result.safeToSpend, 0);
+  const payday = result.daily.find((d) => d.date === day(5));
+  assert.deepEqual(payday, { date: day(5), low: -200, end: 1300 });
+});
+
+test("cushion larger than the trough -> hero is $0, never negative", () => {
+  // Trough is $1,700 (the worked case); a $2,500 cushion would put it at -$800.
+  const result = run([paycheck, rent], 2000, 2500);
+
+  assert.equal(result.trough.amount, 1700);
+  assert.equal(result.cushion, 2500);
+  assert.equal(result.safeToSpend, 0);
+  assert.ok(!Object.is(result.safeToSpend, -0));
+  assert.equal(result.perDay, null);
+  // The trough itself never goes below zero, so this isn't a shortfall.
+  assert.equal(result.shortfall, null);
+});
+
+test("variable-amount income -> the LOW end of the estimate and the LATE end of the date tolerance", () => {
+  // Expected $1,500 (low $1,200), due day 5 +/- 3 days. A bill on day 7 sits
+  // between the due date and the late edge. At the low amount and late date:
+  // 500 -> -800 (day 7) -> 400 (day 8). At the expected amount on the due
+  // date it would be 500 -> 2000 (day 5) -> 700 (day 7), never short.
+  const variable = schedule({
+    kind: "Income",
+    name: "Paycheck",
+    amount: 1500,
+    amountLow: 1200,
+    isEstimate: true,
+    dateToleranceDays: 3,
+    nextDueDate: day(5),
+  });
+  const bill = schedule({ kind: "Expense", name: "Bill", amount: 1300, nextDueDate: day(7), occurrencesRemaining: 1 });
+  const result = run([variable, bill], 500, 0);
+
+  // Due days 5 and 36 (Oct 6, Nov 6) -> counted on days 8 and 39; the
+  // horizon runs to the second payday's late edge.
+  assert.equal(result.horizonEnd, day(39));
+  assert.deepEqual(
+    result.incomes.map((i) => [i.dueDate, i.date, i.amount, i.isEstimate]),
+    [
+      [day(5), day(8), 1200, true],
+      [day(36), day(39), 1200, true],
+    ],
+  );
+  assert.equal(result.trough.amount, -800);
+  assert.equal(result.trough.date, day(7));
+  assert.deepEqual(result.shortfall, { amount: 800, date: day(7) });
+  assert.equal(result.safeToSpend, 0);
+});
