@@ -146,7 +146,12 @@ composite FKs exist for.
 
 ## Section 1: `profiles -> auth.users` FK exists only in production (2026-10-06)
 
-**Status: open. Must be captured in a migration before launch.**
+**Status: fixed in migration 39 (2026-10-06).**
+`20261006000039_39_profiles_auth_users_fk.sql` recreates the FK with the
+identical definition, renamed to `profiles_id_fkey`. Verified in production
+afterwards: exactly one FK, `ON UPDATE CASCADE ON DELETE CASCADE`. Still
+open: the diff of production against a fresh `db reset` for other
+dashboard-only objects.
 
 Production has:
 
@@ -170,8 +175,8 @@ Also note: the name is misleading. It's called `profiles_userid_fkey`, but
 the column is `profiles.id`; there is no `userid` column on `profiles`.
 
 Fix: an idempotent migration that drops and recreates the constraint with
-the same definition (name it `profiles_id_fkey`). It's a no-op on production
-and makes a rebuild reproduce it. Then diff the rest of production against
+the same definition, named `profiles_id_fkey` (done, migration 39). It's a
+no-op on production and makes a rebuild reproduce it. Then diff the rest of production against
 a fresh `db reset` for other dashboard-only objects. This one was found
 only because deletion depends on it.
 
