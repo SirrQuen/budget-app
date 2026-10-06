@@ -144,6 +144,115 @@ the foreign row can't be created through PostgREST, so the test has to
 plant it as the table owner -- which is exactly the RLS-bypassing path the
 composite FKs exist for.
 
+## Section 1: `profiles -> auth.users` FK exists only in production (2026-10-06)
+
+**Status: open. Must be captured in a migration before launch.**
+
+Production has:
+
+```
+profiles_userid_fkey  FOREIGN KEY (id) REFERENCES auth.users(id)
+                      ON UPDATE CASCADE ON DELETE CASCADE
+```
+
+No migration in `supabase/migrations/` creates it. It predates migration 01
+(created by hand in the dashboard), and migrations 14/16 only *assert* it in
+comments. A rebuild from zero (`db reset`, a preview branch, a new project)
+would produce a `profiles` table with no FK to `auth.users`.
+
+Why it matters: `delete_own_account()` ends with
+`delete from auth.users where id = v_uid` and relies on this cascade to remove
+the `profiles` row. Without the FK, deletion "succeeds" and leaves an orphan
+`profiles` row: the user's name, username, phone and `lastlogin`, which is
+exactly the personal data erasure is supposed to remove.
+
+Also note: the name is misleading. It's called `profiles_userid_fkey`, but
+the column is `profiles.id`; there is no `userid` column on `profiles`.
+
+Fix: an idempotent migration that drops and recreates the constraint with
+the same definition (name it `profiles_id_fkey`). It's a no-op on production
+and makes a rebuild reproduce it. Then diff the rest of production against
+a fresh `db reset` for other dashboard-only objects. This one was found
+only because deletion depends on it.
+
+Verified CASCADE in production 2026-10-06 via `pg_constraint`
+(`confdeltype = 'c'`).
+
+## Section 5: account deletion end to end (2026-10-06)
+
+Pre-checks, all against production:
+
+1. `profiles -> auth.users` is `ON DELETE CASCADE` (see Section 1 above).
+2. A user-facing flow exists: Settings -> "Delete account"
+   (`app/(app)/settings/DeleteAccountSection.tsx`), with the typed `DELETE`
+   confirmation re-checked server-side in `lib/actions/account.ts`, which
+   calls `delete_own_account()` via `lib/db/profile.ts`, signs out locally,
+   and redirects to `/account-deleted`. Not a blocker.
+3. Cross-user RESTRICT blockers: run across **all** users, not only the
+   test account. 0 rows on all 7 RESTRICT FKs.
+
+Before-counts were taken for `+rls36` (`7971f982-…`): categories 57,
+category_groups 11, settings 1, profiles 1, auth.users 1, auth.identities 1,
+everything else 0. **The UI deletion was run on a different account**,
+`+sorrel-sign-test` (`fa89fa73-…`), so there are no before-counts for the
+account that was actually deleted. `+rls36` is unchanged.
+
+Deletion of `+sorrel-sign-test` through the Settings UI:
+
+- After-counts: all 21 rows 0. The audit log was already 0 (see the Phase
+  8 item).
+- Full sweep: `CLEAN` across 136 uuid columns in `public`, `auth` and
+  `storage`, including views.
+- App: logged out, shown the "all data removed" page with a sign-up link,
+  no error.
+- Re-signup with the same email: reported as working in the UI, but **no
+  new `auth.users` row exists**. Unresolved, see below.
+- `/dashboard` after deletion redirects to login, so the session is dead.
+- Dev-server terminal: nothing logged during the delete.
+
+Gaps in this run: without before-counts, nothing shows whether the deleted
+account held transactions or accounts. It was a name-test signup from
+2026-10-05, so probably only the trigger-created defaults. If so, it didn't
+exercise the child-before-parent ordering through transactions -> accounts.
+A seeded repeat was skipped by decision on 2026-10-06.
+
+Open items carried forward:
+
+- Re-signup with a deleted user's email: the UI reported success, but no
+  `auth.users` row was created. Either the email used still belonged to an
+  existing account (Supabase returns a normal-looking success for those, by
+  design), or signup failed silently. Not yet determined which.
+- Deletion of an account holding transactions, schedules, goals and budgets
+  hasn't been verified end to end in production.
+
+## Phase 8 policy item: auth audit log retained after deletion (2026-10-06)
+
+**Decision: deliberate retention, not an oversight.** It must match the
+privacy policy wording.
+
+`delete_own_account()` does not touch `auth.audit_log_entries`. Any entries
+for a deleted user keep their id (and, depending on the event, their email)
+in `payload`. That's defensible: security logs have their own legal basis
+(security, fraud prevention) and their own retention period, separate from
+erasure of account data. The privacy policy has to say so explicitly, with
+the retention period.
+
+What the table actually holds in production (2026-10-06): **0 rows total**,
+including none for the test account. Auth audit events most likely aren't
+written to the database at all in this project (Supabase lets you turn that
+off). They go to the platform's Auth logs, which the project cannot delete
+from and which follow the plan's log retention. Confirm that setting in
+Auth settings. The privacy policy wording has to cover the platform logs,
+not the table.
+
+Can it be deleted at all: the table is owned by `supabase_auth_admin`;
+`postgres` has DELETE, `service_role` does not. So deleting is technically
+possible from `delete_own_account()` (it runs as `postgres`). It's still
+GoTrue-managed internal state, and Supabase's platform logs sit outside the
+database regardless, so even deleting from the table wouldn't erase the
+trail. That's a further reason to treat retention as the policy rather than
+attempt erasure.
+
 ## Fixed: `seed_default_categories` callable by anyone (2026-10-04)
 
 SECURITY DEFINER, trusted its `p_userid` argument, and still had Postgres's
