@@ -14,6 +14,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  // Resolves the /opengraph-image URL to an absolute one. SITE_URL is the
+  // deployment's public origin, read on the server only. Unset, this is
+  // undefined and Next warns at build time -- deliberately: a silent
+  // localhost fallback would ship link previews pointing at localhost.
+  metadataBase: process.env.SITE_URL ? new URL(process.env.SITE_URL) : undefined,
   title: "Sorrel",
   description: "Built to Grow Through Any Season",
   openGraph: {
