@@ -18,9 +18,10 @@ import { getBudgetProgress } from "@/lib/db/budgets";
 import { listAccountBalances } from "@/lib/db/accounts";
 import { generateDueOccurrences } from "@/lib/db/recurring";
 import { getReturnSummaryFacts } from "@/lib/actions/activity";
-import { todayISO } from "@/lib/date";
 import { isAwaitingStatementAmount, isAwaitingIncomeConfirmation } from "@/lib/recurringSchedule";
 import { resolveDashboardRange } from "@/lib/dashboardRange";
+import { getToday } from "@/lib/db/settings";
+import { monthStartISO } from "@/lib/date";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatTile } from "@/components/ui/StatTile";
 import { ReturnSummaryStrip } from "@/components/ui/ReturnSummaryStrip";
@@ -45,9 +46,9 @@ import { DayNightMark } from "@/components/DayNightMark";
 // this page renders.
 export default async function DashboardPage({ searchParams }: PageProps<"/dashboard">) {
   const params = await searchParams;
-  const range = resolveDashboardRange(params);
-  const today = todayISO();
-  const currentMonth = `${today.slice(0, 7)}-01`;
+  const today = await getToday();
+  const range = resolveDashboardRange(params, today);
+  const currentMonth = monthStartISO(today);
 
   // recordLogin() is a two-round-trip read-then-write (see lib/db/profile.ts),
   // and app/(app)/layout.tsx fires it too -- it's cache()d, so asking again

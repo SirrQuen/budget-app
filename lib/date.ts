@@ -1,9 +1,45 @@
-// Local calendar day, not UTC -- toISOString() alone can land on yesterday
-// or tomorrow depending on the user's timezone offset.
-export function todayISO(): string {
-  const d = new Date();
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 10);
+// The user's calendar day, as "YYYY-MM-DD", in an explicit IANA zone --
+// never the process's own zone. On the server that zone is the host's
+// (UTC in production), which moved "today" forward at 8pm EDT; every
+// "today" in the app now comes from here with settings.timezone (server:
+// getToday() in lib/db/settings.ts; client: useToday() in
+// components/TodayProvider). null, or a name Intl doesn't know, is UTC --
+// the same fallback the database's apply_user_timezone() uses, so the two
+// sides never disagree about the day.
+export function todayInZone(timeZone: string | null, now: Date = new Date()): string {
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = dayFormatter(timeZone ?? "UTC").formatToParts(now);
+  } catch {
+    parts = dayFormatter("UTC").formatToParts(now);
+  }
+  const get = (type: string) => parts.find((p) => p.type === type)!.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+function dayFormatter(timeZone: string): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+// Whether Intl accepts `timeZone` as a zone name -- the check a browser
+// reported zone passes before it's stored in settings.timezone.
+export function isValidTimeZone(timeZone: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// First of the month `dateISO` falls in.
+export function monthStartISO(dateISO: string): string {
+  return `${dateISO.slice(0, 7)}-01`;
 }
 
 // Builds a Date at LOCAL midnight from a Postgres `date` column's bare
@@ -18,7 +54,7 @@ export function parseLocalDate(dateISO: string): Date {
 }
 
 // Adds (or subtracts, for negative delta) whole days to an ISO "YYYY-MM-DD"
-// date string, staying in local-calendar-day terms the same way todayISO()
+// date string, staying in plain calendar-day terms the same way todayInZone()
 // does -- never routes through a UTC-midnight Date for the input.
 export function addDaysISO(dateISO: string, delta: number): string {
   const [year, month, day] = dateISO.split("-").map(Number);

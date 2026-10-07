@@ -60,6 +60,8 @@ import {
   getGroupMovement,
 } from "@/lib/db/dashboard";
 import { resolveDashboardRange } from "@/lib/dashboardRange";
+import { getToday } from "@/lib/db/settings";
+import { addDaysISO, monthStartISO } from "@/lib/date";
 
 // Every DbResult-returning function in lib/db/, called against whatever
 // session cookies the browser sends in. Not a unit test suite -- it writes
@@ -163,11 +165,9 @@ async function collectResults(): Promise<{
   const user = await requireUser();
   const results: TestEntry[] = [];
 
-  const today = new Date().toISOString().slice(0, 10);
-  const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
-  const firstOfMonth = `${today.slice(0, 7)}-01`;
+  const today = await getToday();
+  const monthAgo = addDaysISO(today, -30);
+  const firstOfMonth = monthStartISO(today);
 
   // ---------------------------------------------------------------- Accounts
   await run(results, "Accounts", "listAccounts()", "success", () => listAccounts());
@@ -438,7 +438,7 @@ async function collectResults(): Promise<{
   // The range functions get the month-to-date default; category_spend_between
   // is a security-invoker RPC, so this is where its per-user scoping is
   // exercised as each user.
-  const dashRange = resolveDashboardRange({});
+  const dashRange = resolveDashboardRange({}, today);
   await run(results, "Dashboard", "getSafeToSpend()", "success", () => getSafeToSpend());
   await run(results, "Dashboard", "getNetWorthStat()", "success", () => getNetWorthStat());
   await run(results, "Dashboard", "getLoggingStreak()", "success", () => getLoggingStreak());

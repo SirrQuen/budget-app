@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { parseLocalDate } from "@/lib/date";
+import { monthStartISO, parseLocalDate } from "@/lib/date";
+import { getToday } from "@/lib/db/settings";
 import { getBudgetProgress } from "@/lib/db/budgets";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { getChronicOverBudgetInsight } from "@/lib/budgetInsights";
@@ -11,14 +12,6 @@ import { CreateBudgetForm } from "./CreateBudgetForm";
 import { BudgetRow } from "./BudgetRow";
 
 const MONTH_RE = /^\d{4}-\d{2}-01$/;
-
-function currentMonthISO(): string {
-  // Local calendar month, not UTC -- see AddTransactionForm's todayISO for
-  // why the offset adjustment matters near midnight.
-  const d = new Date();
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-  return `${local.toISOString().slice(0, 7)}-01`;
-}
 
 function shiftMonth(monthISO: string, delta: number): string {
   const [y, m] = monthISO.split("-").map(Number);
@@ -41,7 +34,7 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
   const month =
     typeof params.month === "string" && MONTH_RE.test(params.month)
       ? params.month
-      : currentMonthISO();
+      : monthStartISO(await getToday());
 
   const [progressResult, historyResult, categoriesResult] = await Promise.all([
     getBudgetProgress({ budget_month: month }),

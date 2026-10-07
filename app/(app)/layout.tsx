@@ -4,10 +4,11 @@ import { listAccounts } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { getMostRecentTransactionAccountId } from "@/lib/db/transactions";
 import { generateDueOccurrences } from "@/lib/db/recurring";
-import { getTheme } from "@/lib/db/settings";
+import { getTheme, getTimeZone, getToday } from "@/lib/db/settings";
 import { AppShell } from "@/components/app-shell/AppShell";
 import { identityName } from "@/lib/displayName";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { TodayProvider } from "@/components/TodayProvider";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   // Every authenticated route runs this layout -- lazy catch-up (see
@@ -20,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // build its banner, is free -- both resolve to this one run.
   await generateDueOccurrences();
 
-  const [user, loginResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme] =
+  const [user, loginResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme, timeZone, today] =
     await Promise.all([
       requireUser(),
       // Every authenticated route runs this layout, including the
@@ -38,6 +39,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       // row resolves to "system" rather than failing every authenticated
       // route. See lib/db/settings.ts.
       getTheme(),
+      // Both cached -- generateDueOccurrences above already read them.
+      getTimeZone(),
+      getToday(),
     ]);
 
   // A load failure here just means no quick-add bar for this request, not a
@@ -58,9 +62,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <ThemeProvider stored={theme}>
-      <AppShell accountName={accountName} quickAdd={quickAdd}>
-        {children}
-      </AppShell>
+      <TodayProvider today={today} timeZone={timeZone}>
+        <AppShell accountName={accountName} quickAdd={quickAdd}>
+          {children}
+        </AppShell>
+      </TodayProvider>
     </ThemeProvider>
   );
 }

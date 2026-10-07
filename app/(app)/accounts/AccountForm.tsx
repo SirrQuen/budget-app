@@ -8,7 +8,7 @@ import {
   type ActionState,
 } from "@/lib/actions/accounts";
 import { ACCOUNT_TYPES, isLiabilityAccountType } from "@/lib/accountOptions";
-import { todayISO } from "@/lib/date";
+import { useToday } from "@/components/TodayProvider";
 import { formatDate } from "@/lib/format";
 import type { Database } from "@/lib/database.types";
 import { FormField } from "@/components/ui/FormField";
@@ -51,7 +51,8 @@ export function AccountForm({
   // Drives the amount field's label -- "Balance as of {date}" only reads as
   // meaningful once the date is live, so it has to track the picker rather
   // than the value the form loaded with.
-  const [openingDate, setOpeningDate] = useState(account?.opening_date ?? todayISO());
+  const today = useToday();
+  const [openingDate, setOpeningDate] = useState(account?.opening_date ?? today);
   // A native date input's value is "" while a segment is mid-edit (e.g. the
   // day was just cleared) -- only format it into the label once it's a
   // complete date, so the label never shows a stale or blank date fragment.

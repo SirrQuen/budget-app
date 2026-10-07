@@ -10,7 +10,7 @@ import {
 import { updateAccountOpeningDateAction } from "@/lib/actions/accounts";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { TransactionType } from "@/lib/db/transactions";
-import { todayISO } from "@/lib/date";
+import { useToday } from "@/components/TodayProvider";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
@@ -123,6 +123,7 @@ export function AddTransactionForm({
   onSaved?: () => void;
 }) {
   const isEdit = mode === "edit";
+  const today = useToday();
   const [open, setOpen] = useState(isEdit || embedded);
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     isEdit ? updateTransactionAction : createTransactionAction,
@@ -140,7 +141,7 @@ export function AddTransactionForm({
   const [fromAccountId, setFromAccountId] = useState(prefill?.fromAccountId ?? "");
   const [toAccountId, setToAccountId] = useState(prefill?.toAccountId ?? "");
   const [transactionDate, setTransactionDate] = useState(
-    initialValues?.transaction_date ?? prefill?.transaction_date ?? todayISO(),
+    initialValues?.transaction_date ?? prefill?.transaction_date ?? today,
   );
   const [amount, setAmount] = useState(
     initialValues ? String(initialValues.amount) : (prefill?.amount ?? ""),
@@ -240,7 +241,7 @@ export function AddTransactionForm({
       setAccountid("");
       setFromAccountId("");
       setToAccountId("");
-      setTransactionDate(todayISO());
+      setTransactionDate(today);
       setAmount("");
       setMerchant("");
       setPaymentMethod("");
@@ -272,9 +273,9 @@ export function AddTransactionForm({
       }, 1600);
     }
     wasPending.current = pending;
-    // `amount` and `type` are read only at the pending->done transition,
-    // where they still hold the just-submitted values -- listing them would
-    // re-run this on every keystroke / type toggle.
+    // `amount`, `type` and `today` are read only at the pending->done
+    // transition, where they still hold the just-submitted values -- listing
+    // them would re-run this on every keystroke / type toggle / day tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pending, state, isEdit, onSaved]);
 

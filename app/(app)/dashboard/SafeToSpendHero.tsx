@@ -10,7 +10,8 @@ import type {
 } from "@/lib/db/dashboard";
 import type { OverdueOccurrence } from "@/lib/safeToSpendProjection";
 import { resolveOverdueBillAction } from "@/lib/actions/recurring";
-import { daysBetweenInclusive, todayISO } from "@/lib/date";
+import { daysBetweenInclusive } from "@/lib/date";
+import { useToday } from "@/components/TodayProvider";
 import { ConfirmVariableAmountSheet } from "../recurring/ConfirmVariableAmountSheet";
 import { INLINE_ACTION, UnconfirmedIncomeNote } from "./UnconfirmedIncomeNote";
 import type { HorizonReason } from "@/lib/safeToSpendProjection";
@@ -99,14 +100,15 @@ function UnconfirmedIncomeLine({ item }: { item: OverdueOccurrence }) {
   );
 }
 
-function daysAgo(dateISO: string): string {
-  const days = daysBetweenInclusive(dateISO, todayISO()) - 1;
+function daysAgo(dateISO: string, today: string): string {
+  const days = daysBetweenInclusive(dateISO, today) - 1;
   return days === 1 ? "yesterday" : `${days} days ago`;
 }
 
 // A bill past due that never posted -- subtracted today until it's
 // answered, so a stale schedule can't quietly hold the figure down.
 function OverdueBillLine({ item }: { item: SafeToSpendOverdueBill }) {
+  const today = useToday();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -120,7 +122,7 @@ function OverdueBillLine({ item }: { item: SafeToSpendOverdueBill }) {
 
   return (
     <li className="text-xs text-ink-secondary">
-      {item.name} was due {daysAgo(item.dueDate)} — did it go out?{" "}
+      {item.name} was due {daysAgo(item.dueDate, today)} — did it go out?{" "}
       <span className="inline-flex flex-wrap gap-x-3">
         {item.cardPayment ? (
           <ConfirmVariableAmountSheet

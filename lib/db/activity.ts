@@ -1,6 +1,8 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { describeReadError } from "@/lib/db/errors";
+import { getToday } from "@/lib/db/settings";
+import { monthStartISO } from "@/lib/date";
 
 export type DbResult<T> = { data: T; error: null } | { data: null; error: string };
 
@@ -10,13 +12,10 @@ export type ActivitySince = {
   crossedBudgetCategoryNames: string[];
 };
 
-// Local calendar month, not UTC -- see AddTransactionForm's todayISO for why
-// the offset adjustment matters near midnight. Matches the normalization
-// budgets.budget_month already uses (always the 1st of the month).
-function currentMonthBoundsISO(): { start: string; end: string } {
-  const d = new Date();
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-  const start = `${local.toISOString().slice(0, 7)}-01`;
+// The user's calendar month (getToday), never the server's. Matches the
+// normalization budgets.budget_month already uses (always the 1st).
+function currentMonthBoundsISO(today: string): { start: string; end: string } {
+  const start = monthStartISO(today);
   const [y, m] = start.split("-").map(Number);
   const nextMonth = new Date(Date.UTC(y, m, 1));
   const end = `${nextMonth.getUTCFullYear()}-${String(nextMonth.getUTCMonth() + 1).padStart(2, "0")}-01`;
@@ -37,7 +36,7 @@ type GoalContributionJoinRow = {
 // in JS (against the project's money rules) or a new SQL function.
 export async function getActivitySince(sinceISO: string): Promise<DbResult<ActivitySince>> {
   const supabase = await createClient();
-  const { start, end } = currentMonthBoundsISO();
+  const { start, end } = currentMonthBoundsISO(await getToday());
 
   const [txCountRes, goalRes, overBudgetRes, recentExpenseCategoriesRes] = await Promise.all([
     supabase

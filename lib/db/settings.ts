@@ -5,6 +5,7 @@ import { coerceTheme, type Theme } from "@/lib/theme";
 import { coerceSafeToSpendWindowPref, type SafeToSpendWindowPref } from "@/lib/safeToSpendWindow";
 import type { Database } from "@/lib/database.types";
 import { describeReadError } from "@/lib/db/errors";
+import { isValidTimeZone, todayInZone } from "@/lib/date";
 
 type SettingsRow = Database["public"]["Tables"]["settings"]["Row"];
 
@@ -50,6 +51,58 @@ export const getSafeToSpendWindowPref = cache(async (): Promise<SafeToSpendWindo
   const result = await getSettings();
   return coerceSafeToSpendWindowPref(result.data?.safe_to_spend_window);
 });
+
+// settings.timezone, or null when it hasn't been reported yet (see
+// components/TimezoneSync) or can't be read. Never throws, same contract as
+// getTheme: null is a real state, meaning "UTC", and every caller handles it.
+export const getTimeZone = cache(async (): Promise<string | null> => {
+  const result = await getSettings();
+  const tz = result.data?.timezone ?? null;
+  return tz !== null && isValidTimeZone(tz) ? tz : null;
+});
+
+// The user's calendar day -- the only "today" server code may use. The
+// process clock's zone (UTC in production) is never the user's; see
+// lib/date.ts's todayInZone. The database agrees with this per request via
+// apply_user_timezone() (migration 40), so current_date in a view and this
+// value name the same day.
+export const getToday = cache(async (): Promise<string> => {
+  return todayInZone(await getTimeZone());
+});
+
+// Called by components/TimezoneSync whenever the browser's zone differs
+// from the stored one -- first load after signup, or after travel.
+export async function updateTimeZone(timeZone: string): Promise<DbResult<string>> {
+  if (!isValidTimeZone(timeZone) || timeZone.length > 64) {
+    return { data: null, error: "That timezone isn't one we recognise." };
+  }
+
+  const supabase = await createClient();
+
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  const userid = claimsData?.claims?.sub;
+
+  if (claimsError || !userid) {
+    return {
+      data: null,
+      error: "Your session's expired. Log in again to pick up where you left off.",
+    };
+  }
+
+  // Filter for PostgREST's benefit (error 21000), not security -- see updateTheme.
+  const { data, error } = await supabase
+    .from("settings")
+    .update({ timezone: timeZone, updated_at: new Date().toISOString() })
+    .eq("userid", userid)
+    .select("timezone")
+    .single();
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "settings") };
+  }
+
+  return { data: data.timezone ?? timeZone, error: null };
+}
 
 export async function updateSafeToSpendWindowPref(
   pref: SafeToSpendWindowPref,

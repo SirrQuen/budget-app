@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import type { DashboardRange, DashboardRangePreset } from "@/lib/dashboardRange";
-import { todayISO } from "@/lib/date";
+import { useToday } from "@/components/TodayProvider";
 import { ChevronDownIcon } from "@/components/ui/icons";
 
 // Presets in the order the brief lists them; month-to-date is the default
@@ -32,7 +32,7 @@ export function DateRangeFilter({
   const [to, setTo] = useState(isCustom ? range.to : "");
   const fromId = useId();
   const toId = useId();
-  const today = todayISO();
+  const today = useToday();
 
   const customValid = from !== "" && to !== "" && from <= to;
 

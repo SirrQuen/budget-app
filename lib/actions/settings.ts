@@ -5,6 +5,7 @@ import {
   updateTheme,
   updateSafeToSpendWindowPref,
   updateSafeToSpendCushion,
+  updateTimeZone,
 } from "@/lib/db/settings";
 import { isTheme } from "@/lib/theme";
 import { isSafeToSpendWindowPref } from "@/lib/safeToSpendWindow";
@@ -31,6 +32,26 @@ export async function setThemeAction(theme: unknown): Promise<ThemeActionState> 
   revalidatePath("/", "layout");
 
   return undefined;
+}
+
+// Reported by components/TodayProvider from the browser whenever it differs
+// from settings.timezone. Silent on failure: the app keeps working on the
+// stored zone (or UTC), and the next page load tries again.
+export async function syncTimeZoneAction(timeZone: unknown): Promise<void> {
+  if (typeof timeZone !== "string") {
+    return;
+  }
+
+  const result = await updateTimeZone(timeZone);
+
+  if (result.error) {
+    return;
+  }
+
+  // Every server-side "today" (getToday) and every current_date in SQL
+  // (apply_user_timezone) just moved to the new zone, so all of the cached
+  // authenticated output is stale.
+  revalidatePath("/", "layout");
 }
 
 export type SafeToSpendWindowActionState = { error?: string } | undefined;

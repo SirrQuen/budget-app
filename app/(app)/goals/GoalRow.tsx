@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
+import { useToday } from "@/components/TodayProvider";
 import { contributeToGoalAction, type ContributeActionState } from "@/lib/actions/goals";
 import { GoalMeter } from "@/components/ui/GoalMeter";
 import { Celebration } from "@/components/ui/Celebration";
@@ -18,14 +19,8 @@ type GoalProgressRow = Database["public"]["Views"]["v_goal_progress"]["Row"];
 const fieldClassName =
   "w-full rounded-lg border border-hairline bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40";
 
-function todayISO() {
-  // Local calendar day, not UTC -- see AddTransactionForm's todayISO.
-  const d = new Date();
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 10);
-}
-
 export function GoalRow({ goal }: { goal: GoalProgressRow }) {
+  const today = useToday();
   const [contributing, setContributing] = useState(false);
   const [state, action, pending] = useActionState<ContributeActionState, FormData>(
     contributeToGoalAction,
@@ -123,7 +118,7 @@ export function GoalRow({ goal }: { goal: GoalProgressRow }) {
               name="date"
               type="date"
               required
-              defaultValue={todayISO()}
+              defaultValue={today}
               className={fieldClassName}
             />
           </FormField>

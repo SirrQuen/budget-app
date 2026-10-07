@@ -3,7 +3,8 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import { describeReadError, describeWriteError, logDbError } from "@/lib/db/errors";
-import { todayISO, addDaysISO } from "@/lib/date";
+import { addDaysISO } from "@/lib/date";
+import { getTimeZone, getToday } from "@/lib/db/settings";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
 import { getBankHolidays } from "@/lib/db/holidays";
 import { nextOccurrenceISO } from "@/lib/recurringCadence";
@@ -263,7 +264,7 @@ export async function pauseRecurring(id: string): Promise<DbResult<RecurringRow>
 // that's still due today or ahead of schedule is untouched.
 export async function resumeRecurring(id: string): Promise<DbResult<RecurringRow>> {
   const supabase = await createClient();
-  const today = todayISO();
+  const today = await getToday();
 
   const { data: current, error: readError } = await supabase
     .from("recurring_transactions")
@@ -446,7 +447,7 @@ export async function confirmIncomeOccurrence(
       categoryid: template.categoryid,
       amount,
       transaction_type: "Income",
-      transaction_date: todayISO(),
+      transaction_date: await getToday(),
       description: template.description,
       recurringid: template.id,
     })
@@ -637,7 +638,16 @@ export const generateDueOccurrences = cache(async (): Promise<
     };
   }
 
-  const today = todayISO();
+  // Until the browser has reported the user's zone (components/
+  // TodayProvider, on the first page load after signup or after migration
+  // 40), "today" would be UTC's -- a day ahead every US evening, which
+  // would post tomorrow's bills tonight. Waiting is free: the report
+  // revalidates the layout, which runs this again straight away.
+  if ((await getTimeZone()) === null) {
+    return { data: [], error: null };
+  }
+
+  const today = await getToday();
 
   // A raw next_run_date past today can still be DUE today once resolved --
   // non_business_day_rule = 'before' can shift the resolved date earlier
@@ -913,7 +923,7 @@ export async function resolveOverdueOccurrence(
   }
 
   // Already resolved (another tab, or a second click) -- nothing to do.
-  if (template.next_due_date >= todayISO()) {
+  if (template.next_due_date >= (await getToday())) {
     return { data: { id }, error: null };
   }
 
@@ -994,7 +1004,7 @@ export async function resolveOverdueOccurrence(
 export async function getUpcoming(daysAhead: number): Promise<DbResult<UpcomingRecurringRow[]>> {
   const supabase = await createClient();
 
-  const horizon = addDaysISO(todayISO(), daysAhead);
+  const horizon = addDaysISO(await getToday(), daysAhead);
 
   const { data, error } = await supabase
     .from("v_upcoming_recurring")

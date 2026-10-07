@@ -1,4 +1,4 @@
-import { todayISO, addDaysISO, daysBetweenInclusive } from "@/lib/date";
+import { addDaysISO, daysBetweenInclusive, monthStartISO } from "@/lib/date";
 
 // The dashboard's "Over time" region is scoped by a single date range, held
 // in the URL (?range= for a preset, ?from=&to= for a custom span). Everything
@@ -75,12 +75,16 @@ function presetDays(preset: "7d" | "30d" | "90d"): number {
   return preset === "7d" ? 7 : preset === "30d" ? 30 : 90;
 }
 
-export function resolveDashboardRange(params: {
-  range?: RawParam;
-  from?: RawParam;
-  to?: RawParam;
-}): DashboardRange {
-  const today = todayISO();
+// `today` is the user's calendar day -- getToday() on the server, never the
+// process clock.
+export function resolveDashboardRange(
+  params: {
+    range?: RawParam;
+    from?: RawParam;
+    to?: RawParam;
+  },
+  today: string,
+): DashboardRange {
   const rangeParam = first(params.range);
   const fromParam = first(params.from);
   const toParam = first(params.to);
@@ -115,7 +119,7 @@ export function resolveDashboardRange(params: {
   }
 
   // Default: month to date, compared against the same span last month.
-  const from = `${today.slice(0, 7)}-01`;
+  const from = monthStartISO(today);
   return {
     preset: "mtd",
     from,

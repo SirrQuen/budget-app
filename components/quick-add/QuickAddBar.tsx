@@ -9,7 +9,7 @@ import type { CategoryWithGroup } from "@/lib/db/categories";
 import { createTransactionAction, suggestCategoryAction, type ActionState } from "@/lib/actions/transactions";
 import { useOptimisticTransactions } from "@/components/quick-add/OptimisticTransactionsContext";
 import { parseQuickAdd } from "@/lib/quickAdd/parseQuickAdd";
-import { todayISO } from "@/lib/date";
+import { useToday } from "@/components/TodayProvider";
 import { formatCurrency } from "@/lib/format";
 import { PlusIcon, FlameIcon } from "@/components/ui/icons";
 import { Amount } from "@/components/ui/Amount";
@@ -78,7 +78,8 @@ export function QuickAddBar({
     undefined,
   );
 
-  const parsed = parseQuickAdd(text, todayISO());
+  const today = useToday();
+  const parsed = parseQuickAdd(text, today);
   const parseKey = parsed.ok ? `${parsed.merchant} ${parsed.transaction_type}` : null;
   const categoryOptions = parsed.ok
     ? parsed.transaction_type === "Income"

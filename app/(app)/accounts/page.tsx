@@ -9,7 +9,7 @@ import { LoadError } from "@/components/ui/LoadError";
 import { StatTile } from "@/components/ui/StatTile";
 import { WalletIcon } from "@/components/ui/icons";
 import { formatAccountBalance } from "@/lib/format";
-import { todayISO } from "@/lib/date";
+import { getToday } from "@/lib/db/settings";
 import { ACCOUNT_TYPE_GROUP_ORDER, isLiabilityAccountType } from "@/lib/accountOptions";
 import { CreateAccountForm } from "./CreateAccountForm";
 import { AccountRow } from "./AccountRow";
@@ -120,6 +120,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
   // "Make a payment" reuses AddTransactionForm's Transfer mode -- it needs
   // the same account/category props that form always needs, not just the
   // one row it's launched from.
+  const today = await getToday();
   const transactionAccounts: TransactionAccountOption[] = allAccounts
     .filter((a) => a.is_active)
     .filter(isNamedAccount)
@@ -127,7 +128,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
       id: a.account_id,
       account_name: a.account_name,
       is_active: true,
-      opening_date: a.opening_date ?? todayISO(),
+      opening_date: a.opening_date ?? today,
       account_type: a.account_type ?? "",
     }));
   const defaultFromAccountId = mostUsedAssetResult.data ?? null;

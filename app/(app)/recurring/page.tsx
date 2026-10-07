@@ -3,7 +3,7 @@ import { listAccounts, listAccountBalances } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { getBankHolidays } from "@/lib/db/holidays";
 import { estimateCardPaymentDue } from "@/lib/accountOptions";
-import { todayISO } from "@/lib/date";
+import { getToday } from "@/lib/db/settings";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadError } from "@/components/ui/LoadError";
@@ -96,7 +96,7 @@ export default async function RecurringPage() {
   );
   const categoryEstimateById = new Map(categoryEstimateEntries);
 
-  const today = todayISO();
+  const today = await getToday();
 
   // Nothing to manage and no account to schedule against yet -- same
   // narrowing AccountsPage/GoalsPage use for a brand-new list.

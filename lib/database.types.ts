@@ -714,6 +714,7 @@ export type Database = {
           safe_to_spend_cushion: number | null
           safe_to_spend_window: string | null
           theme: string
+          timezone: string | null
           updated_at: string
           userid: string
           week_start: number
@@ -728,6 +729,7 @@ export type Database = {
           safe_to_spend_cushion?: number | null
           safe_to_spend_window?: string | null
           theme?: string
+          timezone?: string | null
           updated_at?: string
           userid: string
           week_start?: number
@@ -742,6 +744,7 @@ export type Database = {
           safe_to_spend_cushion?: number | null
           safe_to_spend_window?: string | null
           theme?: string
+          timezone?: string | null
           updated_at?: string
           userid?: string
           week_start?: number
@@ -1493,6 +1496,7 @@ export type Database = {
         Args: { anchor: string; n: number }
         Returns: string
       }
+      apply_user_timezone: { Args: never; Returns: undefined }
       category_spend_between: {
         Args: { p_from: string; p_to: string }
         Returns: {

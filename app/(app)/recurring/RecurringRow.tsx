@@ -41,7 +41,7 @@ export function RecurringRow({
    * (recurring.amount is used instead) for a fixed-amount schedule.
    */
   estimatedAmount: number;
-  /** todayISO(), for deciding whether an unconfirmed variable schedule is already overdue. */
+  /** getToday(), for deciding whether an unconfirmed variable schedule is already overdue. */
   today: string;
 }) {
   const [editing, setEditing] = useState(false);

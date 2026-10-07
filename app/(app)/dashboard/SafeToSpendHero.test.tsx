@@ -63,6 +63,7 @@ let React: typeof import("react");
 let act: typeof import("react").act;
 let createRoot: typeof import("react-dom/client").createRoot;
 let SafeToSpendHero: typeof import("./SafeToSpendHero").SafeToSpendHero;
+let TodayProvider: typeof import("@/components/TodayProvider").TodayProvider;
 
 // The hero imports a Server Action, whose data layer imports "server-only" --
 // a marker only Next's bundler resolves. Outside Next it's an empty module.
@@ -106,15 +107,31 @@ before(async () => {
   act = React.act;
   ({ createRoot } = await import("react-dom/client"));
   ({ SafeToSpendHero } = await import("./SafeToSpendHero"));
+  ({ TodayProvider } = await import("@/components/TodayProvider"));
 });
 
-after(() => dom.window.close());
+// TodayProvider ticks on a timer; unmounting clears it so the process can exit.
+const roots: { unmount(): void }[] = [];
+
+after(async () => {
+  await act(async () => roots.forEach((r) => r.unmount()));
+  dom.window.close();
+});
 
 async function renderOpen(data: SafeToSpend): Promise<HTMLElement> {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
-  await act(async () => root.render(<SafeToSpendHero data={data} />));
+  roots.push(root);
+  // The process's own zone, so TodayProvider has nothing to report.
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  await act(async () =>
+    root.render(
+      <TodayProvider today={TODAY} timeZone={zone}>
+        <SafeToSpendHero data={data} />
+      </TodayProvider>,
+    ),
+  );
   const toggle = container.querySelector("button[aria-expanded]") as HTMLButtonElement;
   await act(async () => toggle.click());
   return container;

@@ -9,7 +9,7 @@ import {
 } from "@/lib/actions/recurring";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { TransactionAccountOption } from "../transactions/AddTransactionForm";
-import { todayISO } from "@/lib/date";
+import { useToday } from "@/components/TodayProvider";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
 import { formatDateWithWeekday } from "@/lib/format";
 import { FormField } from "@/components/ui/FormField";
@@ -330,7 +330,8 @@ export function RecurringForm({
   // Controlled (not defaultValue) because the live timing preview below
   // needs to react to every change -- see nextRunDate's own comment on the
   // date input further down.
-  const [nextRunDate, setNextRunDate] = useState(recurring?.next_run_date ?? todayISO());
+  const today = useToday();
+  const [nextRunDate, setNextRunDate] = useState(recurring?.next_run_date ?? today);
 
   const initialTiming = timingFromRecord(
     recurring?.business_day_offset ?? 0,

@@ -2,10 +2,10 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
-import { todayISO, addDaysISO, endOfMonthISO, daysBetweenInclusive } from "@/lib/date";
+import { addDaysISO, endOfMonthISO, daysBetweenInclusive, monthStartISO } from "@/lib/date";
 import type { DashboardRange } from "@/lib/dashboardRange";
 import { describeReadError } from "@/lib/db/errors";
-import { getSafeToSpendWindowPref, getSafeToSpendCushion } from "@/lib/db/settings";
+import { getSafeToSpendWindowPref, getSafeToSpendCushion, getToday } from "@/lib/db/settings";
 import { getBankHolidays } from "@/lib/db/holidays";
 import { paydayWindowEnd } from "@/lib/recurringSchedule";
 import type { NonBusinessDayRule } from "@/lib/businessDays";
@@ -464,7 +464,7 @@ export type CashflowPoint = {
 export async function getCashflowChart(days = 90): Promise<DbResult<CashflowPoint[]>> {
   const supabase = await createClient();
 
-  const today = todayISO();
+  const today = await getToday();
   const from = addDaysISO(today, -(days - 1));
 
   const { data, error } = await supabase
@@ -489,13 +489,6 @@ export async function getCashflowChart(days = 90): Promise<DbResult<CashflowPoin
   return { data: points, error: null };
 }
 
-function localISODate(d: Date): string {
-  // Local calendar day, not UTC -- see AddTransactionForm's todayISO for why
-  // the offset adjustment matters near midnight.
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 10);
-}
-
 // Dates only, no money -- streaks are computed in JS from distinct
 // transaction_date values rather than a view, unlike every money figure
 // elsewhere in this file. Never stored or incremented: recomputed from
@@ -516,14 +509,12 @@ function localISODate(d: Date): string {
 export const getLoggingStreak = cache(async (): Promise<DbResult<LoggingStreakSummary>> => {
   const supabase = await createClient();
 
-  const today = new Date();
-  const since = new Date(today);
-  since.setDate(since.getDate() - 90);
+  const today = await getToday();
 
   const { data, error } = await supabase
     .from("transactions")
     .select("transaction_date")
-    .gte("transaction_date", localISODate(since));
+    .gte("transaction_date", addDaysISO(today, -90));
 
   if (error) {
     return { data: null, error: describeReadError(error, "streak") };
@@ -532,7 +523,7 @@ export const getLoggingStreak = cache(async (): Promise<DbResult<LoggingStreakSu
   const summary = deriveLoggingStreak(
     data.map((row) => row.transaction_date),
     [],
-    localISODate(today),
+    today,
   );
 
   return { data: summary, error: null };
@@ -767,7 +758,7 @@ function toProjectionSchedule(row: UpcomingProjectionRow): ProjectionSchedule | 
 export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   const supabase = await createClient();
 
-  const today = todayISO();
+  const today = await getToday();
 
   const [cashRes, recurringRes, incomeRes, cushionRes, holidaysRes, windowPref] = await Promise.all([
     supabase
@@ -893,12 +884,11 @@ export type RangeCashflowStats = {
 
 // First-of-month ISO strings for the last 12 calendar months, oldest first,
 // ending with the current month -- the x-axis for every stat-tile sparkline.
-// Local calendar months, matching v_monthly_cashflow.month (date_trunc to
-// the 1st) and the rest of this file's local-day handling.
-function last12MonthStartsISO(): string[] {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
+// The user's calendar months, matching v_monthly_cashflow.month (date_trunc
+// to the 1st).
+function last12MonthStartsISO(today: string): string[] {
+  const [y, mm] = monthStartISO(today).split("-").map(Number);
+  const m = mm - 1;
   const out: string[] = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date(y, m - i, 1);
@@ -926,7 +916,7 @@ function last12MonthStartsISO(): string[] {
 export async function getNetWorthStat(): Promise<DbResult<DashboardStat>> {
   const supabase = await createClient();
 
-  const months = last12MonthStartsISO();
+  const months = last12MonthStartsISO(await getToday());
 
   const [netWorthRes, cashflowRes] = await Promise.all([
     supabase.from("v_net_worth").select("net_worth").maybeSingle(),
