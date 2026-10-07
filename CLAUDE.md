@@ -317,6 +317,20 @@ against the migrations. The contract:
 - Never display a user's name or email ad hoc — resolve it through
   `lib/displayName.ts` (greeting vs sidebar identity). The full email is
   shown only in Settings.
+- "Today" is the user's calendar day in `settings.timezone`, never the
+  process clock's. Server code uses `getToday()` (`lib/db/settings.ts`);
+  Client Components use `useToday()` (`components/TodayProvider.tsx`) --
+  they also render on the server, where `new Date()` is UTC. SQL
+  `current_date` is already the user's day: the `apply_user_timezone()`
+  pre-request hook (migration 40) sets the session TimeZone per request.
+  That hook runs on EVERY API request for every role -- anything that can
+  make it raise takes the whole API down (migration 42).
+- Never parse a bare `date` column with `new Date("YYYY-MM-DD")` (UTC
+  midnight, renders as the previous day west of UTC) -- use
+  `parseLocalDate()`; do calendar arithmetic with `addDaysISO()`.
+- `bank_holidays` follows the Federal Reserve calendar: Sunday holidays
+  are observed Monday, Saturday holidays are NOT observed Friday (the Fed
+  is open). See migration 41.
 - "First login" is decided when the session starts (`lib/auth/firstSession.ts`),
   never from `lastlogin`, which `record_login()` stamps on every request.
 - Tier is profiles.subscription_plan / subscription_status, via getPlan().
