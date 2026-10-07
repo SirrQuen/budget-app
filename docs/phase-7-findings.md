@@ -1,5 +1,53 @@
 # Phase 7 findings
 
+## Launch blockers (authoritative list, 2026-10-07)
+
+**This list is the single source for what blocks launch.** It merges this
+file with Section 15 of Phase-7-Verify.md. Most blockers here were found by
+the audit and were never written as TODOs, so a TODO scan of the code does
+not answer "what blocks launch"; read this list. Keep it current: an item
+leaves this list only when it is verified done, with the date and how.
+
+1. **Composite foreign keys.** Mitigated in RLS only (migration 37). A
+   WITH CHECK lives in RLS, and anything that bypasses RLS writes straight
+   past it. The structural fix is required. See "Cross-user foreign keys"
+   below.
+2. **Schema drift from Section 1.** Production was never diffed against a
+   fresh `db reset`, so other objects created only in the dashboard may
+   exist. This includes the `profiles -> auth.users` cascade that
+   account deletion depends on. *Repo state:* migration 39 (`06c2d97`,
+   2026-10-06) recreates that FK as `profiles_id_fkey`, and it was verified
+   in production. A rebuild has not yet been run to prove migration 39
+   reproduces it. See "Section 1" below.
+3. **WCAG AA contrast and reflow failures:**
+   - the dark-theme `--critical` token
+   - `--ink-muted` on raised surfaces
+   - the 3:1 UI-boundary failures on every form field and focus ring
+   - 320px reflow overflows on transactions, settings and categories
+
+   *Repo state:* `d04eda2` (2026-10-07) changes `--critical`, `--ink-muted`,
+   adds `--field-border`, and makes the field focus ring solid, with
+   measured ratios in its message. Nothing in the repo addresses the 320px
+   reflow. The contrast fixes have not been verified in the running app.
+4. **No marketing page.** `app/page.tsx` only redirects, so a stranger
+   hitting the domain sees a login form with no explanation of what they're
+   logging into.
+5. **Custom SMTP with a verified sending domain** on mysorrel.com,
+   including SPF, DKIM and DMARC. The default Supabase mailer is
+   rate-limited and its mail lands in spam.
+6. **Privacy policy and terms of service.** The real item behind the
+   `TODO(launch blocker)` at `app/(app)/settings/page.tsx:178`. Adding the
+   links takes minutes; writing the policy is the work. It has to describe
+   what the app actually does, including the audit-log retention decision
+   (see "Phase 8 policy item" below).
+7. **The PITR decision.** Pro gives daily snapshots, so worst-case data loss
+   is up to 24 hours. That needs a deliberate answer, not a default.
+8. **The Section 10 error-handling fix pass**, in full. Its design decisions
+   are already made; see "Error handling audit" below.
+
+Not blockers: the streak-strip milestone mark
+(`components/ui/LoggingStreakStrip.tsx:27`) is visual polish.
+
 ## LAUNCH BLOCKER: Cross-user foreign keys can make an account undeletable (2026-10-04)
 
 **Status: mitigated in RLS (migration 37, 2026-10-04). Structural fix
