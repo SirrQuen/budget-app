@@ -394,19 +394,18 @@ has NOT been dropped:
 The other columns (`total_spent`, `total_earned`, `net_cashflow`, ...) need
 their own look before a whole-view drop. Decision pending.
 
-### 4. `app/(app)/dev-projection/page.tsx`: not gone
+### 4. `app/(app)/dev-projection/page.tsx`: deleted
 
-This copy of the set is ignored by decision (the file is being deleted). As
-of 2026-10-06 the file **still exists on disk**, untracked, despite the
-"Deleted 2026-10-04" status below. Added `/app/(app)/dev-projection/` to
-`.gitignore` on 2026-10-06 so `git add .` can't sweep it in. Remove the
-ignore entry together with the file.
+This copy of the set was ignored by decision. It turned up on disk again
+on 2026-10-06, untracked, after being recorded as deleted on 2026-10-04.
+It was gitignored briefly, then deleted on 2026-10-06 and the ignore entry
+removed. It was never committed.
 
 ## Temporary code that must not ship
 
 | Path | Purpose | Added | Status |
 |---|---|---|---|
-| `app/(app)/dev-projection/page.tsx` | Prints the signed-in user's safe-to-spend projection (income, obligations, daily balance, trough, cushion, result) to check it against real data. Dev-only (`notFound()` in production); reads through `getSafeToSpend()` under the user's session and RLS. | 2026-10-02 | Recorded as deleted 2026-10-04, but present on disk again 2026-10-06 (untracked, never committed). Gitignored 2026-10-06 pending deletion; drop the ignore entry with the file. |
+| `app/(app)/dev-projection/page.tsx` | Prints the signed-in user's safe-to-spend projection (income, obligations, daily balance, trough, cushion, result) to check it against real data. Dev-only (`notFound()` in production); reads through `getSafeToSpend()` under the user's session and RLS. | 2026-10-02 | Deleted 2026-10-06 (never committed; an earlier "deleted 2026-10-04" hadn't taken) |
 
 ## "fiber.reset is not a function" in the dev overlay (2026-10-04)
 
