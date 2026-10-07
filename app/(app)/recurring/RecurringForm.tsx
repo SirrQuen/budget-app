@@ -13,12 +13,11 @@ import { useToday } from "@/components/TodayProvider";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
 import { formatDateWithWeekday } from "@/lib/format";
 import { FormField } from "@/components/ui/FormField";
-import { Input } from "@/components/ui/Input";
+import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
-const fieldClassName =
-  "w-full rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40";
+const fieldClassName = FIELD_CLASS;
 
 // Expense/Income pick a category (filtered by this same value, same trick
 // AddTransactionForm uses); Transfer swaps Category+Account for From/To
@@ -181,11 +180,11 @@ function SegmentedControl<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="inline-flex w-fit flex-wrap gap-1 rounded-full border border-hairline bg-surface-raised p-1">
+    <div className="inline-flex w-fit flex-wrap gap-1 rounded-full border border-field-border bg-surface-raised p-1">
       {options.map((opt) => (
         <label
           key={opt.value}
-          className="cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink has-[:checked]:bg-surface has-[:checked]:text-ink has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-action has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-surface-raised"
+          className="cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink has-[:checked]:bg-action has-[:checked]:text-action-ink has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-action has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-surface-raised"
         >
           <input
             type="radio"
@@ -225,7 +224,7 @@ function TimingRadioList<T extends string>({
       {options.map((opt) => (
         <label
           key={opt.value}
-          className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg border border-hairline px-3 py-2 text-sm text-ink-secondary transition-colors duration-150 hover:text-ink has-[:checked]:border-action has-[:checked]:text-ink has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-action has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-surface"
+          className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg border border-field-border px-3 py-2 text-sm text-ink-secondary transition-colors duration-150 hover:text-ink has-[:checked]:border-action has-[:checked]:text-ink has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-action has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-surface"
         >
           <input
             type="radio"

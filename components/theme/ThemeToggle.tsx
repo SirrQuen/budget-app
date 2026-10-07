@@ -5,7 +5,7 @@ import {
   MoonIcon,
   SunIcon,
   MonitorIcon,
-  WarningIcon,
+  InfoIcon,
   type IconProps,
 } from "@/components/ui/icons";
 import { THEMES, THEME_LABELS, type Theme } from "@/lib/theme";
@@ -36,7 +36,7 @@ export function ThemeToggle({
       <div
         role="radiogroup"
         aria-label="Colour theme"
-        className="inline-flex gap-1 rounded-full border border-hairline bg-surface p-1"
+        className="inline-flex gap-1 rounded-full border border-field-border bg-surface p-1"
       >
         {THEMES.map((option) => {
           const Icon = THEME_ICONS[option];
@@ -83,13 +83,14 @@ export function ThemeToggle({
       </div>
 
       {/* aria-live so the failure is announced -- it arrives after the
-          click, not as part of it. The icon carries the status colour and
-          the message stays in ink: --critical is a 3:1 mark, not a 4.5:1
-          text colour, and status never reads by colour alone. */}
+          click, not as part of it. A preference that didn't save is not
+          destructive, so it gets the neutral notice treatment (same as
+          ErrorMessage's "notice"), not the red reserved for destructive
+          actions. */}
       <div aria-live="polite" className="mt-2 min-h-5 text-sm">
         {error ? (
           <p className="flex items-start gap-2 text-ink-secondary">
-            <WarningIcon className="mt-0.5 h-4 w-4 shrink-0 text-critical" aria-hidden="true" />
+            <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
             {error}
           </p>
         ) : saving ? (

@@ -7,7 +7,7 @@ import {
   SAFE_TO_SPEND_WINDOW_LABELS,
   type SafeToSpendWindowPref,
 } from "@/lib/safeToSpendWindow";
-import { WarningIcon } from "@/components/ui/icons";
+import { InfoIcon } from "@/components/ui/icons";
 
 // Radiogroup-pill treatment, same shape as components/theme/ThemeToggle.tsx
 // -- three states of one setting, arrow-key traversal, a single tab stop.
@@ -64,7 +64,7 @@ export function SafeToSpendWindowToggle({
         aria-label="Safe-to-spend window"
         aria-disabled={held || undefined}
         aria-describedby={held ? heldNoteId : undefined}
-        className="inline-flex flex-wrap gap-1 rounded-full border border-hairline bg-surface p-1"
+        className="inline-flex flex-wrap gap-1 rounded-full border border-field-border bg-surface p-1"
       >
         {SAFE_TO_SPEND_WINDOWS.map((option) => {
           const selected = pref === option;
@@ -118,7 +118,7 @@ export function SafeToSpendWindowToggle({
       <div aria-live="polite" className={held ? "text-sm" : "mt-2 min-h-5 text-sm"}>
         {error ? (
           <p className="flex items-start gap-2 text-ink-secondary">
-            <WarningIcon className="mt-0.5 h-4 w-4 shrink-0 text-critical" aria-hidden="true" />
+            <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
             {error}
           </p>
         ) : saving ? (

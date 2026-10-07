@@ -67,7 +67,7 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/categ
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex rounded-full border border-hairline bg-surface p-1">
+        <div className="inline-flex rounded-full border border-field-border bg-surface p-1">
           {TYPE_FILTERS.map((filter) => {
             const active = filter.value === type;
             return (
@@ -76,7 +76,7 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/categ
                 href={buildHref(filter.value, showArchived)}
                 aria-current={active || undefined}
                 className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
-                  active ? "bg-surface-raised text-ink" : "text-ink-secondary hover:text-ink"
+                  active ? "bg-action text-action-ink" : "text-ink-secondary hover:text-ink"
                 }`}
               >
                 {filter.label}
@@ -90,8 +90,8 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/categ
           aria-pressed={showArchived}
           className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all duration-150 ease-out hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page ${
             showArchived
-              ? "border-action/40 bg-action/10 text-action"
-              : "border-hairline bg-surface text-ink-secondary hover:text-ink"
+              ? "border-action bg-action text-action-ink"
+              : "border-field-border bg-surface text-ink-secondary hover:text-ink"
           }`}
         >
           {showArchived ? "Showing archived" : "Show archived"}

@@ -11,6 +11,9 @@ import { LoadError } from "@/components/ui/LoadError";
 import { InfoIcon } from "@/components/ui/icons";
 import { AddTransactionForm } from "./AddTransactionForm";
 import { TransactionsList } from "./TransactionsList";
+import { FIELD_EDGE } from "@/components/ui/Input";
+
+const FILTER_FIELD = `${FIELD_EDGE} bg-surface-raised px-3 py-2 text-sm text-ink`;
 
 function first(value: string | string[] | undefined): string {
   return typeof value === "string" ? value : "";
@@ -122,7 +125,7 @@ export default async function TransactionsPage({
             name="dateFrom"
             type="date"
             defaultValue={dateFrom || undefined}
-            className="rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40"
+            className={FILTER_FIELD}
           />
         </div>
 
@@ -135,7 +138,7 @@ export default async function TransactionsPage({
             name="dateTo"
             type="date"
             defaultValue={dateTo || undefined}
-            className="rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40"
+            className={FILTER_FIELD}
           />
         </div>
 
@@ -147,7 +150,7 @@ export default async function TransactionsPage({
             id="categoryid"
             name="categoryid"
             defaultValue={categoryid}
-            className="rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40"
+            className={FILTER_FIELD}
           >
             <option value="">All categories</option>
             {incomeCategories.length > 0 ? (
@@ -179,7 +182,7 @@ export default async function TransactionsPage({
             id="accountid"
             name="accountid"
             defaultValue={accountid}
-            className="rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40"
+            className={FILTER_FIELD}
           >
             <option value="">All accounts</option>
             {accounts.map((a) => (
@@ -199,7 +202,7 @@ export default async function TransactionsPage({
             id="type"
             name="type"
             defaultValue={type}
-            className="rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40"
+            className={FILTER_FIELD}
           >
             <option value="">All</option>
             <option value="Income">Income</option>

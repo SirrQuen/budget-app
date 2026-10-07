@@ -97,8 +97,11 @@ streak-driven (Duolingo). Playful in framing, precise in figures.
   page plane        #131322
   card surface      #1B1B2F
   raised surface    #23233A
-  hairline border   rgba(255,255,255,0.10)
-  ink primary       #ffffff     secondary #c3c2b7     muted #898781
+  hairline border   rgba(255,255,255,0.10)   dividers and cards only
+  field border      #6d6d98 (light #8383a0)  every control edge -- inputs,
+                    selects, chips. Use FIELD_EDGE / FIELD_CLASS from
+                    components/ui/Input.tsx; never restate a field style.
+  ink primary       #ffffff     secondary #c3c2b7     muted #8e8c86
   gridline          #2C2C42     baseline  #383850
 
 The eight categorical data colours are re-validated against #1B1B2F and pass
@@ -109,7 +112,7 @@ Categorical slots, in this fixed order, never cycled:
   5 magenta #d55181   6 green #008300   7 violet #9085e9   8 red #e66767
 
 Status (reserved — never used as a series colour):
-  good #0ca30c   warning #fab219   serious #ec835a   critical #d03b3b
+  good #0ca30c   warning #fab219   serious #ec835a
 
 Sequential (magnitude): one hue, blue, light to dark. Never a rainbow.
 
@@ -122,9 +125,19 @@ data contexts.
 
 ### Hard rules
 
-- **Red is the Sorrel mark only.** Never data, status, text, errors, negative
-  amounts, controls, or charts. Theme accents remain gold (dark) and navy
-  (light).
+- **Red never describes the user's money.**
+  Never for negative amounts, over-budget states, low balances, shortfalls,
+  spending levels, or any data value or status derived from someone's finances.
+
+  Red is permitted in exactly three places:
+    1. The Sorrel mark
+    2. Destructive-action affordances — delete confirmations and irreversible
+       operations
+    3. Form validation errors and error banners
+
+  Items 2 and 3 describe the INTERFACE. Item 1 is the brand. Anything that
+  describes the user's money is out.
+- Theme accents remain gold (dark) and navy (light).
 - The mark's colour follows the surface it sits on, not the theme setting.
   Its two tokens are named for the ground: `--mark-on-dark`, `--mark-on-light`.
   A fixed-ground surface (the auth splash, the OG image) uses the matching one
@@ -135,7 +148,7 @@ data contexts.
 - Big standalone numbers use proportional figures. `tabular-nums` only in
   columns that must align vertically (table rows).
 - Exactly one hero figure per view, >= 48px, same sans as everything else.
-- Meters: fill carries severity (accent -> warning -> critical); the unfilled
+- Meters: fill carries severity (accent -> warning, never red); the unfilled
   track is a lighter step of the same hue, so state reads across the whole bar.
 - Every animation respects `prefers-reduced-motion`.
 - Green marks income. Expenses and transfers use the theme accent. No colour
@@ -195,11 +208,11 @@ against their own surface:
   surface                 #1B1B2F         #FBFAF7
   gridline                #2C2C42         #E1E0D9
   baseline                #383850         #C3C2B7
-  axis/label ink          #898781         #52514E   <-- NOT #898781 in light;
+  axis/label ink          #8E8C86         #52514E   <-- NOT the dark value in light;
                                                         it only reaches 3.44:1
 
 Status colours are identical in both modes:
-  good #0CA30C · warning #FAB219 · serious #EC835A · critical #D03B3B
+  good #0CA30C · warning #FAB219 · serious #EC835A
 
 In LIGHT mode, aqua, yellow and magenta fall below 3:1 on the surface. The
 relief rule applies: those series MUST carry visible direct labels or a table

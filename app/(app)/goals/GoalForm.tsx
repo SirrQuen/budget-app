@@ -5,12 +5,11 @@ import { useActionState } from "react";
 import { createGoalAction, type ActionState } from "@/lib/actions/goals";
 import { GOAL_TYPES } from "@/lib/goalOptions";
 import { FormField } from "@/components/ui/FormField";
-import { Input } from "@/components/ui/Input";
+import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
-const fieldClassName =
-  "w-full rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40";
+const fieldClassName = FIELD_CLASS;
 
 // Create-only -- there's no edit flow yet, unlike CategoryForm/AccountForm's
 // shared create+edit pattern. A goal set up wrong today can be deleted (via

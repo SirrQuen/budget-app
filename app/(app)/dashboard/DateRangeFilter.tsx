@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import type { DashboardRange, DashboardRangePreset } from "@/lib/dashboardRange";
 import { useToday } from "@/components/TodayProvider";
 import { ChevronDownIcon } from "@/components/ui/icons";
+import { FIELD_EDGE } from "@/components/ui/Input";
 
 // Presets in the order the brief lists them; month-to-date is the default
 // and carries no URL params.
@@ -14,8 +15,7 @@ const PRESETS: { preset: Exclude<DashboardRangePreset, "custom">; label: string;
   { preset: "mtd", label: "Month to date", query: "" },
 ];
 
-const inputClass =
-  "rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40";
+const inputClass = `${FIELD_EDGE} bg-surface-raised px-3 py-2 text-sm text-ink`;
 
 export function DateRangeFilter({
   range,
@@ -63,7 +63,7 @@ export function DateRangeFilter({
             onClick={() => selectPreset(p.query)}
             className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60 ${
               selected
-                ? "bg-surface-raised text-ink"
+                ? "bg-action text-action-ink"
                 : "text-ink-secondary hover:text-ink"
             }`}
           >
@@ -81,13 +81,13 @@ export function DateRangeFilter({
         disabled={pending}
         onClick={() => setShowCustom((v) => !v)}
         className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60 ${
-          showCustom || isCustom ? "bg-surface-raised text-ink" : "text-ink-secondary hover:text-ink"
+          showCustom || isCustom ? "bg-action text-action-ink" : "text-ink-secondary hover:text-ink"
         }`}
       >
         Custom
         <ChevronDownIcon
           aria-hidden="true"
-          className={`h-4 w-4 text-ink-muted motion-safe:transition-transform motion-safe:duration-150 ${
+          className={`h-4 w-4 ${showCustom || isCustom ? "" : "text-ink-muted"} motion-safe:transition-transform motion-safe:duration-150 ${
             showCustom ? "rotate-180" : ""
           }`}
         />

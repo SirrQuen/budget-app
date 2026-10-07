@@ -87,7 +87,7 @@ function ObligationRow({ c, indent = false }: { c: SafeToSpendCommitment; indent
         {c.name} <span className="text-ink-muted">· {formatDateShort(c.date)}</span>
         {c.isEstimate ? <EstimateTag /> : null}
       </dt>
-      <dd className="shrink-0 font-medium text-ink">{formatCurrency(c.amount)}</dd>
+      <dd className="shrink-0 font-medium tabular-nums text-ink">{formatCurrency(c.amount)}</dd>
     </div>
   );
 }
@@ -274,7 +274,7 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
           <dl className="flex flex-col gap-2 text-sm">
             <div className="flex items-baseline justify-between gap-4">
               <dt className="text-ink-secondary">Cash on hand</dt>
-              <dd className="font-medium text-ink">{formatCurrency(data.cashOnHand)}</dd>
+              <dd className="font-medium tabular-nums text-ink">{formatCurrency(data.cashOnHand)}</dd>
             </div>
 
             {projection ? (
@@ -284,7 +284,7 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
                     Low point{" "}
                     <span className="text-ink-muted">· {formatDateWithWeekday(data.trough.date)}</span>
                   </dt>
-                  <dd className="font-medium text-ink">
+                  <dd className="font-medium tabular-nums text-ink">
                     {data.trough.amount < 0 ? "−" : ""}
                     {formatCurrency(Math.abs(data.trough.amount))}
                   </dd>
@@ -298,7 +298,7 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
             ) : (
               <div className="flex items-baseline justify-between gap-4">
                 <dt className="text-ink-secondary">No recurring commitments due in this window</dt>
-                <dd className="font-medium text-ink">{formatCurrency(0)}</dd>
+                <dd className="font-medium tabular-nums text-ink">{formatCurrency(0)}</dd>
               </div>
             )}
 
@@ -312,12 +312,12 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
                   {data.cushionIsDefault ? "suggested · change" : "change"}
                 </Link>
               </dt>
-              <dd className="shrink-0 font-medium text-ink">{formatCurrency(data.cushion)}</dd>
+              <dd className="shrink-0 font-medium tabular-nums text-ink">{formatCurrency(data.cushion)}</dd>
             </div>
 
             <div className="mt-1 flex items-baseline justify-between gap-4 border-t border-hairline pt-2">
               <dt className="font-medium text-ink">Safe to spend</dt>
-              <dd className="font-semibold text-ink">{formatCurrency(data.safeToSpend)}</dd>
+              <dd className="font-semibold tabular-nums text-ink">{formatCurrency(data.safeToSpend)}</dd>
             </div>
           </dl>
 

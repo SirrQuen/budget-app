@@ -200,8 +200,8 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
           aria-pressed={showArchived}
           className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all duration-150 ease-out hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page ${
             showArchived
-              ? "border-action/40 bg-action/10 text-action"
-              : "border-hairline bg-surface text-ink-secondary hover:text-ink"
+              ? "border-action bg-action text-action-ink"
+              : "border-field-border bg-surface text-ink-secondary hover:text-ink"
           }`}
         >
           {showArchived ? "Showing archived" : "Show archived"}

@@ -7,7 +7,7 @@ import { contributeToGoalAction, type ContributeActionState } from "@/lib/action
 import { GoalMeter } from "@/components/ui/GoalMeter";
 import { Celebration } from "@/components/ui/Celebration";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Input, FIELD_EDGE } from "@/components/ui/Input";
 import { FormField } from "@/components/ui/FormField";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { TargetIcon } from "@/components/ui/icons";
@@ -16,8 +16,7 @@ import type { Database } from "@/lib/database.types";
 
 type GoalProgressRow = Database["public"]["Views"]["v_goal_progress"]["Row"];
 
-const fieldClassName =
-  "w-full rounded-lg border border-hairline bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40";
+const fieldClassName = `w-full ${FIELD_EDGE} bg-surface px-3 py-2 text-sm text-ink`;
 
 export function GoalRow({ goal }: { goal: GoalProgressRow }) {
   const today = useToday();

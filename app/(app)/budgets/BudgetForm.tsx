@@ -9,12 +9,11 @@ import {
 } from "@/lib/actions/budgets";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import { FormField } from "@/components/ui/FormField";
-import { Input } from "@/components/ui/Input";
+import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
-const fieldClassName =
-  "w-full rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40";
+const fieldClassName = FIELD_CLASS;
 
 export type EditableBudget = {
   id: string;

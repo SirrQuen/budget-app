@@ -13,15 +13,14 @@ import type { TransactionType } from "@/lib/db/transactions";
 import { useToday } from "@/components/TodayProvider";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { FormField } from "@/components/ui/FormField";
-import { Input } from "@/components/ui/Input";
+import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { Celebration } from "@/components/ui/Celebration";
 import { useConfirmPulse } from "@/components/ui/ConfirmPulse";
 import { ChevronDownIcon, FlameIcon, InfoIcon } from "@/components/ui/icons";
 
-const fieldClassName =
-  "w-full rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40";
+const fieldClassName = FIELD_CLASS;
 
 // Minimal shape the account picker needs -- AccountRow/AccountBalanceRow
 // both satisfy this structurally, so callers can pass either straight
@@ -368,7 +367,7 @@ export function AddTransactionForm({
 
         <fieldset className="flex flex-col gap-1.5">
           <legend className="text-sm font-medium text-ink-secondary">Type</legend>
-          <div className="flex w-full gap-1 rounded-xl border border-hairline bg-surface-raised p-1">
+          <div className="flex w-full gap-1 rounded-xl border border-field-border bg-surface-raised p-1">
             {typeOptions.map((value) => (
               <label
                 key={value}

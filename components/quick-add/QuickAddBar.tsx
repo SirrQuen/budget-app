@@ -18,6 +18,7 @@ import { Celebration } from "@/components/ui/Celebration";
 import { useConfirmPulse } from "@/components/ui/ConfirmPulse";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { FullFormOverlay } from "@/components/quick-add/FullFormOverlay";
+import { FIELD_CLASS, FIELD_EDGE } from "@/components/ui/Input";
 
 export function QuickAddBar({
   accounts,
@@ -312,7 +313,7 @@ export function QuickAddBar({
           onKeyDown={handleInputKeyDown}
           placeholder="Quick add — e.g. trader joes 82.45"
           autoComplete="off"
-          className="w-full rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink placeholder:text-ink-muted outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40"
+          className={FIELD_CLASS}
         />
         <button
           type="button"
@@ -343,7 +344,7 @@ export function QuickAddBar({
                   categoryTouchedRef.current = true;
                   setCategoryid(e.target.value);
                 }}
-                className="rounded-lg border border-hairline bg-surface-raised px-2 py-1 text-xs text-ink outline-none transition-colors duration-150 focus:border-action focus:ring-2 focus:ring-action/40"
+                className={`${FIELD_EDGE} bg-surface-raised px-2 py-1 text-xs text-ink`}
               >
                 <option value="" disabled>
                   Category
@@ -359,7 +360,7 @@ export function QuickAddBar({
                 name="accountid"
                 value={accountid}
                 onChange={(e) => setAccountid(e.target.value)}
-                className="rounded-lg border border-hairline bg-surface-raised px-2 py-1 text-xs text-ink-secondary outline-none transition-colors duration-150 focus:border-action focus:ring-2 focus:ring-action/40"
+                className={`${FIELD_EDGE} bg-surface-raised px-2 py-1 text-xs text-ink-secondary`}
               >
                 <option value="" disabled>
                   Account

@@ -434,7 +434,7 @@ export function TransactionsList({
                   <td className="px-4 py-3 text-right">
                     <Amount amount={tx.amount} type={tx.transaction_type} column />
                   </td>
-                  <td className="px-4 py-3 text-right text-xs text-ink-muted">
+                  <td className={`px-4 py-3 text-right text-xs ${isError ? "text-ink-secondary" : "text-ink-muted"}`}>
                     {isError ? "Couldn't save" : "Saving…"}
                   </td>
                 </tr>

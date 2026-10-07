@@ -12,7 +12,7 @@ import { useToday } from "@/components/TodayProvider";
 import { formatDate } from "@/lib/format";
 import type { Database } from "@/lib/database.types";
 import { FormField } from "@/components/ui/FormField";
-import { Input } from "@/components/ui/Input";
+import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
@@ -103,7 +103,7 @@ export function AccountForm({
           required
           value={accountType}
           onChange={(e) => setAccountType(e.target.value)}
-          className="w-full rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40"
+          className={FIELD_CLASS}
         >
           <option value="" disabled>
             Select a type
@@ -138,7 +138,7 @@ export function AccountForm({
           required
           value={openingDate}
           onChange={(e) => setOpeningDate(e.target.value)}
-          className="w-full rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-action focus:ring-2 focus:ring-action/40"
+          className={FIELD_CLASS}
         />
       </FormField>
 

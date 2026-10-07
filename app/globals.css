@@ -81,7 +81,20 @@
   --surface-raised: #ffffff;
   --hairline: rgba(0, 0, 0, 0.12);
 
-  /* ink -- muted is 4.70:1 on --page, its worst ground */
+  /* Edge of a form control: inputs, selects, chips, segmented controls.
+     --hairline is a decorative divider (~1.3:1) and can't mark a control,
+     which WCAG 1.4.11 holds to 3:1 against every adjacent colour. Measured:
+       light #8383a0  3.12 --page  3.46 --surface  3.67 --surface-raised
+       dark  #6d6d98  3.75 --page  3.45 --surface  3.13 --surface-raised
+     Used only through FIELD_EDGE (components/ui/Input.tsx) and the chip
+     containers -- never for cards or dividers. */
+  --field-border: #8383a0;
+
+  /* ink -- muted, measured on every ground in both themes:
+       light #67677a  4.70 --page  5.22 --surface  5.53 --surface-raised
+       dark  #8e8c86  5.46 --page  5.02 --surface  4.55 --surface-raised
+     Worst ground differs by theme: --page in light, --surface-raised in
+     dark. Input placeholders sit on --surface-raised. */
   --ink: #14141f;
   --ink-secondary: #4a4a58;
   --ink-muted: #67677a;
@@ -90,10 +103,10 @@
   --gridline: #d8d8e2;
   --baseline: #c2c2d0;
 
-  /* The Sorrel mark -- components/SorrelMark.tsx, and nothing else. Red is
-     the mark colour ONLY: never data, status, text, buttons, borders,
-     links, charts or focus rings. Theme accents stay gold/navy. For that
-     reason it is deliberately NOT registered in @theme below, so no
+  /* The Sorrel mark -- components/SorrelMark.tsx, and nothing else. Red
+     never describes the user's money (CLAUDE.md); outside this mark it
+     appears only as --critical, on destructive actions and on errors.
+     This token is deliberately NOT registered in @theme below, so no
      bg-/text-/border-/ring-mark utility exists to reach for.
      Two values, not one: a single deep crimson is 2.86:1 on --dk-surface,
      under the 3:1 non-text minimum, so the dark-ground value runs brighter.
@@ -146,17 +159,30 @@
   --cat-8: #c23f3f; /* red */
 
   /* Status -- reserved, never used as a series colour.
-     --good and --critical are rendered as actual text (an income figure in
-     Amount, the delete affordances), so both clear 4.5:1 on --page, their
-     worst ground. --warning never is: it appears only as a Meter fill, a
-     mark needing 3:1. Holding
-     it to the text bar forced it down to a muddy brown that stopped
-     reading as caution at all -- the over-budget meter looked like a
-     colour, not a warning. It sits at the brightest amber that still
-     clears 3:1 on every light ground (3.25:1 on --page). If it ever wears
-     text, it needs re-stepping or a separate token. */
+
+     --critical is not a status of the user's money. It is interface-only
+     -- destructive-action affordances, validation errors and error
+     banners -- and never marks an amount or a balance (CLAUDE.md).
+
+     --good and --critical are rendered as text (an income figure in
+     Amount; error messages), so both must clear 4.5:1 on every ground, in
+     each theme. Measured, worst ground first:
+       --critical light #c0261f  5.04 --page  5.60 --surface  5.94 raised
+       --critical dark  #dd7070  4.83 raised  5.32 --surface  5.79 --page
+                                 4.53 on the delete-account panel tint
+                                      (--critical 5% over raised)
+       --good     light #097009  5.35 --page
+       --good     dark  #0ca30c  4.56 raised  5.03 --surface  5.47 --page
+
+     --warning never wears text: it is a Meter fill, a mark needing 3:1
+     against the meter's own track (22% of the fill over --page). At
+     #b8730a the light fill was 2.56:1 on that track; #a46609 is the
+     lightest amber on the same hue that clears it (3.05:1 at full
+     warning, 3.98:1 on --page) without thinning the track to a near-
+     invisible tint. Darker than this drifts toward brown and stops
+     reading as caution. If it ever wears text, it needs a separate token. */
   --good: #097009;
-  --warning: #b8730a;
+  --warning: #a46609;
   --serious: #a84718;
   --critical: #c0261f;
   --critical-ink: #ffffff;
@@ -185,7 +211,9 @@
 
   --dk-ink: #ffffff;
   --dk-ink-secondary: #c3c2b7;
-  --dk-ink-muted: #898781;
+  --dk-ink-muted: #8e8c86;
+
+  --dk-field-border: #6d6d98;
 
   --dk-gridline: #2c2c42;
   --dk-baseline: #383850;
@@ -205,13 +233,15 @@
   --dk-good: #0ca30c;
   --dk-warning: #fab219;
   --dk-serious: #ec835a;
-  --dk-critical: #d03b3b;
+  /* Lightened from #d03b3b (3.18-3.82:1 as text) along the same hue, to
+     the first step that clears 4.5:1 on the WORST dark ground -- the
+     delete-panel tint, 4.53:1. Measurements are in the Status note above. */
+  --dk-critical: #dd7070;
   /* Ink on a filled --critical surface, the counterpart to --gold-ink.
-     White on #d03b3b is 4.80:1 and on #c0261f is 5.94:1, so it clears AA
-     for the button's 14px semibold in both modes. Pinned rather than
-     tracking --ink: --critical is a fixed status colour, so its ink must
-     not flip to dark when the page does. */
-  --dk-critical-ink: #ffffff;
+     Light: white on #c0261f is 5.94:1. Dark: white on #dd7070 is only
+     3.17:1, so dark ink takes over -- #0b0b0b is 6.21:1 on it and 5.26:1
+     on its /90 hover. Same rule as gold: a light fill carries dark ink. */
+  --dk-critical-ink: #0b0b0b;
 }
 
 /* System (no data-theme attribute) following a dark OS. The guard is
@@ -239,6 +269,7 @@
     --surface: var(--dk-surface);
     --surface-raised: var(--dk-surface-raised);
     --hairline: var(--dk-hairline);
+    --field-border: var(--dk-field-border);
 
     --ink: var(--dk-ink);
     --ink-secondary: var(--dk-ink-secondary);
@@ -290,6 +321,7 @@
   --surface: var(--dk-surface);
   --surface-raised: var(--dk-surface-raised);
   --hairline: var(--dk-hairline);
+  --field-border: var(--dk-field-border);
 
   --ink: var(--dk-ink);
   --ink-secondary: var(--dk-ink-secondary);
@@ -331,6 +363,7 @@
   --color-surface: var(--surface);
   --color-surface-raised: var(--surface-raised);
   --color-hairline: var(--hairline);
+  --color-field-border: var(--field-border);
 
   --color-ink: var(--ink);
   --color-ink-secondary: var(--ink-secondary);
