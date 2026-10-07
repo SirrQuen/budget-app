@@ -20,7 +20,8 @@ import { generateDueOccurrences } from "@/lib/db/recurring";
 import { getReturnSummaryFacts } from "@/lib/actions/activity";
 import { isAwaitingStatementAmount, isAwaitingIncomeConfirmation } from "@/lib/recurringSchedule";
 import { resolveDashboardRange } from "@/lib/dashboardRange";
-import { getToday } from "@/lib/db/settings";
+import { getTimeZone, getToday } from "@/lib/db/settings";
+import { sinceLabel } from "@/lib/sinceLabel";
 import { monthStartISO } from "@/lib/date";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatTile } from "@/components/ui/StatTile";
@@ -46,7 +47,7 @@ import { DayNightMark } from "@/components/DayNightMark";
 // this page renders.
 export default async function DashboardPage({ searchParams }: PageProps<"/dashboard">) {
   const params = await searchParams;
-  const today = await getToday();
+  const [today, timeZone] = await Promise.all([getToday(), getTimeZone()]);
   const range = resolveDashboardRange(params, today);
   const currentMonth = monthStartISO(today);
 
@@ -314,7 +315,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         ) : null}
 
         {previousLoginAt && returnFacts.length > 0 ? (
-          <ReturnSummaryStrip since={previousLoginAt} facts={returnFacts} />
+          <ReturnSummaryStrip since={sinceLabel(previousLoginAt, today, timeZone)} facts={returnFacts} />
         ) : null}
 
         {generatedOccurrences.length > 0 ? (

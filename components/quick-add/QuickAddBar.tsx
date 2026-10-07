@@ -62,14 +62,17 @@ export function QuickAddBar({
   // current as of the last commit, so a same-tick double Enter can race it.
   // This ref is set synchronously inside handleSubmit instead.
   const submittingRef = useRef(false);
-  // One key per fill of the form: minted once on mount, reused on every
-  // retry of the same submission, replaced only once the server has
+  // One key per fill of the form: minted on its first submit, reused on
+  // every retry of the same submission, cleared only once the server has
   // confirmed the row exists. This makes two submissions that carry it
   // resolve to one row (see createTransaction's 23505 handling) rather than
   // relying on the button/Enter guards never letting a duplicate through.
-  // State, not a ref -- the hidden input below reads it during render, and
-  // refs can't be read there (only in effects/handlers).
-  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  // Minted in handleSubmit and written straight into the hidden input, never
+  // during render: a render-time UUID differs between the server and the
+  // client and mismatches on hydration. React builds the action's FormData
+  // after onSubmit runs, so the value is in place by then.
+  const idempotencyKeyRef = useRef<string | null>(null);
+  const idempotencyInputRef = useRef<HTMLInputElement>(null);
 
   const { addPending, settlePending, failPending } = useOptimisticTransactions();
 
@@ -138,7 +141,7 @@ export function QuickAddBar({
       // A fresh key for the next transaction -- reusing this one across an
       // unrelated future submission would make the server treat it as a
       // retry of this one and silently drop it.
-      setIdempotencyKey(crypto.randomUUID());
+      idempotencyKeyRef.current = null;
       const clientId = pendingClientIdRef.current;
       pendingClientIdRef.current = null;
       if (clientId) settlePending(clientId);
@@ -264,6 +267,9 @@ export function QuickAddBar({
 
     submittingRef.current = true;
 
+    idempotencyKeyRef.current ??= crypto.randomUUID();
+    if (idempotencyInputRef.current) idempotencyInputRef.current.value = idempotencyKeyRef.current;
+
     const category = categoryOptions.find((c) => c.id === categoryid);
     const account = accounts.find((a) => a.id === accountid);
     pendingClientIdRef.current = addPending({
@@ -295,7 +301,7 @@ export function QuickAddBar({
         value={parsed.ok ? parsed.transaction_type : ""}
         readOnly
       />
-      <input type="hidden" name="idempotency_key" value={idempotencyKey} readOnly />
+      <input type="hidden" name="idempotency_key" ref={idempotencyInputRef} defaultValue="" />
 
       <div className="flex items-center gap-3">
         <input
