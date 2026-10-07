@@ -279,11 +279,134 @@ harmless: `signed_amount` and `set_updated_at` (default PUBLIC);
 select); and
 `username_is_available` (anon by design, for signup).
 
+## "Leaves the set" classifier: only one of three consumers shares it (2026-10-06)
+
+**Status: decided, build in the fix pass.**
+
+CLAUDE.md requires that Spendable Cash, the safe-to-spend projection and the
+cushion suggestion all call one "leaves the set" classifier
+(`lib/safeToSpend.ts`: `SPENDABLE_ACCOUNT_TYPES`, `isSpendableAccountType`,
+`isSafeToSpendCommitment`). Audit result:
+
+| Consumer | Uses the shared classifier? | Where |
+|---|---|---|
+| Projection | Yes | `lib/safeToSpendProjection.ts` imports both functions |
+| Spendable Cash (starting balance) | **No**: own copy of the set | `lib/db/dashboard.ts:777` `.in("account_type", ["Checking", "Savings"])` |
+| Cushion suggestion | **No**: whole rule rewritten in SQL | `suggested_safe_to_spend_cushion()`, migration 33 |
+
+Also hand-copied: `getIncomeSchedules`, `lib/db/dashboard.ts:670`.
+
+The classifier itself is correct. Verified against all eight required cases
+(Checking<->Savings transfers not counted, either direction; Checking ->
+Credit Card and Checking -> Investment counted; card purchases not counted;
+Checking purchases counted; income into Checking counted as inflow; income
+outside the set not counted). `lib/safeToSpend.test.ts` and
+`lib/safeToSpendProjection.test.ts` pass (39/39). There is no direct unit
+test for Transfer Checking -> Credit Card in `safeToSpend.test.ts`; add one.
+
+### 1. Spendable Cash and getIncomeSchedules: mechanical
+
+Pass `[...SPENDABLE_ACCOUNT_TYPES]` to `.in(...)` at `dashboard.ts:777`, and
+call `isSpendableAccountType` at `dashboard.ts:670`. There's no design
+question here.
+
+**Spendable Cash comes first.** The projection takes its starting balance
+from Spendable Cash and its obligations from the classifier. If those two
+disagree about which accounts are in the set, the hero number is wrong.
+`getIncomeSchedules` only picks the payday shown in the context line and the
+settings page.
+
+### 2. Cushion SQL: option (a), one SQL function
+
+Create `leaves_spendable_set(from_type, to_type)` as the only SQL-side
+implementation, and call it from `suggested_safe_to_spend_cushion()`.
+
+**Not option (b), a stored flag.** The classification depends on account
+TYPE, and account types are editable. If a user changed an account from
+Savings to Investment, every stored flag on that account's history would be
+wrong, and nothing would detect it. A derived value that depends on mutable
+parent data doesn't get frozen at write time.
+
+That leaves two implementations, one per language. A parity test is what
+makes that safe:
+
+- **Enumerate account-type pairs from the source of truth, not a hardcoded
+  list.** Adding a seventh type must create new cases automatically, and the
+  test must FAIL if only one side was updated. That property is the whole
+  point.
+  - Caveat found while recording this: **there is no Postgres enum.**
+    `account_type` is `text` constrained by `accounts_account_type_check`
+    (migration 04), and `lib/accountOptions.ts`'s `ACCOUNT_TYPES` mirrors it
+    by hand ("Keep in sync if that constraint ever changes").
+    `database.types.ts` types the column as `string`.
+  - So the test must read the allowed values from the database, by parsing
+    `pg_get_constraintdef` for `accounts_account_type_check` or by
+    converting the column to a real enum or lookup table first. It must also
+    assert that `ACCOUNT_TYPES` equals that set before it compares the
+    classifiers. Otherwise a type added only to the constraint gets no cases
+    on the TS side and the test passes silently.
+  - Open: where the test runs. `npm test` is pure `node --test` with no
+    database. The SQL half needs a connection, either the
+    `docs/rls-isolation-test.sql` route or a DB-backed test runner. Decide
+    in the fix pass.
+- **Cover both halves of a transfer.** The two versions work out "leaves the
+  set" differently:
+  - SQL looks at the transaction's Expense leg and its sibling Income leg via
+    `transfer_group_id`.
+  - TS looks at the schedule's `account_type` / `to_account_type`.
+
+  For every (from, to) pair, build a real transfer with both legs. Assert
+  that the SQL counts exactly the Expense leg, never the Income leg, and only
+  when the TS classifier says the transfer leaves the set. Also cover a plain
+  Expense (no group) for each source type.
+
+**Fix migration 33's comment** in the new migration's `comment on function`.
+Its header says the cushion "uses the same 'leaves the set' rule as the
+projection's obligations (`isSafeToSpendCommitment`)". Nothing guaranteed
+that, which is how the duplicate got past review. Once
+`leaves_spendable_set` and the parity test exist, the claim can point at
+them. Until then, delete it. (A migration that has already run can't be
+edited; the replacement comment carries the fix.)
+
+### 3. `v_dashboard_kpis.cash_balance`: a fourth "cash", has readers, decide separately
+
+Correction: the 2026-10-06 audit called this `v_dashboard_summary`. The view
+is `v_dashboard_kpis` (last defined in migration 07). Its `cash_balance` is
+`Checking + Savings + Cash`. Every other definition of cash is Checking +
+Savings.
+
+The instruction was to DROP it if nothing reads it. Something does, so it
+has NOT been dropped:
+
+- `lib/db/dashboard.ts:118` `getDashboardKpis()` selects `*` from the view.
+  Its only caller is the test harness, `app/db-test/page.tsx:413`. No
+  product page or component calls it.
+- `docs/rls-isolation-test.sql:276` uses the view as an RLS isolation case.
+  That test checks row scoping and doesn't read the column.
+- `evernest/DATABASE.md` (lines 52, 65-69) documents it as the dashboard
+  view, and says "`cash_balance` is the one that belongs next to monthly
+  income and spend". The one document every query-writer is told to read
+  recommends the wrong definition, so that is the trap, written down.
+- Not checked: saved SQL snippets and reports in the Supabase dashboard.
+  These aren't reachable from the repo or the CLI. Someone has to check by
+  hand before anything is dropped.
+
+The other columns (`total_spent`, `total_earned`, `net_cashflow`, ...) need
+their own look before a whole-view drop. Decision pending.
+
+### 4. `app/(app)/dev-projection/page.tsx`: not gone
+
+This copy of the set is ignored by decision (the file is being deleted). As
+of 2026-10-06 the file **still exists on disk**, untracked, despite the
+"Deleted 2026-10-04" status below. Added `/app/(app)/dev-projection/` to
+`.gitignore` on 2026-10-06 so `git add .` can't sweep it in. Remove the
+ignore entry together with the file.
+
 ## Temporary code that must not ship
 
 | Path | Purpose | Added | Status |
 |---|---|---|---|
-| `app/(app)/dev-projection/page.tsx` | Prints the signed-in user's safe-to-spend projection (income, obligations, daily balance, trough, cushion, result) to check it against real data. Dev-only (`notFound()` in production); reads through `getSafeToSpend()` under the user's session and RLS. | 2026-10-02 | Deleted 2026-10-04 (never committed) |
+| `app/(app)/dev-projection/page.tsx` | Prints the signed-in user's safe-to-spend projection (income, obligations, daily balance, trough, cushion, result) to check it against real data. Dev-only (`notFound()` in production); reads through `getSafeToSpend()` under the user's session and RLS. | 2026-10-02 | Recorded as deleted 2026-10-04, but present on disk again 2026-10-06 (untracked, never committed). Gitignored 2026-10-06 pending deletion; drop the ignore entry with the file. |
 
 ## "fiber.reset is not a function" in the dev overlay (2026-10-04)
 

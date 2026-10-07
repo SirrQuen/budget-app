@@ -43,5 +43,9 @@ next-env.d.ts
 # supabase CLI local link-state (pooler URL, project ref -- machine-specific)
 supabase/.temp/
 
+# temporary dev-only page, pending deletion (docs/phase-7-findings.md) --
+# remove this entry together with the file
+/app/(app)/dev-projection/
+
 # claude code -- local-only overrides, not shared config
 .claude/settings.local.json

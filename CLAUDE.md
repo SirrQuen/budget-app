@@ -7,12 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Stack
 
 Multi-user personal finance / budgeting app. Next.js 16 (App Router), TypeScript,
-Tailwind v4, Supabase (Postgres + Auth). Currently a fresh `create-next-app`
-scaffold — no data layer built yet. Path alias `@/*` -> project root.
+Tailwind v4, Supabase (Postgres + Auth). The data layer lives in `lib/db/`;
+the schema lives in `supabase/migrations/`. Path alias `@/*` -> project root.
 
 ## Commands
 
-`npm run dev|build|start|lint`. No test runner configured yet.
+`npm run dev|build|start|lint|test`. `npm test` runs `node --test` (via `tsx`)
+over `lib/**/*.test.ts` and `app/**/*.test.tsx`. These tests are pure: no
+database connection.
 
 ## Rules
 
@@ -23,7 +25,10 @@ scaffold — no data layer built yet. Path alias `@/*` -> project root.
   a Client Component or any file with `"use client"`.
 - All database access goes through functions in `lib/` — pages and components
   never call Supabase directly.
-- Money is stored as integer cents, never floats.
+- Money is never a float. In the database it is exact `numeric` dollars
+  (`transactions.amount` is `numeric(12,2)`). Pure TypeScript calculations
+  that must do arithmetic convert to integer cents internally and back to
+  dollars only at the edges (see `lib/safeToSpendProjection.ts`).
 - Foreign key columns in this schema have no underscore: `userid`, `accountid`,
   `categoryid`, `goalid`, `recurringid`. Never write `user_id`.
 - `amount` is Postgres `numeric` (exact). Never do money arithmetic in
@@ -60,8 +65,12 @@ arrived when it didn't makes them overspend.
 Income: low amount, late date. Obligations: high amount, early date.
 
 **One "leaves the set" classifier, three consumers.**
-Spendable Cash, the projection, and the cushion suggestion all call the same
-function. Never reimplement it — they will drift.
+Spendable Cash, the projection, and the cushion suggestion must all use the
+same classifier (`lib/safeToSpend.ts`). Never reimplement it — they will drift.
+KNOWN VIOLATION, being fixed: today only the projection uses it. Spendable
+Cash (`lib/db/dashboard.ts`) copies the account-type set, and the cushion SQL
+(migration 33) rewrites the rule. See `docs/phase-7-findings.md`. Don't copy
+either pattern.
 Checking→savings is NOT money leaving. Card purchases are NOT counted here;
 the card payment obligation already captures them.
 
@@ -231,7 +240,12 @@ here directly. `git log`/`git status` reflect this repo only.
 
 ## Backend contract
 
-Read `../../DATABASE.md` before writing any query or signup flow:
+The migrations in `supabase/migrations/` and `lib/database.types.ts` are the
+authority on the schema. `~/evernest/DATABASE.md` (a separate repo, not an
+ancestor directory) has useful background on schema conventions. It is older
+than many migrations here (it still says transfers are unsupported, and it
+recommends `v_dashboard_kpis.cash_balance`), so check anything taken from it
+against the migrations. The contract:
 
 - Balances are computed, not stored — read from views (`v_account_balances`,
   `v_goal_progress`), never balance columns.
@@ -258,8 +272,15 @@ Read `../../DATABASE.md` before writing any query or signup flow:
   revoked for `authenticated`). Neither `profiles` tier columns nor
   `subscriptions` are writable by `authenticated`.
 - Username login resolves server-side only (`email_for_username()` is
-  `service_role`-only).
-- Only `Income`/`Expense` transaction types exist — transfers unsupported.
+  `service_role`-only). The app has no username login yet, and signup
+  collects no username. This is the rule for when it's built.
+- `transaction_type` is only `Income`/`Expense`, but transfers ARE supported
+  (migration 07): a transfer is two rows sharing a `transfer_group_id` -- an
+  Expense leg on the source account, an Income leg on the destination, no
+  category on either -- inserted together by `createTransfer()` in
+  `lib/db/transactions.ts`. Every income/expense/spending aggregate must
+  exclude rows where `transfer_group_id is not null`, or a transfer inflates
+  both sides. Recurring transfers exist too (`recurring_transactions.to_accountid`).
 - Accounts/categories are soft-deleted (`is_active`), never hard-deleted.
 - Regenerate `lib/database.types.ts` after every migration (see "After any
   migration" below).
@@ -304,9 +325,8 @@ Read `../../DATABASE.md` before writing any query or signup flow:
   means "not a paying subscriber", not an error.
 - subscriptions: read-only for users. Billing state is service_role only.
 - Never use the service role key in application code.
-- The data layer test harness lives in git history — recover with
-  `git checkout <commit> -- app/db-test`. Re-run it as two different users
-  after any change to `lib/db/`.
+- The data layer test harness is `app/db-test/page.tsx` (in the tree). Re-run
+  it as two different users after any change to `lib/db/`.
 
 ## Recurring transactions
 
@@ -323,7 +343,8 @@ obvious and trivially correctable rather than confirmed in advance.
 - When a user edits the AMOUNT on a generated transaction, offer once to update
   the schedule too ("Update the Rent schedule to $1,450?"). Declining leaves the
   schedule alone and is never asked again for that edit. This is what makes
-  variable bills (utilities) workable.
+  variable bills (utilities) workable. NOT BUILT YET: editing a generated
+  transaction's amount doesn't offer this today.
 - Deleting a schedule must NOT delete transactions already generated from it.
   `recurringid` is ON DELETE SET NULL; that history is real.
 
@@ -337,6 +358,9 @@ obvious and trivially correctable rather than confirmed in advance.
 
 ### Generation
 - Lazy catch-up when a user opens the app. No scheduler.
-- MUST be idempotent, enforced by a database constraint on
-  (recurringid, occurrence date) -- not by application logic. Two page loads
-  must never create two rows.
+- MUST be idempotent, enforced by a database constraint -- not by
+  application logic. Two page loads must never create two rows. The unique
+  index is `recurring_tx_no_double_post` on
+  `(recurringid, transaction_date, transaction_type)` (migration 19). The
+  type is in the key because both legs of a recurring transfer share an
+  occurrence date.
