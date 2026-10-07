@@ -86,3 +86,28 @@ export function nextOccurrenceISO(
       throw new Error(`Unknown recurring frequency: ${frequency}`);
   }
 }
+
+type CadenceFields = {
+  next_run_date: string;
+  frequency: string;
+  interval_count: number;
+};
+
+// Whether saving the edit form should move start_date (the anchor
+// nextOccurrenceISO reads its day-of-month from) to the posted
+// next_run_date. next_run_date is often a CLAMPED date -- a 31st schedule
+// sits on Feb 28 or Apr 30 -- and the form posts it back on every save, so
+// re-anchoring unconditionally turned "edit the amount in February" into
+// "runs on the 28th forever". Re-pin only when the user moved the date or
+// changed the cadence, or when there's no anchor at all (legacy rows).
+export function shouldReanchor(
+  stored: CadenceFields & { start_date: string | null },
+  edited: CadenceFields,
+): boolean {
+  return (
+    stored.start_date === null ||
+    edited.next_run_date !== stored.next_run_date ||
+    edited.frequency !== stored.frequency ||
+    edited.interval_count !== stored.interval_count
+  );
+}

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { shouldReanchor } from "@/lib/recurringCadence";
 import {
   createRecurring,
   updateRecurring,
@@ -313,13 +314,19 @@ export async function updateRecurringAction(
   // staying variable must clear it too: a confirmed amount is the OLD
   // card's balance, and carrying it over to a different card would post the
   // wrong figure next cycle. Neither touches next_amount/confirmed_at.
-  let clearPendingConfirmation = !parsed.amount_is_variable;
-  if (parsed.amount_is_variable && !clearPendingConfirmation) {
-    const current = await getRecurring(id);
-    if (current.data && current.data.to_accountid !== parsed.to_accountid) {
-      clearPendingConfirmation = true;
-    }
+  const current = await getRecurring(id);
+  if (current.data === null) {
+    return { error: current.error };
   }
+
+  let clearPendingConfirmation = !parsed.amount_is_variable;
+  if (parsed.amount_is_variable && current.data.to_accountid !== parsed.to_accountid) {
+    clearPendingConfirmation = true;
+  }
+
+  // The form always posts next_run_date back, often a clamped date -- see
+  // shouldReanchor for why saving must not blindly re-pin start_date.
+  const reanchor = shouldReanchor(current.data, parsed);
 
   const { error } = await updateRecurring(id, {
     description: parsed.description,
@@ -330,13 +337,10 @@ export async function updateRecurringAction(
     frequency: parsed.frequency,
     interval_count: parsed.interval_count,
     next_run_date: parsed.next_run_date,
-    // Re-anchors the cadence to the edited date -- start_date is what
-    // nextOccurrenceISO reads as the fixed day-of-month/month-day (see
-    // lib/db/recurring.ts), and the generator never advances it itself.
-    // Choosing a new "Next due date" here is a deliberate re-pin (e.g. a
-    // rent schedule moving from the 1st to the 5th), not a catch-up step,
-    // so it's exactly the case that should move the anchor too.
-    start_date: parsed.next_run_date,
+    // Choosing a new "Next due date" is a deliberate re-pin (rent moving
+    // from the 1st to the 5th), so it moves the anchor too -- see
+    // `reanchor` above for when it must not.
+    ...(reanchor ? { start_date: parsed.next_run_date } : {}),
     // Explicit even when null -- switching "Ends" back to Never (or from a
     // date to a count) must clear whichever of the two isn't in play
     // anymore, not just leave the old value stuck from before the edit.
