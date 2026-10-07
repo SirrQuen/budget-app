@@ -57,8 +57,8 @@ export function StatTile({
   const deltaParts = delta ? formatDelta(delta.value, { format: delta.format }) : null;
 
   // Colour by direction x whether that direction is good -- never by the
-  // sign alone (that's formatDelta's own `tone`, which we deliberately drop
-  // here). The losing direction is neutral ink, not critical.
+  // sign alone. The losing direction is neutral ink: red never describes
+  // the user's money.
   let deltaTone: Tone = "neutral";
   if (delta && delta.value !== 0) {
     const wentUp = delta.value > 0;

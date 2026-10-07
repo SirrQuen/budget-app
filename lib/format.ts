@@ -157,7 +157,9 @@ export function formatCompactNumber(value: number, opts: { currency?: boolean } 
   return (isLarge ? compactNumber : plainNumber).format(value);
 }
 
-export type Tone = "good" | "critical" | "neutral";
+// No "critical": red never describes the user's money (CLAUDE.md), so no
+// amount, delta or balance can carry a red tone.
+export type Tone = "good" | "neutral";
 
 /**
  * Income renders with a leading + and Expense with a minus, so direction is
@@ -176,13 +178,17 @@ export function formatSignedAmount(
   };
 }
 
-/** A change versus a comparison period -- e.g. StatTile's delta line. */
+/**
+ * A change versus a comparison period -- e.g. StatTile's delta line. Text
+ * and arrow only, no tone: whether a direction is good depends on what is
+ * being measured (spending down is good, income down isn't), so the caller
+ * decides, never the sign.
+ */
 export function formatDelta(
   value: number,
   opts: { format?: "currency" | "number" | "percent" } = {},
-): { text: string; arrow: "↑" | "↓" | "→"; tone: Tone } {
+): { text: string; arrow: "↑" | "↓" | "→" } {
   const format = opts.format ?? "number";
-  const tone: Tone = value > 0 ? "good" : value < 0 ? "critical" : "neutral";
   const arrow = value > 0 ? "↑" : value < 0 ? "↓" : "→";
   const abs = Math.abs(value);
   const magnitude =
@@ -192,5 +198,5 @@ export function formatDelta(
         ? `${abs.toFixed(1)}%`
         : plainNumber.format(abs);
   const sign = value > 0 ? "+" : value < 0 ? "−" : "";
-  return { text: `${sign}${magnitude}`, arrow, tone };
+  return { text: `${sign}${magnitude}`, arrow };
 }

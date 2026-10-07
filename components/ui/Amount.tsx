@@ -1,11 +1,10 @@
 import { formatSignedAmount, type Tone } from "@/lib/format";
 
 // The only place a Tone maps to a colour class -- every other component
-// that needs tone-coloured text (Amount itself, or a precomputed tone from
-// formatDelta) goes through toneClassName rather than keeping its own copy.
+// that needs tone-coloured text (Amount itself, or StatTile's delta line)
+// goes through toneClassName rather than keeping its own copy.
 const TONE_CLASS: Record<Tone, string> = {
   good: "text-good",
-  critical: "text-critical",
   neutral: "text-ink",
 };
 
