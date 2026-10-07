@@ -339,8 +339,11 @@ against the migrations. The contract:
   means "not a paying subscriber", not an error.
 - subscriptions: read-only for users. Billing state is service_role only.
 - Never use the service role key in application code.
-- The data layer test harness is `app/db-test/page.tsx` (in the tree). Re-run
-  it as two different users after any change to `lib/db/`.
+- Cross-user isolation is asserted by `docs/rls-isolation-test.sql` (two
+  throwaway users, one transaction, rolled back). Run it after any change to
+  tables, views, grants, policies or functions. There is no in-app test
+  harness: `app/db-test/page.tsx` was deleted 2026-10-07 because it was
+  deployed and wrote the visitor's real data. Never add a page that does.
 
 ## Recurring transactions
 

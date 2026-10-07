@@ -379,8 +379,9 @@ The instruction was to DROP it if nothing reads it. Something does, so it
 has NOT been dropped:
 
 - `lib/db/dashboard.ts:118` `getDashboardKpis()` selects `*` from the view.
-  Its only caller is the test harness, `app/db-test/page.tsx:413`. No
-  product page or component calls it.
+  Its only caller was the test harness `app/db-test/page.tsx`, deleted
+  2026-10-07 (see "Error handling audit" below). It now has no caller in
+  the repo.
 - `docs/rls-isolation-test.sql:276` uses the view as an RLS isolation case.
   That test checks row scoping and doesn't read the column.
 - `evernest/DATABASE.md` (lines 52, 65-69) documents it as the dashboard
@@ -401,11 +402,167 @@ on 2026-10-06, untracked, after being recorded as deleted on 2026-10-04.
 It was gitignored briefly, then deleted on 2026-10-06 and the ignore entry
 removed. It was never committed.
 
+## Error handling audit (2026-10-07)
+
+Audit of reads, error copy, schema leaks, swallowed errors and Server Action
+failures. `/db-test` was fixed on the spot. Everything else is decided below
+and goes into ONE fix pass, in the order listed. It's one piece of work
+across the same files; don't split it.
+
+### Fixed: `/db-test` was deployed and wrote the visitor's data
+
+`app/db-test/page.tsx` had no environment gate. Any signed-in user who
+opened `/db-test` in production ran ~45 write calls against their own real
+data: it created and archived accounts and categories, created and deleted
+transactions and budgets, and called `updateProfile` seven times. It also
+rendered raw PostgREST `code`/`message`/`details`/`hint`. RLS kept it to the
+visitor's own rows. **Deleted 2026-10-07**, not gated: nothing needs it. Its
+two-user isolation check is what `docs/rls-isolation-test.sql` already does
+at the SQL layer, and CLAUDE.md now points there. Side effect:
+`getDashboardKpis()` lost its only caller (see section 3 above).
+
+### P1: an unreachable auth server signs everyone out
+
+When Supabase Auth can't be reached, `getClaims()`/`getUser()` return an
+`AuthRetryableFetchError` (status 0 on a network failure, 5xx/52x on an
+outage). Three places read that as "not signed in":
+
+- `lib/supabase/middleware.ts:61-67`: ignores the error. `claims` is null,
+  so every protected request **redirects to `/login`**. A short Supabase
+  outage signs out every user at once.
+- `lib/auth/dal.ts:12`: `getUser()` error -> `null` -> `requireUser()`
+  redirects to `/login`. Not logged.
+- 15 `getClaims()` sites in `lib/db/*` (accounts, budgets, categories,
+  goals, profile, recurring x4, settings x4, transactions x2): any
+  `claimsError` becomes "Your session's expired". Not logged.
+
+**Decision:** this is a third outcome, not "signed out" and not "signed in".
+When middleware can't verify the session it must NOT let the request
+through: "can't reach the auth server" is not "authenticated". It renders
+an error state (503) saying the service is unreachable. It never redirects
+to `/login`, and it never falls through to `NextResponse.next()`.
+`requireUser()` and the 15 `getClaims()` sites make the same distinction:
+`isAuthRetryableFetchError()` (public export of `@supabase/supabase-js`)
+-> network-unreachable; a genuine auth failure -> auth-expired. The 15
+sites go through one shared helper, not 15 copies of the check.
+
+### P1 (equal): a failed read renders as a plausible zero
+
+A failed read must render an error state, never a believable empty list
+or zero. This app's premise is a number you can trust.
+
+- `app/(app)/recurring/page.tsx:57-74`: failed accounts / balances /
+  categories reads default to `[]`. A failed balances read shows **$0** as
+  a card payment's estimate (`:157`), which is silently wrong money. A
+  failed accounts read hides "Add schedule"; a failed categories read
+  leaves the pickers empty.
+- `app/(app)/accounts/page.tsx:135-136`: a failed categories read leaves
+  the pickers empty.
+
+The fix pass sweeps every `result.data ?? []` / `?? 0` / `?? null` in
+`app/` and decides each one: error state, or a documented harmless
+degradation like `holidays` on the recurring page, whose comment explains
+why it's only a preview.
+
+### 1. The classifier: one function, six classes
+
+`describeReadError` and `describeWriteError` (`lib/db/errors.ts`) give the
+same copy for a connect timeout, a missing GRANT (`42501`) and a genuine
+bug. They are rebuilt on one `classifyDbError()` with these classes:
+
+| Class | Detected by | User copy |
+|---|---|---|
+| network-unreachable | Supabase client's fetch-failure shape (below) | "We can't reach our servers right now. It's not you — try again in a minute." |
+| auth-expired | `PGRST301`/`PGRST302`, JWT expired/invalid | existing "Your session's expired…" |
+| permission-denied | `42501` | generic text; logged at error, because it's a GRANT bug |
+| transient | `40001`, `40P01`, `55P03`, `57014`, `53300`, `08xxx` | existing "busy, try again" (reads get it too, not only writes) |
+| not-found | `PGRST116` | per caller; often not an error at all (see `maybeSingle()` below) |
+| unexpected | everything else | existing generic text |
+
+**Shape-pinning test (required).** On a failed fetch `@supabase/postgrest-js`
+(2.112.2) does not throw. It returns `{ code: "", message:
+"<name>: <message>", details: "...Caused by: ... (<cause code>)", hint }`
+with `status: 0` (`dist/index.cjs:394-434`). Detection relies on that
+implementation detail. If an upgrade changes the shape, every network error
+silently becomes "unexpected" and nothing fails. So a test drives a real
+`PostgrestClient` with a `fetch` that rejects (a `TypeError("fetch failed")`
+with an `UND_ERR_CONNECT_TIMEOUT` cause) and asserts that
+`classifyDbError` returns network-unreachable. The upgrade then breaks a
+test instead of the error handling. The auth side uses
+`isAuthRetryableFetchError()`, which is public API and needs no pinning.
+
+### 2. Copy: whose connection failed
+
+Every database call runs on the Next server, so a server-side `fetch failed`
+means the server can't reach Supabase. It does NOT mean the user is
+offline. Three cases:
+
+- Server can't reach Supabase: "We can't reach our servers right now.
+  It's not you — try again in a minute."
+- Browser offline (a Server Action or navigation failed in the browser):
+  `app/error.tsx` checks `navigator.onLine` in an effect and shows "You
+  appear to be offline." Today it says "Something on our end broke, not
+  anything you did", which is wrong for someone who's offline.
+- Everything else: the existing generic text.
+
+"Check your connection" wording appears ONLY in the browser-offline case.
+
+### 3. Auth error text leaks Supabase's raw message
+
+`lib/auth/errors.ts:32` falls back to `error.message` for any unmapped
+auth code. That message reaches login, signup, forgot-password and reset.
+GoTrue's real messages include "Database error saving new user" and
+"Database error querying schema", and a network failure shows "fetch
+failed". **Decision:** a fixed sentence to the user, the raw message to the
+server log.
+
+The rest of the app is clean on schema leaks: `lib/db` returns only fixed
+strings, and `error.tsx` shows only the digest.
+
+### 4. Smaller items
+
+- `app/(app)/transactions/[id]/edit/page.tsx:37`: `notFound()` on *any*
+  `getTransaction` error, so a timeout shows "page not found". It also uses
+  `.single()`, so a legitimately missing row is logged at error level. Move
+  to `.maybeSingle()`: `null` -> `notFound()`, error -> load-error state.
+- `app/(app)/transactions/AddTransactionForm.tsx:181`: if
+  `updateAccountOpeningDateAction` fails, the button does nothing, with no
+  message and no change. Show the error. This is the one direct action call
+  that doesn't check `result?.error`.
+- `components/quick-add/QuickAddBar.tsx:115`: `suggestCategoryAction` runs
+  in a `setTimeout` with no catch, so a network failure is an unhandled
+  promise rejection. Catch it; a missing suggestion is fine.
+- Deliberate swallows: keep the behaviour, stop discarding the error. Log
+  `components/TodayProvider.tsx:67` (`syncTimeZoneAction(...).catch(() =>
+  {})`) and `lib/format.ts:94,107,123,139` (a malformed date renders blank).
+  `lib/date.ts:11` (invalid zone -> UTC) is already guarded by its callers.
+  The localStorage guards, the cookie `setAll` in `lib/supabase/server.ts`
+  and the inline theme script stay as they are.
+
+### Recorded, NOT in this fix pass: a thrown action loses the form
+
+When a Server Action throws (browser offline, server crash), React sends it
+to the nearest error boundary. `app/error.tsx` replaces the whole route and
+anything typed into the form is lost. It isn't a false success: every
+`useActionState` form only calls `onSuccess` on `!state?.error`, and every
+other direct call checks `result?.error` (except `:181` above). But it's
+heavy-handed. A real problem and a bigger change than the rest; decide
+separately.
+
+### Not an open item: a missing RLS policy looks like an empty list
+
+RLS filters rows, it doesn't raise an error, so a table missing its
+SELECT policy returns `[]`. No app code can tell that apart from a user
+with no data. It isn't solvable at runtime. **Covered by
+`docs/rls-isolation-test.sql`**, which asserts the policies exist and
+isolate. Run it after any migration (see that file's header).
+
 ## Temporary code that must not ship
 
 | Path | Purpose | Added | Status |
 |---|---|---|---|
 | `app/(app)/dev-projection/page.tsx` | Prints the signed-in user's safe-to-spend projection (income, obligations, daily balance, trough, cushion, result) to check it against real data. Dev-only (`notFound()` in production); reads through `getSafeToSpend()` under the user's session and RLS. | 2026-10-02 | Deleted 2026-10-06 (never committed; an earlier "deleted 2026-10-04" hadn't taken) |
+| `app/db-test/page.tsx` | Data-layer test harness: ran every `lib/db` read and write as the signed-in user and printed raw PostgREST errors. **No environment gate**, so it was live in production and wrote the visitor's data. | 2026-08-15 | Deleted 2026-10-07. Isolation checks live in `docs/rls-isolation-test.sql`. |
 
 ## "fiber.reset is not a function" in the dev overlay (2026-10-04)
 
