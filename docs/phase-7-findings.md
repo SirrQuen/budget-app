@@ -272,6 +272,39 @@ only table without a `userid` and the only data a fresh database needs.
 
 What a dump cannot capture at all is listed in `docs/supabase-config.md`.
 
+### Archived files vs what production ran (2026-10-08)
+
+Checked once, before the reconcile deletes the evidence: each file in
+`_archive/` against its `supabase_migrations.schema_migrations.statements`
+entry, the SQL that actually ran. Whitespace ignored; each statement's
+`;` restored, since the CLI stores statements without it.
+
+- 28 identical. 13 identical except comment lines after the last
+  statement, which the CLI does not store (01, 02, 03, 04, 14, 15, 16,
+  17, 22, 34, 39, 40, 41) -- a storage artefact, not an edit.
+- **1 mismatch: 07 (`07_transfers`) was edited after it ran.**
+  Production ran a bare `alter table transactions alter column
+  categoryid drop not null;`. The file has that statement wrapped in a
+  `do $do$` block guarded by an `information_schema.columns` check
+  (`is_nullable = 'NO'`), plus a comment saying the guard matches the
+  file's idempotent style. Nothing else in the file differs. The edit
+  predates the file's only commit (`c3b3c1c`, 2026-08-25), so the repo
+  never recorded what ran.
+
+  Effect: none on production. Both forms leave `categoryid` nullable,
+  the guard only makes a re-run a no-op, and the baseline diff confirms
+  the end state. But it is the repo-doesn't-match-reality problem in a
+  form the schema diff cannot see: edit a migration after applying it
+  and nothing records that the file is not what ran. Applied migrations
+  are never edited; a change is a new migration.
+
+The full history table, statements included, is saved at
+`sorrel-backups/2026-10-08/migration-history-before.txt`.
+
+Migration 10 never existed in git (this repo or `~/evernest`) and never
+ran: production's history goes from `20260828000009` to
+`20260828000011`.
+
 ## Section 1: `profiles -> auth.users` FK exists only in production (2026-10-06)
 
 **Status: fixed in migration 39 (2026-10-06).**
