@@ -16,6 +16,7 @@ import {
   type ProjectionSchedule,
   type SafeToSpendProjection,
 } from "@/lib/safeToSpendProjection";
+import { SPENDABLE_ACCOUNT_TYPES, isSpendableAccountType } from "@/lib/safeToSpend";
 import { deriveLoggingStreak, type LoggingStreakSummary } from "@/lib/streak";
 
 type DashboardKpisRow = Database["public"]["Views"]["v_dashboard_kpis"]["Row"];
@@ -658,7 +659,7 @@ export const getIncomeSchedules = cache(async (): Promise<DbResult<IncomeSchedul
     return { data: null, error: describeReadError(error, "dashboard") };
   }
 
-  const row = data.find((r) => r.account_type === "Checking" || r.account_type === "Savings");
+  const row = data.find((r) => r.account_type !== null && isSpendableAccountType(r.account_type));
 
   return {
     data: {
@@ -765,7 +766,7 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
       .from("v_account_balances")
       .select("balance")
       .eq("is_active", true)
-      .in("account_type", ["Checking", "Savings"]),
+      .in("account_type", [...SPENDABLE_ACCOUNT_TYPES]),
     supabase
       .from("v_upcoming_recurring")
       .select(

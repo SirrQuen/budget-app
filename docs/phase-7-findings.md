@@ -505,7 +505,7 @@ select); and
 
 ## "Leaves the set" classifier: only one of three consumers shares it (2026-10-06)
 
-**Status: decided, build in the fix pass.**
+**Status: fix 1 done 2026-10-08; fix 2 (cushion SQL) open.**
 
 CLAUDE.md requires that Spendable Cash, the safe-to-spend projection and the
 cushion suggestion all call one "leaves the set" classifier
@@ -515,10 +515,11 @@ cushion suggestion all call one "leaves the set" classifier
 | Consumer | Uses the shared classifier? | Where |
 |---|---|---|
 | Projection | Yes | `lib/safeToSpendProjection.ts` imports both functions |
-| Spendable Cash (starting balance) | **No**: own copy of the set | `lib/db/dashboard.ts:777` `.in("account_type", ["Checking", "Savings"])` |
+| Spendable Cash (starting balance) | ~~**No**: own copy of the set~~ Yes since 2026-10-08 | `getSafeToSpend()` in `lib/db/dashboard.ts`, `.in("account_type", [...SPENDABLE_ACCOUNT_TYPES])` |
 | Cushion suggestion | **No**: whole rule rewritten in SQL | `suggested_safe_to_spend_cushion()`, migration 33 |
 
-Also hand-copied: `getIncomeSchedules`, `lib/db/dashboard.ts:670`.
+Also hand-copied at audit time: `getIncomeSchedules` in
+`lib/db/dashboard.ts`. Now calls `isSpendableAccountType` (2026-10-08).
 
 The classifier itself is correct. Verified against all eight required cases
 (Checking<->Savings transfers not counted, either direction; Checking ->
@@ -529,6 +530,9 @@ outside the set not counted). `lib/safeToSpend.test.ts` and
 test for Transfer Checking -> Credit Card in `safeToSpend.test.ts`; add one.
 
 ### 1. Spendable Cash and getIncomeSchedules: mechanical
+
+**Done 2026-10-08.** Both sites now use the shared set; `npm test` 112/112.
+Not yet checked in the running app.
 
 Pass `[...SPENDABLE_ACCOUNT_TYPES]` to `.in(...)` at `dashboard.ts:777`, and
 call `isSpendableAccountType` at `dashboard.ts:670`. There's no design

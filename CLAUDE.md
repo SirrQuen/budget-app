@@ -67,10 +67,9 @@ Income: low amount, late date. Obligations: high amount, early date.
 **One "leaves the set" classifier, three consumers.**
 Spendable Cash, the projection, and the cushion suggestion must all use the
 same classifier (`lib/safeToSpend.ts`). Never reimplement it — they will drift.
-KNOWN VIOLATION, being fixed: today only the projection uses it. Spendable
-Cash (`lib/db/dashboard.ts`) copies the account-type set, and the cushion SQL
-(migration 33) rewrites the rule. See `docs/phase-7-findings.md`. Don't copy
-either pattern.
+The projection and Spendable Cash (`lib/db/dashboard.ts`) both use it.
+KNOWN VIOLATION, being fixed: the cushion SQL (migration 33) rewrites the
+rule. See `docs/phase-7-findings.md`. Don't copy that pattern.
 Checking→savings is NOT money leaving. Card purchases are NOT counted here;
 the card payment obligation already captures them.
 
