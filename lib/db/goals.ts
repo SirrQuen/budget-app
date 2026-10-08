@@ -64,9 +64,19 @@ export async function contributeToGoal(
 ): Promise<DbResult<GoalContributionRow>> {
   const supabase = await createClient();
 
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  const userid = claimsData?.claims?.sub;
+
+  if (claimsError || !userid) {
+    return {
+      data: null,
+      error: "Your session's expired. Log in again to pick up where you left off.",
+    };
+  }
+
   const { data, error } = await supabase
     .from("goal_contributions")
-    .insert({ ...input, goalid, funding_method: "manual" })
+    .insert({ ...input, goalid, userid, funding_method: "manual" })
     .select()
     .single();
 

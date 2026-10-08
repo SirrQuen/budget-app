@@ -11,8 +11,14 @@
 -- is audited without editing this file. FKs to profiles are skipped:
 -- those ARE the owner column, not a reference to someone's data.
 --
--- Owner of a row is its userid, except goal_contributions, which has no
--- userid and belongs to its goal's owner.
+-- Composite FKs (userid, ref) -> parent(userid, id) (migration 44) are
+-- audited on their non-userid column. They cannot hold a mismatch by
+-- construction; auditing them anyway keeps this file vacuous-proof if one
+-- is ever rewritten back to single-column.
+--
+-- Owner of a row is its userid. goal_contributions had no userid before
+-- migration 44 and belonged to its goal's owner; that branch is kept so
+-- the audit still runs against a database from before 44.
 -- =====================================================================
 
 with fks as (
@@ -24,13 +30,14 @@ with fks as (
     from pg_constraint con
     join pg_class cr on cr.oid = con.conrelid
     join pg_class pr on pr.oid = con.confrelid
-    join pg_attribute ca on ca.attrelid = con.conrelid  and ca.attnum = con.conkey[1]
-    join pg_attribute pa on pa.attrelid = con.confrelid and pa.attnum = con.confkey[1]
+    cross join lateral unnest(con.conkey, con.confkey) as k(ck, pk)
+    join pg_attribute ca on ca.attrelid = con.conrelid  and ca.attnum = k.ck
+    join pg_attribute pa on pa.attrelid = con.confrelid and pa.attnum = k.pk
    where con.contype = 'f'
      and con.connamespace = 'public'::regnamespace
      and pr.relnamespace  = 'public'::regnamespace
      and pr.relname <> 'profiles'
-     and cardinality(con.conkey) = 1
+     and (cardinality(con.conkey) = 1 or ca.attname <> 'userid')
 ),
 owners as (
   select f.*,

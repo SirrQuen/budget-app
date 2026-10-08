@@ -117,31 +117,17 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "budgets_categoryid_fkey"
-            columns: ["categoryid"]
+            columns: ["userid", "categoryid"]
             isOneToOne: false
             referencedRelation: "categories"
-            referencedColumns: ["id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "budgets_categoryid_fkey"
-            columns: ["categoryid"]
-            isOneToOne: false
-            referencedRelation: "v_budget_vs_actual"
-            referencedColumns: ["category_id"]
-          },
-          {
-            foreignKeyName: "budgets_categoryid_fkey"
-            columns: ["categoryid"]
+            columns: ["userid", "categoryid"]
             isOneToOne: false
             referencedRelation: "v_category_activity"
-            referencedColumns: ["category_id"]
-          },
-          {
-            foreignKeyName: "budgets_categoryid_fkey"
-            columns: ["categoryid"]
-            isOneToOne: false
-            referencedRelation: "v_category_spending"
-            referencedColumns: ["category_id"]
+            referencedColumns: ["userid", "category_id"]
           },
           {
             foreignKeyName: "budgets_userid_fkey"
@@ -196,24 +182,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "categories_groupid_fkey"
-            columns: ["groupid"]
+            columns: ["userid", "groupid"]
             isOneToOne: false
             referencedRelation: "category_groups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "categories_groupid_fkey"
-            columns: ["groupid"]
-            isOneToOne: false
-            referencedRelation: "v_budget_vs_actual"
-            referencedColumns: ["group_id"]
-          },
-          {
-            foreignKeyName: "categories_groupid_fkey"
-            columns: ["groupid"]
-            isOneToOne: false
-            referencedRelation: "v_category_spending"
-            referencedColumns: ["group_id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "categories_userid_fkey"
@@ -279,6 +251,7 @@ export type Database = {
           goalid: string
           id: string
           transactionid: string | null
+          userid: string
         }
         Insert: {
           amount?: number
@@ -288,6 +261,7 @@ export type Database = {
           goalid: string
           id?: string
           transactionid?: string | null
+          userid: string
         }
         Update: {
           amount?: number
@@ -297,28 +271,43 @@ export type Database = {
           goalid?: string
           id?: string
           transactionid?: string | null
+          userid?: string
         }
         Relationships: [
           {
             foreignKeyName: "goal_contributions_goalid_fkey"
-            columns: ["goalid"]
+            columns: ["userid", "goalid"]
             isOneToOne: false
             referencedRelation: "goals"
-            referencedColumns: ["id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "goal_contributions_goalid_fkey"
-            columns: ["goalid"]
+            columns: ["userid", "goalid"]
             isOneToOne: false
             referencedRelation: "v_goal_progress"
-            referencedColumns: ["goal_id"]
+            referencedColumns: ["userid", "goal_id"]
           },
           {
             foreignKeyName: "goal_contributions_transactionid_fkey"
-            columns: ["transactionid"]
+            columns: ["userid", "transactionid"]
             isOneToOne: false
             referencedRelation: "transactions"
+            referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "goal_contributions_userid_fkey"
+            columns: ["userid"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_contributions_userid_fkey"
+            columns: ["userid"]
+            isOneToOne: false
+            referencedRelation: "v_dashboard_kpis"
+            referencedColumns: ["userid"]
           },
         ]
       }
@@ -368,17 +357,17 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "goals_accountid_fkey"
-            columns: ["accountid"]
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "accounts"
-            referencedColumns: ["id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "goals_accountid_fkey"
-            columns: ["accountid"]
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
-            referencedColumns: ["account_id"]
+            referencedColumns: ["userid", "account_id"]
           },
           {
             foreignKeyName: "goals_userid_fkey"
@@ -433,17 +422,17 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "investments_accountid_fkey"
-            columns: ["accountid"]
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "accounts"
-            referencedColumns: ["id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "investments_accountid_fkey"
-            columns: ["accountid"]
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
-            referencedColumns: ["account_id"]
+            referencedColumns: ["userid", "account_id"]
           },
           {
             foreignKeyName: "investments_userid_fkey"
@@ -633,59 +622,45 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "recurring_transactions_accountid_fkey"
-            columns: ["accountid"]
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "accounts"
-            referencedColumns: ["id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "recurring_transactions_accountid_fkey"
-            columns: ["accountid"]
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
-            referencedColumns: ["account_id"]
+            referencedColumns: ["userid", "account_id"]
           },
           {
             foreignKeyName: "recurring_transactions_categoryid_fkey"
-            columns: ["categoryid"]
+            columns: ["userid", "categoryid"]
             isOneToOne: false
             referencedRelation: "categories"
-            referencedColumns: ["id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "recurring_transactions_categoryid_fkey"
-            columns: ["categoryid"]
-            isOneToOne: false
-            referencedRelation: "v_budget_vs_actual"
-            referencedColumns: ["category_id"]
-          },
-          {
-            foreignKeyName: "recurring_transactions_categoryid_fkey"
-            columns: ["categoryid"]
+            columns: ["userid", "categoryid"]
             isOneToOne: false
             referencedRelation: "v_category_activity"
-            referencedColumns: ["category_id"]
-          },
-          {
-            foreignKeyName: "recurring_transactions_categoryid_fkey"
-            columns: ["categoryid"]
-            isOneToOne: false
-            referencedRelation: "v_category_spending"
-            referencedColumns: ["category_id"]
+            referencedColumns: ["userid", "category_id"]
           },
           {
             foreignKeyName: "recurring_transactions_to_accountid_fkey"
-            columns: ["to_accountid"]
+            columns: ["userid", "to_accountid"]
             isOneToOne: false
             referencedRelation: "accounts"
-            referencedColumns: ["id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "recurring_transactions_to_accountid_fkey"
-            columns: ["to_accountid"]
+            columns: ["userid", "to_accountid"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
-            referencedColumns: ["account_id"]
+            referencedColumns: ["userid", "account_id"]
           },
           {
             foreignKeyName: "recurring_transactions_userid_fkey"
@@ -878,73 +853,59 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "transactions_accountid_fkey"
-            columns: ["accountid"]
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "accounts"
-            referencedColumns: ["id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "transactions_accountid_fkey"
-            columns: ["accountid"]
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
-            referencedColumns: ["account_id"]
+            referencedColumns: ["userid", "account_id"]
           },
           {
             foreignKeyName: "transactions_categoryid_fkey"
-            columns: ["categoryid"]
+            columns: ["userid", "categoryid"]
             isOneToOne: false
             referencedRelation: "categories"
-            referencedColumns: ["id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "transactions_categoryid_fkey"
-            columns: ["categoryid"]
-            isOneToOne: false
-            referencedRelation: "v_budget_vs_actual"
-            referencedColumns: ["category_id"]
-          },
-          {
-            foreignKeyName: "transactions_categoryid_fkey"
-            columns: ["categoryid"]
+            columns: ["userid", "categoryid"]
             isOneToOne: false
             referencedRelation: "v_category_activity"
-            referencedColumns: ["category_id"]
-          },
-          {
-            foreignKeyName: "transactions_categoryid_fkey"
-            columns: ["categoryid"]
-            isOneToOne: false
-            referencedRelation: "v_category_spending"
-            referencedColumns: ["category_id"]
+            referencedColumns: ["userid", "category_id"]
           },
           {
             foreignKeyName: "transactions_goalid_fkey"
-            columns: ["goalid"]
+            columns: ["userid", "goalid"]
             isOneToOne: false
             referencedRelation: "goals"
-            referencedColumns: ["id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "transactions_goalid_fkey"
-            columns: ["goalid"]
+            columns: ["userid", "goalid"]
             isOneToOne: false
             referencedRelation: "v_goal_progress"
-            referencedColumns: ["goal_id"]
+            referencedColumns: ["userid", "goal_id"]
           },
           {
             foreignKeyName: "transactions_recurringid_fkey"
-            columns: ["recurringid"]
+            columns: ["userid", "recurringid"]
             isOneToOne: false
             referencedRelation: "recurring_transactions"
-            referencedColumns: ["id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "transactions_recurringid_fkey"
-            columns: ["recurringid"]
+            columns: ["userid", "recurringid"]
             isOneToOne: false
             referencedRelation: "v_upcoming_recurring"
-            referencedColumns: ["recurring_id"]
+            referencedColumns: ["userid", "recurring_id"]
           },
           {
             foreignKeyName: "transactions_userid_fkey"
@@ -1160,17 +1121,17 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "goals_accountid_fkey"
-            columns: ["accountid"]
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "accounts"
-            referencedColumns: ["id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "goals_accountid_fkey"
-            columns: ["accountid"]
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
-            referencedColumns: ["account_id"]
+            referencedColumns: ["userid", "account_id"]
           },
           {
             foreignKeyName: "goals_userid_fkey"
@@ -1252,17 +1213,17 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "investments_accountid_fkey"
-            columns: ["accountid"]
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "accounts"
-            referencedColumns: ["id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "investments_accountid_fkey"
-            columns: ["accountid"]
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
-            referencedColumns: ["account_id"]
+            referencedColumns: ["userid", "account_id"]
           },
           {
             foreignKeyName: "investments_userid_fkey"
@@ -1349,17 +1310,17 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "investments_accountid_fkey"
-            columns: ["accountid"]
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "accounts"
-            referencedColumns: ["id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "investments_accountid_fkey"
-            columns: ["accountid"]
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
-            referencedColumns: ["account_id"]
+            referencedColumns: ["userid", "account_id"]
           },
           {
             foreignKeyName: "investments_userid_fkey"
@@ -1420,59 +1381,45 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "recurring_transactions_accountid_fkey"
-            columns: ["accountid"]
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "accounts"
-            referencedColumns: ["id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "recurring_transactions_accountid_fkey"
-            columns: ["accountid"]
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
-            referencedColumns: ["account_id"]
+            referencedColumns: ["userid", "account_id"]
           },
           {
             foreignKeyName: "recurring_transactions_categoryid_fkey"
-            columns: ["categoryid"]
+            columns: ["userid", "categoryid"]
             isOneToOne: false
             referencedRelation: "categories"
-            referencedColumns: ["id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "recurring_transactions_categoryid_fkey"
-            columns: ["categoryid"]
-            isOneToOne: false
-            referencedRelation: "v_budget_vs_actual"
-            referencedColumns: ["category_id"]
-          },
-          {
-            foreignKeyName: "recurring_transactions_categoryid_fkey"
-            columns: ["categoryid"]
+            columns: ["userid", "categoryid"]
             isOneToOne: false
             referencedRelation: "v_category_activity"
-            referencedColumns: ["category_id"]
-          },
-          {
-            foreignKeyName: "recurring_transactions_categoryid_fkey"
-            columns: ["categoryid"]
-            isOneToOne: false
-            referencedRelation: "v_category_spending"
-            referencedColumns: ["category_id"]
+            referencedColumns: ["userid", "category_id"]
           },
           {
             foreignKeyName: "recurring_transactions_to_accountid_fkey"
-            columns: ["to_accountid"]
+            columns: ["userid", "to_accountid"]
             isOneToOne: false
             referencedRelation: "accounts"
-            referencedColumns: ["id"]
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "recurring_transactions_to_accountid_fkey"
-            columns: ["to_accountid"]
+            columns: ["userid", "to_accountid"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
-            referencedColumns: ["account_id"]
+            referencedColumns: ["userid", "account_id"]
           },
           {
             foreignKeyName: "recurring_transactions_userid_fkey"

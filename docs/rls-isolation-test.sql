@@ -44,6 +44,9 @@
 --   7  Trigger oracles
 --                 DEFINER triggers must answer the same for another
 --                 user's category as for a made-up id
+--   8  Composite foreign keys
+--                 the section 4 references written as the table owner
+--                 (RLS bypassed) must be rejected by the FK itself
 --   5  Coverage   every public table/view is tested here or exempted
 --   2d Function grants (Phase 7)
 --
@@ -109,12 +112,13 @@ begin
 end
 $$;
 
--- Run a write as p_user. Returns rows affected, or the error it raised.
+-- Run a write as p_user (null user = table owner, RLS bypassed).
+-- Returns rows affected, or the error it raised.
 create function pg_temp.try_as(p_user uuid, p_sql text,
   out n bigint, out state text, out msg text)
 language plpgsql as $$
 begin
-  perform pg_temp.become(p_user);
+  if p_user is not null then perform pg_temp.become(p_user); end if;
   begin
     execute p_sql;
     get diagnostics n = row_count;
@@ -209,8 +213,8 @@ begin
     insert into public.goals (id, userid, goal_name, goal_type, target_amount, status, tracking_method)
     values (pg_temp.fx(u || '_goal'), uid, 'RLS ' || u || ' goal', 'Custom', 500, 'Active', 'Manual');
 
-    insert into public.goal_contributions (id, goalid, amount, date, funding_method)
-    values (pg_temp.fx(u || '_contrib'), pg_temp.fx(u || '_goal'), 50, current_date, 'manual');
+    insert into public.goal_contributions (id, userid, goalid, amount, date, funding_method)
+    values (pg_temp.fx(u || '_contrib'), uid, pg_temp.fx(u || '_goal'), 50, current_date, 'manual');
 
     -- current_price null: also gives v_integrity_issues a missing_price row.
     insert into public.investments (id, userid, accountid, ticker, shares, average_cost, asset_type)
@@ -379,7 +383,7 @@ begin
       ('budgets',                format('insert into public.budgets (userid, categoryid, budget_amount, budget_month) values (%L, %L, 1, %L)', a, pg_temp.fx('B_rent'), date_trunc('month', current_date)::date)),
       ('categories',             format('insert into public.categories (userid, groupid, category_name, category_type) values (%L, %L, ''rls'', ''Expense'')', a, pg_temp.fx('B_group'))),
       ('category_groups',        format('insert into public.category_groups (userid, name) values (%L, ''rls'')', a)),
-      ('goal_contributions',     format('insert into public.goal_contributions (goalid, amount, date, funding_method) values (%L, 1, current_date, ''manual'')', pg_temp.fx('A_goal'))),
+      ('goal_contributions',     format('insert into public.goal_contributions (userid, goalid, amount, date, funding_method) values (%L, %L, 1, current_date, ''manual'')', a, pg_temp.fx('A_goal'))),
       ('goals',                  format('insert into public.goals (userid, goal_name, goal_type, target_amount) values (%L, ''rls'', ''Custom'', 1)', a)),
       ('investments',            format('insert into public.investments (userid, accountid, ticker, shares, average_cost, asset_type) values (%L, %L, ''RLS2'', 1, 1, ''Stock'')', a, pg_temp.fx('B_invacct'))),
       ('notifications',          format('insert into public.notifications (userid, title, message, notification_type) values (%L, ''rls'', ''rls'', ''info'')', a)),
@@ -461,7 +465,7 @@ begin
       ('goals',                  'accountid -> A''s account',
         format('insert into public.goals (userid, goal_name, goal_type, target_amount, accountid) values (%L, ''rls'', ''Custom'', 1, %L)', b, pg_temp.fx('A_acct'))),
       ('goal_contributions',     'transactionid -> A''s transaction',
-        format('insert into public.goal_contributions (goalid, transactionid, amount, date, funding_method) values (%L, %L, 1, current_date, ''transaction'')', pg_temp.fx('B_goal'), pg_temp.fx('A_txn')))
+        format('insert into public.goal_contributions (userid, goalid, transactionid, amount, date, funding_method) values (%L, %L, %L, 1, current_date, ''transaction'')', b, pg_temp.fx('B_goal'), pg_temp.fx('A_txn')))
     ) as t(rel, ref, sql)
   loop
     select * into w from pg_temp.try_as(b, r.sql);
@@ -539,9 +543,9 @@ begin
       ('goals', 'UPDATE own goal', 1,
         format('update public.goals set goal_name = ''rls edited'' where id = %L', pg_temp.fx('A_goal'))),
       ('goal_contributions', 'INSERT manual, transactionid null', 1,
-        format('insert into public.goal_contributions (goalid, amount, date, funding_method) values (%L, 10, current_date, ''manual'')', pg_temp.fx('A_goal'))),
+        format('insert into public.goal_contributions (userid, goalid, amount, date, funding_method) values (%L, %L, 10, current_date, ''manual'')', a, pg_temp.fx('A_goal'))),
       ('goal_contributions', 'INSERT from own transaction', 1,
-        format('insert into public.goal_contributions (goalid, transactionid, amount, date, funding_method) values (%L, %L, 30, current_date, ''transaction'')', pg_temp.fx('A_goal'), pg_temp.fx('A_txn'))),
+        format('insert into public.goal_contributions (userid, goalid, transactionid, amount, date, funding_method) values (%L, %L, %L, 30, current_date, ''transaction'')', a, pg_temp.fx('A_goal'), pg_temp.fx('A_txn'))),
       ('goal_contributions', 'UPDATE own contribution', 1,
         format('update public.goal_contributions set amount = 60 where id = %L', pg_temp.fx('A_contrib')))
     ) as t(rel, what, rows_expected, sql)
@@ -631,6 +635,119 @@ begin
       coalesce('rejected ' || w.state || ': ' || w.msg, 'accepted'),
       case r.expected when 'accepted' then w.state is null
                       else w.state = '23514' end);
+  end loop;
+end
+$$;
+
+
+-- ---------------------------------------------------------------------
+-- 8 Composite foreign keys (migration 44)
+--
+-- Section 4 proves RLS rejects cross-user references. This proves the
+-- schema does, with RLS out of the way: every write runs as the table
+-- owner, the path service_role, a SECURITY DEFINER function or a
+-- support-side fix takes. Each must be rejected by the named FK (23503),
+-- not by a CHECK or trigger that happens to fire first.
+--
+-- Then the ON DELETE SET NULL FKs: deleting the parent must null only the
+-- reference and leave userid alone (the column-list form).
+-- ---------------------------------------------------------------------
+do $$
+declare
+  a uuid := pg_temp.fx('A');
+  b uuid := pg_temp.fx('B');
+  r record;
+  w record;
+  v_goal uuid := gen_random_uuid();
+  v_recur uuid := gen_random_uuid();
+  v_acct uuid := gen_random_uuid();
+  v_txn_goal uuid := gen_random_uuid();
+  v_txn_recur uuid := gen_random_uuid();
+  v_goal_linked uuid := gen_random_uuid();
+  v_row record;
+begin
+  for r in
+    select * from (values
+      ('transactions_accountid_fkey',
+        format('insert into public.transactions (userid, accountid, categoryid, description, amount, transaction_type, transaction_date) values (%L, %L, %L, ''rls'', 5, ''Expense'', current_date)', b, pg_temp.fx('A_acct'), pg_temp.fx('B_groceries'))),
+      ('transactions_categoryid_fkey',
+        format('insert into public.transactions (userid, accountid, categoryid, description, amount, transaction_type, transaction_date) values (%L, %L, %L, ''rls'', 5, ''Expense'', current_date)', b, pg_temp.fx('B_acct'), pg_temp.fx('A_groceries'))),
+      ('transactions_goalid_fkey',
+        format('insert into public.transactions (userid, accountid, categoryid, goalid, description, amount, transaction_type, transaction_date) values (%L, %L, %L, %L, ''rls'', 5, ''Expense'', current_date)', b, pg_temp.fx('B_acct'), pg_temp.fx('B_groceries'), pg_temp.fx('A_goal'))),
+      -- current_date - 1: section 6 posted A's schedule today, and
+      -- recurring_tx_no_double_post (checked immediately) would fire
+      -- before the FK (checked at end of statement).
+      ('transactions_recurringid_fkey',
+        format('insert into public.transactions (userid, accountid, categoryid, recurringid, description, amount, transaction_type, transaction_date) values (%L, %L, %L, %L, ''rls'', 5, ''Expense'', current_date - 1)', b, pg_temp.fx('B_acct'), pg_temp.fx('B_rent'), pg_temp.fx('A_recur'))),
+      ('recurring_transactions_accountid_fkey',
+        format('insert into public.recurring_transactions (userid, accountid, categoryid, description, amount, frequency, next_run_date, next_due_date) values (%L, %L, %L, ''rls'', 1, ''Monthly'', current_date + 5, current_date + 5)', b, pg_temp.fx('A_acct'), pg_temp.fx('B_rent'))),
+      ('recurring_transactions_to_accountid_fkey',
+        format('insert into public.recurring_transactions (userid, accountid, to_accountid, categoryid, description, amount, frequency, next_run_date, next_due_date) values (%L, %L, %L, null, ''rls'', 1, ''Monthly'', current_date + 5, current_date + 5)', b, pg_temp.fx('B_acct'), pg_temp.fx('A_acct'))),
+      ('recurring_transactions_categoryid_fkey',
+        format('insert into public.recurring_transactions (userid, accountid, categoryid, description, amount, frequency, next_run_date, next_due_date) values (%L, %L, %L, ''rls'', 1, ''Monthly'', current_date + 5, current_date + 5)', b, pg_temp.fx('B_acct'), pg_temp.fx('A_rent'))),
+      ('investments_accountid_fkey',
+        format('insert into public.investments (userid, accountid, ticker, shares, average_cost, asset_type) values (%L, %L, ''RLS8'', 1, 1, ''Stock'')', b, pg_temp.fx('A_invacct'))),
+      ('budgets_categoryid_fkey',
+        format('insert into public.budgets (userid, categoryid, budget_amount, budget_month) values (%L, %L, 1, %L)', b, pg_temp.fx('A_groceries'), (date_trunc('month', current_date) + interval '2 months')::date)),
+      ('goals_accountid_fkey',
+        format('insert into public.goals (userid, goal_name, goal_type, target_amount, accountid) values (%L, ''rls'', ''Custom'', 1, %L)', b, pg_temp.fx('A_acct'))),
+      ('categories_groupid_fkey',
+        format('insert into public.categories (userid, groupid, category_name, category_type) values (%L, %L, ''rls'', ''Expense'')', b, pg_temp.fx('A_group'))),
+      ('goal_contributions_goalid_fkey',
+        format('insert into public.goal_contributions (userid, goalid, amount, date, funding_method) values (%L, %L, 1, current_date, ''manual'')', b, pg_temp.fx('A_goal'))),
+      ('goal_contributions_transactionid_fkey',
+        format('insert into public.goal_contributions (userid, goalid, transactionid, amount, date, funding_method) values (%L, %L, %L, 1, current_date, ''transaction'')', b, pg_temp.fx('B_goal'), pg_temp.fx('A_txn'))),
+      -- Re-pointing an existing row is the same hole by UPDATE.
+      ('transactions_accountid_fkey',
+        format('update public.transactions set accountid = %L where id = %L', pg_temp.fx('A_acct'), pg_temp.fx('B_txn'))),
+      ('goal_contributions_goalid_fkey',
+        format('update public.goal_contributions set goalid = %L where id = %L', pg_temp.fx('A_goal'), pg_temp.fx('B_contrib')))
+    ) as t(fk, sql)
+  loop
+    select * into w from pg_temp.try_as(null, r.sql);
+    perform pg_temp.rec('8 composite FKs', r.fk,
+      'owner (RLS bypassed): B row -> A''s parent, ' || split_part(r.sql, ' ', 1),
+      'rejected 23503 by ' || r.fk,
+      coalesce('rejected ' || w.state || ': ' || w.msg, 'ACCEPTED, ' || w.n::text || ' rows'),
+      w.state = '23503' and w.msg like '%"' || r.fk || '"%');
+  end loop;
+
+  -- SET NULL (column list): parent deleted -> reference nulled, userid kept.
+  insert into public.goals (id, userid, goal_name, goal_type, target_amount)
+  values (v_goal, a, 'rls fk goal', 'Custom', 1);
+  insert into public.recurring_transactions (id, userid, accountid, categoryid, description, amount,
+                                             frequency, next_run_date, next_due_date)
+  values (v_recur, a, pg_temp.fx('A_acct'), pg_temp.fx('A_rent'), 'rls fk recur', 1, 'Monthly',
+          current_date + 5, current_date + 5);
+  insert into public.accounts (id, userid, account_name, account_type)
+  values (v_acct, a, 'rls fk acct', 'Savings');
+  insert into public.transactions (id, userid, accountid, categoryid, goalid, description, amount,
+                                   transaction_type, transaction_date)
+  values (v_txn_goal, a, pg_temp.fx('A_acct'), pg_temp.fx('A_groceries'), v_goal, 'rls fk', 1,
+          'Expense', current_date);
+  insert into public.transactions (id, userid, accountid, categoryid, recurringid, description, amount,
+                                   transaction_type, transaction_date)
+  values (v_txn_recur, a, pg_temp.fx('A_acct'), pg_temp.fx('A_rent'), v_recur, 'rls fk', 1,
+          'Expense', current_date - 400);
+  insert into public.goals (id, userid, goal_name, goal_type, target_amount, accountid)
+  values (v_goal_linked, a, 'rls fk linked', 'Custom', 1, v_acct);
+
+  delete from public.goals where id = v_goal;
+  delete from public.recurring_transactions where id = v_recur;
+  delete from public.accounts where id = v_acct;
+
+  for v_row in
+    select 'transactions_goalid_fkey' as fk, t.goalid as ref, t.userid from public.transactions t where t.id = v_txn_goal
+    union all
+    select 'transactions_recurringid_fkey', t.recurringid, t.userid from public.transactions t where t.id = v_txn_recur
+    union all
+    select 'goals_accountid_fkey', g.accountid, g.userid from public.goals g where g.id = v_goal_linked
+  loop
+    perform pg_temp.rec('8 composite FKs', v_row.fk, 'parent deleted: SET NULL nulls the reference only',
+      'ref null, userid = A',
+      format('ref %s, userid %s', coalesce(v_row.ref::text, 'null'),
+             case when v_row.userid = a then 'A' else coalesce(v_row.userid::text, 'null') end),
+      v_row.ref is null and v_row.userid = a);
   end loop;
 end
 $$;

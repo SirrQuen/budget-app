@@ -8,10 +8,11 @@ the audit and were never written as TODOs, so a TODO scan of the code does
 not answer "what blocks launch"; read this list. Keep it current: an item
 leaves this list only when it is verified done, with the date and how.
 
-1. **Composite foreign keys.** Mitigated in RLS only (migration 37). A
-   WITH CHECK lives in RLS, and anything that bypasses RLS writes straight
-   past it. The structural fix is required. See "Cross-user foreign keys"
-   below.
+1. ~~Composite foreign keys.~~ **Closed 2026-10-08.** Migration 44 in
+   production: every reference between user-owned tables is a composite
+   FK, so no role can write a cross-user reference. Verified: RLS harness
+   233/233 against production (section 8 rejects each one as the table
+   owner), audit 0 on all 13. See "Cross-user foreign keys" below.
 2. ~~Schema drift from Section 1.~~ **Closed 2026-10-08.** The chain had
    never rebuilt from zero; migrations are squashed to a baseline dumped
    from production. Verified: a fresh preview branch built from the
@@ -48,11 +49,11 @@ leaves this list only when it is verified done, with the date and how.
 Not blockers: the streak-strip milestone mark
 (`components/ui/LoggingStreakStrip.tsx:27`) is visual polish.
 
-## LAUNCH BLOCKER: Cross-user foreign keys can make an account undeletable (2026-10-04)
+## Cross-user foreign keys could make an account undeletable (2026-10-04)
 
-**Status: mitigated in RLS (migration 37, 2026-10-04). Structural fix
-(composite FKs) still required before launch. Do not launch until it
-ships.**
+**Status: closed 2026-10-08 -- composite FKs (migration 44) in
+production.** Was a launch blocker; mitigated in RLS by migration 37
+first.
 
 Section 4 of `docs/rls-isolation-test.sql` going green does NOT close this
 entry. It proves the RLS mitigation only; see "Mitigation" below for what
@@ -139,7 +140,7 @@ INSERT and UPDATE policy. Verified:
   category), create a recurring schedule, create a budget. All succeeded;
   test rows removed afterwards.
 
-What it does NOT cover -- why composite FKs remain a launch blocker:
+What it does NOT cover -- why composite FKs were still required (now migration 44):
 
 - **It lives only in RLS.** `service_role`, the table owner, and any
   SECURITY DEFINER function write straight past it. Today nothing does,
@@ -163,7 +164,45 @@ What it does NOT cover -- why composite FKs remain a launch blocker:
   bypasses RLS with a cross-user `categoryid` now skips the type check
   rather than applying it against the other user's category.
 
-### Structural fix (not built yet)
+### Structural fix: migration 44 (in production 2026-10-08)
+
+`20261008000044_44_composite_foreign_keys.sql`. Decisions taken while
+building: all 13 references are composite (not only the RESTRICT ones);
+constraint names are unchanged (`lib/db/recurring.ts` embeds by name);
+`goal_contributions` gained a `userid` column, backfilled from its goal,
+NOT NULL, set by `contributeToGoal()` from the session, and required to
+equal `auth.uid()` by its INSERT/UPDATE WITH CHECK. Every other policy is
+unchanged -- RLS still answers first (42501), the FK is the guarantee.
+
+Verified 2026-10-08:
+
+- Production, read-only: `docs/cross-user-references-audit.sql` 0 on all
+  13 references; Postgres 17.6 (the `set null (col)` form needs 15+).
+- Preview branch `composite-fk-verify` (built from the baseline):
+  - Planted one cross-user transaction, pushed: the pre-flight aborted
+    with `transactions.accountid: 1`; the transaction rolled back whole
+    (no `userid` column, history unchanged). Removed the row, pushed:
+    applied.
+  - All 13 FKs composite with original names and ON DELETE actions; 6
+    `unique (userid, id)` keys; contribution `userid` backfilled.
+  - RLS harness 233/233, including new section 8: 15 cross-user writes
+    as the table owner (RLS bypassed) each rejected 23503 by the named
+    FK; the 3 SET NULL FKs null the reference and keep `userid`.
+    Section 4 still rejects with 42501 (RLS before FK).
+  - `delete_own_account()` on a user with contributions: 0 rows left.
+  - PostgREST, signed in as a branch user: the exact embed strings from
+    `lib/db` (recurring, transactions, categories, contributions) all 200
+    with the right parents.
+  - `lib/database.types.ts` generated from the branch; tsc, lint, tests
+    clean. Branch deleted.
+
+- Production, 2026-10-08: audit 0 on all 13 immediately before;
+  `db push` applied 44 alone (history now `00000000000000`,
+  `20261008000044`). After: 13 composite FKs, no null contribution
+  `userid`, RLS harness 233/233 with 0 rows left behind, audit 0 on all
+  13. `gen types --linked` byte-identical to the branch-generated file.
+
+Original plan, kept for the reasoning:
 
 Composite FKs so a child can only reference its own user's parent:
 `unique (userid, id)` on each parent, then each FK rewritten as
