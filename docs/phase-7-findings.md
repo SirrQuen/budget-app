@@ -19,6 +19,10 @@ leaves this list only when it is verified done, with the date and how.
    2026-10-06) recreates that FK as `profiles_id_fkey`, and it was verified
    in production. A rebuild has not yet been run to prove migration 39
    reproduces it. See "Section 1" below.
+   *2026-10-08:* bigger than drift. The migration chain has never been
+   able to rebuild from zero (see "The migrations have never rebuilt the
+   database" below). Being fixed by squashing to a baseline dumped from
+   production.
 3. **WCAG AA contrast and reflow failures:**
    - the dark-theme `--critical` token
    - `--ink-muted` on raised surfaces
@@ -191,6 +195,82 @@ after it, the foreign row cannot exist to begin with. Since migration 37
 the foreign row can't be created through PostgREST, so the test has to
 plant it as the table owner -- which is exactly the RLS-bypassing path the
 composite FKs exist for.
+
+## The migrations have never rebuilt the database (2026-10-08)
+
+**Status: baseline built and verified on a fresh preview branch
+(2026-10-08); production history not yet reconciled.** Record:
+`docs/schema-drift-current.txt`. The branch's schema dump diffs clean
+against production (only the Postgres version in the dump header
+differs: 17.11 vs 17.6); the auth trigger, `authenticator` setting and
+`bank_holidays` rows match; the RLS harness passes 215/215. Production's
+history is reconciled once, by hand, with
+`docs/squash-history-reconcile.sql` (rehearsed on the branch).
+
+**Flagged, not changed -- `service_role` has no table access in
+production.** It holds only REFERENCES, TRIGGER, TRUNCATE, MAINTAIN on
+all 14 tables and 14 views: no SELECT, INSERT, UPDATE or DELETE. No
+archived migration revokes it; 05 says an unrecorded "hardening pass"
+revoked DML and 05 restored it for `authenticated` only, while its own
+comment expects `service_role` to write billing state. The baseline
+reproduces production exactly, so this carries over. Anything using
+the secret key (a billing sync) gets 42501. Decide whether that is
+intended before building one.
+
+Migration 01 depends on a pre-existing EverNest schema that no migration
+creates, so this chain has NEVER been able to rebuild from zero. 01-04
+were written to modify a schema built by hand in the dashboard: 01's
+second statement is `select count(*) from families`, and `accounts`,
+`transactions` and every other base table are only ever altered, never
+created. That base schema is not recorded anywhere -- not in this repo,
+not in `~/evernest`, not in `sorrel-backups` (the oldest dump, 2026-09-28,
+postdates 01).
+
+Found 2026-10-08: `supabase db push` of 01-43 to an empty preview branch
+(`drift-rebuild-1`) failed at 01, statement 2, `relation "families" does
+not exist` (42P01). The default branch has shown `MIGRATIONS_FAILED`
+since 2026-10-04, which is consistent with this.
+
+Consequences:
+
+- No preview branch, `db reset` or new project has ever had this schema.
+  Every "verified" claim in this file was verified against production
+  only.
+- The Section 1 drift question ("what exists only in production?") had
+  no answer: the answer was "everything 01-04 assume".
+
+Fix (decided 2026-10-08): squash. A schema dump of production becomes
+`supabase/migrations/00000000000000_baseline.sql`; 01-43 move to
+`supabase/migrations/_archive/` (the CLI ignores subdirectories --
+checked 2026-10-08 with a probe file, absent from `migration list`). Git
+keeps the history; the folder exists for reproducibility. A baseline
+dumped from the database it is registered against cannot be wrong about
+it, where reconstructing the pre-01 schema could only be guessed.
+
+The baseline dump keeps ACLs (`--schema-only --no-owner -n public`), and
+so does every verification dump: `--no-acl` would drop ~70 GRANT/REVOKE
+statements and make that whole class of error invisible to the check.
+
+Outside a `-n public` dump, carried into the baseline explicitly, each
+read from production 2026-10-08:
+
+- `on_auth_user_created` on `auth.users` -- the only non-internal trigger
+  on that table.
+- `alter role authenticator set pgrst.db_pre_request =
+  'public.apply_user_timezone'` (from 40).
+- `bank_holidays` rows (~110; 25, trimmed by 41) -- reference data
+  `lib/businessDays.ts` reads. A schema-only baseline would leave it
+  empty and no schema diff would notice.
+
+Data statements that do NOT carry over, deliberately: one-time
+corrections of rows that existed when they ran -- 03 (backfill of
+pre-trigger users), 04 (`category_type`), 06 (liability sign), 11
+(category replacement), 22 (`opening_date`), 24 (`next_due_date`), 29
+(`requires_confirmation`), 30 (`date_tolerance_days`), 41 (`next_due_date`
+recompute). A fresh database has no such rows. `bank_holidays` is the
+only table without a `userid` and the only data a fresh database needs.
+
+What a dump cannot capture at all is listed in `docs/supabase-config.md`.
 
 ## Section 1: `profiles -> auth.users` FK exists only in production (2026-10-06)
 

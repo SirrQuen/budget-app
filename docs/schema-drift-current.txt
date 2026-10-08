@@ -1,0 +1,83 @@
+Schema drift -- current (2026-10-08)
+====================================
+
+1. Old migration chain (01-43) vs production: NO DRIFT LIST POSSIBLE
+--------------------------------------------------------------------
+The chain cannot rebuild from zero. `supabase db push` of 01-43 to an
+empty preview branch (drift-rebuild-1) failed at the first migration:
+
+  Applying migration 20260805000001_01_drop_families.sql...
+  ERROR: relation "families" does not exist (SQLSTATE 42P01)
+  At statement: 2
+
+01-04 alter a hand-built EverNest schema that no migration creates. See
+docs/phase-7-findings.md, "The migrations have never rebuilt the
+database". Fixed by squashing to 00000000000000_baseline.sql.
+
+2. Baseline vs production
+-------------------------
+Production:  pg_dump --schema-only --no-owner -n public  (ACLs kept)
+             ../sorrel-backups/2026-10-08/prod-schema-acl.sql, 01:23 EDT
+Rebuild:     fresh preview branch drift-verify-3, `supabase db push` of
+             supabase/migrations/ (baseline only) -- applied, exit 0;
+             history: 00000000000000 | baseline
+             then the same pg_dump flags.
+Filter:      only the \restrict / \unrestrict lines (a random token
+             pg_dump generates per run) were excluded.
+
+diff prod-schema-acl.sql branch-schema.sql -- complete output:
+6c6
+< -- Dumped from database version 17.6
+---
+> -- Dumped from database version 17.11
+
+That is the dump header: the branch runs Postgres 17.11, production
+17.6. Not a schema difference. Every object, definition, policy, grant
+and default privilege is identical.
+
+Earlier iteration (drift-rebuild-2, since deleted), for the record:
+  - first push failed: ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin
+    -> 42501 (platform defaults; removed from the baseline -- the diff
+    above shows the branch has production's values without them);
+  - second push applied, but 28 tables/views granted anon
+    REFERENCES,TRIGGER,TRUNCATE,MAINTAIN that production does not
+    (pg_dump writes ACLs relative to an owner-only default; the branch's
+    default privileges granted more at CREATE). Fixed by resetting to
+    pg_dump's assumption before the dump's GRANTs.
+
+3. Outside the public schema dump (same query on both sides)
+------------------------------------------------------------
+  production: auth.users trigger = on_auth_user_created: CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION handle_new_user()
+  production: authenticator pgrst.db_pre_request = pgrst.db_pre_request=public.apply_user_timezone
+  production: bank_holidays md5 = a04c1b56808eebbd8b936b0c60ff5212
+  production: bank_holidays rows = 101
+  production: role timeouts = anon: statement_timeout=3s | authenticated: statement_timeout=8s | authenticator: session_preload_libraries=supautils, safeupdate,statement_timeout=8s,lock_timeout=8s,pgrst.db_pre_request=public.apply_user_timezone
+  branch:     auth.users trigger = on_auth_user_created: CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION handle_new_user()
+  branch:     authenticator pgrst.db_pre_request = pgrst.db_pre_request=public.apply_user_timezone
+  branch:     bank_holidays md5 = a04c1b56808eebbd8b936b0c60ff5212
+  branch:     bank_holidays rows = 101
+  branch:     role timeouts = anon: statement_timeout=3s | authenticated: statement_timeout=8s | authenticator: session_preload_libraries=supautils, safeupdate,statement_timeout=8s,lock_timeout=8s,pgrst.db_pre_request=public.apply_user_timezone
+
+  diff --strip-trailing-cr: identical.
+
+4. Behaviour: docs/rls-isolation-test.sql on drift-verify-3
+-----------------------------------------------------------
+  215 assertions, 215 pass, 0 fail.
+  39 1 reads
+  42 2 views
+  12 2d function grants
+  52 3 writes
+  12 4 cross-tenant refs
+  28 5 coverage
+  20 6 same-user writes
+  10 7 trigger oracles
+
+5. History reconciliation, rehearsed on drift-verify-3
+------------------------------------------------------
+docs/squash-history-reconcile.sql against a history set to production's
+42 rows: first run -> 1 row (00000000000000 | baseline | 350 statements,
+md5 fd2ef61ce77f2380e0c8bb1e58bc4b67); second run refused ("production
+history is not the 42 archived migrations; nothing changed"); then
+`supabase db push --dry-run`:
+
+  {"upToDate":true,"dryRun":true,"migrations":[],"seeds":[],"roles":[],"message":"Remote database is up to date."}
