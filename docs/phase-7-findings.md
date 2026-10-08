@@ -12,17 +12,13 @@ leaves this list only when it is verified done, with the date and how.
    WITH CHECK lives in RLS, and anything that bypasses RLS writes straight
    past it. The structural fix is required. See "Cross-user foreign keys"
    below.
-2. **Schema drift from Section 1.** Production was never diffed against a
-   fresh `db reset`, so other objects created only in the dashboard may
-   exist. This includes the `profiles -> auth.users` cascade that
-   account deletion depends on. *Repo state:* migration 39 (`06c2d97`,
-   2026-10-06) recreates that FK as `profiles_id_fkey`, and it was verified
-   in production. A rebuild has not yet been run to prove migration 39
-   reproduces it. See "Section 1" below.
-   *2026-10-08:* bigger than drift. The migration chain has never been
-   able to rebuild from zero (see "The migrations have never rebuilt the
-   database" below). Being fixed by squashing to a baseline dumped from
-   production.
+2. ~~Schema drift from Section 1.~~ **Closed 2026-10-08.** The chain had
+   never rebuilt from zero; migrations are squashed to a baseline dumped
+   from production. Verified: a fresh preview branch built from the
+   baseline file alone diffs clean against production, and production's
+   history is reconciled to it. See "The migrations have never rebuilt
+   the database" below. (Numbering kept so references to blockers 3-8
+   stay valid.)
 3. **WCAG AA contrast and reflow failures:**
    - the dark-theme `--critical` token
    - `--ink-muted` on raised surfaces
@@ -198,14 +194,36 @@ composite FKs exist for.
 
 ## The migrations have never rebuilt the database (2026-10-08)
 
-**Status: baseline built and verified on a fresh preview branch
-(2026-10-08); production history not yet reconciled.** Record:
-`docs/schema-drift-current.txt`. The branch's schema dump diffs clean
-against production (only the Postgres version in the dump header
-differs: 17.11 vs 17.6); the auth trigger, `authenticator` setting and
-`bank_holidays` rows match; the RLS harness passes 215/215. Production's
-history is reconciled once, by hand, with
-`docs/squash-history-reconcile.sql` (rehearsed on the branch).
+**Status: closed 2026-10-08.** Record: `docs/schema-drift-current.txt`.
+Verified by, in order:
+
+1. Fresh preview branch `drift-verify-3`, baseline pushed: schema dump
+   (`--schema-only --no-owner -n public`, ACLs kept) diffs clean against
+   production -- only the Postgres version in the dump header differs
+   (17.11 vs 17.6). Auth trigger, `authenticator` setting and
+   `bank_holidays` rows match; RLS harness 215/215.
+2. Production history reconciled by hand with
+   `docs/squash-history-reconcile.sql` (rehearsed on the branch first).
+   History is now one row, `00000000000000 | baseline`, 350 statements,
+   md5 `fd2ef61c...`; `supabase db push --dry-run`: "Remote database is
+   up to date."
+3. Production schema re-dumped after the reconcile: byte-identical to
+   the pre-reconcile dump apart from pg_dump's random `\restrict` token.
+4. Fresh preview branch `batch-1-1-final` from commit `639e62b`
+   (migrations folder = the baseline alone). The platform built it by
+   replaying production's recorded history (status FUNCTIONS_DEPLOYED);
+   then `supabase db reset --db-url <branch>` rebuilt it from the file on
+   disk -- applied with no errors, and the history row it wrote matches
+   production's exactly (350 statements, same md5). Schema dump diffs
+   clean against the post-reconcile production dump (version header
+   only); auth trigger, `authenticator` setting and `bank_holidays` rows
+   match; RLS harness 215/215.
+
+Side effect, explained: preview branches without a GitHub integration
+are built by replaying production's recorded history. Until the
+reconcile that was the 42 old migrations, which fail at 01 -- hence
+`MIGRATIONS_FAILED` on every earlier branch and on the default `main`
+branch record since 2026-10-04. A fresh branch now builds correctly.
 
 **Flagged, not changed -- `service_role` has no table access in
 production.** It holds only REFERENCES, TRIGGER, TRUNCATE, MAINTAIN on
@@ -299,7 +317,10 @@ entry, the SQL that actually ran. Whitespace ignored; each statement's
   are never edited; a change is a new migration.
 
 The full history table, statements included, is saved at
-`sorrel-backups/2026-10-08/migration-history-before.txt`.
+`sorrel-backups/2026-10-08/migration-history-before.txt`. Re-checked
+against that file after the reconcile (2026-10-08): its 42 rows are
+statement-for-statement identical to the live rows compared above, and
+the comparison gives the same result -- 41 match, 07 differs.
 
 Migration 10 never existed in git (this repo or `~/evernest`) and never
 ran: production's history goes from `20260828000009` to
@@ -310,9 +331,12 @@ ran: production's history goes from `20260828000009` to
 **Status: fixed in migration 39 (2026-10-06).**
 `20261006000039_39_profiles_auth_users_fk.sql` recreates the FK with the
 identical definition, renamed to `profiles_id_fkey`. Verified in production
-afterwards: exactly one FK, `ON UPDATE CASCADE ON DELETE CASCADE`. Still
-open: the diff of production against a fresh `db reset` for other
-dashboard-only objects.
+afterwards: exactly one FK, `ON UPDATE CASCADE ON DELETE CASCADE`. The
+diff of production against a fresh rebuild for other dashboard-only
+objects: **closed 2026-10-08** -- no migration chain could rebuild at
+all; the baseline replaces it and diffs clean against production,
+`profiles_id_fkey` included. See "The migrations have never rebuilt the
+database".
 
 Production has:
 

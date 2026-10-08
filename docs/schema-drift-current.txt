@@ -81,3 +81,35 @@ history is not the 42 archived migrations; nothing changed"); then
 `supabase db push --dry-run`:
 
   {"upToDate":true,"dryRun":true,"migrations":[],"seeds":[],"roles":[],"message":"Remote database is up to date."}
+
+6. After the production reconcile (2026-10-08)
+----------------------------------------------
+Production history: one row, 00000000000000 | baseline | 350 statements,
+md5 fd2ef61ce77f2380e0c8bb1e58bc4b67.
+`supabase db push --dry-run --linked`:
+  {"upToDate":true,"dryRun":true,"migrations":[],"seeds":[],"roles":[],"message":"Remote database is up to date."}
+
+Production schema unchanged by the reconcile:
+  diff prod-schema-acl.sql (01:23) prod-schema-after-reconcile.sql (02:08),
+  \restrict lines excluded -> exit 0, no output. Both 116,204 bytes.
+
+Fresh preview branch batch-1-1-final, commit 639e62b (migrations folder:
+00000000000000_baseline.sql alone, git blob c8e48890).
+  - Built by the platform from production's recorded history (status
+    FUNCTIONS_DEPLOYED); `db push` then reported "Remote database is up
+    to date" -- so, to test the FILE:
+  - `supabase db reset --db-url <branch>`:
+      Applying migration 00000000000000_baseline.sql...
+      {"target":"remote","version":"","message":"Reset remote database."}
+    History row written from the file: 350 statements, md5
+    fd2ef61ce77f2380e0c8bb1e58bc4b67 -- identical to production's.
+  - diff prod-schema-after-reconcile.sql branch-schema.sql -- complete output:
+      6c6
+      < -- Dumped from database version 17.6
+      ---
+      > -- Dumped from database version 17.11
+    Postgres version in the dump header only.
+  - Auth trigger, authenticator db_pre_request, bank_holidays (101 rows,
+    same md5): identical to production.
+  - docs/rls-isolation-test.sql: 215 assertions, 215 pass, 0 fail.
+  Branch deleted afterwards.
