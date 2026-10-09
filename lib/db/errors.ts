@@ -3,6 +3,7 @@
 // modules, which are server-only themselves, import it.
 import util from "node:util";
 import { isAuthError, isAuthRetryableFetchError } from "@supabase/supabase-js";
+import { UNREACHABLE } from "@/lib/unreachable";
 
 // Turns a PostgREST / Postgres error into a string that's safe to show a
 // user, and makes sure the ones that are our fault are never lost.
@@ -86,12 +87,9 @@ const GENERIC_WRITE =
   "That didn't save, and it's not something you did. Try again in a moment.";
 const GENERIC_WRITE_BUSY =
   "That didn't save -- the database was busy for a moment. Try again.";
-// Every database call runs on the Next server, so a failed fetch means the
-// server can't reach Supabase, not that the user is offline. Never "check
-// your connection" here (docs/phase-7-findings.md, "Copy: whose connection
-// failed").
-export const UNREACHABLE =
-  "We can't reach our servers right now. It's not you — try again in a minute.";
+// The copy lives in lib/unreachable.ts so app/error.tsx (a Client
+// Component) can share it; this module imports node:util.
+export { UNREACHABLE } from "@/lib/unreachable";
 
 // Server Component console output is serialized on its way to the browser
 // dev overlay, and an object argument to console.error arrives there as

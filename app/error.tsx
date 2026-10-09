@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
+import { UNREACHABLE, isUnreachableDigest, referenceFromDigest } from "@/lib/unreachable";
 
 // Catches anything thrown while rendering a route under app/ (not the root
 // layout itself -- that would need app/global-error.tsx). Must be a Client
@@ -12,6 +13,38 @@ import { useEffect } from "react";
 // `digest` that correlates to that log line. So: the user sees a calm
 // generic message and a reference code, we keep the detail server-side, and
 // a stack trace is never rendered.
+//
+// Three cases, because "whose connection failed" decides the copy
+// (docs/phase-7-findings.md, "Copy: whose connection failed"):
+//   - The browser is offline: a navigation or Server Action never reached
+//     us. The ONLY place "check your connection" is said.
+//   - The server can't reach Supabase: an UnreachableError, recognised by its
+//     digest because the message is redacted in production. Not the user's
+//     connection, so never "check your connection".
+//   - Anything else: the generic text.
+
+function subscribeOnline(onChange: () => void) {
+  window.addEventListener("online", onChange);
+  window.addEventListener("offline", onChange);
+  return () => {
+    window.removeEventListener("online", onChange);
+    window.removeEventListener("offline", onChange);
+  };
+}
+
+// The server render can't know; assume online so it never claims the user
+// is offline, and let hydration correct it.
+const useOnline = () =>
+  useSyncExternalStore(
+    subscribeOnline,
+    () => navigator.onLine,
+    () => true,
+  );
+
+const OFFLINE = "You appear to be offline. Check your connection, then try again.";
+const GENERIC =
+  "Something on our end broke, not anything you did. Try again — if it keeps happening, give it a few minutes.";
+
 export default function Error({
   error,
   reset,
@@ -24,14 +57,14 @@ export default function Error({
     console.error(error);
   }, [error]);
 
+  const online = useOnline();
+  const message = !online ? OFFLINE : isUnreachableDigest(error.digest) ? UNREACHABLE : GENERIC;
+
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-page px-6 py-16 text-center text-ink">
       <div className="flex max-w-sm flex-col gap-2">
         <h1 className="text-2xl font-semibold">This page didn&rsquo;t load</h1>
-        <p className="text-sm text-ink-secondary">
-          Something on our end broke, not anything you did. Try again — if it keeps happening,
-          give it a few minutes.
-        </p>
+        <p className="text-sm text-ink-secondary">{message}</p>
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-3">
@@ -52,7 +85,7 @@ export default function Error({
 
       {error.digest ? (
         <p className="text-xs text-ink-muted">
-          Reference: <span className="font-mono">{error.digest}</span>
+          Reference: <span className="font-mono">{referenceFromDigest(error.digest)}</span>
         </p>
       ) : null}
     </main>
