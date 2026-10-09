@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/database.types";
+import { classifyDbError, logDbError, UNREACHABLE } from "@/lib/db/errors";
 
 // Paths reachable without a session. Everything else (including every route
 // under app/(app)/) requires auth. /auth/confirm is the email-link callback;
@@ -31,6 +32,43 @@ function redirectTo(request: NextRequest, pathname: string, supabaseResponse: Ne
   return response;
 }
 
+// A complete response, not a rewrite to a page: a rewritten page answers
+// 200 and renders the app layout, which calls Supabase itself. Static
+// markup, no user input. Colours are the dark surface tokens from
+// globals.css, inlined because no stylesheet loads here.
+function serviceUnavailable(): Response {
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sorrel is unreachable</title>
+<style>
+  body { margin: 0; min-height: 100dvh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 24px; padding: 64px 24px;
+    box-sizing: border-box; text-align: center; background: #131322; color: #ffffff;
+    font-family: system-ui, sans-serif; }
+  h1 { margin: 0; font-size: 1.5rem; font-weight: 600; }
+  p { margin: 8px 0 0; max-width: 24rem; font-size: 0.875rem; color: #c3c2b7; }
+  a { border-radius: 9999px; padding: 8px 16px; font-size: 0.875rem; font-weight: 600;
+    text-decoration: none; background: #E9B949; color: #0B0B0B; }
+</style>
+</head>
+<body>
+<div><h1>This page didn&rsquo;t load</h1><p>${UNREACHABLE}</p></div>
+<a href="">Try again</a>
+</body>
+</html>`;
+  return new Response(html, {
+    status: 503,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+      "retry-after": "60",
+    },
+  });
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -58,7 +96,18 @@ export async function updateSession(request: NextRequest) {
   // Do not run code between createServerClient and supabase.auth.getClaims().
   // A stray `await` here can make it very hard to debug users being
   // randomly logged out.
-  const { data } = await supabase.auth.getClaims();
+  const { data, error } = await supabase.auth.getClaims();
+
+  // Can't reach the auth server: the session is unverified, which is neither
+  // "signed in" nor "signed out". Passing the request through would serve a
+  // protected page on an unverified session; redirecting to /login would sign
+  // a real user out over our own outage. So it's a third outcome, a 503, on
+  // every path. Never fold this into either branch below.
+  if (error && classifyDbError(error) === "network-unreachable") {
+    logDbError(`[proxy] auth unreachable for ${request.nextUrl.pathname}:`, error);
+    return serviceUnavailable();
+  }
+
   const isAuthenticated = data?.claims != null;
 
   const { pathname } = request.nextUrl;

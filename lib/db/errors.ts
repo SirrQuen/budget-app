@@ -90,7 +90,7 @@ const GENERIC_WRITE_BUSY =
 // server can't reach Supabase, not that the user is offline. Never "check
 // your connection" here (docs/phase-7-findings.md, "Copy: whose connection
 // failed").
-const UNREACHABLE =
+export const UNREACHABLE =
   "We can't reach our servers right now. It's not you — try again in a minute.";
 
 // Server Component console output is serialized on its way to the browser
