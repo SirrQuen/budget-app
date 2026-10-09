@@ -67,12 +67,15 @@ Income: low amount, late date. Obligations: high amount, early date.
 **One "leaves the set" classifier, three consumers.**
 Spendable Cash, the projection, and the cushion suggestion must all use the
 same classifier (`lib/safeToSpend.ts`). Never reimplement it — they will drift.
-The projection and Spendable Cash (`lib/db/dashboard.ts`) both use it.
-SQL can't call TypeScript, so the cushion uses its one SQL twin,
-`leaves_spendable_set(from_type, to_type)` (migration 45). Never write the
-rule inline in SQL; call that function. `npm run test:parity` checks the
-two agree on every account-type pair read from `accounts_account_type_check`.
-Run it after changing either classifier or the account types.
+The projection (`lib/safeToSpendProjection.ts`) uses it directly.
+SQL can't call TypeScript, so SQL has twins: `is_spendable_account_type(type)`
+(migration 47), the set itself, which `spendable_cash_balance()` (Spendable
+Cash) filters on; and `leaves_spendable_set(from_type, to_type)`
+(migration 45), built on it, which the cushion calls. Never write the set or
+the rule inline in SQL; call those functions. `npm run test:parity` checks
+both agree with the TS side on every account type and pair read from
+`accounts_account_type_check`. Run it after changing either side or the
+account types.
 Checking→savings is NOT money leaving. Card purchases are NOT counted here;
 the card payment obligation already captures them.
 

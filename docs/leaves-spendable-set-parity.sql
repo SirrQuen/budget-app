@@ -14,9 +14,12 @@
 --
 -- Why it exists: there are two implementations of one rule.
 -- leaves_spendable_set() (migration 45) is the SQL one, used by
--- suggested_safe_to_spend_cushion(). isSafeToSpendCommitment is the TS
--- one, used by Spendable Cash and the projection. This test is what makes
--- that safe (docs/phase-7-findings.md, "'Leaves the set' classifier").
+-- suggested_safe_to_spend_cushion(); it is built on
+-- is_spendable_account_type() (migration 47), which
+-- spendable_cash_balance() (Spendable Cash) filters on.
+-- isSafeToSpendCommitment / isSpendableAccountType are the TS ones, used
+-- by the projection. This test is what makes that safe
+-- (docs/phase-7-findings.md, "'Leaves the set' classifier").
 --
 -- Account types come from accounts_account_type_check -- the database's
 -- definition -- never from a list in this file. Adding a type to the
@@ -24,8 +27,9 @@
 -- until ACCOUNT_TYPES and both classifiers agree on it.
 --
 -- Sections
---   1  Account types  the constraint's set equals ACCOUNT_TYPES, and
---                     SPENDABLE_ACCOUNT_TYPES is inside it
+--   1  Account types  the constraint's set equals ACCOUNT_TYPES,
+--                     SPENDABLE_ACCOUNT_TYPES is inside it, and
+--                     is_spendable_account_type() agrees with it
 --   2  Function       leaves_spendable_set(from, to) equals the TS answer
 --                     for every (from, to) pair and every plain Expense
 --   3  Cushion rows   a real transfer (both legs) for every pair, and a
@@ -116,6 +120,19 @@ select pg_temp.rec('1 account types', s.account_type,
   from (select jsonb_array_elements_text(payload->'spendable_types') as account_type
           from parity_ts) s
   left join parity_db_types d on d.account_type = s.account_type;
+
+-- The SQL set (is_spendable_account_type, migration 47) equals the TS set,
+-- type by type. spendable_cash_balance() filters on it.
+select pg_temp.rec('1 account types', d.account_type,
+  'is_spendable_account_type',
+  (s.account_type is not null)::text,
+  public.is_spendable_account_type(d.account_type)::text,
+  public.is_spendable_account_type(d.account_type) = (s.account_type is not null))
+  from parity_db_types d
+  left join (select jsonb_array_elements_text(payload->'spendable_types') as account_type
+               from parity_ts) s
+    on s.account_type = d.account_type
+ order by d.ord;
 
 -- ---------------------------------------------------------------------
 -- 2 -- leaves_spendable_set vs isSafeToSpendCommitment

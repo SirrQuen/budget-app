@@ -1285,6 +1285,7 @@ export type Database = {
         Returns: number
       }
       is_business_day: { Args: { d: string }; Returns: boolean }
+      is_spendable_account_type: { Args: { p_type: string }; Returns: boolean }
       leaves_spendable_set: {
         Args: { p_from_type: string; p_to_type: string }
         Returns: boolean
@@ -1310,6 +1311,7 @@ export type Database = {
         Args: { p_amount: number; p_type: string }
         Returns: number
       }
+      spendable_cash_balance: { Args: never; Returns: number }
       suggested_safe_to_spend_cushion: { Args: never; Returns: number }
       username_is_available: { Args: { p_username: string }; Returns: boolean }
     }

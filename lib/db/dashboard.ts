@@ -16,7 +16,7 @@ import {
   type ProjectionSchedule,
   type SafeToSpendProjection,
 } from "@/lib/safeToSpendProjection";
-import { SPENDABLE_ACCOUNT_TYPES, isSpendableAccountType } from "@/lib/safeToSpend";
+import { isSpendableAccountType } from "@/lib/safeToSpend";
 import { deriveLoggingStreak, type LoggingStreakSummary } from "@/lib/streak";
 
 type NetWorthRow = Database["public"]["Views"]["v_net_worth"]["Row"];
@@ -727,8 +727,9 @@ function toProjectionSchedule(row: UpcomingProjectionRow): ProjectionSchedule | 
 // day-by-day walk -- lives in lib/safeToSpendProjection.ts, pure and
 // unit tested. This function only gathers its inputs:
 //
-//   cash       active Checking + Savings balances from v_account_balances.
-//              Investment, Cash, Credit Card and Loan never contribute.
+//   cash       spendable_cash_balance(): active Checking + Savings
+//              balances, summed in SQL. Investment, Cash, Credit Card and
+//              Loan never contribute.
 //   schedules  every row of v_upcoming_recurring, which already applies
 //              is_active, the end-date guard and the occurrence_limit
 //              guard. The projection steps each one forward past its next
@@ -746,11 +747,7 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   const today = await getToday();
 
   const [cashRes, recurringRes, incomeRes, cushionRes, holidaysRes, windowPref] = await Promise.all([
-    supabase
-      .from("v_account_balances")
-      .select("balance")
-      .eq("is_active", true)
-      .in("account_type", [...SPENDABLE_ACCOUNT_TYPES]),
+    supabase.rpc("spendable_cash_balance"),
     supabase
       .from("v_upcoming_recurring")
       .select(
@@ -796,16 +793,10 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
     fallbackWindowEnd = today;
   }
 
-  // Integer cents, same as before -- PostgREST hands back one row per
-  // account, and balance is exact numeric.
-  const cashCents = (cashRes.data ?? []).reduce(
-    (cents, row) => cents + Math.round((row.balance ?? 0) * 100),
-    0,
-  );
-
+  // Summed in SQL (migration 47): active accounts in the spendable set.
   const projection = projectSafeToSpend({
     today,
-    cash: cashCents / 100,
+    cash: cashRes.data,
     cushion: cushionRes.data.amount,
     schedules: recurringRes.data
       .map(toProjectionSchedule)

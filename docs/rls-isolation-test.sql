@@ -789,6 +789,37 @@ $$;
 
 
 -- ---------------------------------------------------------------------
+-- 2c -- Money functions
+--
+-- security invoker functions that sum a user's money: each caller must
+-- get their own total, never one that includes the other user. Truth is
+-- the owner's sum for that user alone. By this point the write sections
+-- have moved A's balance (it can be negative), so the guard against a
+-- vacuous pass is non-zero, not positive.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  u text;
+  uid uuid;
+  v_truth bigint;
+  v_actual bigint;
+begin
+  foreach u in array array['A', 'B'] loop
+    uid := pg_temp.fx(u);
+    v_truth := pg_temp.count_as(null, format(
+      'select (coalesce(sum(balance), 0) * 100)::bigint from public.v_account_balances
+        where userid = %L and is_active and account_type in (''Checking'', ''Savings'')', uid));
+    v_actual := pg_temp.count_as(uid,
+      'select (public.spendable_cash_balance() * 100)::bigint');
+    perform pg_temp.rec('2c money functions', 'spendable_cash_balance()',
+      u || ' gets own total (cents)', format('%s, non-zero', v_truth), v_actual::text,
+      v_actual = v_truth and v_truth <> 0);
+  end loop;
+end
+$$;
+
+
+-- ---------------------------------------------------------------------
 -- 2d -- Function grants
 --
 -- Postgres grants EXECUTE to PUBLIC on every new function, so a
@@ -814,6 +845,8 @@ begin
       ('public.seed_default_categories(uuid)',                   'authenticated', false),
       ('public.delete_own_account()',                            'anon',          false),
       ('public.delete_own_account()',                            'authenticated', true),
+      ('public.spendable_cash_balance()',                        'anon',          false),
+      ('public.spendable_cash_balance()',                        'authenticated', true),
       -- Trigger functions: closed in migration 36 so nobody has to
       -- re-reason about them.
       ('public.handle_new_user()',                               'anon',          false),
