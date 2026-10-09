@@ -69,6 +69,10 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   // return-facts chain above, so it's still in flight concurrently with
   // that request; only the batch below has to wait for it.
   const generatedResult = await generateDueOccurrences();
+  // A failed catch-up only loses the "while you were away" banner. No
+  // figure goes wrong: an occurrence that didn't post stays a commitment
+  // (the projection carries it as overdue), and the next load retries it.
+  // lib/db already logs the failure.
   const generatedOccurrences = generatedResult.data ?? [];
 
   // One batch, all in flight together. A brand-new user (stages 1-2) fetches
@@ -131,6 +135,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         accounts={balancesResult.data ?? []}
         accountsError={balancesResult.error}
         netWorth={netWorthResult.data?.net_worth ?? null}
+        netWorthError={netWorthResult.error}
       />
     );
   }
@@ -199,6 +204,9 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     ]),
   );
 
+  // Both prompt lists below read recurringResult. On a failed read they're
+  // empty, but never silently: the Upcoming section reports the failure.
+  //
   // The nudge to confirm a card's statement amount runs from the statement
   // date through the due date (see CLAUDE.md "Prompt timing") -- scanned
   // over the FULL upcoming list, not just the 5-item slice above, so a
@@ -242,6 +250,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       dueDate: r.next_due_date!,
     }));
 
+  const upcomingError = recurringResult.error ?? safeToSpendResult.error;
+
   // Every section that renders a SectionError on failure, by its label.
   const failedSections = (
     [
@@ -250,7 +260,10 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       ["Net worth", netWorthStatResult.error],
       ["Budgets", budgetResult.error],
       ["Goals", goalResult.error],
-      ["Upcoming", recurringResult.error],
+      // The list is built from the projection (see `upcoming` above), so a
+      // failed safe-to-spend read fails it too. Without this it vanished
+      // silently beside the "Safe to spend" notice.
+      ["Upcoming", upcomingError],
       ["Income and spending", rangeStatsResult.error],
       ["Cash flow", cashflowResult.error],
       ["Category movement", movementResult.error],
@@ -286,7 +299,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     activeGoals.length > 0;
   const showPanels =
     showMeters ||
-    showsError(recurringResult.error) ||
+    showsError(upcomingError) ||
     (upcoming !== null && upcoming.items.length > 0);
 
   return (
@@ -393,7 +406,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
                 ) : null}
               </div>
             ) : null}
-            {recurringResult.error ? (
+            {upcomingError ? (
               sectionError("Upcoming")
             ) : upcoming !== null && upcoming.items.length > 0 ? (
               <UpcomingList

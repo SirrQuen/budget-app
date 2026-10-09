@@ -16,8 +16,9 @@ export function CategoryRow({
 }: {
   category: CategoryWithGroup;
   groups: { id: string; name: string }[];
-  /** null only when the activity query itself failed -- rendered the same
-   * as "never used" rather than blocking the row. */
+  /** null only when the activity query itself failed. The row still
+   * renders, but with no figure: never $0 and never "Not used yet", either
+   * of which would be a believable wrong answer. The page shows the notice. */
   activity: CategoryActivity | null;
 }) {
   const [editing, setEditing] = useState(false);
@@ -36,8 +37,7 @@ export function CategoryRow({
     });
   }
 
-  const lifetimeCount = activity?.lifetimeTransactionCount ?? 0;
-  const neverUsed = lifetimeCount === 0;
+  const neverUsed = activity !== null && activity.lifetimeTransactionCount === 0;
 
   if (editing) {
     return (
@@ -89,12 +89,15 @@ export function CategoryRow({
             "Not used yet" instead of an amount so an empty column doesn't
             look broken on the 1st of the month. */}
         <span className="shrink-0 justify-self-end text-right text-sm tabular-nums">
-          {neverUsed ? (
+          {activity === null ? (
+            <span className="font-normal text-ink-muted">
+              <span aria-hidden="true">—</span>
+              <span className="sr-only">Not loaded</span>
+            </span>
+          ) : neverUsed ? (
             <span className="font-normal text-ink-secondary">Not used yet</span>
           ) : (
-            <span className="font-medium text-ink">
-              {formatCurrency(activity?.currentMonthTotal ?? 0)}
-            </span>
+            <span className="font-medium text-ink">{formatCurrency(activity.currentMonthTotal)}</span>
           )}
         </span>
       </div>

@@ -30,6 +30,10 @@ const TYPE_FILTERS: { label: string; value: TransactionType | "all" }[] = [
 const CATEGORY_ROW_GRID =
   "sm:grid sm:grid-cols-[minmax(0,min(28rem,1fr))_auto_max-content_max-content] sm:gap-x-4 sm:px-4";
 
+function noActivity(categoryId: string): CategoryActivity {
+  return { categoryId, currentMonthTotal: 0, lifetimeTransactionCount: 0, lastTransactionDate: null };
+}
+
 function buildHref(type: TransactionType | "all", archived: boolean) {
   const params = new URLSearchParams();
   if (type !== "all") params.set("type", type);
@@ -51,13 +55,17 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/categ
     }),
     listCategoryGroups(),
     // "This month" only -- a failure here shouldn't take down the whole
-    // categories list, so it's deliberately left out of the error check
-    // below. CategoryRow treats a missing entry as zero activity.
+    // categories list. But it must not read as zero either: the rows show
+    // no figure and a notice says the totals didn't load
+    // (docs/phase-7-findings.md, "a failed read renders as a plausible
+    // zero"). null means the read failed; a category with no entry in a
+    // successful read genuinely has no activity.
     listCategoryActivity(),
   ]);
-  const activityByCategoryId = new Map(
-    (activityResult.data ?? []).map((a) => [a.categoryId, a]),
-  );
+  const activityByCategoryId =
+    activityResult.error === null
+      ? new Map(activityResult.data.map((a) => [a.categoryId, a]))
+      : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -109,6 +117,9 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/categ
       ) : (
         <>
           <CreateCategoryForm groups={groupsResult.data} />
+          {activityResult.error !== null ? (
+            <LoadError message="This month’s totals didn’t load." />
+          ) : null}
           <CategoryGroups
             categories={categoriesResult.data}
             groups={groupsResult.data}
@@ -127,7 +138,7 @@ function CategoryGroups({
 }: {
   categories: CategoryWithGroup[];
   groups: { id: string; name: string }[];
-  activityByCategoryId: Map<string, CategoryActivity>;
+  activityByCategoryId: Map<string, CategoryActivity> | null;
 }) {
   const byGroup = new Map<string, CategoryWithGroup[]>();
   for (const category of categories) {
@@ -179,7 +190,11 @@ function CategoryGroups({
                 key={category.id}
                 category={category}
                 groups={groups}
-                activity={activityByCategoryId.get(category.id) ?? null}
+                activity={
+                  activityByCategoryId === null
+                    ? null
+                    : (activityByCategoryId.get(category.id) ?? noActivity(category.id))
+                }
               />
             ))}
           </ul>

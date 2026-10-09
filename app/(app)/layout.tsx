@@ -19,6 +19,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // and would otherwise race its inserts. cache()d (like
   // recordLogin), so DashboardPage's own call for the created list, to
   // build its banner, is free -- both resolve to this one run.
+  // Its result is read on the dashboard; a failure here posts nothing, which
+  // the projection already treats as overdue, and the next load retries.
   await generateDueOccurrences();
 
   const [user, loginResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme, timeZone, today] =
@@ -45,7 +47,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ]);
 
   // A load failure here just means no quick-add bar for this request, not a
-  // broken page.
+  // broken page. Deliberate, and not a plausible zero: no figure is shown,
+  // and the page underneath reports its own failed reads, which share the
+  // cause. A failed recent-account read only loses the pre-selected account.
   const quickAdd =
     accountsResult.data && incomeCategoriesResult.data && expenseCategoriesResult.data
       ? {

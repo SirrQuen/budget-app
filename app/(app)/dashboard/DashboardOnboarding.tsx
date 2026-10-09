@@ -51,17 +51,23 @@ export function NoTransactionsView({
   accounts,
   accountsError,
   netWorth,
+  netWorthError,
 }: {
   welcome: string;
   accounts: AccountBalanceRow[];
   accountsError: string | null;
   netWorth: number | null;
+  netWorthError: string | null;
 }) {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Dashboard" description={welcome} />
 
-      {!accountsError && netWorth !== null ? (
+      {/* A failed read says so; it never just drops the figure. With the
+          accounts list down too, that notice covers both. */}
+      {netWorthError && !accountsError ? (
+        <SectionError label="Total across accounts" />
+      ) : !accountsError && netWorth !== null ? (
         <div className="rounded-2xl border border-hairline bg-surface p-4">
           <p className="text-sm font-medium text-ink-secondary">Total across accounts</p>
           <p className="mt-1 text-5xl font-semibold text-ink">
