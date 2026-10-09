@@ -31,13 +31,22 @@ export default async function EditTransactionPage({
   const { id } = await params;
 
   const transactionResult = await getTransaction(id);
-  // .single() errors on zero rows -- indistinguishable here from "belongs
-  // to another user" (RLS) and "no such id". Both mean the same thing to
-  // this viewer: there's nothing here for them to edit.
+  // A failed read is a load error, not "not found": a timeout must not
+  // tell the user their transaction doesn't exist.
   if (transactionResult.error !== null) {
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader title="Edit transaction" />
+        <LoadError message={transactionResult.error} />
+      </div>
+    );
+  }
+  // No row: no such id, or another user's (RLS). Both mean the same thing
+  // to this viewer -- there's nothing here for them to edit.
+  const tx = transactionResult.data;
+  if (tx === null) {
     notFound();
   }
-  const tx = transactionResult.data;
 
   // A transfer is two linked legs, not one transaction -- editing one side
   // on its own would put the pair out of sync, so there's no per-leg edit

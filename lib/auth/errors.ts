@@ -1,4 +1,5 @@
 import type { AuthError } from "@supabase/supabase-js";
+import { classifyDbError, logDbError, UNREACHABLE } from "@/lib/db/errors";
 
 // Keyed on AuthError.code (stable across SDK versions) rather than
 // error.message, which Supabase can reword without notice.
@@ -23,11 +24,21 @@ const MESSAGES: Record<string, string> = {
   signup_disabled: "Sign-ups are currently disabled.",
 };
 
+const GENERIC = "That didn't go through. Give it another try in a moment.";
+
 export function authErrorMessage(error: AuthError): string {
   if (error.code && MESSAGES[error.code]) {
     return MESSAGES[error.code];
   }
-  // Fall back to Supabase's own message rather than a generic string —
-  // it's still a real, specific error even if we haven't mapped its code.
-  return error.message || "That didn't go through. Give it another try in a moment.";
+  // Never Supabase's own message: GoTrue's include "Database error saving
+  // new user", "Database error querying schema" and, on a network failure,
+  // "fetch failed" (docs/phase-7-findings.md, "Auth error text leaks
+  // Supabase's raw message"). A fixed sentence to the user, the raw error
+  // to the server log.
+  if (classifyDbError(error) === "network-unreachable") {
+    logDbError("[auth] auth server unreachable:", error);
+    return UNREACHABLE;
+  }
+  logDbError(`[auth] unmapped auth error (code ${error.code ?? "none"}):`, error);
+  return GENERIC;
 }

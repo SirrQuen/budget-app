@@ -10,11 +10,22 @@ export function todayInZone(timeZone: string | null, now: Date = new Date()): st
   let parts: Intl.DateTimeFormatPart[];
   try {
     parts = dayFormatter(timeZone ?? "UTC").formatToParts(now);
-  } catch {
+  } catch (error) {
+    warnUnknownZone(timeZone, error);
     parts = dayFormatter("UTC").formatToParts(now);
   }
   const get = (type: string) => parts.find((p) => p.type === type)!.value;
   return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+// The UTC fallback is deliberate (it matches apply_user_timezone()), but a
+// zone Intl rejects is still worth knowing about. todayInZone runs on every
+// render and TodayProvider tick, so once per zone per process, not per call.
+const warnedZones = new Set<string | null>();
+function warnUnknownZone(timeZone: string | null, error: unknown): void {
+  if (warnedZones.has(timeZone)) return;
+  warnedZones.add(timeZone);
+  console.warn(`[date] unknown time zone ${JSON.stringify(timeZone)}; using UTC:`, error);
 }
 
 function dayFormatter(timeZone: string): Intl.DateTimeFormat {

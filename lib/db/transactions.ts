@@ -211,23 +211,26 @@ export async function getTransactionCount(): Promise<DbResult<number>> {
   return { data: count ?? 0, error: null };
 }
 
+// null means there's no such transaction for this user: a bad id, a row
+// deleted in another tab, or another user's row (RLS hides it). Absence is
+// legitimate here, so .maybeSingle() -- an error is a real load failure.
 export async function getTransaction(
   id: string,
-): Promise<DbResult<TransactionWithRelations>> {
+): Promise<DbResult<TransactionWithRelations | null>> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("transactions")
     .select(TRANSACTION_SELECT)
     .eq("id", id)
-    .single()
-    .returns<RawTransactionRow>();
+    .maybeSingle()
+    .returns<RawTransactionRow | null>();
 
   if (error) {
     return { data: null, error: describeReadError(error, "transaction") };
   }
 
-  return { data: flatten(data), error: null };
+  return { data: data ? flatten(data) : null, error: null };
 }
 
 export type CreateTransactionInput = Omit<

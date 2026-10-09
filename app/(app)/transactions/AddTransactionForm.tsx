@@ -166,6 +166,9 @@ export function AddTransactionForm({
   // `accounts`.
   const [openingDateOverrides, setOpeningDateOverrides] = useState<Record<string, string>>({});
   const [isMovingOpeningDate, startMoveOpeningDate] = useTransition();
+  // Keyed by account id like the overrides above, so the message stays with
+  // the note it belongs to (a Transfer can show two).
+  const [moveOpeningDateErrors, setMoveOpeningDateErrors] = useState<Record<string, string>>({});
   const formRef = useRef<HTMLFormElement>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
   const wasPending = useRef(false);
@@ -178,9 +181,17 @@ export function AddTransactionForm({
   function handleMoveOpeningDate(accountId: string, newOpeningDate: string) {
     startMoveOpeningDate(async () => {
       const result = await updateAccountOpeningDateAction(accountId, newOpeningDate);
-      if (!result?.error) {
-        setOpeningDateOverrides((prev) => ({ ...prev, [accountId]: newOpeningDate }));
+      const error = result?.error;
+      if (error) {
+        setMoveOpeningDateErrors((prev) => ({ ...prev, [accountId]: error }));
+        return;
       }
+      setMoveOpeningDateErrors((prev) => {
+        const next = { ...prev };
+        delete next[accountId];
+        return next;
+      });
+      setOpeningDateOverrides((prev) => ({ ...prev, [accountId]: newOpeningDate }));
     });
   }
 
@@ -192,23 +203,27 @@ export function AddTransactionForm({
     if (!account) return null;
     const openingDate = openingDateOverrides[account.id] ?? account.opening_date;
     if (transactionDate >= openingDate) return null;
+    const moveError = moveOpeningDateErrors[account.id];
 
     return (
-      <p className="flex items-start gap-2 rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink-secondary">
-        <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
-        <span className="flex-1">
-          This is before your {account.account_name} balance date of {formatDate(openingDate)}, so
-          it won&apos;t change that balance.{" "}
-          <button
-            type="button"
-            onClick={() => handleMoveOpeningDate(account.id, transactionDate)}
-            disabled={isMovingOpeningDate}
-            className="font-medium text-action underline-offset-2 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised"
-          >
-            Move the balance date to {formatDate(transactionDate)}
-          </button>
-        </span>
-      </p>
+      <div className="flex flex-col gap-2">
+        <p className="flex items-start gap-2 rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink-secondary">
+          <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
+          <span className="flex-1">
+            This is before your {account.account_name} balance date of {formatDate(openingDate)}, so
+            it won&apos;t change that balance.{" "}
+            <button
+              type="button"
+              onClick={() => handleMoveOpeningDate(account.id, transactionDate)}
+              disabled={isMovingOpeningDate}
+              className="font-medium text-action underline-offset-2 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised"
+            >
+              Move the balance date to {formatDate(transactionDate)}
+            </button>
+          </span>
+        </p>
+        {moveError ? <ErrorMessage message={moveError} /> : null}
+      </div>
     );
   }
   // Closed by default (most entries skip these), but an edit or a prefill

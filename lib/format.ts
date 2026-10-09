@@ -68,6 +68,21 @@ function parseDisplayDate(date: string | Date): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+// The never-throws contract shared by every date formatter below: a
+// malformed value renders blank rather than crashing the page it's on. Blank
+// is deliberate; discarding the cause isn't. A bad date reaching a formatter
+// is a bug upstream, so it's logged with the value that caused it.
+function formatOrBlank(date: string | Date, format: (d: Date) => string, name: string): string {
+  try {
+    const parsed = parseDisplayDate(date);
+    if (parsed) return format(parsed);
+    console.warn(`[format] ${name}: not a date, rendered blank:`, date);
+  } catch (error) {
+    console.warn(`[format] ${name}: failed, rendered blank:`, date, error);
+  }
+  return "";
+}
+
 /** Full-precision currency for a single figure -- a transaction row, a line item. */
 export function formatCurrency(amount: number): string {
   return currency.format(amount);
@@ -91,12 +106,7 @@ export function formatAccountBalance(balance: number, accountType: string): stri
  * string rather than crashing whatever page it's embedded in.
  */
 export function formatDate(date: string | Date): string {
-  try {
-    const parsed = parseDisplayDate(date);
-    return parsed ? mediumDate.format(parsed) : "";
-  } catch {
-    return "";
-  }
+  return formatOrBlank(date, (d) => mediumDate.format(d), "formatDate");
 }
 
 /**
@@ -104,12 +114,7 @@ export function formatDate(date: string | Date): string {
  * never-throws contract as formatDate.
  */
 export function formatDateShort(date: string | Date): string {
-  try {
-    const parsed = parseDisplayDate(date);
-    return parsed ? shortDate.format(parsed) : "";
-  } catch {
-    return "";
-  }
+  return formatOrBlank(date, (d) => shortDate.format(d), "formatDateShort");
 }
 
 /**
@@ -120,12 +125,11 @@ export function formatDateShort(date: string | Date): string {
  * formatDate.
  */
 export function formatDateWithWeekday(date: string | Date): string {
-  try {
-    const parsed = parseDisplayDate(date);
-    return parsed ? `${weekdayLong.format(parsed)} ${dayMonthLong.format(parsed)}` : "";
-  } catch {
-    return "";
-  }
+  return formatOrBlank(
+    date,
+    (d) => `${weekdayLong.format(d)} ${dayMonthLong.format(d)}`,
+    "formatDateWithWeekday",
+  );
 }
 
 /**
@@ -136,12 +140,7 @@ export function formatDateWithWeekday(date: string | Date): string {
  * contract as formatDate.
  */
 export function formatDayMonth(date: string | Date): string {
-  try {
-    const parsed = parseDisplayDate(date);
-    return parsed ? dayMonthLong.format(parsed) : "";
-  } catch {
-    return "";
-  }
+  return formatOrBlank(date, (d) => dayMonthLong.format(d), "formatDayMonth");
 }
 
 /**

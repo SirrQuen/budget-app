@@ -63,8 +63,11 @@ export function TodayProvider({
       return;
     }
     reported.current = browserZone;
-    // A failed report (offline, deploy mid-flight) just waits for the next load.
-    syncTimeZoneAction(browserZone).catch(() => {});
+    // A failed report (offline, deploy mid-flight) just waits for the next
+    // load. Swallowed on purpose, but logged so a persistent failure shows.
+    syncTimeZoneAction(browserZone).catch((error: unknown) => {
+      console.warn(`[timezone] couldn't report ${browserZone}; retrying next load:`, error);
+    });
   }, [timeZone]);
 
   const value = now === null ? today : todayInZone(timeZone, now);

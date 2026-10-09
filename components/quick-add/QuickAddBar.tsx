@@ -113,7 +113,16 @@ export function QuickAddBar({
 
     const token = ++requestTokenRef.current;
     const timer = setTimeout(async () => {
-      const suggestion = await suggestCategoryAction(parsed.merchant, parsed.transaction_type);
+      // A missing suggestion is fine -- the user picks a category. But a
+      // rejection here (offline, a deploy mid-flight) has no caller to
+      // catch it, so it must be caught here, not left unhandled.
+      let suggestion: Awaited<ReturnType<typeof suggestCategoryAction>>;
+      try {
+        suggestion = await suggestCategoryAction(parsed.merchant, parsed.transaction_type);
+      } catch (error) {
+        console.warn("[quick-add] category suggestion failed:", error);
+        return;
+      }
       if (requestTokenRef.current !== token || categoryTouchedRef.current || !suggestion) return;
       const list = parsed.transaction_type === "Income" ? incomeCategories : expenseCategories;
       if (list.some((c) => c.id === suggestion.categoryid)) {
