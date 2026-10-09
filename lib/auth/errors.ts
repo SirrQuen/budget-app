@@ -42,3 +42,43 @@ export function authErrorMessage(error: AuthError): string {
   logDbError(`[auth] unmapped auth error (code ${error.code ?? "none"}):`, error);
   return GENERIC;
 }
+
+// What app/auth/confirm/route.ts does when it can't open a session from an
+// email link. `link` is which call failed: "otp" (verifyOtp, our template)
+// or "code" (exchangeCodeForSession, Supabase's default email).
+//
+//   unreachable        the auth server didn't answer, so we learned nothing
+//                      about the link. Never "already confirmed": that would
+//                      tell someone an unconfirmed address is confirmed.
+//                      The route answers 503 in place, so a reload retries
+//                      the same link.
+//   already-confirmed  a signup link whose token was spent, almost always
+//                      by a mail scanner. Normal, so info, not error.
+//   failed             everything else, including any spent recovery link.
+export type ConfirmFailure = "unreachable" | "already-confirmed" | "failed";
+
+const VERIFIER_MISSING = new Set(["bad_code_verifier", "flow_state_not_found", "flow_state_expired"]);
+
+export function confirmFailure(
+  error: AuthError,
+  link: "otp" | "code",
+  isRecovery: boolean,
+): ConfirmFailure {
+  if (classifyDbError(error) === "network-unreachable") {
+    logDbError(`[auth:confirm] ${link} auth server unreachable:`, error);
+    return "unreachable";
+  }
+
+  // On a code link, Supabase's verify endpoint already confirmed the address
+  // before issuing the code; the exchange only failed to open a session
+  // *here*, because the PKCE verifier cookie is missing (another device or
+  // browser, a scanner, a second click).
+  const spent = link === "otp" || VERIFIER_MISSING.has(error.code ?? "");
+  if (!isRecovery && spent) {
+    console.info(`[auth:confirm] ${link} link already used (code ${error.code ?? "none"})`);
+    return "already-confirmed";
+  }
+
+  logDbError(`[auth:confirm] ${link} link failed (code ${error.code ?? "none"}):`, error);
+  return "failed";
+}

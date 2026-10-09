@@ -9,13 +9,15 @@ import {
 } from "@/lib/db/settings";
 import { isTheme } from "@/lib/theme";
 import { isSafeToSpendWindowPref } from "@/lib/safeToSpendWindow";
+import { mustReachUserUnchanged } from "@/lib/db/errors";
 
 export type ThemeActionState = { error?: string } | undefined;
 
 // The control applies the theme locally before calling this, so a failure
 // here doesn't undo what the user just saw -- it only means the choice
 // didn't follow the account to their other devices. The message says that
-// rather than claiming nothing happened.
+// rather than claiming nothing happened -- except for an expired session or
+// an outage, which the user needs to hear as they are.
 export async function setThemeAction(theme: unknown): Promise<ThemeActionState> {
   if (!isTheme(theme)) {
     return { error: "That isn't a theme we recognise." };
@@ -24,7 +26,11 @@ export async function setThemeAction(theme: unknown): Promise<ThemeActionState> 
   const result = await updateTheme(theme);
 
   if (result.error) {
-    return { error: "Your theme is set on this device, but we couldn't save it to your account." };
+    return {
+      error: mustReachUserUnchanged(result.error)
+        ? result.error
+        : "Your theme is set on this device, but we couldn't save it to your account.",
+    };
   }
 
   // The layout renders the stored theme into ThemeProvider, so the cached
@@ -70,7 +76,9 @@ export async function setSafeToSpendWindowAction(
 
   if (result.error) {
     return {
-      error: "Your preference is set on this device, but we couldn't save it to your account.",
+      error: mustReachUserUnchanged(result.error)
+        ? result.error
+        : "Your preference is set on this device, but we couldn't save it to your account.",
     };
   }
 
@@ -93,7 +101,7 @@ export async function setSafeToSpendCushionAction(
   if (formData.get("reset") === "1") {
     const result = await updateSafeToSpendCushion(null);
     if (result.error) {
-      return { error: "We couldn't save that. Give it another try." };
+      return { error: result.error };
     }
     revalidatePath("/", "layout");
     return { saved: true };
@@ -111,7 +119,7 @@ export async function setSafeToSpendCushionAction(
 
   const result = await updateSafeToSpendCushion(amount);
   if (result.error) {
-    return { error: "We couldn't save that. Give it another try." };
+    return { error: result.error };
   }
 
   // The dashboard's getSafeToSpend() subtracts this.

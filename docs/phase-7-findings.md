@@ -834,6 +834,25 @@ per zone, though the audit said its callers already guard it.
   The localStorage guards, the cookie `setAll` in `lib/supabase/server.ts`
   and the inline theme script stay as they are.
 
+### Re-audit (2026-10-09): three gaps the pass left
+
+**Done 2026-10-09.**
+
+- Settings saves (`lib/db/settings.ts`, the four updates) went through
+  `describeReadError`, so a failed save read "We couldn't load your
+  settings". `lib/actions/settings.ts` then replaced every message with
+  fixed text, so an expired session or an outage read as "try again". Now
+  `describeWriteError(error, "settings")`. The actions keep their own
+  wording only when `mustReachUserUnchanged()` is false.
+- `app/auth/confirm/route.ts` never logged a failed `verifyOtp` /
+  `exchangeCodeForSession`, and an unreachable auth server on a signup link
+  redirected to "Your email is confirmed". The decision is now
+  `confirmFailure()` (`lib/auth/errors.ts`, tested). An outage answers the
+  proxy's 503 page in place, so a reload retries the same link.
+- The read copy for permission-denied / unexpected said "Refresh the page
+  to try again", which can't fix a missing GRANT. It now says the fault is
+  on our end, not the user's.
+
 ### Recorded, NOT in this fix pass: a thrown action loses the form
 
 When a Server Action throws (browser offline, server crash), React sends it

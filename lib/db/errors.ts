@@ -48,10 +48,12 @@ export type WriteContext =
   | "transaction"
   | "transfer"
   | "profile"
-  | "recurring";
+  | "recurring"
+  | "settings";
 
 // 23505 unique_violation, phrased per what was being created. Every one of
-// these is something the user can see and change.
+// these is something the user can see and change. Settings only ever
+// UPDATEs its one row, so its entry exists to satisfy the Record.
 const DUPLICATE: Record<WriteContext, string> = {
   account:
     "You already have an account with that name. Use a different one, or edit the account you've got.",
@@ -68,6 +70,12 @@ const DUPLICATE: Record<WriteContext, string> = {
     "That transfer is already logged. Refresh the page to see it in the list.",
   profile: "That username is already taken. Pick a different one.",
   recurring: "You already have a schedule set up like that. Edit the existing one instead.",
+  settings: "That's already saved. Refresh the page to see your current settings.",
+};
+
+// "That <context> isn't there anymore" doesn't read for a plural noun.
+const GONE: Partial<Record<WriteContext, string>> = {
+  settings: "We couldn't find your settings to save that. Refresh the page and try again.",
 };
 
 // SQLSTATEs where "try again in a moment" is genuine advice -- the write
@@ -163,7 +171,10 @@ export function describeWriteError(error: DbError, context: WriteContext): strin
     // concurrent delete, or a second tab. The user can recover by reloading.
     case "not-found":
       console.warn(`[db:${context}] target row is gone: ${error.message}`);
-      return `That ${context} isn't there anymore. Refresh the page to see the current list.`;
+      return (
+        GONE[context] ??
+        `That ${context} isn't there anymore. Refresh the page to see the current list.`
+      );
     case "auth-expired":
       console.warn(`[db:${context}] stale session: ${error.message}`);
       return SESSION_EXPIRED;
@@ -199,12 +210,22 @@ export function describeReadError(error: DbError, resource: string): string {
     case "transient":
       logDbError(`[db:read:${resource}] transient ${error.code}:`, error);
       return `We couldn't load your ${resource} -- the database was busy for a moment. Refresh the page to try again.`;
+    // A missing GRANT or a bug. Refreshing won't fix it and the user can't,
+    // so say it's ours rather than imply they should keep retrying.
     case "permission-denied":
     case "not-found":
     case "unexpected":
       logDbError(`[db:read:${resource}] ${kind}:`, error);
-      return `We couldn't load your ${resource} just now. Refresh the page to try again.`;
+      return `We couldn't load your ${resource}. Something on our end broke, not anything you did. Try again in a few minutes.`;
   }
+}
+
+// For a caller that swaps describeWriteError's text for wording of its own
+// (lib/actions/settings.ts): true for the two messages that tell the user
+// something only they can act on or should know -- log in again, or it's
+// our outage -- and so must reach them unchanged.
+export function mustReachUserUnchanged(message: string): boolean {
+  return message === SESSION_EXPIRED || message === UNREACHABLE;
 }
 
 // What supabase.auth.getClaims() resolves to, structurally.

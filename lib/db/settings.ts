@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { coerceTheme, type Theme } from "@/lib/theme";
 import { coerceSafeToSpendWindowPref, type SafeToSpendWindowPref } from "@/lib/safeToSpendWindow";
 import type { Database } from "@/lib/database.types";
-import { describeReadError, sessionUserId } from "@/lib/db/errors";
+import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/errors";
 import { isValidTimeZone, todayInZone } from "@/lib/date";
 
 type SettingsRow = Database["public"]["Tables"]["settings"]["Row"];
@@ -94,7 +94,7 @@ export async function updateTimeZone(timeZone: string): Promise<DbResult<string>
     .single();
 
   if (error) {
-    return { data: null, error: describeReadError(error, "settings") };
+    return { data: null, error: describeWriteError(error, "settings") };
   }
 
   return { data: data.timezone ?? timeZone, error: null };
@@ -119,7 +119,7 @@ export async function updateSafeToSpendWindowPref(
     .single();
 
   if (error) {
-    return { data: null, error: describeReadError(error, "settings") };
+    return { data: null, error: describeWriteError(error, "settings") };
   }
 
   return { data: coerceSafeToSpendWindowPref(data.safe_to_spend_window) ?? pref, error: null };
@@ -182,7 +182,7 @@ export async function updateSafeToSpendCushion(
     .single();
 
   if (error) {
-    return { data: null, error: describeReadError(error, "settings") };
+    return { data: null, error: describeWriteError(error, "settings") };
   }
 
   return { data: data.safe_to_spend_cushion, error: null };
@@ -208,7 +208,7 @@ export async function updateTheme(theme: Theme): Promise<DbResult<Theme>> {
     .single();
 
   if (error) {
-    return { data: null, error: describeReadError(error, "settings") };
+    return { data: null, error: describeWriteError(error, "settings") };
   }
 
   return { data: coerceTheme(data.theme), error: null };

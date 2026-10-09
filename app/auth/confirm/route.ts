@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SIGNED_IN_COOKIE, SIGNED_IN_MAX_AGE_S } from "@/lib/auth/signedInFlag";
 import { markSessionStart } from "@/lib/auth/firstSession";
+import { confirmFailure, type ConfirmFailure } from "@/lib/auth/errors";
+import { serviceUnavailable } from "@/lib/supabase/middleware";
 
 // The email-link callback for both signup confirmation and password recovery.
 //
@@ -52,6 +54,13 @@ export async function GET(request: NextRequest) {
   const FAILURE = "/login?error=confirmation_failed";
   const ALREADY_CONFIRMED = "/login?notice=email_confirmed";
 
+  // An outage answers 503 in place rather than redirecting, so a reload
+  // retries this same link once the auth server is back.
+  const afterFailure = (outcome: ConfirmFailure): Response => {
+    if (outcome === "unreachable") return serviceUnavailable();
+    redirect(outcome === "already-confirmed" ? ALREADY_CONFIRMED : FAILURE);
+  };
+
   const supabase = await createClient();
 
   // A confirmed signup is a brand-new user's first sight of the app, so the
@@ -83,8 +92,7 @@ export async function GET(request: NextRequest) {
     }
     // Spent or expired token. On a signup link that almost always means a
     // scanner already confirmed the address.
-    if (!isRecovery) redirect(ALREADY_CONFIRMED);
-    redirect(FAILURE);
+    return afterFailure(confirmFailure(error, "otp", isRecovery));
   }
 
   // --- Shape 1a: default email — ?code -> exchangeCodeForSession ----------
@@ -96,20 +104,8 @@ export async function GET(request: NextRequest) {
       redirect(next);
     }
 
-    // Supabase's verify endpoint issued this code, so the address is already
-    // confirmed — the exchange only failed to open a session *here*. That
-    // happens when the PKCE verifier cookie is missing: the link was opened
-    // on a different device or browser than signup, or a scanner ran the
-    // flow, or the code was already exchanged. None of these mean the
-    // address is unconfirmed.
-    const verifierMissing =
-      error.code === "bad_code_verifier" ||
-      error.code === "flow_state_not_found" ||
-      error.code === "flow_state_expired";
-
-    if (!isRecovery && verifierMissing) redirect(ALREADY_CONFIRMED);
-    // A malformed code, or a transient server error — worth a retry.
-    redirect(FAILURE);
+    // The verifier-missing cases are explained in confirmFailure.
+    return afterFailure(confirmFailure(error, "code", isRecovery));
   }
 
   // --- Shape 1b: default email — verify endpoint bounced back an error ----

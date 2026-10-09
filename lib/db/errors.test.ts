@@ -1,7 +1,13 @@
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { createClient } from "@supabase/supabase-js";
-import { classifyDbError, describeReadError, describeWriteError, sessionUserId } from "./errors";
+import {
+  classifyDbError,
+  describeReadError,
+  describeWriteError,
+  mustReachUserUnchanged,
+  sessionUserId,
+} from "./errors";
 
 // These drive the real Supabase client with a stubbed fetch, so they pin
 // the error SHAPES the client produces, not just our reading of them. If
@@ -155,4 +161,27 @@ test("describeWriteError: a duplicate keeps its own message", (t) => {
   quiet(t);
   const message = describeWriteError({ code: "23505", message: "dup" }, "account");
   assert.match(message, /already have an account with that name/);
+});
+
+test("describeReadError: a missing GRANT says it's ours, not a connection problem", (t) => {
+  quiet(t);
+  const message = describeReadError({ code: "42501", message: "permission denied for table accounts" }, "accounts");
+  assert.match(message, /on our end/);
+  assert.doesNotMatch(message, /connection|permission|accounts table/i);
+  assert.notEqual(message, describeReadError({ code: "", message: "x", details: "Caused by: TypeError: fetch failed" }, "accounts"));
+});
+
+test("describeWriteError: a settings save that fails isn't called a failed load", (t) => {
+  quiet(t);
+  for (const code of ["42501", "PGRST116", "40001"]) {
+    assert.doesNotMatch(describeWriteError({ code, message: "x" }, "settings"), /load|That settings/);
+  }
+});
+
+test("mustReachUserUnchanged: only the session and outage lines", async (t) => {
+  quiet(t);
+  const outage = describeWriteError(await selectError(unreachable("ECONNREFUSED")), "settings");
+  assert.ok(mustReachUserUnchanged(outage));
+  assert.ok(mustReachUserUnchanged(describeWriteError({ code: "PGRST301", message: "JWT expired" }, "settings")));
+  assert.ok(!mustReachUserUnchanged(describeWriteError({ code: "42501", message: "x" }, "settings")));
 });

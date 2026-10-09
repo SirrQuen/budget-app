@@ -36,7 +36,7 @@ function redirectTo(request: NextRequest, pathname: string, supabaseResponse: Ne
 // 200 and renders the app layout, which calls Supabase itself. Static
 // markup, no user input. Colours are the dark surface tokens from
 // globals.css, inlined because no stylesheet loads here.
-function serviceUnavailable(): Response {
+export function serviceUnavailable(): Response {
   const html = `<!doctype html>
 <html lang="en">
 <head>
