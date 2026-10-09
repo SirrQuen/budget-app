@@ -59,17 +59,26 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
   ] = await Promise.all([
     listAccountBalances(),
     getNetWorth(),
-    // These four only feed the "Make a payment" shortcut's pre-fill and the
-    // opening-date display -- a failure there shouldn't take down the whole
-    // accounts page, so they're deliberately left out of the error check
-    // below.
+    // Only this one may fail quietly: it pre-selects the "Make a payment"
+    // shortcut's From account, and without it the user picks one, the same
+    // as a user with no payment history yet.
     getMostUsedAssetAccountId(),
     listCategoriesForType("Income"),
     listCategoriesForType("Expense"),
     listAccounts(),
   ]);
 
-  if (accountsResult.error !== null || netWorthResult.error !== null) {
+  // A failed read is an error state, never an empty list
+  // (docs/phase-7-findings.md, "a failed read renders as a plausible
+  // zero"). Failed categories would leave "Make a payment"'s pickers empty;
+  // a failed accounts-table read would stamp every opening date as today.
+  if (
+    accountsResult.error !== null ||
+    netWorthResult.error !== null ||
+    incomeCategoriesResult.error !== null ||
+    expenseCategoriesResult.error !== null ||
+    accountsTableResult.error !== null
+  ) {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader title="Accounts" description="Every place your money lives, in one list." />
@@ -77,6 +86,9 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
           message={
             accountsResult.error ??
             netWorthResult.error ??
+            incomeCategoriesResult.error ??
+            expenseCategoriesResult.error ??
+            accountsTableResult.error ??
             "We couldn't load your accounts. Refresh the page to try again."
           }
         />
@@ -88,7 +100,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
   // migration comment) -- merged in here from the base table so the edit
   // form and the "Make a payment" shortcut both have it.
   const openingDateById = new Map(
-    (accountsTableResult.data ?? []).map((a) => [a.id, a.opening_date]),
+    accountsTableResult.data.map((a) => [a.id, a.opening_date]),
   );
   const allAccounts: AccountBalanceRow[] = accountsResult.data.map((a) => ({
     ...a,
@@ -132,8 +144,8 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
       account_type: a.account_type ?? "",
     }));
   const defaultFromAccountId = mostUsedAssetResult.data ?? null;
-  const incomeCategories = incomeCategoriesResult.data ?? [];
-  const expenseCategories = expenseCategoriesResult.data ?? [];
+  const incomeCategories = incomeCategoriesResult.data;
+  const expenseCategories = expenseCategoriesResult.data;
 
   const typeGroups = ACCOUNT_TYPE_GROUP_ORDER.map((type) => {
     const accounts = visibleAccounts

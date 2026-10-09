@@ -19,6 +19,18 @@ import type { TransactionAccountOption } from "../transactions/AddTransactionFor
 const RECURRING_ROW_GRID =
   "sm:grid sm:grid-cols-[minmax(0,min(28rem,1fr))_auto_auto_max-content_max-content] sm:gap-x-4 sm:px-4";
 
+function RecurringLoadError({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Recurring"
+        description="Bills and paychecks that repeat -- posted automatically on their due date."
+      />
+      <LoadError message={message} />
+    </div>
+  );
+}
+
 export default async function RecurringPage() {
   const [
     recurringResult,
@@ -42,27 +54,42 @@ export default async function RecurringPage() {
   // failed read here is a preview inconvenience, not a correctness issue.
   const holidays = holidaysResult.data ? Array.from(holidaysResult.data) : [];
 
-  if (recurringResult.error !== null) {
+  // A failed read is an error state, never an empty list or a zero
+  // (docs/phase-7-findings.md, "a failed read renders as a plausible
+  // zero"). A failed balances read would show $0 as a card payment's
+  // estimate; a failed accounts read would hide "Add schedule"; a failed
+  // categories read would leave the pickers empty. Holidays above is the
+  // one documented exception.
+  if (
+    recurringResult.error !== null ||
+    accountsResult.error !== null ||
+    balancesResult.error !== null ||
+    incomeCategoriesResult.error !== null ||
+    expenseCategoriesResult.error !== null
+  ) {
     return (
-      <div className="flex flex-col gap-6">
-        <PageHeader
-          title="Recurring"
-          description="Bills and paychecks that repeat -- posted automatically on their due date."
-        />
-        <LoadError message={recurringResult.error} />
-      </div>
+      <RecurringLoadError
+        message={
+          recurringResult.error ??
+          accountsResult.error ??
+          balancesResult.error ??
+          incomeCategoriesResult.error ??
+          expenseCategoriesResult.error ??
+          "We couldn't load your recurring transactions. Refresh the page to try again."
+        }
+      />
     );
   }
 
-  const accounts: TransactionAccountOption[] = (accountsResult.data ?? []).map((a) => ({
+  const accounts: TransactionAccountOption[] = accountsResult.data.map((a) => ({
     id: a.id,
     account_name: a.account_name,
     is_active: a.is_active,
     opening_date: a.opening_date,
     account_type: a.account_type,
   }));
-  const incomeCategories = incomeCategoriesResult.data ?? [];
-  const expenseCategories = expenseCategoriesResult.data ?? [];
+  const incomeCategories = incomeCategoriesResult.data;
+  const expenseCategories = expenseCategoriesResult.data;
   const schedules = recurringResult.data;
 
   // For a variable schedule with no confirmed next_amount, this is the same
@@ -71,7 +98,7 @@ export default async function RecurringPage() {
   // per-row round trip, since this page (unlike the dashboard) reads the
   // raw recurring_transactions table, not that view.
   const cardBalanceByAccountId = new Map(
-    (balancesResult.data ?? []).map((b) => [b.account_id, b.balance ?? 0]),
+    balancesResult.data.map((b) => [b.account_id, b.balance ?? 0]),
   );
 
   // Same idea for a variable-amount Income or Expense schedule --
@@ -85,16 +112,23 @@ export default async function RecurringPage() {
   const variableCategorySchedules = schedules.filter(
     (r) => r.amount_is_variable && r.to_accountid === null,
   );
-  const categoryEstimateEntries = await Promise.all(
+  const categoryEstimateResults = await Promise.all(
     variableCategorySchedules.map(async (r) => {
       const result =
         r.category_type === "Expense"
           ? await estimateExpenseAmount(r.id, Number(r.amount))
           : await estimateIncomeAmount(r.id, Number(r.amount));
-      return [r.id, result.data ?? Number(r.amount)] as const;
+      return [r.id, result] as const;
     }),
   );
-  const categoryEstimateById = new Map(categoryEstimateEntries);
+  // Falling back to the stored amount on a FAILED estimate would show a
+  // believable figure that isn't the estimate. The SQL functions already
+  // apply the fallback when there's no history; an error is an error.
+  const categoryEstimateById = new Map<string, number>();
+  for (const [id, result] of categoryEstimateResults) {
+    if (result.error !== null) return <RecurringLoadError message={result.error} />;
+    categoryEstimateById.set(id, result.data);
+  }
 
   const today = await getToday();
 
