@@ -46,6 +46,15 @@ leaves this list only when it is verified done, with the date and how.
 8. **The Section 10 error-handling fix pass**, in full. Its design decisions
    are already made; see "Error handling audit" below.
 
+   *Repo state:* every item in the pass is committed on
+   `chore/schema-drift` (2026-10-09, `81a5ae9` through `6d84f27`), with
+   unit tests for the classifier, the proxy's 503, the error page's three
+   cases and the auth copy; `npm test` 136/136. Not yet verified in a
+   running production build: in particular that a Server Component's
+   `UnreachableError` digest reaches `app/error.tsx` intact (taken from
+   Next's `create-error-handler.js`, not observed). Close this item once
+   that's checked with the auth server blocked.
+
 Not blockers: the streak-strip milestone mark
 (`components/ui/LoggingStreakStrip.tsx:27`) is visual polish.
 
@@ -655,6 +664,11 @@ removed. It was never committed.
 
 ## Error handling audit (2026-10-07)
 
+**Status: fix pass done in the repo 2026-10-09 (`81a5ae9`..`6d84f27`);
+not yet verified in a production build -- see launch blocker 8.** The
+"thrown action loses the form" item below was never in the pass and is
+still open.
+
 Audit of reads, error copy, schema leaks, swallowed errors and Server Action
 failures. `/db-test` was fixed on the spot. Everything else is decided below
 and goes into ONE fix pass, in the order listed. It's one piece of work
@@ -674,6 +688,12 @@ at the SQL layer, and CLAUDE.md now points there. Side effect:
 (see section 3 above).
 
 ### P1: an unreachable auth server signs everyone out
+
+**Done 2026-10-09.** `d2de8b5`: the proxy returns a self-contained 503
+page, never a redirect and never a pass-through; `getUser()` throws an
+`UnreachableError`, so `requireUser()` renders `app/error.tsx`.
+`81a5ae9`: the 16 `getClaims()` sites go through `sessionUserId()`.
+`lib/supabase/middleware.test.ts` fails on both wrong versions.
 
 When Supabase Auth can't be reached, `getClaims()`/`getUser()` return an
 `AuthRetryableFetchError` (status 0 on a network failure, 5xx/52x on an
@@ -700,6 +720,15 @@ sites go through one shared helper, not 15 copies of the check.
 
 ### P1 (equal): a failed read renders as a plausible zero
 
+**Done 2026-10-09.** `3513fd1` (Recurring, Accounts) and `6d84f27`
+(dashboard, categories, layout). Every `.data ??` left in `app/` carries
+a comment saying why it's harmless. Beyond the lines below, the sweep
+also caught: a failed variable-amount estimate on Recurring falling back
+to the stored amount; the categories page reading a failed activity read
+as "Not used yet"/$0; the dashboard's Upcoming list vanishing when the
+projection failed; and the no-transactions dashboard dropping "Total
+across accounts" on a failed net worth read.
+
 A failed read must render an error state, never a believable empty list
 or zero. This app's premise is a number you can trust.
 
@@ -717,6 +746,9 @@ degradation like `holidays` on the recurring page, whose comment explains
 why it's only a preview.
 
 ### 1. The classifier: one function, six classes
+
+**Done 2026-10-09** (`81a5ae9`). Shape-pinning test:
+`lib/db/errors.test.ts`.
 
 `describeReadError` and `describeWriteError` (`lib/db/errors.ts`) give the
 same copy for a connect timeout, a missing GRANT (`42501`) and a genuine
@@ -745,6 +777,11 @@ test instead of the error handling. The auth side uses
 
 ### 2. Copy: whose connection failed
 
+**Done 2026-10-09** (`31c1866`). The server-unreachable case is
+recognised in `app/error.tsx` by an `UNREACHABLE;` digest prefix, since
+the message is redacted in production (`lib/unreachable.ts`). Test:
+`app/error.test.tsx`.
+
 Every database call runs on the Next server, so a server-side `fetch failed`
 means the server can't reach Supabase. It does NOT mean the user is
 offline. Three cases:
@@ -761,6 +798,9 @@ offline. Three cases:
 
 ### 3. Auth error text leaks Supabase's raw message
 
+**Done 2026-10-09** (`9f691f8`). An unreachable auth server gets the
+UNREACHABLE copy. Test: `lib/auth/errors.test.ts`.
+
 `lib/auth/errors.ts:32` falls back to `error.message` for any unmapped
 auth code. That message reaches login, signup, forgot-password and reset.
 GoTrue's real messages include "Database error saving new user" and
@@ -772,6 +812,9 @@ The rest of the app is clean on schema leaks: `lib/db` returns only fixed
 strings, and `error.tsx` shows only the digest.
 
 ### 4. Smaller items
+
+**Done 2026-10-09** (`9f691f8`), all five. `lib/date.ts` logs too, once
+per zone, though the audit said its callers already guard it.
 
 - `app/(app)/transactions/[id]/edit/page.tsx:37`: `notFound()` on *any*
   `getTransaction` error, so a timeout shows "page not found". It also uses
