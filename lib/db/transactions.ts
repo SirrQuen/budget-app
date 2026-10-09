@@ -443,6 +443,11 @@ export type CreateTransferInput = {
   date: string;
   description: string;
   notes?: string | null;
+  // Rides on the outgoing leg only: the unique index is (userid,
+  // idempotency_key), so both legs can't carry it. One leg is enough -- the
+  // two are inserted in one statement, so if that leg exists, so does the
+  // transfer.
+  idempotency_key?: string | null;
 };
 
 // A transfer is two legs sharing a transfer_group_id: an Expense on the
@@ -476,6 +481,7 @@ export async function createTransfer(
     description: input.description,
     notes: input.notes ?? null,
     transfer_group_id,
+    idempotency_key: input.idempotency_key ?? null,
   };
 
   const legIn: TransactionInsert = {
@@ -496,6 +502,42 @@ export async function createTransfer(
     .select();
 
   if (error) {
+    // Same as createTransaction: a retry of a transfer that already landed.
+    // Return its two legs rather than a duplicate error.
+    if (error.code === "23505" && input.idempotency_key) {
+      const { data: existingOut, error: outError } = await supabase
+        .from("transactions")
+        .select("transfer_group_id")
+        .eq("userid", userid)
+        .eq("idempotency_key", input.idempotency_key)
+        .single();
+
+      if (outError) {
+        return { data: null, error: describeWriteError(outError, "transfer") };
+      }
+      if (existingOut.transfer_group_id === null) {
+        // The key belongs to a plain transaction. Keys are minted per
+        // submission, so this is a client bug, not a user's retry.
+        return {
+          data: null,
+          error: describeWriteError(
+            { message: "idempotency key matched a non-transfer row" },
+            "transfer",
+          ),
+        };
+      }
+
+      const { data: legs, error: legsError } = await supabase
+        .from("transactions")
+        .select()
+        .eq("transfer_group_id", existingOut.transfer_group_id);
+
+      if (legsError) {
+        return { data: null, error: describeWriteError(legsError, "transfer") };
+      }
+      return { data: legs, error: null };
+    }
+
     return { data: null, error: describeWriteError(error, "transfer") };
   }
 

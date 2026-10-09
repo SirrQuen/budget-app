@@ -880,12 +880,16 @@ React's reset behaviour.
 action pending and replays it, and a replay of a write whose response was
 lost (it committed, the reply didn't arrive) posts it twice.
 
-**Open, related:** "Try again" after a thrown create is a retry of a write
-that may already have landed. QuickAddBar sends an `idempotency_key`, so
-its retry resolves to one row. AddTransactionForm sends none, so a retry
-there can post a duplicate transaction. (That was already true when the
-error page made the user re-enter it.) Account, category, budget, goal and
-schedule creates are covered by their unique constraints.
+**Done, related (2026-10-09):** "Try again" after a thrown create is a
+retry of a write that may already have landed. QuickAddBar already sent an
+`idempotency_key`; AddTransactionForm now does too, transfers included
+(the key rides on the outgoing leg only, since the unique index is
+`(userid, idempotency_key)` and both legs land in one statement). Its key
+is per SUBMISSION (`lib/idempotency.ts`): an identical resend reuses it,
+an edited one gets a new key, so a retry never returns the old row and
+silently drops the edit. QuickAddBar still keys per fill of the form and
+has that edit-drop gap; it isn't changed yet. Not exercised against a real
+database: the transfer 23505 path is untested beyond types.
 
 **Not verified in a running app:** a real offline submit, and that a
 redirecting action dispatched this way still navigates (the test pins

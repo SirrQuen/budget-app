@@ -4,6 +4,12 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { callAction, useActionForm } from "@/components/useActionForm";
 import {
+  IDEMPOTENCY_FIELD,
+  keyForSubmission,
+  submissionFields,
+  type IdempotencyAttempt,
+} from "@/lib/idempotency";
+import {
   createTransactionAction,
   updateTransactionAction,
   type ActionState,
@@ -174,6 +180,12 @@ export function AddTransactionForm({
   const amountInputRef = useRef<HTMLInputElement>(null);
   const wasPending = useRef(false);
   const celebrateTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Create only. The last submission's key and fields: an identical retry
+  // reuses the key, an edited one gets a new key (lib/idempotency.ts).
+  // Minted in handleSubmit and written into the hidden input, never during
+  // render, where a UUID would differ between server and client.
+  const lastAttempt = useRef<IdempotencyAttempt | null>(null);
+  const idempotencyInputRef = useRef<HTMLInputElement>(null);
 
   const categoryGroups =
     type === "Transfer" ? [] : groupByCategoryGroup(type === "Income" ? incomeCategories : expenseCategories);
@@ -250,6 +262,8 @@ export function AddTransactionForm({
       // Capture the submitted direction before setType("Expense") below --
       // the pulse variant must reflect what was logged, not the reset value.
       const loggedType = type;
+      // Saved: the next entry is a new transaction, whatever its fields.
+      lastAttempt.current = null;
       formRef.current?.reset();
       setType("Expense");
       setCategoryid("");
@@ -337,6 +351,11 @@ export function AddTransactionForm({
       return;
     }
     setClientError(undefined);
+    if (!isEdit && idempotencyInputRef.current) {
+      const fields = submissionFields(new FormData(e.currentTarget));
+      lastAttempt.current = keyForSubmission(fields, lastAttempt.current, () => crypto.randomUUID());
+      idempotencyInputRef.current.value = lastAttempt.current.key;
+    }
     submit(e);
   }
 
@@ -358,7 +377,9 @@ export function AddTransactionForm({
       >
         {isEdit && initialValues ? (
           <input type="hidden" name="id" value={initialValues.id} />
-        ) : null}
+        ) : (
+          <input type="hidden" name={IDEMPOTENCY_FIELD} ref={idempotencyInputRef} defaultValue="" />
+        )}
 
         <div className="flex items-center justify-between">
           <h2 id={headingId} className="text-base font-semibold text-ink">

@@ -169,6 +169,12 @@ export async function createTransactionAction(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  // Sent by both create forms (QuickAddBar, AddTransactionForm). Retrying
+  // with the same key must resolve to what the first attempt created, not a
+  // second copy -- see the 23505 handling in createTransaction and
+  // createTransfer.
+  const idempotencyKey = String(formData.get("idempotency_key") ?? "").trim() || null;
+
   // The type toggle's third option -- Transfer -- shares this action rather
   // than getting its own, since AddTransactionForm's useActionState binds a
   // single action for the life of the form.
@@ -178,7 +184,7 @@ export async function createTransactionAction(
       return parsed;
     }
 
-    const { error } = await createTransfer(parsed);
+    const { error } = await createTransfer({ ...parsed, idempotency_key: idempotencyKey });
     if (error) {
       return { error };
     }
@@ -191,14 +197,9 @@ export async function createTransactionAction(
     return parsed;
   }
 
-  // Optional: only quick-add sends this. Retrying with the same key must
-  // resolve to the row the first attempt created, not a second one -- see
-  // createTransaction's 23505 handling.
-  const idempotencyKey = String(formData.get("idempotency_key") ?? "").trim();
-
   const { error } = await createTransaction({
     ...parsed,
-    idempotency_key: idempotencyKey || null,
+    idempotency_key: idempotencyKey,
   });
 
   if (error) {
