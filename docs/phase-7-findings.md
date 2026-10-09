@@ -505,7 +505,7 @@ select); and
 
 ## "Leaves the set" classifier: only one of three consumers shares it (2026-10-06)
 
-**Status: fix 1 done 2026-10-08; fix 2 (cushion SQL) open.**
+**Status: done. Fix 1 2026-10-08; fix 2 (cushion SQL) 2026-10-09.**
 
 CLAUDE.md requires that Spendable Cash, the safe-to-spend projection and the
 cushion suggestion all call one "leaves the set" classifier
@@ -545,6 +545,31 @@ disagree about which accounts are in the set, the hero number is wrong.
 settings page.
 
 ### 2. Cushion SQL: option (a), one SQL function
+
+**Done 2026-10-09.** Migration 45
+(`20261009000045_45_leaves_spendable_set.sql`) adds `leaves_spendable_set`
+and rewrites `suggested_safe_to_spend_cushion()` to call it; its
+`comment on function` replaces migration 33's unbacked claim with one that
+names the function and the parity test. Parity test:
+`docs/leaves-spendable-set-parity.sql`, run by `npm run test:parity`
+(`scripts/leaves-spendable-set-parity.ts`). The open question below was
+answered with "the `rls-isolation-test.sql` route": the runner computes the
+TS answers from `ACCOUNT_TYPES`, pastes them into the SQL, and runs it
+against the linked project in one transaction ending in ROLLBACK. Account
+types are parsed from `accounts_account_type_check` (no enum conversion).
+
+Verified 2026-10-09 against production with `--with` (the migration applied
+inside the rolled-back transaction): 93/93 pass. Then each one-sided change
+was checked to FAIL: a type added to the constraint only, a type added to
+`ACCOUNT_TYPES` only, `leaves_spendable_set` counting Cash as spendable,
+and a cushion that ignores the transfer destination. The same new type
+added on both sides passes (122/122), with its cases generated
+automatically. Afterwards: no leftover fixture user, no function, no
+constraint change.
+
+Pushed 2026-10-09; `database.types.ts` regenerated. After the push,
+`npm run test:parity` (no `--with`) 93/93, `rls-isolation-test.sql`
+233/233.
 
 Create `leaves_spendable_set(from_type, to_type)` as the only SQL-side
 implementation, and call it from `suggested_safe_to_spend_cushion()`.

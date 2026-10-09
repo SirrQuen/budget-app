@@ -1470,6 +1470,10 @@ export type Database = {
         Returns: number
       }
       is_business_day: { Args: { d: string }; Returns: boolean }
+      leaves_spendable_set: {
+        Args: { p_from_type: string; p_to_type: string }
+        Returns: boolean
+      }
       record_login: {
         Args: never
         Returns: {

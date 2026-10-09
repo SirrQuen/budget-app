@@ -3,7 +3,8 @@
 // client form can pull the same source of truth.
 
 // Mirrors accounts_account_type_check (20260805000004_04_hardening.sql).
-// Keep in sync if that constraint ever changes.
+// Keep in sync if that constraint ever changes: `npm run test:parity`
+// fails while they differ.
 export const ACCOUNT_TYPES = [
   "Checking",
   "Savings",
