@@ -12,6 +12,7 @@ import { formatCurrency } from "@/lib/format";
 import type { BudgetProgressRow } from "@/lib/db/budgets";
 import type { ChronicOverBudget } from "@/lib/budgetInsights";
 import type { CategoryWithGroup } from "@/lib/db/categories";
+import { callAction } from "@/components/useActionForm";
 
 // True once the month after monthISO has started -- the viewed month is
 // fully in the books, not still accumulating spend.
@@ -80,7 +81,7 @@ export function BudgetRow({
 
   function handleDelete() {
     startDelete(async () => {
-      const result = await deleteBudgetAction(budget.budget_id!);
+      const result = await callAction(() => deleteBudgetAction(budget.budget_id!));
       if (result?.error) {
         setDeleteError(result.error);
         return;

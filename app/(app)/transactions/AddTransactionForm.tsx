@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { callAction, useActionForm } from "@/components/useActionForm";
 import {
   createTransactionAction,
   updateTransactionAction,
@@ -124,7 +125,7 @@ export function AddTransactionForm({
   const isEdit = mode === "edit";
   const today = useToday();
   const [open, setOpen] = useState(isEdit || embedded);
-  const [state, formAction, pending] = useActionState<ActionState, FormData>(
+  const [state, formAction, pending, submit] = useActionForm<ActionState>(
     isEdit ? updateTransactionAction : createTransactionAction,
     undefined,
   );
@@ -180,7 +181,7 @@ export function AddTransactionForm({
 
   function handleMoveOpeningDate(accountId: string, newOpeningDate: string) {
     startMoveOpeningDate(async () => {
-      const result = await updateAccountOpeningDateAction(accountId, newOpeningDate);
+      const result = await callAction(() => updateAccountOpeningDateAction(accountId, newOpeningDate));
       const error = result?.error;
       if (error) {
         setMoveOpeningDateErrors((prev) => ({ ...prev, [accountId]: error }));
@@ -336,6 +337,7 @@ export function AddTransactionForm({
       return;
     }
     setClientError(undefined);
+    submit(e);
   }
 
   if (!isEdit && !embedded && !open) {

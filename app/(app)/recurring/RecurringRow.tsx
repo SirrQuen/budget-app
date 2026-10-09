@@ -18,6 +18,7 @@ import type { RecurringWithRelations } from "@/lib/db/recurring";
 import type { TransactionType } from "@/lib/db/transactions";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { TransactionAccountOption } from "../transactions/AddTransactionForm";
+import { callAction } from "@/components/useActionForm";
 
 export function RecurringRow({
   recurring,
@@ -53,7 +54,7 @@ export function RecurringRow({
 
   function handleDelete() {
     startDelete(async () => {
-      const result = await deleteRecurringAction(recurring.id);
+      const result = await callAction(() => deleteRecurringAction(recurring.id));
       if (result?.error) {
         setDeleteError(result.error);
         return;
@@ -66,8 +67,8 @@ export function RecurringRow({
     setToggleError(undefined);
     startToggle(async () => {
       const result = recurring.is_active
-        ? await pauseRecurringAction(recurring.id)
-        : await resumeRecurringAction(recurring.id);
+        ? await callAction(() => pauseRecurringAction(recurring.id))
+        : await callAction(() => resumeRecurringAction(recurring.id));
       if (result?.error) {
         setToggleError(result.error);
       }

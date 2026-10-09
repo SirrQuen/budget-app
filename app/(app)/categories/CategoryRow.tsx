@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { CategoryActivity, CategoryWithGroup } from "@/lib/db/categories";
 import { categoryColorVar } from "@/lib/categoryOptions";
 import { formatCurrency } from "@/lib/format";
+import { callAction } from "@/components/useActionForm";
 
 export function CategoryRow({
   category,
@@ -28,7 +29,7 @@ export function CategoryRow({
 
   function handleArchive() {
     startArchive(async () => {
-      const result = await archiveCategoryAction(category.id);
+      const result = await callAction(() => archiveCategoryAction(category.id));
       if (result?.error) {
         setArchiveError(result.error);
         return;

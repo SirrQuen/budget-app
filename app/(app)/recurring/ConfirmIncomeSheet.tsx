@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useActionState } from "react";
+import { useActionForm } from "@/components/useActionForm";
 import { confirmIncomeAction, type ActionState } from "@/lib/actions/recurring";
 import { formatDate } from "@/lib/format";
 import { useConfirmPulse } from "@/components/ui/ConfirmPulse";
@@ -47,7 +47,7 @@ export function ConfirmIncomeSheet({
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
-  const [state, action, pending] = useActionState<ActionState, FormData>(
+  const [state, action, pending, submit] = useActionForm<ActionState>(
     confirmIncomeAction,
     undefined,
   );
@@ -78,7 +78,7 @@ export function ConfirmIncomeSheet({
             shouldn't hold a stale estimate across reopens for a different
             schedule without the page re-rendering in between. */}
         {open ? (
-          <form action={action} className="flex flex-col gap-4 p-5">
+          <form action={action} onSubmit={submit} className="flex flex-col gap-4 p-5">
             <input type="hidden" name="id" value={target.id} />
 
             <div className="flex items-center justify-between gap-3">

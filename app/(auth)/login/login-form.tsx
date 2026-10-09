@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionForm } from "@/components/useActionForm";
 import { login, type ActionState } from "@/lib/auth/actions";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
@@ -9,13 +9,13 @@ import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
 export function LoginForm({ initialError }: { initialError?: string }) {
-  const [state, action, pending] = useActionState<ActionState, FormData>(
+  const [state, action, pending, submit] = useActionForm<ActionState>(
     login,
     initialError ? { error: initialError } : undefined,
   );
 
   return (
-    <form action={action} className="flex flex-col gap-4">
+    <form action={action} onSubmit={submit} className="flex flex-col gap-4">
       <FormField label="Email" htmlFor="email" required>
         <Input id="email" name="email" type="email" autoComplete="email" required />
       </FormField>

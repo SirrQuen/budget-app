@@ -666,8 +666,8 @@ removed. It was never committed.
 
 **Status: fix pass done in the repo 2026-10-09 (`81a5ae9`..`6d84f27`);
 not yet verified in a production build -- see launch blocker 8.** The
-"thrown action loses the form" item below was never in the pass and is
-still open.
+"thrown action loses the form" item below was fixed separately, also
+2026-10-09.
 
 Audit of reads, error copy, schema leaks, swallowed errors and Server Action
 failures. `/db-test` was fixed on the spot. Everything else is decided below
@@ -853,15 +853,44 @@ per zone, though the audit said its callers already guard it.
   to try again", which can't fix a missing GRANT. It now says the fault is
   on our end, not the user's.
 
-### Recorded, NOT in this fix pass: a thrown action loses the form
+### A failed submission loses the form
 
-When a Server Action throws (browser offline, server crash), React sends it
-to the nearest error boundary. `app/error.tsx` replaces the whole route and
-anything typed into the form is lost. It isn't a false success: every
-`useActionState` form only calls `onSuccess` on `!state?.error`, and every
-other direct call checks `result?.error` (except `:181` above). But it's
-heavy-handed. A real problem and a bigger change than the rest; decide
-separately.
+**Done 2026-10-09**, in two parts, because the form was lost two ways:
+
+- A Server Action that THROWS (browser offline, server crash) rejected
+  into the error boundary, and `app/error.tsx` replaced the route.
+- A returned error lost it too, which the audit missed: React resets every
+  uncontrolled field when a `<form action={fn}>` submission finishes,
+  error or not (react-dom's `startHostTransition` queues
+  `requestFormReset` before the action runs). So a returned "You already
+  have an account with that name" blanked the name.
+
+Every `useActionState` form now uses `useActionForm()`
+(`components/useActionForm.ts`). It submits from `onSubmit` and dispatches
+inside its own transition, which React doesn't reset. `action` stays on the
+form, so a submit before hydration still posts natively. Its action is
+wrapped in `callAction()`, which turns a throw into an inline `{ error }`
+with the same three-case copy as `app/error.tsx` (`lib/thrownError.ts`),
+and passes `redirect()` / `notFound()` through via `unstable_rethrow`. The
+13 direct calls in `startTransition` go through `callAction()` too. Test:
+`components/useActionForm.test.tsx`, including a control that pins
+React's reset behaviour.
+
+`experimental.useOffline` was considered and not used. It holds a failed
+action pending and replays it, and a replay of a write whose response was
+lost (it committed, the reply didn't arrive) posts it twice.
+
+**Open, related:** "Try again" after a thrown create is a retry of a write
+that may already have landed. QuickAddBar sends an `idempotency_key`, so
+its retry resolves to one row. AddTransactionForm sends none, so a retry
+there can post a duplicate transaction. (That was already true when the
+error page made the user re-enter it.) Account, category, budget, goal and
+schedule creates are covered by their unique constraints.
+
+**Not verified in a running app:** a real offline submit, and that a
+redirecting action dispatched this way still navigates (the test pins
+that `redirect()` propagates; Next's `RedirectBoundary` handling it is
+taken from `server-action-reducer.js`, not observed).
 
 ### Not an open item: a missing RLS policy looks like an empty list
 

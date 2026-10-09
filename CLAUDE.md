@@ -13,8 +13,8 @@ the schema lives in `supabase/migrations/`. Path alias `@/*` -> project root.
 ## Commands
 
 `npm run dev|build|start|lint|test`. `npm test` runs `node --test` (via `tsx`)
-over `lib/**/*.test.ts` and `app/**/*.test.tsx`. These tests are pure: no
-database connection.
+over `lib/**/*.test.ts`, `app/**/*.test.tsx` and `components/**/*.test.tsx`.
+These tests are pure: no database connection.
 
 ## Rules
 

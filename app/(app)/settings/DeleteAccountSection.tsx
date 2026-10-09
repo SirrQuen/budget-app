@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState } from "react";
+import { useActionForm } from "@/components/useActionForm";
 import { deleteAccountAction, type DeleteAccountState } from "@/lib/actions/account";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -42,7 +43,7 @@ export function DeleteAccountSection({
 }: {
   summary: AccountDeletionSummary | null;
 }) {
-  const [state, action, pending] = useActionState<DeleteAccountState, FormData>(
+  const [state, action, pending, submit] = useActionForm<DeleteAccountState>(
     deleteAccountAction,
     undefined,
   );
@@ -73,7 +74,7 @@ export function DeleteAccountSection({
         This cannot be undone, and no backup is kept. Once it is gone, it is gone.
       </p>
 
-      <form action={action} className="mt-4 flex flex-col gap-3 sm:max-w-xs">
+      <form action={action} onSubmit={submit} className="mt-4 flex flex-col gap-3 sm:max-w-xs">
         <label htmlFor="confirmation" className="text-sm text-ink-secondary">
           Type <span className="font-semibold text-ink">{CONFIRM_PHRASE}</span> to confirm
         </label>

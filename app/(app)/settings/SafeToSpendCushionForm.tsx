@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useId } from "react";
+import { useId } from "react";
+import { useActionForm } from "@/components/useActionForm";
 import {
   setSafeToSpendCushionAction,
   type SafeToSpendCushionActionState,
@@ -24,7 +25,7 @@ export function SafeToSpendCushionForm({
   suggested: number;
 }) {
   const inputId = useId();
-  const [state, action, pending] = useActionState<SafeToSpendCushionActionState, FormData>(
+  const [state, action, pending, submit] = useActionForm<SafeToSpendCushionActionState>(
     setSafeToSpendCushionAction,
     undefined,
   );
@@ -34,7 +35,7 @@ export function SafeToSpendCushionForm({
     : `Suggested: ${formatCurrency(suggested)}, about a week of everyday spending from checking and savings.`;
 
   return (
-    <form action={action} className="mt-4 flex flex-col gap-3">
+    <form action={action} onSubmit={submit} className="mt-4 flex flex-col gap-3">
       <FormField label="Cushion" htmlFor={inputId} hint={hint} error={state?.error}>
         {/* Keyed on the saved value so "Use suggested" (or a save that
             normalises "250" to 250.00) refreshes the uncontrolled field. */}

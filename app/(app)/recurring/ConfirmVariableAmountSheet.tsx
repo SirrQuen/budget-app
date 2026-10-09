@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useActionState } from "react";
+import { useActionForm } from "@/components/useActionForm";
 import { confirmVariableAmountAction, type ActionState } from "@/lib/actions/recurring";
 import { statementDateForCycle } from "@/lib/recurringSchedule";
 import { formatDate } from "@/lib/format";
@@ -42,7 +42,7 @@ export function ConfirmVariableAmountSheet({
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
-  const [state, action, pending] = useActionState<ActionState, FormData>(
+  const [state, action, pending, submit] = useActionForm<ActionState>(
     confirmVariableAmountAction,
     undefined,
   );
@@ -74,7 +74,7 @@ export function ConfirmVariableAmountSheet({
             shouldn't hold a stale estimate across reopens for a different
             card without the page re-rendering in between. */}
         {open ? (
-          <form action={action} className="flex flex-col gap-4 p-5">
+          <form action={action} onSubmit={submit} className="flex flex-col gap-4 p-5">
             <input type="hidden" name="id" value={target.id} />
 
             <div className="flex items-center justify-between gap-3">

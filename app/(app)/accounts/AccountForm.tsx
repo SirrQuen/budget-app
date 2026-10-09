@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useActionState } from "react";
+import { useActionForm } from "@/components/useActionForm";
 import {
   createAccountAction,
   updateAccountAction,
@@ -33,7 +33,7 @@ export function AccountForm({
   onCancel: () => void;
 }) {
   const isEdit = account !== undefined;
-  const [state, action, pending] = useActionState<ActionState, FormData>(
+  const [state, action, pending, submit] = useActionForm<ActionState>(
     isEdit ? updateAccountAction : createAccountAction,
     undefined,
   );
@@ -68,6 +68,7 @@ export function AccountForm({
   return (
     <form
       action={action}
+      onSubmit={submit}
       className="flex flex-col gap-5 rounded-2xl border border-hairline bg-surface p-5"
     >
       {isEdit ? <input type="hidden" name="id" value={account.account_id ?? ""} /> : null}

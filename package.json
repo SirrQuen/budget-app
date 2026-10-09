@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --import tsx --test \"lib/**/*.test.ts\" \"app/**/*.test.tsx\"",
+    "test": "node --import tsx --test \"lib/**/*.test.ts\" \"app/**/*.test.tsx\" \"components/**/*.test.tsx\"",
     "test:parity": "tsx scripts/leaves-spendable-set-parity.ts"
   },
   "dependencies": {

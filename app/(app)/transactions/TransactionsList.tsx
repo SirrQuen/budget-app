@@ -16,6 +16,7 @@ import type { TransactionAccountOption } from "./AddTransactionForm";
 import { useOptimisticTransactions, type PendingTransaction } from "@/components/quick-add/OptimisticTransactionsContext";
 import { categoryColorVar } from "@/lib/categoryOptions";
 import type { CategoryWithGroup } from "@/lib/db/categories";
+import { callAction } from "@/components/useActionForm";
 
 const checkboxClassName =
   "h-4 w-4 cursor-pointer rounded border-hairline bg-surface-raised accent-action outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
@@ -263,7 +264,7 @@ export function TransactionsList({
       .map((info) => info.transferGroupId);
 
     startBulkDelete(async () => {
-      const result = await bulkDeleteTransactionsAction(transactionIds, transferGroupIds);
+      const result = await callAction(() => bulkDeleteTransactionsAction(transactionIds, transferGroupIds));
       if (result?.error) {
         setBulkError(result.error);
         return;

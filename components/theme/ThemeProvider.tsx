@@ -11,6 +11,7 @@ import {
 } from "react";
 import { setThemeAction } from "@/lib/actions/settings";
 import { applyTheme, THEME_STORAGE_KEY, type Theme } from "@/lib/theme";
+import { callAction } from "@/components/useActionForm";
 
 type ThemeContextValue = {
   theme: Theme;
@@ -86,7 +87,7 @@ export function ThemeProvider({
     }
 
     startTransition(async () => {
-      const result = await setThemeAction(next);
+      const result = await callAction(() => setThemeAction(next));
 
       if (result?.error) {
         setError(result.error);

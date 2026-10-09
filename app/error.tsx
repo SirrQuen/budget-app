@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useSyncExternalStore } from "react";
-import { UNREACHABLE, isUnreachableDigest, referenceFromDigest } from "@/lib/unreachable";
+import { referenceFromDigest } from "@/lib/unreachable";
+import { thrownErrorMessage } from "@/lib/thrownError";
 
 // Catches anything thrown while rendering a route under app/ (not the root
 // layout itself -- that would need app/global-error.tsx). Must be a Client
@@ -14,14 +15,8 @@ import { UNREACHABLE, isUnreachableDigest, referenceFromDigest } from "@/lib/unr
 // generic message and a reference code, we keep the detail server-side, and
 // a stack trace is never rendered.
 //
-// Three cases, because "whose connection failed" decides the copy
-// (docs/phase-7-findings.md, "Copy: whose connection failed"):
-//   - The browser is offline: a navigation or Server Action never reached
-//     us. The ONLY place "check your connection" is said.
-//   - The server can't reach Supabase: an UnreachableError, recognised by its
-//     digest because the message is redacted in production. Not the user's
-//     connection, so never "check your connection".
-//   - Anything else: the generic text.
+// The copy depends on whose connection failed; lib/thrownError.ts has the
+// three cases, shared with forms whose Server Action threw.
 
 function subscribeOnline(onChange: () => void) {
   window.addEventListener("online", onChange);
@@ -41,10 +36,6 @@ const useOnline = () =>
     () => true,
   );
 
-const OFFLINE = "You appear to be offline. Check your connection, then try again.";
-const GENERIC =
-  "Something on our end broke, not anything you did. Try again — if it keeps happening, give it a few minutes.";
-
 export default function Error({
   error,
   reset,
@@ -58,7 +49,7 @@ export default function Error({
   }, [error]);
 
   const online = useOnline();
-  const message = !online ? OFFLINE : isUnreachableDigest(error.digest) ? UNREACHABLE : GENERIC;
+  const message = thrownErrorMessage(error, online);
 
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-page px-6 py-16 text-center text-ink">

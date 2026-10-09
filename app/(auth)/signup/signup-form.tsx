@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useState } from "react";
+import { useActionForm } from "@/components/useActionForm";
 import { Check, Circle } from "lucide-react";
 import { signup, type SignupActionState } from "@/lib/auth/actions";
 import { FormField } from "@/components/ui/FormField";
@@ -39,7 +40,7 @@ const FIELD_ORDER: SignupField[] = [
 // action. Each field validates when the user leaves it, and again as they
 // edit it once it has shown an error; submit validates everything.
 export function SignupForm() {
-  const [state, action, pending] = useActionState<SignupActionState, FormData>(
+  const [state, action, pending, submit] = useActionForm<SignupActionState>(
     signup,
     undefined,
   );
@@ -77,7 +78,10 @@ export function SignupForm() {
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     const firstInvalid = FIELD_ORDER.find((field) => clientErrors[field]);
-    if (!firstInvalid) return;
+    if (!firstInvalid) {
+      submit(e);
+      return;
+    }
     e.preventDefault();
     setTouched(Object.fromEntries(FIELD_ORDER.map((f) => [f, true])));
     document.getElementById(firstInvalid)?.focus();

@@ -10,6 +10,7 @@ import { isLiabilityAccountType } from "@/lib/accountOptions";
 import type { Database } from "@/lib/database.types";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { AddTransactionPrefill, TransactionAccountOption } from "../transactions/AddTransactionForm";
+import { callAction } from "@/components/useActionForm";
 
 type AccountBalanceRow = Database["public"]["Views"]["v_account_balances"]["Row"] & {
   opening_date: string | null;
@@ -55,7 +56,7 @@ export function AccountRow({
 
   function handleArchive() {
     startArchive(async () => {
-      const result = await archiveAccountAction(account.account_id ?? "");
+      const result = await callAction(() => archiveAccountAction(account.account_id ?? ""));
       if (result?.error) {
         setArchiveError(result.error);
         return;

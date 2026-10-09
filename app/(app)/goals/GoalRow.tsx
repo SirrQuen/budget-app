@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useActionState } from "react";
+import { useActionForm } from "@/components/useActionForm";
 import { useToday } from "@/components/TodayProvider";
 import { contributeToGoalAction, type ContributeActionState } from "@/lib/actions/goals";
 import { GoalMeter } from "@/components/ui/GoalMeter";
@@ -21,7 +21,7 @@ const fieldClassName = `w-full ${FIELD_EDGE} bg-surface px-3 py-2 text-sm text-i
 export function GoalRow({ goal }: { goal: GoalProgressRow }) {
   const today = useToday();
   const [contributing, setContributing] = useState(false);
-  const [state, action, pending] = useActionState<ContributeActionState, FormData>(
+  const [state, action, pending, submit] = useActionForm<ContributeActionState>(
     contributeToGoalAction,
     undefined,
   );
@@ -108,6 +108,7 @@ export function GoalRow({ goal }: { goal: GoalProgressRow }) {
         <form
           ref={formRef}
           action={action}
+          onSubmit={submit}
           className="flex flex-wrap items-end gap-3 rounded-xl border border-hairline bg-surface-raised p-3"
         >
           <input type="hidden" name="goalid" value={goal.goal_id ?? ""} />

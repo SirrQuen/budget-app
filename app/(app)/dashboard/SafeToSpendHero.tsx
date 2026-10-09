@@ -25,6 +25,7 @@ import {
   formatDayMonth,
 } from "@/lib/format";
 import { ChevronDownIcon, InfoIcon, PlusIcon } from "@/components/ui/icons";
+import { callAction } from "@/components/useActionForm";
 
 // A projection or a real payday gets the weekday ("Friday 3 October" -- a
 // date worth checking against your own bank); the end-of-month fallback
@@ -115,7 +116,7 @@ function OverdueBillLine({ item }: { item: SafeToSpendOverdueBill }) {
   const resolve = (outcome: "posted" | "skipped") => {
     setError(null);
     startTransition(async () => {
-      const result = await resolveOverdueBillAction(item.recurringId, outcome);
+      const result = await callAction(() => resolveOverdueBillAction(item.recurringId, outcome));
       if (result?.error) setError(result.error);
     });
   };

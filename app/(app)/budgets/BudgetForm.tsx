@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useActionState } from "react";
+import { useActionForm } from "@/components/useActionForm";
 import {
   createBudgetAction,
   updateBudgetAction,
@@ -56,7 +56,7 @@ export function BudgetForm({
   onCancel: () => void;
 }) {
   const isEdit = budget !== undefined;
-  const [state, action, pending] = useActionState<ActionState, FormData>(
+  const [state, action, pending, submit] = useActionForm<ActionState>(
     isEdit ? updateBudgetAction : createBudgetAction,
     undefined,
   );
@@ -74,6 +74,7 @@ export function BudgetForm({
   return (
     <form
       action={action}
+      onSubmit={submit}
       className="flex flex-col gap-5 rounded-2xl border border-hairline bg-surface p-5"
     >
       {isEdit ? <input type="hidden" name="id" value={budget.id} /> : null}

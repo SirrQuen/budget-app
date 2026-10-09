@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useActionState } from "react";
+import { useActionForm } from "@/components/useActionForm";
 import {
   createCategoryAction,
   updateCategoryAction,
@@ -30,7 +30,7 @@ export function CategoryForm({
   onCancel: () => void;
 }) {
   const isEdit = category !== undefined;
-  const [state, action, pending] = useActionState<ActionState, FormData>(
+  const [state, action, pending, submit] = useActionForm<ActionState>(
     isEdit ? updateCategoryAction : createCategoryAction,
     undefined,
   );
@@ -46,6 +46,7 @@ export function CategoryForm({
   return (
     <form
       action={action}
+      onSubmit={submit}
       className="flex flex-col gap-5 rounded-2xl border border-hairline bg-surface p-5"
     >
       {isEdit ? <input type="hidden" name="id" value={category.id} /> : null}

@@ -8,6 +8,7 @@ import {
   type SafeToSpendWindowPref,
 } from "@/lib/safeToSpendWindow";
 import { InfoIcon } from "@/components/ui/icons";
+import { callAction } from "@/components/useActionForm";
 
 // Radiogroup-pill treatment, same shape as components/theme/ThemeToggle.tsx
 // -- three states of one setting, arrow-key traversal, a single tab stop.
@@ -50,7 +51,7 @@ export function SafeToSpendWindowToggle({
     setError(null);
 
     startTransition(async () => {
-      const result = await setSafeToSpendWindowAction(next);
+      const result = await callAction(() => setSafeToSpendWindowAction(next));
       if (result?.error) {
         setError(result.error);
       }

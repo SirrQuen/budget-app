@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useId } from "react";
+import { useId } from "react";
+import { useActionForm } from "@/components/useActionForm";
 import {
   updateProfileNamesAction,
   type ProfileNamesActionState,
@@ -26,7 +27,7 @@ export function ProfileForm({
   const firstId = useId();
   const lastId = useId();
   const preferredId = useId();
-  const [state, action, pending] = useActionState<ProfileNamesActionState, FormData>(
+  const [state, action, pending, submit] = useActionForm<ProfileNamesActionState>(
     updateProfileNamesAction,
     undefined,
   );
@@ -35,7 +36,7 @@ export function ProfileForm({
     state?.field === field ? state?.error : undefined;
 
   return (
-    <form action={action} className="mt-4 flex flex-col gap-4">
+    <form action={action} onSubmit={submit} className="mt-4 flex flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="First name" htmlFor={firstId} error={fieldError("firstName")}>
           <Input

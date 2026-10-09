@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useActionState } from "react";
+import { useActionForm } from "@/components/useActionForm";
 import { createGoalAction, type ActionState } from "@/lib/actions/goals";
 import { GOAL_TYPES } from "@/lib/goalOptions";
 import { FormField } from "@/components/ui/FormField";
@@ -16,7 +16,7 @@ const fieldClassName = FIELD_CLASS;
 // GoalRow, once that exists) and re-created; editing is a natural follow-up,
 // not something this pass needs.
 export function GoalForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: () => void }) {
-  const [state, action, pending] = useActionState<ActionState, FormData>(createGoalAction, undefined);
+  const [state, action, pending, submit] = useActionForm<ActionState>(createGoalAction, undefined);
   const wasPending = useRef(false);
 
   useEffect(() => {
@@ -29,6 +29,7 @@ export function GoalForm({ onSuccess, onCancel }: { onSuccess: () => void; onCan
   return (
     <form
       action={action}
+      onSubmit={submit}
       className="flex flex-col gap-5 rounded-2xl border border-hairline bg-surface p-5"
     >
       <div className="flex items-center justify-between">

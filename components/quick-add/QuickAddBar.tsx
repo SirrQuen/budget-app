@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useActionForm } from "@/components/useActionForm";
 import {
   type AddTransactionPrefill,
   type TransactionAccountOption,
@@ -70,14 +71,14 @@ export function QuickAddBar({
   // relying on the button/Enter guards never letting a duplicate through.
   // Minted in handleSubmit and written straight into the hidden input, never
   // during render: a render-time UUID differs between the server and the
-  // client and mismatches on hydration. React builds the action's FormData
-  // after onSubmit runs, so the value is in place by then.
+  // client and mismatches on hydration. submit() builds the FormData at the
+  // end of handleSubmit, so the value is in place by then.
   const idempotencyKeyRef = useRef<string | null>(null);
   const idempotencyInputRef = useRef<HTMLInputElement>(null);
 
   const { addPending, settlePending, failPending } = useOptimisticTransactions();
 
-  const [state, formAction, pending] = useActionState<ActionState, FormData>(
+  const [state, formAction, pending, submit] = useActionForm<ActionState>(
     createTransactionAction,
     undefined,
   );
@@ -293,6 +294,8 @@ export function QuickAddBar({
       accountid,
       account_name: account?.account_name ?? null,
     });
+
+    submit(e);
   }
 
   const panel = (

@@ -6,6 +6,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { TrashIcon } from "@/components/ui/icons";
 import { formatCurrency, formatDate, formatSignedAmount } from "@/lib/format";
 import type { TransactionType } from "@/lib/db/transactions";
+import { callAction } from "@/components/useActionForm";
 
 // Shared by the transactions list row and the edit page -- same dialog,
 // only where "after delete" lands (redirectToList) and which action fires
@@ -54,8 +55,8 @@ export function DeleteTransactionButton({
     startDelete(async () => {
       const result =
         transferGroupId !== null
-          ? await deleteTransferAction(transferGroupId, redirectToList)
-          : await deleteTransactionAction(id, redirectToList);
+          ? await callAction(() => deleteTransferAction(transferGroupId, redirectToList))
+          : await callAction(() => deleteTransactionAction(id, redirectToList));
       if (result?.error) {
         setError(result.error);
         return;

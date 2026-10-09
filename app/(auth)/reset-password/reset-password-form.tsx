@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionForm } from "@/components/useActionForm";
 import { updatePassword } from "@/lib/auth/actions";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
@@ -8,10 +8,10 @@ import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
 export function ResetPasswordForm() {
-  const [state, action, pending] = useActionState(updatePassword, undefined);
+  const [state, action, pending, submit] = useActionForm(updatePassword, undefined);
 
   return (
-    <form action={action} className="flex flex-col gap-4">
+    <form action={action} onSubmit={submit} className="flex flex-col gap-4">
       <FormField label="New password" htmlFor="password" required>
         <Input
           id="password"

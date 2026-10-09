@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useActionState } from "react";
+import { useActionForm } from "@/components/useActionForm";
 import {
   createRecurringAction,
   updateRecurringAction,
@@ -279,7 +279,7 @@ export function RecurringForm({
 }) {
   const isEdit = recurring !== undefined;
   const seed = recurring ?? prefill;
-  const [state, action, pending] = useActionState<ActionState, FormData>(
+  const [state, action, pending, submit] = useActionForm<ActionState>(
     isEdit ? updateRecurringAction : createRecurringAction,
     undefined,
   );
@@ -370,6 +370,7 @@ export function RecurringForm({
   return (
     <form
       action={action}
+      onSubmit={submit}
       className="flex flex-col gap-5 rounded-2xl border border-hairline bg-surface p-5"
     >
       {isEdit ? <input type="hidden" name="id" value={recurring.id} /> : null}
