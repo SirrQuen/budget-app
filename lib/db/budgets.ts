@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
-import { describeReadError, describeWriteError } from "@/lib/db/errors";
+import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/errors";
 
 type BudgetRow = Database["public"]["Tables"]["budgets"]["Row"];
 type BudgetInsert = Database["public"]["Tables"]["budgets"]["Insert"];
@@ -67,15 +67,11 @@ export async function createBudget(
 ): Promise<DbResult<BudgetRow>> {
   const supabase = await createClient();
 
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const userid = claimsData?.claims?.sub;
-
-  if (claimsError || !userid) {
-    return {
-      data: null,
-      error: "Your session's expired. Log in again to pick up where you left off.",
-    };
+  const session = sessionUserId(await supabase.auth.getClaims(), "budget");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
   }
+  const { userid } = session;
 
   const { data, error } = await supabase
     .from("budgets")

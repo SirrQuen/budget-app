@@ -2,7 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import type { GoalType } from "@/lib/goalOptions";
-import { describeWriteError } from "@/lib/db/errors";
+import { describeWriteError, sessionUserId } from "@/lib/db/errors";
 
 type GoalRow = Database["public"]["Tables"]["goals"]["Row"];
 type GoalInsert = Database["public"]["Tables"]["goals"]["Insert"];
@@ -24,15 +24,11 @@ export type CreateGoalInput = {
 export async function createGoal(input: CreateGoalInput): Promise<DbResult<GoalRow>> {
   const supabase = await createClient();
 
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const userid = claimsData?.claims?.sub;
-
-  if (claimsError || !userid) {
-    return {
-      data: null,
-      error: "Your session's expired. Log in again to pick up where you left off.",
-    };
+  const session = sessionUserId(await supabase.auth.getClaims(), "goal");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
   }
+  const { userid } = session;
 
   const insert: GoalInsert = {
     ...input,
@@ -64,15 +60,11 @@ export async function contributeToGoal(
 ): Promise<DbResult<GoalContributionRow>> {
   const supabase = await createClient();
 
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const userid = claimsData?.claims?.sub;
-
-  if (claimsError || !userid) {
-    return {
-      data: null,
-      error: "Your session's expired. Log in again to pick up where you left off.",
-    };
+  const session = sessionUserId(await supabase.auth.getClaims(), "goal");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
   }
+  const { userid } = session;
 
   const { data, error } = await supabase
     .from("goal_contributions")

@@ -2,7 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import type { TransactionType } from "@/lib/db/transactions";
-import { describeReadError, describeWriteError } from "@/lib/db/errors";
+import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/errors";
 
 type CategoryRow = Database["public"]["Tables"]["categories"]["Row"];
 type CategoryInsert = Database["public"]["Tables"]["categories"]["Insert"];
@@ -152,15 +152,11 @@ export async function createCategory(
 ): Promise<DbResult<CategoryRow>> {
   const supabase = await createClient();
 
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const userid = claimsData?.claims?.sub;
-
-  if (claimsError || !userid) {
-    return {
-      data: null,
-      error: "Your session's expired. Log in again to pick up where you left off.",
-    };
+  const session = sessionUserId(await supabase.auth.getClaims(), "category");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
   }
+  const { userid } = session;
 
   const { data, error } = await supabase
     .from("categories")

@@ -3,7 +3,7 @@ import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
-import { describeReadError, describeWriteError, logDbError } from "@/lib/db/errors";
+import { describeReadError, describeWriteError, logDbError, sessionUserId } from "@/lib/db/errors";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
@@ -134,15 +134,11 @@ export async function updateProfile(
 ): Promise<DbResult<ProfileRow>> {
   const supabase = await createClient();
 
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const userid = claimsData?.claims?.sub;
-
-  if (claimsError || !userid) {
-    return {
-      data: null,
-      error: "Your session's expired. Log in again to pick up where you left off.",
-    };
+  const session = sessionUserId(await supabase.auth.getClaims(), "profile");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
   }
+  const { userid } = session;
 
   // PostgREST rejects an UPDATE with no filter (error 21000), so this .eq
   // is required even though RLS already scopes the row -- filtering here

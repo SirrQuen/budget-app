@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
-import { describeReadError, describeWriteError } from "@/lib/db/errors";
+import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/errors";
 
 type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"];
 type TransactionInsert = Database["public"]["Tables"]["transactions"]["Insert"];
@@ -243,15 +243,11 @@ export async function createTransaction(
 ): Promise<DbResult<TransactionRow>> {
   const supabase = await createClient();
 
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const userid = claimsData?.claims?.sub;
-
-  if (claimsError || !userid) {
-    return {
-      data: null,
-      error: "Your session's expired. Log in again to pick up where you left off.",
-    };
+  const session = sessionUserId(await supabase.auth.getClaims(), "transaction");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
   }
+  const { userid } = session;
 
   // Pre-check so a mismatched category/type pair gets a readable error
   // instead of the DB trigger's raw errcode 23514 exception. The trigger
@@ -459,15 +455,11 @@ export async function createTransfer(
 
   const supabase = await createClient();
 
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const userid = claimsData?.claims?.sub;
-
-  if (claimsError || !userid) {
-    return {
-      data: null,
-      error: "Your session's expired. Log in again to pick up where you left off.",
-    };
+  const session = sessionUserId(await supabase.auth.getClaims(), "transaction");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
   }
+  const { userid } = session;
 
   const transfer_group_id = crypto.randomUUID();
 

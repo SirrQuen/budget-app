@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
-import { describeReadError, describeWriteError, logDbError } from "@/lib/db/errors";
+import { describeReadError, describeWriteError, logDbError, sessionUserId } from "@/lib/db/errors";
 import { addDaysISO } from "@/lib/date";
 import { getTimeZone, getToday } from "@/lib/db/settings";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
@@ -140,15 +140,11 @@ export async function createRecurring(
 ): Promise<DbResult<RecurringRow>> {
   const supabase = await createClient();
 
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const userid = claimsData?.claims?.sub;
-
-  if (claimsError || !userid) {
-    return {
-      data: null,
-      error: "Your session's expired. Log in again to pick up where you left off.",
-    };
+  const session = sessionUserId(await supabase.auth.getClaims(), "recurring");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
   }
+  const { userid } = session;
 
   const next_due_date = await computeNextDueDate(
     input.next_run_date,
@@ -412,15 +408,11 @@ export async function confirmIncomeOccurrence(
 ): Promise<DbResult<TransactionRow>> {
   const supabase = await createClient();
 
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const userid = claimsData?.claims?.sub;
-
-  if (claimsError || !userid) {
-    return {
-      data: null,
-      error: "Your session's expired. Log in again to pick up where you left off.",
-    };
+  const session = sessionUserId(await supabase.auth.getClaims(), "recurring");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
   }
+  const { userid } = session;
 
   const { data: template, error: readError } = await supabase
     .from("recurring_transactions")
@@ -628,15 +620,11 @@ export const generateDueOccurrences = cache(async (): Promise<
 > => {
   const supabase = await createClient();
 
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const userid = claimsData?.claims?.sub;
-
-  if (claimsError || !userid) {
-    return {
-      data: null,
-      error: "Your session's expired. Log in again to pick up where you left off.",
-    };
+  const session = sessionUserId(await supabase.auth.getClaims(), "recurring");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
   }
+  const { userid } = session;
 
   // Until the browser has reported the user's zone (components/
   // TodayProvider, on the first page load after signup or after migration
@@ -895,15 +883,11 @@ export async function resolveOverdueOccurrence(
 ): Promise<DbResult<{ id: string }>> {
   const supabase = await createClient();
 
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const userid = claimsData?.claims?.sub;
-
-  if (claimsError || !userid) {
-    return {
-      data: null,
-      error: "Your session's expired. Log in again to pick up where you left off.",
-    };
+  const session = sessionUserId(await supabase.auth.getClaims(), "recurring");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
   }
+  const { userid } = session;
 
   const { data: template, error: readError } = await supabase
     .from("recurring_transactions")

@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { coerceTheme, type Theme } from "@/lib/theme";
 import { coerceSafeToSpendWindowPref, type SafeToSpendWindowPref } from "@/lib/safeToSpendWindow";
 import type { Database } from "@/lib/database.types";
-import { describeReadError } from "@/lib/db/errors";
+import { describeReadError, sessionUserId } from "@/lib/db/errors";
 import { isValidTimeZone, todayInZone } from "@/lib/date";
 
 type SettingsRow = Database["public"]["Tables"]["settings"]["Row"];
@@ -79,15 +79,11 @@ export async function updateTimeZone(timeZone: string): Promise<DbResult<string>
 
   const supabase = await createClient();
 
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const userid = claimsData?.claims?.sub;
-
-  if (claimsError || !userid) {
-    return {
-      data: null,
-      error: "Your session's expired. Log in again to pick up where you left off.",
-    };
+  const session = sessionUserId(await supabase.auth.getClaims(), "settings");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
   }
+  const { userid } = session;
 
   // Filter for PostgREST's benefit (error 21000), not security -- see updateTheme.
   const { data, error } = await supabase
@@ -109,15 +105,11 @@ export async function updateSafeToSpendWindowPref(
 ): Promise<DbResult<SafeToSpendWindowPref>> {
   const supabase = await createClient();
 
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const userid = claimsData?.claims?.sub;
-
-  if (claimsError || !userid) {
-    return {
-      data: null,
-      error: "Your session's expired. Log in again to pick up where you left off.",
-    };
+  const session = sessionUserId(await supabase.auth.getClaims(), "settings");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
   }
+  const { userid } = session;
 
   const { data, error } = await supabase
     .from("settings")
@@ -176,15 +168,11 @@ export async function updateSafeToSpendCushion(
 ): Promise<DbResult<number | null>> {
   const supabase = await createClient();
 
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const userid = claimsData?.claims?.sub;
-
-  if (claimsError || !userid) {
-    return {
-      data: null,
-      error: "Your session's expired. Log in again to pick up where you left off.",
-    };
+  const session = sessionUserId(await supabase.auth.getClaims(), "settings");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
   }
+  const { userid } = session;
 
   const { data, error } = await supabase
     .from("settings")
@@ -203,15 +191,11 @@ export async function updateSafeToSpendCushion(
 export async function updateTheme(theme: Theme): Promise<DbResult<Theme>> {
   const supabase = await createClient();
 
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const userid = claimsData?.claims?.sub;
-
-  if (claimsError || !userid) {
-    return {
-      data: null,
-      error: "Your session's expired. Log in again to pick up where you left off.",
-    };
+  const session = sessionUserId(await supabase.auth.getClaims(), "settings");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
   }
+  const { userid } = session;
 
   // PostgREST rejects an UPDATE with no filter (error 21000), so this .eq
   // is required even though RLS already scopes the row -- filtering here

@@ -2,7 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import { isLiabilityAccountType, type AccountType } from "@/lib/accountOptions";
-import { describeReadError, describeWriteError } from "@/lib/db/errors";
+import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/errors";
 
 export { ACCOUNT_TYPES, type AccountType } from "@/lib/accountOptions";
 
@@ -68,15 +68,11 @@ export async function createAccount(
 ): Promise<DbResult<AccountRow>> {
   const supabase = await createClient();
 
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const userid = claimsData?.claims?.sub;
-
-  if (claimsError || !userid) {
-    return {
-      data: null,
-      error: "Your session's expired. Log in again to pick up where you left off.",
-    };
+  const session = sessionUserId(await supabase.auth.getClaims(), "account");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
   }
+  const { userid } = session;
 
   const { data, error } = await supabase
     .from("accounts")
