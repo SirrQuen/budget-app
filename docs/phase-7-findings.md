@@ -621,32 +621,30 @@ that, which is how the duplicate got past review. Once
 them. Until then, delete it. (A migration that has already run can't be
 edited; the replacement comment carries the fix.)
 
-### 3. `v_dashboard_kpis.cash_balance`: a fourth "cash", has readers, decide separately
+### 3. `v_dashboard_kpis.cash_balance`: a fourth "cash", dropped (migration 46)
 
 Correction: the 2026-10-06 audit called this `v_dashboard_summary`. The view
-is `v_dashboard_kpis` (last defined in migration 07). Its `cash_balance` is
-`Checking + Savings + Cash`. Every other definition of cash is Checking +
-Savings.
+was `v_dashboard_kpis`. Its `cash_balance` was `Checking + Savings + Cash`.
+Every other definition of cash is Checking + Savings.
 
-The instruction was to DROP it if nothing reads it. Something does, so it
-has NOT been dropped:
+**Dropped 2026-10-09** (migration 46), whole view, once each of these
+checked out:
 
-- `lib/db/dashboard.ts:118` `getDashboardKpis()` selects `*` from the view.
-  Its only caller was the test harness `app/db-test/page.tsx`, deleted
-  2026-10-07 (see "Error handling audit" below). It now has no caller in
-  the repo.
-- `docs/rls-isolation-test.sql:276` uses the view as an RLS isolation case.
-  That test checks row scoping and doesn't read the column.
-- `evernest/DATABASE.md` (lines 52, 65-69) documents it as the dashboard
-  view, and says "`cash_balance` is the one that belongs next to monthly
-  income and spend". The one document every query-writer is told to read
-  recommends the wrong definition, so that is the trap, written down.
-- Not checked: saved SQL snippets and reports in the Supabase dashboard.
-  These aren't reachable from the repo or the CLI. Someone has to check by
-  hand before anything is dropped.
+- Database: no view or function depends on it (`pg_depend`, `pg_proc`).
+- App: `getDashboardKpis()` had no caller since `app/db-test` was deleted;
+  removed. `pg_stat_statements` (reset 2026-07-20) showed 292
+  `authenticated` reads of `cash_balance` alone. Those came from
+  `getSafeToSpend`'s `.select("cash_balance")` (2d810c3), which was
+  replaced in 3e712a9 on 2026-09-16 and has been on main since.
+- Supabase dashboard: neither saved SQL snippet (`supabase snippets list`)
+  references it.
+- `docs/rls-isolation-test.sql`: case removed. Still 229/229 pass.
+- `evernest/DATABASE.md` recommended `cash_balance` as the dashboard
+  figure. Rewritten to say the view is gone and not to recreate it.
 
-The other columns (`total_spent`, `total_earned`, `net_cashflow`, ...) need
-their own look before a whole-view drop. Decision pending.
+None of the other columns (`total_spent`, `total_earned`, `net_cashflow`,
+...) had a reader either. Rebuild any that are needed from
+`v_account_balances` / `v_net_worth` / `signed_amount()`.
 
 ### 4. `app/(app)/dev-projection/page.tsx`: deleted
 
@@ -672,7 +670,8 @@ rendered raw PostgREST `code`/`message`/`details`/`hint`. RLS kept it to the
 visitor's own rows. **Deleted 2026-10-07**, not gated: nothing needs it. Its
 two-user isolation check is what `docs/rls-isolation-test.sql` already does
 at the SQL layer, and CLAUDE.md now points there. Side effect:
-`getDashboardKpis()` lost its only caller (see section 3 above).
+`getDashboardKpis()` lost its only caller. It and the view are now gone
+(see section 3 above).
 
 ### P1: an unreachable auth server signs everyone out
 

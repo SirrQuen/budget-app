@@ -277,7 +277,6 @@ begin
       ('2 views', 'v_category_activity',    format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_category_spending',    format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_daily_cashflow',       format('userid = %L', a),                            format('userid <> %L', b)),
-      ('2 views', 'v_dashboard_kpis',       format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_goal_progress',        format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_goals_summary',        format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_integrity_issues',     format('userid = %L', a),                            format('userid <> %L', b)),

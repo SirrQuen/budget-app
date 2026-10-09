@@ -258,9 +258,8 @@ here directly. `git log`/`git status` reflect this repo only.
 The migrations in `supabase/migrations/` and `lib/database.types.ts` are the
 authority on the schema. `~/evernest/DATABASE.md` (a separate repo, not an
 ancestor directory) has useful background on schema conventions. It is older
-than many migrations here (it still says transfers are unsupported, and it
-recommends `v_dashboard_kpis.cash_balance`), so check anything taken from it
-against the migrations. The contract:
+than many migrations here (it still says transfers are unsupported), so
+check anything taken from it against the migrations. The contract:
 
 - Balances are computed, not stored — read from views (`v_account_balances`,
   `v_goal_progress`), never balance columns.

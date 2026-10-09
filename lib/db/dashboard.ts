@@ -19,7 +19,6 @@ import {
 import { SPENDABLE_ACCOUNT_TYPES, isSpendableAccountType } from "@/lib/safeToSpend";
 import { deriveLoggingStreak, type LoggingStreakSummary } from "@/lib/streak";
 
-type DashboardKpisRow = Database["public"]["Views"]["v_dashboard_kpis"]["Row"];
 type NetWorthRow = Database["public"]["Views"]["v_net_worth"]["Row"];
 type MonthlyCashflowRow = Database["public"]["Views"]["v_monthly_cashflow"]["Row"];
 type DailyCashflowRow = Database["public"]["Views"]["v_daily_cashflow"]["Row"];
@@ -111,21 +110,6 @@ export function classifyDashboardStage(
     return "early";
   }
   return "full";
-}
-
-// One row per user, pinned to the current calendar month server-side --
-// there's no month param to pass. If a date-pickable dashboard shows up,
-// this view needs to become a ranged function (see DATABASE.md).
-export async function getDashboardKpis(): Promise<DbResult<DashboardKpisRow>> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase.from("v_dashboard_kpis").select("*").single();
-
-  if (error) {
-    return { data: null, error: describeReadError(error, "dashboard") };
-  }
-
-  return { data, error: null };
 }
 
 // Point-in-time snapshot, one row per user -- no date range applies.

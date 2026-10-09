@@ -65,13 +65,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "accounts_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
-          },
         ]
       }
       bank_holidays: {
@@ -136,13 +129,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "budgets_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
-          },
         ]
       }
       categories: {
@@ -194,13 +180,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "categories_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
-          },
         ]
       }
       category_groups: {
@@ -232,13 +211,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "category_groups_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
           },
         ]
       }
@@ -301,13 +273,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "goal_contributions_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
           },
         ]
       }
@@ -376,13 +341,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "goals_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
-          },
         ]
       }
       investments: {
@@ -441,13 +399,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "investments_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
-          },
         ]
       }
       notifications: {
@@ -488,13 +439,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "notifications_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
           },
         ]
       }
@@ -669,13 +613,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "recurring_transactions_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
-          },
         ]
       }
       settings: {
@@ -732,13 +669,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "settings_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
-          },
         ]
       }
       subscriptions: {
@@ -779,13 +709,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "subscriptions_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
           },
         ]
       }
@@ -914,13 +837,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "transactions_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
-          },
         ]
       }
     }
@@ -948,13 +864,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "accounts_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
           },
         ]
       }
@@ -986,13 +895,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "budgets_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
-          },
         ]
       }
       v_category_activity: {
@@ -1010,13 +912,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "categories_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
           },
         ]
       }
@@ -1045,13 +940,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "transactions_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
-          },
         ]
       }
       v_daily_cashflow: {
@@ -1072,31 +960,7 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "transactions_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
-          },
         ]
-      }
-      v_dashboard_kpis: {
-        Row: {
-          cash_balance: number | null
-          investment_balance: number | null
-          net_cashflow: number | null
-          net_worth: number | null
-          period_month: string | null
-          savings_rate_pct: number | null
-          total_assets: number | null
-          total_earned: number | null
-          total_liabilities: number | null
-          total_spent: number | null
-          transaction_count: number | null
-          userid: string | null
-        }
-        Relationships: []
       }
       v_goal_progress: {
         Row: {
@@ -1140,13 +1004,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "goals_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
-          },
         ]
       }
       v_goals_summary: {
@@ -1171,13 +1028,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "goals_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
           },
         ]
       }
@@ -1232,13 +1082,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "investments_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
-          },
         ]
       }
       v_monthly_cashflow: {
@@ -1260,13 +1103,6 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "transactions_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
-          },
         ]
       }
       v_net_worth: {
@@ -1284,13 +1120,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "accounts_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
           },
         ]
       }
@@ -1328,13 +1157,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "investments_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
           },
         ]
       }
@@ -1427,13 +1249,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "recurring_transactions_userid_fkey"
-            columns: ["userid"]
-            isOneToOne: false
-            referencedRelation: "v_dashboard_kpis"
-            referencedColumns: ["userid"]
           },
         ]
       }

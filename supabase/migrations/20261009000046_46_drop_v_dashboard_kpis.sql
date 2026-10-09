@@ -1,0 +1,27 @@
+-- =====================================================================
+-- EverNest 46: drop v_dashboard_kpis
+--
+-- docs/phase-7-findings.md, "'Leaves the set' classifier", section 3.
+--
+-- v_dashboard_kpis.cash_balance summed Checking + Savings + Cash. Every
+-- other "cash" in the app is Checking + Savings (lib/safeToSpend.ts, and
+-- leaves_spendable_set in migration 45). An unused view with that wrong
+-- definition and an authoritative column name is a trap for whoever next
+-- needs a cash balance and finds one ready-made.
+--
+-- Confirmed unused on 2026-10-09:
+--   - no view or function in the database depends on it (pg_depend,
+--     pg_proc);
+--   - no app code reads it. getDashboardKpis() had no caller since
+--     app/db-test was deleted, and is removed with this migration. The
+--     one real API reader, getSafeToSpend's .select("cash_balance")
+--     (2d810c3), was replaced in 3e712a9 on 2026-09-16;
+--   - no saved SQL snippet in the Supabase dashboard references it.
+--
+-- The other columns (total_spent, total_earned, net_cashflow,
+-- savings_rate_pct, ...) go with it. Nothing reads them either. Rebuild
+-- any that are needed from v_account_balances, v_net_worth and
+-- signed_amount(), with cash defined as Checking + Savings.
+-- =====================================================================
+
+drop view if exists public.v_dashboard_kpis;
