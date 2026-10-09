@@ -887,9 +887,9 @@ retry of a write that may already have landed. QuickAddBar already sent an
 `(userid, idempotency_key)` and both legs land in one statement). Its key
 is per SUBMISSION (`lib/idempotency.ts`): an identical resend reuses it,
 an edited one gets a new key, so a retry never returns the old row and
-silently drops the edit. QuickAddBar still keys per fill of the form and
-has that edit-drop gap; it isn't changed yet. Not exercised against a real
-database: the transfer 23505 path is untested beyond types.
+silently drops the edit. QuickAddBar, which used to key per fill of the
+form and had that gap, now uses the same rule. Not exercised against a
+real database: the transfer 23505 path is untested beyond types.
 
 **Not verified in a running app:** a real offline submit, and that a
 redirecting action dispatched this way still navigates (the test pins

@@ -3,6 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useActionForm } from "@/components/useActionForm";
 import {
+  IDEMPOTENCY_FIELD,
+  keyForSubmission,
+  submissionFields,
+  type IdempotencyAttempt,
+} from "@/lib/idempotency";
+import {
   type AddTransactionPrefill,
   type TransactionAccountOption,
 } from "@/app/(app)/transactions/AddTransactionForm";
@@ -64,16 +70,17 @@ export function QuickAddBar({
   // current as of the last commit, so a same-tick double Enter can race it.
   // This ref is set synchronously inside handleSubmit instead.
   const submittingRef = useRef(false);
-  // One key per fill of the form: minted on its first submit, reused on
-  // every retry of the same submission, cleared only once the server has
-  // confirmed the row exists. This makes two submissions that carry it
-  // resolve to one row (see createTransaction's 23505 handling) rather than
-  // relying on the button/Enter guards never letting a duplicate through.
+  // One key per submission (lib/idempotency.ts): resending the same fields
+  // reuses it, so a retry resolves to one row (see createTransaction's 23505
+  // handling) rather than relying on the button/Enter guards never letting a
+  // duplicate through. Editing first mints a new key, so a retry can't
+  // return the old row and silently drop the edit. Cleared once the server
+  // confirms the row exists.
   // Minted in handleSubmit and written straight into the hidden input, never
   // during render: a render-time UUID differs between the server and the
   // client and mismatches on hydration. submit() builds the FormData at the
   // end of handleSubmit, so the value is in place by then.
-  const idempotencyKeyRef = useRef<string | null>(null);
+  const lastAttemptRef = useRef<IdempotencyAttempt | null>(null);
   const idempotencyInputRef = useRef<HTMLInputElement>(null);
 
   const { addPending, settlePending, failPending } = useOptimisticTransactions();
@@ -138,9 +145,9 @@ export function QuickAddBar({
   }, [parseKey]);
 
   useEffect(() => {
-    // Failure: leave text, category, account and the idempotency key
-    // exactly as entered, so pressing Add/Enter again retries the same
-    // submission instead of risking a second row.
+    // Failure: leave text, category, account and the last attempt exactly
+    // as entered, so pressing Add/Enter again retries the same submission
+    // (same key) instead of risking a second row.
     if (wasPendingRef.current && !pending && state?.error) {
       submittingRef.current = false;
       const clientId = pendingClientIdRef.current;
@@ -152,7 +159,7 @@ export function QuickAddBar({
       // A fresh key for the next transaction -- reusing this one across an
       // unrelated future submission would make the server treat it as a
       // retry of this one and silently drop it.
-      idempotencyKeyRef.current = null;
+      lastAttemptRef.current = null;
       const clientId = pendingClientIdRef.current;
       pendingClientIdRef.current = null;
       if (clientId) settlePending(clientId);
@@ -278,8 +285,9 @@ export function QuickAddBar({
 
     submittingRef.current = true;
 
-    idempotencyKeyRef.current ??= crypto.randomUUID();
-    if (idempotencyInputRef.current) idempotencyInputRef.current.value = idempotencyKeyRef.current;
+    const fields = submissionFields(new FormData(e.currentTarget));
+    lastAttemptRef.current = keyForSubmission(fields, lastAttemptRef.current, () => crypto.randomUUID());
+    if (idempotencyInputRef.current) idempotencyInputRef.current.value = lastAttemptRef.current.key;
 
     const category = categoryOptions.find((c) => c.id === categoryid);
     const account = accounts.find((a) => a.id === accountid);
@@ -314,7 +322,7 @@ export function QuickAddBar({
         value={parsed.ok ? parsed.transaction_type : ""}
         readOnly
       />
-      <input type="hidden" name="idempotency_key" ref={idempotencyInputRef} defaultValue="" />
+      <input type="hidden" name={IDEMPOTENCY_FIELD} ref={idempotencyInputRef} defaultValue="" />
 
       <div className="flex items-center gap-3">
         <input
