@@ -908,7 +908,9 @@ isolate. Run it after any migration (see that file's header).
 ## Streak: redefined as days opened (2026-10-10)
 
 **Status: decided, scheduled after Batch 1.2 and the launch blockers. Not
-built. The dashboard strip is hidden meanwhile; its code stays in place.**
+built. The dashboard strip is hidden meanwhile; its code stays in place.
+Built as part of the activity-table job, not on its own: see "The fix:
+one activity table, one job" under `record_login()` below.**
 
 ### Why it was hidden
 
@@ -928,12 +930,11 @@ A day counts if the user **opened Sorrel** that day. Whether they logged
 a transaction doesn't matter. The habit worth building is awareness, not
 spending.
 
-- One small table: `(userid, date)`, unique on the pair. RLS scoped to
-  `auth.uid()`, like every user table.
-- Written at most once per day per user, on an authenticated visit. The
-  unique constraint enforces that, not app logic. `date` is the user's day
-  (`settings.timezone`); SQL `current_date` already is, via
-  `apply_user_timezone()`.
+- The source is the shared activity table (`userid, seen_at`), not a
+  streak-only table. The streak is its day-wise reading: a day counts if
+  it has any row, bucketed in the user's timezone. The earlier sketch of a
+  separate `(userid, date)` table is superseded. One source, so the streak
+  and "since you were last here" can't disagree about whether you visited.
 - Streak = consecutive days with a row, ending today or yesterday.
 - No grace days at first. When the bar is "you looked", a missed day is
   genuinely missed. Revisit only if real usage shows otherwise.
@@ -954,6 +955,11 @@ counter starts at zero for everyone. The old `current`/`longest` values
 are not carried forward or shown next to the new metric. "Longest 9 days"
 measured something else, and a stale 9 next to a fresh 0 is worse than
 starting clean.
+
+The activity table's backfill (one row per user from `lastlogin`) can add
+at most one day to a new streak, and only a day that really had a visit.
+That's consistent with starting clean: it carries no transaction-based
+history forward.
 
 ### Display fixes to make when it's built
 
@@ -981,7 +987,9 @@ has no callers until the rebuild:
 
 ## `record_login()` writes on every page load (2026-10-10)
 
-**Status: open, recorded for the fix pass. Not blocking Batch 1.2.**
+**Status: open, recorded for the fix pass. Not blocking Batch 1.2. One
+job with the streak rebuild and the last-seen value; see "The fix: one
+activity table, one job" at the end of this entry.**
 
 `app/(app)/layout.tsx` calls `recordLogin()`, which runs `record_login()`.
 That function reads the profile's name fields and the prior `lastlogin`,
@@ -1008,6 +1016,12 @@ nor anything `record_login()` returns. It reads a browser-session cookie
 (`sorrel_first_session`), which `markSessionStart()` sets when `login()`
 or `/auth/confirm` creates a session, before any authenticated page has
 rendered, so the per-render write can't change it.**
+
+The cookie is not independent of `lastlogin`, though: `markSessionStart()`
+decides it by calling `hasLoggedInBefore()`, which reads `lastlogin`. So
+the per-render write doesn't affect the greeting within a session, but
+the greeting still depends on that write having happened in an earlier
+one (see "Who reads `lastlogin`" below).
 
 Traced: a returning user's `login()` reads `lastlogin` (still the previous
 session's last page view, not null), deletes the cookie, and gets
@@ -1045,6 +1059,13 @@ It means the last full page load or dashboard view. So does
 longer means "profile last edited" either. Anything that reads either
 column as "last sign-in" or "last edit" is wrong.
 
+Nothing reads `profiles.updated_at`: no app code, view, function or
+policy (`getProfile()` selects `*` and no caller uses it). So the fix is
+not a trigger patch. The cause is that `lastlogin` is activity data
+living in a profile table, which makes stamping a visit look like a
+profile edit. Move it out, and `updated_at` goes back to meaning "profile
+edited" with no change of its own.
+
 ### Who reads `lastlogin` (this sizes the fix)
 
 Searched app code, `lib/`, every migration and the baseline. There are
@@ -1073,27 +1094,122 @@ which the layout uses for the sidebar identity and the dashboard for the
 greeting name. Taking it out of the layout needs a plain profile read in
 its place.
 
-### Fix shape
+### The fix: one activity table, one job
 
-You can't just stop writing it. `lastlogin` would stay null for every new
-user, and `hasLoggedInBefore()` would call every session a first one:
-"Welcome" forever. The fix is to **write once per session start**:
+Decided 2026-10-10. **This is one job, not three.** The check-in streak,
+the "since you were last here" last-seen value, and getting activity data
+off `profiles` all come from the same new table. Build them together in
+the fix pass. Building any one alone either adds a second activity source
+or leaves `lastlogin` in place with a reader.
 
-- In `markSessionStart()` (`login()` and `/auth/confirm`, both server
-  side, neither a render), read the prior value and stamp `now()`. That
-  makes `lastlogin` mean last sign-in again.
-- Drop `record_login()` from the layout and the dashboard. Replace it
-  with a name read (no write).
-- Carry the prior value for the return summary, for example in the
-  session cookie next to the first-session flag.
+Same principle as the "leaves the set" classifier: one source, read
+different ways by different features. **No feature grows its own
+last-seen value.** If a new feature needs one, it's another reading of
+this table.
 
-**Decision needed in the fix pass:** what "since you were last here"
-should measure. "Since your last sign-in" is honest, but Supabase
-sessions refresh for a long time. A user who never signs out would never
-start a new session, so they'd never see the summary again. If the
-feature needs "since your last visit", that's its own last-seen value,
-written by an explicit action and throttled (at most once every few
-hours), not a stamp on every render.
+An earlier draft of this section proposed stamping `lastlogin` once per
+session start and carrying the prior value in a cookie. That's
+superseded: Supabase sessions refresh for a long time, so a user who never
+signs out would never start a new session and never see the summary
+again.
+
+#### Shape: `(userid, seen_at)`, append-only
+
+- **Columns:** `userid` (FK to `profiles(id)` `ON DELETE CASCADE`, like
+  every user table, so account deletion clears it), `seen_at
+  timestamptz`, and a generated
+  `hour_bucket = date_trunc('hour', seen_at at time zone 'UTC')`.
+- **Throttle in the database**, the same way `recurring_tx_no_double_post`
+  makes recurring generation idempotent, not in app logic: unique index on
+  `(userid, hour_bucket)`, insert with `ON CONFLICT DO NOTHING`. That's at
+  most one row per clock hour. Two rows a minute apart across `:00` can
+  happen and do no harm. A rolling-hour check would need a lock, or a
+  `NOT EXISTS` that races.
+- **RLS** scoped to `auth.uid()`. Add it to `docs/rls-isolation-test.sql`.
+- **Written by an explicit server action**, called from the client after
+  mount on an authenticated page. Never from a render (CLAUDE.md, "A page
+  render never writes"). Throttled, so most calls are a no-op insert.
+- **Size:** at most 24 rows per user per day, a few in practice. Pruning
+  is optional and can wait.
+
+Why rows rather than `(userid, day)` plus a single `last_seen_at`: a
+single value is overwritten by every write, so the summary's comparison
+point would have to be captured before it's destroyed and held somewhere.
+That's the same read-then-overwrite pattern `record_login()` gets wrong
+today. With append-only rows, every point either reading needs can be
+derived again at any time.
+
+#### Reading 1: the streak (by day)
+
+A day counts if it has any row: `seen_at::date`, which uses the session
+TimeZone that `apply_user_timezone()` already sets to the user's zone.
+Streak = consecutive such days ending today or yesterday. Details are in
+the streak entry above.
+
+Accepted: if a user changes timezone, past days are bucketed again under
+the new zone. Storing the day at write time would freeze them, but that's
+a second derived column for an edge case.
+
+#### Reading 2: "since you were last here" (by gap)
+
+A new visit begins when more than 4 hours have passed since the previous
+view, so morning and evening are separate visits.
+
+- **Current visit start** = the most recent row that comes after a gap of
+  more than 4 hours (or the user's first row).
+- **Previous visit end** = the last row before the current visit start.
+- **Summary window** = (previous visit end, current visit start).
+
+**The trap, and why this shape avoids it:** the comparison point must
+be the start of the current visit, fixed for the whole visit. If it read
+"the most recent view", it would move as the user browses. The summary
+would empty out mid-visit, or show the same items again on every refresh.
+Here the freeze is built into the definition: a visit contains no 4-hour
+gap, so new rows written during it never move its start, and a refresh
+recomputes the same window. The upper bound at visit start also keeps
+anything done during this visit out of "since you were last here".
+
+Before this visit's first row lands (the write follows the first render):
+if the latest row is more than 4 hours old, the visit starts now and the
+previous visit ended at that row. Once the row lands, the window is the
+same.
+
+Accepted: a row records the first view in its hour, so a previous visit
+can look up to an hour shorter than it was. Visits really 3 to 4 hours
+apart may count as two, and the window can start up to an hour early,
+possibly re-including a few items. Recording the last view in each hour
+would mean updating the row on every view, which is the per-view write
+again.
+
+#### Reading 3: first session
+
+`hasLoggedInBefore()` becomes "does this user have any activity row?"
+`markSessionStart()` runs at sign-in, before any page has mounted, so
+rows exist only for a returning user. The cookie and the greeting work as
+they do now.
+
+#### What goes away
+
+- `profiles.lastlogin`: no reader is left. Drop the column and its
+  UPDATE grant. Update `UpdateProfilePatch` and the CLAUDE.md
+  profiles-grant line to match.
+- The `lastlogin` stamp in `record_login()`. Replace `record_login()` in
+  the layout and the dashboard with a plain name read: it also supplies
+  the sidebar identity and the greeting name.
+- `previousLoginAt`. The dashboard's return summary takes its window from
+  reading 2.
+- Nothing changes on `profiles.updated_at` or its trigger. With the stamp
+  gone, it means "profile edited" again.
+
+#### Migration order
+
+1. Create the table and **backfill one row per user from `lastlogin`**
+   where it isn't null. Without the backfill, every existing user has no
+   rows and gets "Welcome" at their next sign-in.
+2. Ship the server action, the three readings and the name read.
+3. Drop `lastlogin` in a later migration, once nothing deployed reads it.
+4. Regenerate `lib/database.types.ts` after each migration, and run
+   `docs/rls-isolation-test.sql`.
 
 ## Temporary code that must not ship
 
