@@ -348,6 +348,12 @@ check anything taken from it against the migrations. The contract:
 - `bank_holidays` follows the Federal Reserve calendar: Sunday holidays
   are observed Monday, Saturday holidays are NOT observed Friday (the Fed
   is open). See migration 41.
+- **A page render never writes.** Writes belong in server actions or
+  scheduled work. Two known violations, to be removed, not copied:
+  recurring catch-up (`generateDueOccurrences()`, from
+  `app/(app)/layout.tsx` and the dashboard) and `record_login()` (every
+  full page load and dashboard view). The streak rebuild nearly added a
+  third. See `docs/phase-7-findings.md`.
 - "First login" is decided when the session starts (`lib/auth/firstSession.ts`),
   never from `lastlogin`, which `record_login()` stamps on every request.
 - Tier is profiles.subscription_plan / subscription_status, via getPlan().
@@ -391,7 +397,8 @@ obvious and trivially correctable rather than confirmed in advance.
   boundary -- if it jumps, something is double-counting.
 
 ### Generation
-- Lazy catch-up when a user opens the app. No scheduler.
+- Lazy catch-up when a user opens the app. No scheduler. Today it runs
+  from a render, a known violation of "A page render never writes".
 - MUST be idempotent, enforced by a database constraint -- not by
   application logic. Two page loads must never create two rows. The unique
   index is `recurring_tx_no_double_post` on

@@ -938,18 +938,14 @@ spending.
 - No grace days at first. When the bar is "you looked", a missed day is
   genuinely missed. Revisit only if real usage shows otherwise.
 
-### Where the write happens: open question
+### Where the write happens: an explicit server action
 
-Not from a page render. The dashboard already has a render side effect
-(flagged in Section 6b), and a second one is the wrong direction. The two
-candidates were "extend `record_login()`" or "an explicit server action".
-Note before choosing: `record_login()` is **not** once per login. It
-runs from `app/(app)/layout.tsx` on every authenticated route render (see
-the `recordLogin` comment in `lib/db/profile.ts`). So extending it is
-itself a render-time write, just one that already exists. Folding the
-insert in adds no new side effect, but it sits on the same path 6b
-objects to. An explicit server action is the only option that keeps the
-write out of render entirely. Decide which one when this is built.
+Decided 2026-10-10. Not from a page render: the dashboard already has a
+render side effect (flagged in Section 6b), and CLAUDE.md now says a page
+render never writes. **Do not extend `record_login()`.** It runs on every
+full page load and every dashboard view, which is already wrong (see
+"`record_login()` writes on every page load" below). Adding a second write
+to it compounds that rather than reusing a safe path.
 
 ### No history: start clean
 
@@ -970,16 +966,134 @@ starting clean.
   outline currently means both "missed" and "hasn't happened yet", which
   is why the strip can't be read.
 
-### Other streak surfaces still on the old definition
+### Other streak surfaces: off too (2026-10-10, `11bad55`)
 
-Hiding the strip doesn't stop these. Each reads `getLoggingStreak()`:
+Every other place that read `getLoggingStreak()` is off as well, so it
+has no callers until the rebuild:
 
+- the save milestone toast ("7-day streak", fired from
+  `lib/actions/transactions.ts`). This was the most direct "log to keep it
+  going" nudge. `"streak"` stays in the `Milestone` type for the rebuild.
 - the return-summary fact "N-day streak going" (`lib/actions/activity.ts`)
-- the 7/30/100/365 milestone toast fired when a transaction is saved
-  (`lib/actions/transactions.ts`, shown by `QuickAddBar` and
-  `AddTransactionForm`): the most direct "log to keep it going" loop
-- the onboarding copy that names a streak
-  (`app/(app)/dashboard/DashboardOnboarding.tsx`)
+- the onboarding copy (`DashboardOnboarding.tsx`) no longer mentions a
+  streak. This one was removed, not hidden: a new user shouldn't be
+  promised something they won't see. Put it back when the streak returns.
+
+## `record_login()` writes on every page load (2026-10-10)
+
+**Status: open, recorded for the fix pass. Not blocking Batch 1.2.**
+
+`app/(app)/layout.tsx` calls `recordLogin()`, which runs `record_login()`.
+That function reads the profile's name fields and the prior `lastlogin`,
+stamps `lastlogin = now()`, and returns the old values. The dashboard page
+calls it too. It's `cache()`d, so one request makes one call.
+
+### When it fires
+
+Next's partial rendering doesn't re-run a shared layout on client-side
+navigation, so this isn't literally every navigation. It fires on:
+
+- every full page load or refresh of any `(app)` route, through the layout
+- **every dashboard render**, including client-side navigation to it,
+  because the page calls `recordLogin()` itself
+
+The dashboard is the landing page (login and `/auth/confirm` both redirect
+there). So in practice it fires on most visits and several times in most
+sessions. "Not every navigation" doesn't mean infrequent.
+
+### The greeting is unaffected
+
+**The Welcome / Welcome back greeting reads neither `profiles.lastlogin`
+nor anything `record_login()` returns. It reads a browser-session cookie
+(`sorrel_first_session`), which `markSessionStart()` sets when `login()`
+or `/auth/confirm` creates a session, before any authenticated page has
+rendered, so the per-render write can't change it.**
+
+Traced: a returning user's `login()` reads `lastlogin` (still the previous
+session's last page view, not null), deletes the cookie, and gets
+"Welcome back". A first-ever user arrives through `/auth/confirm` with
+`lastlogin` null, the cookie is set, and they get "Welcome" for that
+browser session. Later views in the same session don't change it.
+
+Written-down consequences of the cookie, accepted:
+
+- The cookie is present only for a first-ever session. If it's missing,
+  the user is treated as returning. So a new device, another browser or
+  cleared cookies give a returning user **"Welcome back"**, which is
+  correct: each of those means signing in through `login()`, which finds
+  `lastlogin` set. Losing the cookie can't make a returning user see
+  "Welcome".
+- The reverse can happen. A first-ever user whose cookie goes away during
+  their first session sees "Welcome back" early. For example, they close
+  the browser while the Supabase session stays alive, so the next visit
+  needs no sign-in. The code chooses that side on purpose: a new user
+  hearing "Welcome back" is harmless, and a returning user hearing
+  "Welcome" is not (`hasLoggedInBefore()`).
+- A password-recovery link creates a session without `markSessionStart()`.
+  A user who had never signed in before gets "Welcome back".
+
+### (a) A write per view, forever
+
+One `UPDATE profiles` per full load or dashboard view, per user. It's
+awaited in the layout's `Promise.all`, so it sits on the critical path of
+every authenticated route. It also fires `trg_profiles_updated_at`.
+
+### (b) `lastlogin` doesn't mean last login
+
+It means the last full page load or dashboard view. So does
+`profiles.updated_at`: the trigger bumps it on every stamp, so it no
+longer means "profile last edited" either. Anything that reads either
+column as "last sign-in" or "last edit" is wrong.
+
+### Who reads `lastlogin` (this sizes the fix)
+
+Searched app code, `lib/`, every migration and the baseline. There are
+two readers, and nothing else reads it: no view, policy or other SQL
+function.
+
+1. **`hasLoggedInBefore()`** (`lib/db/profile.ts`), at session start,
+   from `markSessionStart()`. It only checks null against not null.
+   **The greeting depends on this.**
+2. **`record_login()`'s returned prior value**, which becomes
+   `previousLoginAt` and is used only by the dashboard's return summary
+   ("since you were last here"):
+   - the gate: the summary shows only if `previousLoginAt` is more than
+     4 hours old (`AWAY_MS`, `lib/actions/activity.ts`)
+   - the window: `getActivitySince()` counts rows with `created_at` after
+     it
+   - the label: `sinceLabel()` ("yesterday", "Tuesday", ...)
+
+   Because every view restamps it, the summary really means "since your
+   last page view, if that was more than 4 hours ago". Landing on any
+   other page first (a bookmarked `/transactions`, say) restamps it, and
+   the dashboard you open next shows no summary.
+
+Not a reader, but tied in: `record_login()` also returns the name fields,
+which the layout uses for the sidebar identity and the dashboard for the
+greeting name. Taking it out of the layout needs a plain profile read in
+its place.
+
+### Fix shape
+
+You can't just stop writing it. `lastlogin` would stay null for every new
+user, and `hasLoggedInBefore()` would call every session a first one:
+"Welcome" forever. The fix is to **write once per session start**:
+
+- In `markSessionStart()` (`login()` and `/auth/confirm`, both server
+  side, neither a render), read the prior value and stamp `now()`. That
+  makes `lastlogin` mean last sign-in again.
+- Drop `record_login()` from the layout and the dashboard. Replace it
+  with a name read (no write).
+- Carry the prior value for the return summary, for example in the
+  session cookie next to the first-session flag.
+
+**Decision needed in the fix pass:** what "since you were last here"
+should measure. "Since your last sign-in" is honest, but Supabase
+sessions refresh for a long time. A user who never signs out would never
+start a new session, so they'd never see the summary again. If the
+feature needs "since your last visit", that's its own last-seen value,
+written by an explicit action and throttled (at most once every few
+hours), not a stamp on every render.
 
 ## Temporary code that must not ship
 
