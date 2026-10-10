@@ -82,7 +82,7 @@ export function NoTransactionsView({
       <EmptyState
         icon={ladderMark}
         heading="Log your first transaction"
-        message="Your cash flow, budgets, streak and spending trends all build from what you log. Add a few transactions and this dashboard fills in."
+        message="Your cash flow, budgets and spending trends all build from what you log. Add a few transactions and this dashboard fills in."
         action={
           <Link href="/transactions" className={primaryAction}>
             <PlusIcon className="h-4 w-4" aria-hidden="true" />

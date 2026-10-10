@@ -1,7 +1,6 @@
 "use server";
 
 import { getActivitySince } from "@/lib/db/activity";
-import { getLoggingStreak } from "@/lib/db/dashboard";
 import { formatCurrency } from "@/lib/format";
 
 // A few hours away is the bar for a "since you were last here" strip -- a
@@ -9,8 +8,10 @@ import { formatCurrency } from "@/lib/format";
 const AWAY_MS = 4 * 60 * 60 * 1000;
 
 // Fixed order, matching the spec: transactions logged, goal progress,
-// current streak, budgets crossed. At most one fact per category, so this
-// is also the natural "never more than four facts" cap. Returns [] when the
+// budgets crossed. At most one fact per category, so this is also the
+// natural cap. The spec's "current streak" fact is off until the streak is
+// redefined as days opened (docs/phase-7-findings.md) -- as built it counts
+// days with a transaction, which rewards spending. Returns [] when the
 // last visit was too recent, or when genuinely nothing changed -- the
 // caller renders nothing on an empty list either way.
 export async function getReturnSummaryFacts(sinceISO: string): Promise<string[]> {
@@ -19,10 +20,7 @@ export async function getReturnSummaryFacts(sinceISO: string): Promise<string[]>
     return [];
   }
 
-  const [activityResult, streakResult] = await Promise.all([
-    getActivitySince(sinceISO),
-    getLoggingStreak(),
-  ]);
+  const activityResult = await getActivitySince(sinceISO);
 
   const facts: string[] = [];
 
@@ -34,9 +32,6 @@ export async function getReturnSummaryFacts(sinceISO: string): Promise<string[]>
     }
     if (goalHighlight) {
       facts.push(`${goalHighlight.goalName} +${formatCurrency(goalHighlight.amount)}`);
-    }
-    if (streakResult.data && streakResult.data.current > 0) {
-      facts.push(`${streakResult.data.current}-day streak going`);
     }
     if (crossedBudgetCategoryNames.length === 1) {
       facts.push(`${crossedBudgetCategoryNames[0]} over budget`);

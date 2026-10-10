@@ -16,8 +16,6 @@ import {
   type TransactionType,
   type MerchantCategorySuggestion,
 } from "@/lib/db/transactions";
-import { getLoggingStreak } from "@/lib/db/dashboard";
-import { milestoneReached } from "@/lib/streak";
 
 // "kind" is a plain string, not the icon itself -- Server Action results
 // cross the server/client boundary as serialized data, so the client picks
@@ -29,20 +27,15 @@ export type Milestone = { kind: "first-transaction" | "streak"; message: string 
 
 export type ActionState = { error?: string; milestone?: Milestone } | undefined;
 
-// Checked after every successful create, in priority order -- a first-ever
-// transaction can't also be a logging-streak milestone, so there's no real
-// conflict, but the order still reads as "most foundational achievement
-// first."
+// Checked after every successful create. The streak milestone is off: the
+// streak counts days with a transaction, so celebrating it on save is a
+// direct "log to keep it going" nudge -- it rewards spending. It returns on
+// the "opened Sorrel" definition (docs/phase-7-findings.md, "Streak:
+// redefined as days opened"), which is why "streak" stays in Milestone.
 async function detectTransactionMilestone(): Promise<Milestone | undefined> {
   const countResult = await getTransactionCount();
   if (countResult.data === 1) {
     return { kind: "first-transaction", message: "First transaction logged" };
-  }
-
-  const streakResult = await getLoggingStreak();
-  const days = streakResult.data ? milestoneReached(streakResult.data.current) : null;
-  if (days) {
-    return { kind: "streak", message: `${days}-day streak` };
   }
 
   return undefined;

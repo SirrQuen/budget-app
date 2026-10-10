@@ -480,11 +480,13 @@ export async function getCashflowChart(days = 90): Promise<DbResult<CashflowPoin
 // the transactions table on every read, so there's no counter to drift
 // out of sync with reality.
 //
-// Cached per-request: the dashboard page (Right now mark strip) and
-// getReturnSummaryFacts both ask for the streak, and without this that's
-// two identical 90-day scans on one dashboard render. The one calculation
-// -- deriveLoggingStreak in lib/streak.ts -- feeds both, so they can never
-// disagree the way a
+// No callers right now: the strip, the return-summary fact and the save
+// milestone are all off until the streak is redefined as days opened (see
+// docs/phase-7-findings.md). Kept for that rebuild.
+//
+// Cached per-request: when several surfaces read the streak on one render,
+// they share one 90-day scan. The one calculation -- deriveLoggingStreak in
+// lib/streak.ts -- feeds all of them, so they can never disagree the way a
 // second, separately-maintained implementation could drift.
 //
 // graceDates is empty until the "nothing to log" / grace-ledger tables
