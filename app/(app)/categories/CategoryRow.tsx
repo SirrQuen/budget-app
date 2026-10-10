@@ -63,15 +63,18 @@ export function CategoryRow({
           month, actions) instead of nesting inside them -- same pattern as
           AccountRow. */}
       <div className="flex items-start justify-between gap-3 sm:contents">
-        <div className="flex min-w-0 flex-1 items-center gap-3 sm:contents">
-          <div className="flex min-w-0 items-center gap-2">
+        {/* Below sm the group stacks under the name and the name wraps
+            rather than truncating: on one line beside the group and the
+            month figure, a 320px viewport left the name ~60px (WCAG 1.4.10). */}
+        <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5 sm:contents">
+          <div className="flex min-w-0 max-w-full items-center gap-2">
             <span
               className="h-2.5 w-2.5 shrink-0 rounded-full"
               style={{ backgroundColor: categoryColorVar(category.color) }}
               aria-hidden="true"
             />
             <CategoryIcon icon={category.icon} className="h-4 w-4 shrink-0 text-ink-secondary" />
-            <span className="min-w-0 truncate text-sm font-medium text-ink">{category.category_name}</span>
+            <span className="min-w-0 break-words text-sm font-medium text-ink sm:truncate">{category.category_name}</span>
             {!category.is_active ? (
               <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
                 Archived

@@ -133,7 +133,9 @@ function OccurrenceRow({ item, meta }: { item: UpcomingOccurrence; meta: Upcomin
         ) : (
           <CategoryIcon icon={meta?.categoryIcon ?? null} className="h-4 w-4 shrink-0 text-ink-muted" />
         )}
-        <span className="min-w-0 flex-1 truncate text-ink">
+        {/* Wraps below sm: beside the date and amount, a 320px viewport
+            cut the name to ~70px. */}
+        <span className="min-w-0 flex-1 break-words text-ink sm:truncate">
           {item.name}
           {/* Quiet on purpose: no colour, no icon. A known bill carries nothing. */}
           {item.status === "expected" ? <span className="ml-1.5 text-xs text-ink-muted">expected</span> : null}

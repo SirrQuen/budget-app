@@ -163,14 +163,16 @@ export function RecurringRow({
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="truncate text-sm font-medium text-ink">{recurring.description}</span>
+                {/* Wraps below sm, truncates from sm up: beside the amount, a
+                    320px viewport cut the description to ~130px. */}
+                <span className="min-w-0 break-words text-sm font-medium text-ink sm:truncate">{recurring.description}</span>
                 {!recurring.is_active ? (
                   <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
                     Paused
                   </span>
                 ) : null}
               </div>
-              <p className="mt-0.5 truncate text-sm text-ink-muted">
+              <p className="mt-0.5 break-words text-sm text-ink-muted sm:truncate">
                 {isTransfer
                   ? `${recurring.account_name ?? "…"} → ${recurring.to_account_name ?? "…"}`
                   : `${recurring.category_name ?? "Uncategorized"} · ${recurring.account_name ?? "—"}`}

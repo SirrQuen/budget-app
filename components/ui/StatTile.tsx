@@ -77,10 +77,13 @@ export function StatTile({
         {displayText}
       </p>
       {deltaParts ? (
-        <p className={`mt-1 flex items-center gap-1 text-sm ${toneClassName(deltaTone)}`}>
+        // flex-wrap: in a narrow tile the comparison label drops to its own
+        // line whole instead of being squeezed a word per line beside the
+        // delta. min-w-0 lets it wrap there if even a full line is too narrow.
+        <p className={`mt-1 flex flex-wrap items-center gap-x-1 text-sm ${toneClassName(deltaTone)}`}>
           <span aria-hidden="true">{deltaParts.arrow}</span>
           <span>{deltaParts.text}</span>
-          <span className="text-ink-muted">vs {delta!.periodLabel}</span>
+          <span className="min-w-0 text-ink-muted">vs {delta!.periodLabel}</span>
         </p>
       ) : !delta && footnote ? (
         <p className="mt-1 text-sm text-ink-muted">{footnote}</p>

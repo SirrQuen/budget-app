@@ -28,8 +28,13 @@ leaves this list only when it is verified done, with the date and how.
 
    *Repo state:* `d04eda2` (2026-10-07) changes `--critical`, `--ink-muted`,
    adds `--field-border`, and makes the field focus ring solid, with
-   measured ratios in its message. Nothing in the repo addresses the 320px
-   reflow. The contrast fixes have not been verified in the running app.
+   measured ratios in its message; re-measured 2026-10-10, all hold
+   (dark `--critical` is 4.53 on the delete-panel tint, the tightest).
+   320px reflow fixed 2026-10-10: transactions filter selects, settings
+   theme toggle, and list names on categories, accounts, recurring and
+   the dashboard (wrap below sm, truncate from sm up), plus dashboard stat
+   tiles (one column below 360px). Measured in the running app at 320 and
+   375px: no route overflows and no text truncates.
 4. **No marketing page.** `app/page.tsx` only redirects, so a stranger
    hitting the domain sees a login form with no explanation of what they're
    logging into.

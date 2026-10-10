@@ -336,8 +336,11 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
           <SafeToSpendHero data={safeToSpendResult.data} />
         ) : null}
 
+        {/* One column below 360px: two columns there left each tile
+            ~128px, wrapping the delta line a word at a time (WCAG 1.4.10).
+            Same on the range tiles below. */}
         {showTiles ? (
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 lg:grid-cols-4">
             {netWorthStatResult.error ? (
               // Full row: a half-width tile squeezes the notice and its
               // retry to a word per line on a phone.
@@ -414,7 +417,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         {rangeStatsResult.error ? (
           sectionError("Income and spending")
         ) : rangeStats ? (
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 lg:grid-cols-4">
             <StatTile
               id="dashboard-income"
               label="Income"

@@ -36,7 +36,12 @@ export function ThemeToggle({
       <div
         role="radiogroup"
         aria-label="Colour theme"
-        className="inline-flex gap-1 rounded-full border border-field-border bg-surface p-1"
+        // Below sm the labelled variant fills its row and drops the icons:
+        // three icon+label pills are 300px, wider than a settings card at
+        // a 320px viewport (WCAG 1.4.10).
+        className={`gap-1 rounded-full border border-field-border bg-surface p-1 ${
+          compact ? "inline-flex" : "flex w-full sm:inline-flex sm:w-auto"
+        }`}
       >
         {THEMES.map((option) => {
           const Icon = THEME_ICONS[option];
@@ -64,14 +69,14 @@ export function ThemeToggle({
               }}
               title={compact ? THEME_LABELS[option] : undefined}
               className={`flex items-center justify-center gap-2 rounded-full text-sm font-medium transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
-                compact ? "h-11 w-11" : "min-h-11 px-4 py-2"
+                compact ? "h-11 w-11" : "min-h-11 flex-1 px-2 py-2 sm:flex-none sm:px-4"
               } ${
                 selected
                   ? "bg-action text-action-ink"
                   : "text-ink-secondary hover:bg-surface-raised hover:text-ink"
               }`}
             >
-              <Icon className="h-4 w-4" aria-hidden="true" />
+              <Icon className={`h-4 w-4 ${compact ? "" : "hidden sm:block"}`} aria-hidden="true" />
               {compact ? (
                 <span className="sr-only">{THEME_LABELS[option]}</span>
               ) : (

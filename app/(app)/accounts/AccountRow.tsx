@@ -88,10 +88,13 @@ export function AccountRow({
           columns (name, type, balance, actions) instead of nesting inside
           them. */}
       <div className="flex items-start justify-between gap-3 sm:contents">
-        <div className="flex min-w-0 flex-1 items-center gap-2 sm:contents">
-          <div className="min-w-0">
+        {/* Below sm the type chip stacks under the name and the name and
+            institution wrap rather than truncating: beside the chip and the
+            balance, a 320px viewport left the name ~56px (WCAG 1.4.10). */}
+        <div className="flex min-w-0 flex-1 flex-col items-start gap-1 sm:contents">
+          <div className="min-w-0 max-w-full">
             <div className="flex items-center gap-2">
-              <span className="truncate text-sm font-medium text-ink">{account.account_name}</span>
+              <span className="min-w-0 break-words text-sm font-medium text-ink sm:truncate">{account.account_name}</span>
               {!account.is_active ? (
                 <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
                   Archived
@@ -99,7 +102,7 @@ export function AccountRow({
               ) : null}
             </div>
             {account.institution ? (
-              <p className="mt-0.5 truncate text-sm text-ink-muted">{account.institution}</p>
+              <p className="mt-0.5 break-words text-sm text-ink-muted sm:truncate">{account.institution}</p>
             ) : null}
           </div>
 

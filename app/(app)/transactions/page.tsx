@@ -13,7 +13,9 @@ import { AddTransactionForm } from "./AddTransactionForm";
 import { TransactionsList } from "./TransactionsList";
 import { FIELD_EDGE } from "@/components/ui/Input";
 
-const FILTER_FIELD = `${FIELD_EDGE} bg-surface-raised px-3 py-2 text-sm text-ink`;
+// max-w-full: a <select> sizes to its longest option, so one long category
+// or account name otherwise pushes the card past a 320px viewport.
+const FILTER_FIELD = `max-w-full ${FIELD_EDGE} bg-surface-raised px-3 py-2 text-sm text-ink`;
 
 function first(value: string | string[] | undefined): string {
   return typeof value === "string" ? value : "";
@@ -116,7 +118,7 @@ export default async function TransactionsPage({
         action="/transactions"
         className="flex flex-wrap items-end gap-3 rounded-2xl border border-hairline bg-surface p-4"
       >
-        <div className="flex flex-col gap-1.5">
+        <div className="flex min-w-0 max-w-full flex-col gap-1.5">
           <label htmlFor="dateFrom" className="text-sm font-medium text-ink-secondary">
             From
           </label>
@@ -129,7 +131,7 @@ export default async function TransactionsPage({
           />
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex min-w-0 max-w-full flex-col gap-1.5">
           <label htmlFor="dateTo" className="text-sm font-medium text-ink-secondary">
             To
           </label>
@@ -142,7 +144,7 @@ export default async function TransactionsPage({
           />
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex min-w-0 max-w-full flex-col gap-1.5">
           <label htmlFor="categoryid" className="text-sm font-medium text-ink-secondary">
             Category
           </label>
@@ -174,7 +176,7 @@ export default async function TransactionsPage({
           </select>
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex min-w-0 max-w-full flex-col gap-1.5">
           <label htmlFor="accountid" className="text-sm font-medium text-ink-secondary">
             Account
           </label>
@@ -194,7 +196,7 @@ export default async function TransactionsPage({
           </select>
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex min-w-0 max-w-full flex-col gap-1.5">
           <label htmlFor="type" className="text-sm font-medium text-ink-secondary">
             Type
           </label>

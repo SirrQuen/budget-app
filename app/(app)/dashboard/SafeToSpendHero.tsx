@@ -84,7 +84,7 @@ function EstimateTag() {
 function ObligationRow({ c, indent = false }: { c: SafeToSpendCommitment; indent?: boolean }) {
   return (
     <div className={`flex items-baseline justify-between gap-4 ${indent ? "pl-4 text-xs" : ""}`}>
-      <dt className="min-w-0 truncate text-ink-secondary">
+      <dt className="min-w-0 break-words text-ink-secondary sm:truncate">
         {c.name} <span className="text-ink-muted">· {formatDateShort(c.date)}</span>
         {c.isEstimate ? <EstimateTag /> : null}
       </dt>

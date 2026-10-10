@@ -46,7 +46,7 @@ export default function DashboardLoading() {
           <LoadingSkeleton className="mt-3 h-4 w-64 bg-surface-raised" />
         </div>
 
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 lg:grid-cols-4">
           <TileSkeleton />
           <TileSkeleton />
         </div>
@@ -64,7 +64,7 @@ export default function DashboardLoading() {
       <section className="flex flex-col gap-6">
         <LoadingSkeleton className="h-4 w-20 bg-surface-raised" />
         <LoadingSkeleton className="h-[52px] w-full rounded-2xl" />
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 lg:grid-cols-4">
           <TileSkeleton />
           <TileSkeleton />
         </div>
