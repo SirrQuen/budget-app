@@ -55,8 +55,9 @@ leaves this list only when it is verified done, with the date and how.
    Next's `create-error-handler.js`, not observed). Close this item once
    that's checked with the auth server blocked.
 
-Not blockers: the streak-strip milestone mark
-(`components/ui/LoggingStreakStrip.tsx:27`) is visual polish.
+Not blockers: the streak redefinition (see "Streak: redefined as days
+opened" below) is decided and scheduled after Batch 1.2 and these
+blockers. The strip is hidden until then.
 
 ## Cross-user foreign keys could make an account undeletable (2026-10-04)
 
@@ -903,6 +904,82 @@ SELECT policy returns `[]`. No app code can tell that apart from a user
 with no data. It isn't solvable at runtime. **Covered by
 `docs/rls-isolation-test.sql`**, which asserts the policies exist and
 isolate. Run it after any migration (see that file's header).
+
+## Streak: redefined as days opened (2026-10-10)
+
+**Status: decided, scheduled after Batch 1.2 and the launch blockers. Not
+built. The dashboard strip is hidden meanwhile; its code stays in place.**
+
+### Why it was hidden
+
+Phase 6.75 item 3 specified a streak of days the books were kept current,
+not days a transaction was logged. As built, `deriveLoggingStreak()`
+(`lib/streak.ts`) counts consecutive days with at least one
+`transaction_date`, fed by `getLoggingStreak()` (`lib/db/dashboard.ts`).
+So a day with nothing to log breaks it, and a week of spending nothing
+breaks it every day. That rewards spending, which inverts the app's first
+rule. A relabel can't fix it, because the incentive stays. The grace
+ledger the code expects was never built: `graceDates` is always `[]`, so
+the `grace` state never renders.
+
+### The new definition
+
+A day counts if the user **opened Sorrel** that day. Whether they logged
+a transaction doesn't matter. The habit worth building is awareness, not
+spending.
+
+- One small table: `(userid, date)`, unique on the pair. RLS scoped to
+  `auth.uid()`, like every user table.
+- Written at most once per day per user, on an authenticated visit. The
+  unique constraint enforces that, not app logic. `date` is the user's day
+  (`settings.timezone`); SQL `current_date` already is, via
+  `apply_user_timezone()`.
+- Streak = consecutive days with a row, ending today or yesterday.
+- No grace days at first. When the bar is "you looked", a missed day is
+  genuinely missed. Revisit only if real usage shows otherwise.
+
+### Where the write happens: open question
+
+Not from a page render. The dashboard already has a render side effect
+(flagged in Section 6b), and a second one is the wrong direction. The two
+candidates were "extend `record_login()`" or "an explicit server action".
+Note before choosing: `record_login()` is **not** once per login. It
+runs from `app/(app)/layout.tsx` on every authenticated route render (see
+the `recordLogin` comment in `lib/db/profile.ts`). So extending it is
+itself a render-time write, just one that already exists. Folding the
+insert in adds no new side effect, but it sits on the same path 6b
+objects to. An explicit server action is the only option that keeps the
+write out of render entirely. Decide which one when this is built.
+
+### No history: start clean
+
+There is no check-in history, so past streaks can't be recomputed. The new
+counter starts at zero for everyone. The old `current`/`longest` values
+are not carried forward or shown next to the new metric. "Longest 9 days"
+measured something else, and a stale 9 next to a fresh 0 is worse than
+starting clean.
+
+### Display fixes to make when it's built
+
+- Mark today explicitly in every state, visibly, not only while it's
+  empty and not only in the sr-only list. Today, only `today-pending`
+  (40% gold) sets it apart; once logged it looks like any other day.
+- Drop the duplicate: `LoggingStreakStrip` renders the bare `{current}`
+  and also `formatStreakLine()` ("N days current"). Keep one.
+- Give each dot state a distinct, labelled meaning. The `unearned`
+  outline currently means both "missed" and "hasn't happened yet", which
+  is why the strip can't be read.
+
+### Other streak surfaces still on the old definition
+
+Hiding the strip doesn't stop these. Each reads `getLoggingStreak()`:
+
+- the return-summary fact "N-day streak going" (`lib/actions/activity.ts`)
+- the 7/30/100/365 milestone toast fired when a transaction is saved
+  (`lib/actions/transactions.ts`, shown by `QuickAddBar` and
+  `AddTransactionForm`): the most direct "log to keep it going" loop
+- the onboarding copy that names a streak
+  (`app/(app)/dashboard/DashboardOnboarding.tsx`)
 
 ## Temporary code that must not ship
 
