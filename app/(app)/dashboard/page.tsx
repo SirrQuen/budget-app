@@ -7,7 +7,6 @@ import {
   getSafeToSpend,
   getNetWorth,
   getNetWorthStat,
-  getLoggingStreak,
   getRangeCashflowStats,
   getCashflowChart,
   getGroupMovement,
@@ -26,7 +25,6 @@ import { monthStartISO } from "@/lib/date";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatTile } from "@/components/ui/StatTile";
 import { ReturnSummaryStrip } from "@/components/ui/ReturnSummaryStrip";
-import { LoggingStreakStrip } from "@/components/ui/LoggingStreakStrip";
 import { GeneratedOccurrencesBanner } from "./GeneratedOccurrencesBanner";
 import { VariableAmountPrompt } from "./VariableAmountPrompt";
 import { IncomeConfirmPrompt } from "./IncomeConfirmPrompt";
@@ -84,7 +82,6 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     onboardingResult,
     safeToSpendResult,
     netWorthStatResult,
-    streakResult,
     budgetResult,
     goalResult,
     recurringResult,
@@ -101,7 +98,6 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     getDashboardOnboarding(),
     getSafeToSpend(),
     getNetWorthStat(),
-    getLoggingStreak(),
     getBudgetProgress({ budget_month: currentMonth }),
     getGoalProgress(),
     getUpcomingRecurring(),
@@ -255,7 +251,6 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   // Every section that renders a SectionError on failure, by its label.
   const failedSections = (
     [
-      ["Logging streak", streakResult.error],
       ["Safe to spend", safeToSpendResult.error],
       ["Net worth", netWorthStatResult.error],
       ["Budgets", budgetResult.error],
@@ -317,15 +312,10 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
           <DayNightMark size={56} />
         </div>
 
-        {streakResult.error ? (
-          sectionError("Logging streak")
-        ) : streakResult.data ? (
-          <LoggingStreakStrip
-            current={streakResult.data.current}
-            longest={streakResult.data.longest}
-            segments={streakResult.data.segments}
-          />
-        ) : null}
+        {/* LoggingStreakStrip is hidden, not deleted: it counts days with a
+            transaction, so a week of spending nothing breaks it. It returns
+            on the "opened Sorrel" definition -- see docs/phase-7-findings.md,
+            "Streak: redefined as days opened". */}
 
         {previousLoginAt && returnFacts.length > 0 ? (
           <ReturnSummaryStrip since={sinceLabel(previousLoginAt, today, timeZone)} facts={returnFacts} />
