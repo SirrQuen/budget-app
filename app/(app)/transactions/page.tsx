@@ -119,11 +119,11 @@ export default async function TransactionsPage({
         className="flex flex-wrap items-end gap-3 rounded-2xl border border-hairline bg-surface p-4"
       >
         <div className="flex min-w-0 max-w-full flex-col gap-1.5">
-          <label htmlFor="dateFrom" className="text-sm font-medium text-ink-secondary">
+          <label htmlFor="filter-dateFrom" className="text-sm font-medium text-ink-secondary">
             From
           </label>
           <input
-            id="dateFrom"
+            id="filter-dateFrom"
             name="dateFrom"
             type="date"
             defaultValue={dateFrom || undefined}
@@ -132,11 +132,11 @@ export default async function TransactionsPage({
         </div>
 
         <div className="flex min-w-0 max-w-full flex-col gap-1.5">
-          <label htmlFor="dateTo" className="text-sm font-medium text-ink-secondary">
+          <label htmlFor="filter-dateTo" className="text-sm font-medium text-ink-secondary">
             To
           </label>
           <input
-            id="dateTo"
+            id="filter-dateTo"
             name="dateTo"
             type="date"
             defaultValue={dateTo || undefined}
@@ -145,11 +145,11 @@ export default async function TransactionsPage({
         </div>
 
         <div className="flex min-w-0 max-w-full flex-col gap-1.5">
-          <label htmlFor="categoryid" className="text-sm font-medium text-ink-secondary">
+          <label htmlFor="filter-categoryid" className="text-sm font-medium text-ink-secondary">
             Category
           </label>
           <select
-            id="categoryid"
+            id="filter-categoryid"
             name="categoryid"
             defaultValue={categoryid}
             className={FILTER_FIELD}
@@ -177,11 +177,11 @@ export default async function TransactionsPage({
         </div>
 
         <div className="flex min-w-0 max-w-full flex-col gap-1.5">
-          <label htmlFor="accountid" className="text-sm font-medium text-ink-secondary">
+          <label htmlFor="filter-accountid" className="text-sm font-medium text-ink-secondary">
             Account
           </label>
           <select
-            id="accountid"
+            id="filter-accountid"
             name="accountid"
             defaultValue={accountid}
             className={FILTER_FIELD}
@@ -197,11 +197,11 @@ export default async function TransactionsPage({
         </div>
 
         <div className="flex min-w-0 max-w-full flex-col gap-1.5">
-          <label htmlFor="type" className="text-sm font-medium text-ink-secondary">
+          <label htmlFor="filter-type" className="text-sm font-medium text-ink-secondary">
             Type
           </label>
           <select
-            id="type"
+            id="filter-type"
             name="type"
             defaultValue={type}
             className={FILTER_FIELD}

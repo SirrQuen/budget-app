@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { callAction, useActionForm } from "@/components/useActionForm";
 import {
   IDEMPOTENCY_FIELD,
@@ -162,6 +162,12 @@ export function AddTransactionForm({
   );
   const [paymentMethod, setPaymentMethod] = useState(initialValues?.payment_method ?? "");
   const [notes, setNotes] = useState(initialValues?.notes ?? "");
+  // Per-instance ids: this form can be on screen twice at once (the inline
+  // form on /transactions and the quick-add Full form overlay), and the
+  // filter bar beside it has its own Category/Account fields. A fixed id
+  // there points every <label for> at whichever field comes first in the DOM.
+  const idPrefix = useId();
+  const fieldId = (name: string) => `${idPrefix}${name}`;
   const [clientError, setClientError] = useState<string>();
   const [celebrate, setCelebrate] = useState(false);
   const [celebrateMessage, setCelebrateMessage] = useState("Logged");
@@ -428,9 +434,9 @@ export function AddTransactionForm({
         <div className="grid grid-cols-1 gap-x-6 gap-y-4 lg:grid-cols-2">
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField label="Date" htmlFor="transaction_date" required>
+              <FormField label="Date" htmlFor={fieldId("transaction_date")} required>
                 <input
-                  id="transaction_date"
+                  id={fieldId("transaction_date")}
                   name="transaction_date"
                   type="date"
                   required
@@ -440,10 +446,10 @@ export function AddTransactionForm({
                 />
               </FormField>
 
-              <FormField label="Amount" htmlFor="amount" required>
+              <FormField label="Amount" htmlFor={fieldId("amount")} required>
                 <Input
                   ref={amountInputRef}
-                  id="amount"
+                  id={fieldId("amount")}
                   name="amount"
                   type="number"
                   inputMode="decimal"
@@ -459,9 +465,9 @@ export function AddTransactionForm({
               </FormField>
             </div>
 
-            <FormField label="Description" htmlFor="description" required>
+            <FormField label="Description" htmlFor={fieldId("description")} required>
               <Input
-                id="description"
+                id={fieldId("description")}
                 name="description"
                 required
                 maxLength={120}
@@ -474,9 +480,9 @@ export function AddTransactionForm({
           <div className="flex flex-col gap-4">
             {type === "Transfer" ? (
               <>
-                <FormField label="From account" htmlFor="fromAccountId" required>
+                <FormField label="From account" htmlFor={fieldId("fromAccountId")} required>
                   <select
-                    id="fromAccountId"
+                    id={fieldId("fromAccountId")}
                     name="fromAccountId"
                     required
                     value={fromAccountId}
@@ -498,12 +504,12 @@ export function AddTransactionForm({
 
                 <FormField
                   label="To account"
-                  htmlFor="toAccountId"
+                  htmlFor={fieldId("toAccountId")}
                   required
                   error={accountsMismatch ? "From and to accounts must be different." : undefined}
                 >
                   <select
-                    id="toAccountId"
+                    id={fieldId("toAccountId")}
                     name="toAccountId"
                     required
                     value={toAccountId}
@@ -525,9 +531,9 @@ export function AddTransactionForm({
               </>
             ) : (
               <>
-                <FormField label="Category" htmlFor="categoryid" required>
+                <FormField label="Category" htmlFor={fieldId("categoryid")} required>
                   <select
-                    id="categoryid"
+                    id={fieldId("categoryid")}
                     name="categoryid"
                     required
                     value={categoryid}
@@ -550,9 +556,9 @@ export function AddTransactionForm({
                   </select>
                 </FormField>
 
-                <FormField label="Account" htmlFor="accountid" required>
+                <FormField label="Account" htmlFor={fieldId("accountid")} required>
                   <select
-                    id="accountid"
+                    id={fieldId("accountid")}
                     name="accountid"
                     required
                     value={accountid}
@@ -584,9 +590,9 @@ export function AddTransactionForm({
           <div className="flex flex-col gap-4 px-3 pb-3 pt-1">
             {type === "Transfer" ? null : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <FormField label="Merchant" htmlFor="merchant" hint="Optional">
+                <FormField label="Merchant" htmlFor={fieldId("merchant")} hint="Optional">
                   <Input
-                    id="merchant"
+                    id={fieldId("merchant")}
                     name="merchant"
                     maxLength={80}
                     placeholder="e.g. Trader Joe's"
@@ -595,9 +601,9 @@ export function AddTransactionForm({
                   />
                 </FormField>
 
-                <FormField label="Payment method" htmlFor="payment_method" hint="Optional">
+                <FormField label="Payment method" htmlFor={fieldId("payment_method")} hint="Optional">
                   <Input
-                    id="payment_method"
+                    id={fieldId("payment_method")}
                     name="payment_method"
                     maxLength={40}
                     placeholder="e.g. Debit card"
@@ -608,9 +614,9 @@ export function AddTransactionForm({
               </div>
             )}
 
-            <FormField label="Notes" htmlFor="notes" hint="Optional">
+            <FormField label="Notes" htmlFor={fieldId("notes")} hint="Optional">
               <textarea
-                id="notes"
+                id={fieldId("notes")}
                 name="notes"
                 rows={2}
                 maxLength={500}

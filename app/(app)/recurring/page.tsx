@@ -16,8 +16,12 @@ import type { TransactionAccountOption } from "../transactions/AddTransactionFor
 // this screen, same reasoning as ACCOUNT_ROW_GRID in the accounts screen.
 // One flat list here (no type-groups to subgrid across), so RecurringRow's
 // <li> subgrids straight off this <ul>.
+// Container-query breakpoints (@4xl), not viewport ones: the grid switches
+// on when the list itself is ~56rem wide, so the sidebar and browser zoom
+// can't squeeze the name column to a few letters. The @container is the
+// <div> wrapping the <ul> below.
 const RECURRING_ROW_GRID =
-  "sm:grid sm:grid-cols-[minmax(0,min(28rem,1fr))_auto_auto_max-content_max-content] sm:gap-x-4 sm:px-4";
+  "@4xl:grid @4xl:grid-cols-[minmax(0,min(28rem,1fr))_auto_auto_max-content_max-content] @4xl:gap-x-4 @4xl:px-4";
 
 function RecurringLoadError({ message }: { message: string }) {
   return (
@@ -179,6 +183,7 @@ export default async function RecurringPage() {
           than dropping out of sight behind a toggle (AccountsPage hides
           archived accounts this way -- a paused schedule is meant to be
           easy to find again and resume). */}
+      <div className="@container">
       <ul
         className={`divide-y divide-gridline rounded-2xl border border-hairline bg-surface ${RECURRING_ROW_GRID}`}
       >
@@ -207,6 +212,7 @@ export default async function RecurringPage() {
           );
         })}
       </ul>
+      </div>
     </div>
   );
 }

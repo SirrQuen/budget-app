@@ -331,6 +331,10 @@ export function QuickAddBar({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleInputKeyDown}
+          // The placeholder vanishes on input and isn't a label. The name
+          // starts with its visible words so voice control ("click Quick add")
+          // still matches.
+          aria-label="Quick add a transaction"
           placeholder="Quick add — e.g. trader joes 82.45"
           autoComplete="off"
           className={FIELD_CLASS}
@@ -359,6 +363,7 @@ export function QuickAddBar({
               <select
                 ref={categorySelectRef}
                 name="categoryid"
+                aria-label="Category"
                 value={categoryid}
                 onChange={(e) => {
                   categoryTouchedRef.current = true;
@@ -378,6 +383,7 @@ export function QuickAddBar({
               <select
                 ref={accountSelectRef}
                 name="accountid"
+                aria-label="Account"
                 value={accountid}
                 onChange={(e) => setAccountid(e.target.value)}
                 className={`${FIELD_EDGE} bg-surface-raised px-2 py-1 text-xs text-ink-secondary`}

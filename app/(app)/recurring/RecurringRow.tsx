@@ -126,7 +126,7 @@ export function RecurringRow({
       non_business_day_rule: recurring.non_business_day_rule,
     };
     return (
-      <li className="p-4 sm:col-span-5">
+      <li className="p-4 @4xl:col-span-5">
         <RecurringForm
           recurring={editable}
           incomeCategories={incomeCategories}
@@ -141,21 +141,27 @@ export function RecurringRow({
   }
 
   const endCondition = formatEndCondition(recurring.occurrence_limit, recurring.end_date);
+  const subtitle = isTransfer
+    ? `${recurring.account_name ?? "…"} → ${recurring.to_account_name ?? "…"}`
+    : `${recurring.category_name ?? "Uncategorized"} · ${recurring.account_name ?? "—"}`;
 
   return (
     <li
-      className={`flex flex-col gap-3 px-4 py-4 transition-colors duration-150 hover:bg-surface-raised sm:col-span-5 sm:grid sm:grid-cols-subgrid sm:grid-flow-row-dense sm:items-center sm:gap-y-0 sm:px-0 sm:py-0 sm:min-h-[52px] ${recurring.is_active ? "" : "opacity-60"}`}
+      className={`flex flex-col gap-3 px-4 py-4 transition-colors duration-150 hover:bg-surface-raised @4xl:col-span-5 @4xl:grid @4xl:grid-cols-subgrid @4xl:grid-flow-row-dense @4xl:items-center @4xl:gap-y-0 @4xl:px-0 @4xl:py-0 @4xl:min-h-[52px] ${recurring.is_active ? "" : "opacity-60"}`}
     >
-      {/* Below sm the actions drop onto their own line, same reflow as
-          AccountRow/CategoryRow -- sm:contents dissolves these wrappers
-          from sm up so their children land directly in the row's five
+      {/* Keyed to the LIST's width (@container in recurring/page.tsx), not
+          the viewport: five columns need ~56rem, and at sm the sidebar
+          left the name ~30px at 200% zoom. Below @4xl the actions drop onto
+          their own line, same reflow as AccountRow/CategoryRow --
+          @4xl:contents dissolves these wrappers from @4xl up so their
+          children land directly in the row's five
           subgrid columns (name, schedule, next due, amount, actions).
-          Each promoted cell gets an explicit sm:col-start so nesting name
+          Each promoted cell gets an explicit @4xl:col-start so nesting name
           and amount together for the mobile line doesn't disturb the
           desktop column order. */}
-      <div className="flex flex-col gap-2 sm:contents">
-        <div className="flex items-start justify-between gap-3 sm:contents">
-          <div className="flex min-w-0 items-center gap-3 sm:col-start-1 sm:min-w-0">
+      <div className="flex flex-col gap-2 @4xl:contents">
+        <div className="flex items-start justify-between gap-3 @4xl:contents">
+          <div className="flex min-w-0 items-center gap-3 @4xl:col-start-1 @4xl:min-w-0">
             {isTransfer ? (
               <TransferIcon className="h-4 w-4 shrink-0 text-ink-secondary" aria-hidden="true" />
             ) : (
@@ -163,24 +169,22 @@ export function RecurringRow({
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                {/* Wraps below sm, truncates from sm up: beside the amount, a
-                    320px viewport cut the description to ~130px. */}
-                <span className="min-w-0 break-words text-sm font-medium text-ink sm:truncate">{recurring.description}</span>
+                {/* Wraps below @4xl, truncates from @4xl up: beside the
+                    amount, a 320px viewport cut the description to ~130px. */}
+                <span title={recurring.description ?? undefined} className="min-w-0 break-words text-sm font-medium text-ink @4xl:truncate">{recurring.description}</span>
                 {!recurring.is_active ? (
                   <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
                     Paused
                   </span>
                 ) : null}
               </div>
-              <p className="mt-0.5 break-words text-sm text-ink-muted sm:truncate">
-                {isTransfer
-                  ? `${recurring.account_name ?? "…"} → ${recurring.to_account_name ?? "…"}`
-                  : `${recurring.category_name ?? "Uncategorized"} · ${recurring.account_name ?? "—"}`}
+              <p title={subtitle} className="mt-0.5 break-words text-sm text-ink-muted @4xl:truncate">
+                {subtitle}
               </p>
             </div>
           </div>
 
-          <span className="shrink-0 text-right text-sm font-medium tabular-nums text-ink sm:col-start-4 sm:justify-self-end">
+          <span className="shrink-0 text-right text-sm font-medium tabular-nums text-ink @4xl:col-start-4 @4xl:justify-self-end">
             {formatCurrency(displayAmount)}
             {isEstimatedExpenseSchedule ? (
               <span className="ml-1 text-xs font-normal text-ink-muted">est.</span>
@@ -188,7 +192,7 @@ export function RecurringRow({
           </span>
         </div>
 
-        <span className="text-sm text-ink-secondary sm:col-start-2 sm:justify-self-start">
+        <span className="text-sm text-ink-secondary @4xl:col-start-2 @4xl:justify-self-start">
           {formatSchedule(
             recurring.frequency,
             // The stable anchor, not the live cursor -- next_run_date can
@@ -200,19 +204,19 @@ export function RecurringRow({
           )}
         </span>
 
-        <div className="text-sm text-ink-secondary sm:col-start-3 sm:justify-self-start">
+        <div className="text-sm text-ink-secondary @4xl:col-start-3 @4xl:justify-self-start">
           <p>Due {formatDate(recurring.next_due_date)}</p>
           {endCondition ? <p className="text-xs text-ink-muted">{endCondition}</p> : null}
         </div>
       </div>
 
-      <div className="-mx-2 flex shrink-0 items-center gap-1 sm:col-start-5 sm:mx-0 sm:justify-self-end sm:gap-3">
-        {deleteError ? <span className="px-2 text-sm text-critical sm:px-0">{deleteError}</span> : null}
-        {toggleError ? <span className="px-2 text-sm text-critical sm:px-0">{toggleError}</span> : null}
+      <div className="-mx-2 flex shrink-0 items-center gap-1 @4xl:col-start-5 @4xl:mx-0 @4xl:justify-self-end @4xl:gap-3">
+        {deleteError ? <span className="px-2 text-sm text-critical @4xl:px-0">{deleteError}</span> : null}
+        {toggleError ? <span className="px-2 text-sm text-critical @4xl:px-0">{toggleError}</span> : null}
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="inline-flex min-h-11 items-center rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface sm:px-0"
+          className="inline-flex min-h-11 items-center rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface @4xl:px-0"
         >
           Edit
         </button>
@@ -220,7 +224,7 @@ export function RecurringRow({
           type="button"
           onClick={handleToggle}
           disabled={isToggling}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50 sm:px-0"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50 @4xl:px-0"
         >
           {recurring.is_active ? (
             <PauseIcon className="h-3.5 w-3.5" aria-hidden="true" />
@@ -232,7 +236,7 @@ export function RecurringRow({
         <button
           type="button"
           onClick={() => setConfirmingDelete(true)}
-          className="inline-flex min-h-11 items-center rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface sm:px-0"
+          className="inline-flex min-h-11 items-center rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface @4xl:px-0"
         >
           Delete
         </button>
@@ -242,7 +246,7 @@ export function RecurringRow({
           width line below the row rather than squeezing into one of the
           five tracks above. */}
       {needsConfirmation ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-sm sm:col-span-5">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm @4xl:col-span-5">
           <span className="inline-flex items-center gap-1.5 text-ink-muted">
             <InfoIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             {isOverdueNeedsAmount
@@ -271,7 +275,7 @@ export function RecurringRow({
       ) : null}
 
       {needsIncomeConfirmation ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-sm sm:col-span-5">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm @4xl:col-span-5">
           <span className="inline-flex items-center gap-1.5 text-ink-muted">
             <InfoIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             {isOverdueNeedsConfirmation

@@ -21,6 +21,14 @@ import { callAction } from "@/components/useActionForm";
 const checkboxClassName =
   "h-4 w-4 cursor-pointer rounded border-hairline bg-surface-raised accent-action outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 
+// The Amount column pins to the scroll container's right edge. When the table
+// fits (most desktop widths) sticky never engages and nothing changes. When it
+// overflows (narrow windows, 200% zoom), amounts stay in view and Category /
+// Account scroll under them instead of pushing them off-screen. The cell needs
+// an opaque ground, and `group-hover` keeps it in step with the row's hover.
+const AMOUNT_CELL =
+  "sticky right-0 bg-surface transition-colors duration-150 group-hover:bg-surface-raised";
+
 type SearchParams = Record<string, string | string[] | undefined>;
 
 function first(value: string | string[] | undefined): string {
@@ -397,7 +405,7 @@ export function TransactionsList({
               <th className="px-4 py-3 font-medium">Description</th>
               <th className="px-4 py-3 font-medium">Category</th>
               <th className="px-4 py-3 font-medium">Account</th>
-              <th className="px-4 py-3 text-right font-medium">Amount</th>
+              <th className={`px-4 py-3 text-right font-medium ${AMOUNT_CELL}`}>Amount</th>
               <th className="px-4 py-3">
                 <span className="sr-only">Actions</span>
               </th>
@@ -432,7 +440,7 @@ export function TransactionsList({
                     </span>
                   </td>
                   <td className="px-4 py-3 text-ink-secondary">{tx.account_name ?? "—"}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className={`px-4 py-3 text-right ${AMOUNT_CELL}`}>
                     <Amount amount={tx.amount} type={tx.transaction_type} column />
                   </td>
                   <td className={`px-4 py-3 text-right text-xs ${isError ? "text-ink-secondary" : "text-ink-muted"}`}>
@@ -461,7 +469,7 @@ export function TransactionsList({
                 return (
                   <tr
                     key={`transfer-${row.transferGroupId}`}
-                    className="transition-colors duration-150 hover:bg-surface-raised motion-safe:animate-[row-in_600ms_ease-out]"
+                    className="group transition-colors duration-150 hover:bg-surface-raised motion-safe:animate-[row-in_600ms_ease-out]"
                   >
                     {checkbox}
                     <td className="whitespace-nowrap px-4 py-3 text-ink-secondary">
@@ -477,7 +485,7 @@ export function TransactionsList({
                     <td className="px-4 py-3 text-ink-secondary">
                       {row.fromAccountName ?? "…"} → {row.toAccountName ?? "…"}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className={`px-4 py-3 text-right ${AMOUNT_CELL}`}>
                       <span className="font-medium tabular-nums text-ink">{formatCurrency(row.amount)}</span>
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -528,7 +536,7 @@ export function TransactionsList({
               return (
                 <tr
                   key={tx.id}
-                  className="transition-colors duration-150 hover:bg-surface-raised motion-safe:animate-[row-in_600ms_ease-out]"
+                  className="group transition-colors duration-150 hover:bg-surface-raised motion-safe:animate-[row-in_600ms_ease-out]"
                 >
                   {checkbox}
                   <td className="whitespace-nowrap px-4 py-3 text-ink-secondary">
@@ -557,7 +565,7 @@ export function TransactionsList({
                     </span>
                   </td>
                   <td className="px-4 py-3 text-ink-secondary">{tx.account_name ?? "—"}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className={`px-4 py-3 text-right ${AMOUNT_CELL}`}>
                     <Amount amount={Number(tx.amount)} type={tx.transaction_type as TransactionType} column />
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -629,6 +637,9 @@ export function TransactionsList({
           Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, totalCount)} of {totalCount}
         </p>
         <div className="flex items-center gap-3">
+          {/* The inactive end stays readable: plain ink-muted (4.70:1 light,
+              5.46:1 dark), no opacity -- opacity-50 took it to 1.96:1. It is
+              marked a disabled link so it reads as unavailable, not as text. */}
           {page > 1 ? (
             <Link
               href={buildHref(params, { page: String(page - 1) })}
@@ -637,7 +648,7 @@ export function TransactionsList({
               Previous
             </Link>
           ) : (
-            <span className="font-medium text-ink-muted opacity-50">Previous</span>
+            <span role="link" aria-disabled="true" className="font-medium text-ink-muted">Previous</span>
           )}
           <span className="text-ink-muted">
             Page {page} of {totalPages}
@@ -650,7 +661,7 @@ export function TransactionsList({
               Next
             </Link>
           ) : (
-            <span className="font-medium text-ink-muted opacity-50">Next</span>
+            <span role="link" aria-disabled="true" className="font-medium text-ink-muted">Next</span>
           )}
         </div>
       </div>
