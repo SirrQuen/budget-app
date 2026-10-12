@@ -1259,3 +1259,78 @@ and obligation rows rendered through the signed `<Amount type="Expense">`,
 so the cushion read "−$0.00" (and "−$300.00" beside an unsigned "Cash on
 hand"). The breakdown is label-and-value, unsigned throughout; both now use
 `formatCurrency`, and the test asserts it.
+
+## Chrome ignores `var()` in a keyframe's easing (2026-10-12)
+
+**Status: worked around at build time. Not an app bug; a browser behaviour
+that will bite again.**
+
+Inside `@keyframes`, `animation-timing-function: var(--token)` is silently
+dropped and that interval runs **linear**. No console warning, no DevTools
+flag; the animation just moves at constant speed. `var()` works everywhere
+else, including on the `animation` property itself, so the failure only
+shows up once a stagger forces the easing down into the keyframes.
+
+Measured in Chrome 154 on one 1000ms `translateX(0 → 100px)`, sampled at
+25% progress:
+
+| Easing written as | x at 25% |
+|---|---|
+| `var(--e)` inside the keyframe | 25.00 (linear) |
+| the same curve as a literal inside the keyframe | 28.82 |
+| `var(--e)` on the `animation` property | 28.82 |
+
+**How to spot it:** read the keyframes back.
+`el.getAnimations()[0].effect.getKeyframes()[0].easing` reports `"linear"`
+where you wrote a `var()`. That's how the nav icon verbs were caught:
+their multi-part keyframes were all running linear.
+
+**Fix in place:** `postcss/inline-keyframe-easing.cjs`, first in
+`postcss.config.mjs`, replaces `var(--x)` in a keyframe's
+`animation-timing-function` with the value `--x` is declared with on
+`:root`. So `--icon-anim-ease` stays the single place the curve is written,
+and the browser only ever sees a literal where it needs one. An unresolvable
+`var()` there fails the build instead of shipping a linear interval, and
+`postcss/inline-keyframe-easing.test.ts` runs the real `globals.css`
+through the plugin in `npm test`. Two gotchas from wiring it up:
+Turbopack evaluates `postcss.config.mjs` from a compiled chunk under
+`.next/`, so a `"./"` plugin path resolves from there (use an absolute
+path); and it loads plugins with `require()`, so the plugin is CommonJS.
+
+### Related: `animation-delay` costs a layout pass per frame
+
+Found in the same work. Staggering SVG parts with `animation-delay` made
+Chrome run style + layout on nearly every frame of playback (12-14 per
+360ms verb, traced). The same parts with the stagger built into the
+keyframes (each runs the full duration and holds its start pose for its
+offset) measured 0-2, the same as an unstaggered animation. Paint was 0
+either way; transforms on SVG child elements do composite in current
+Chrome. Prefer a held keyframe to a delay for any multi-part stagger.
+
+### Nav icon verbs: measured cost on navigation (2026-10-12)
+
+Measured in the dev server, alternating trials with and without the verb
+(the "without" trials report reduced motion, so the click path is otherwise
+identical), counterbalanced on-off-off-on per route:
+
+| Metric | With verb | Without | Difference (95% CI) |
+|---|---|---|---|
+| Click -> route request starts | 11.2ms | 8.5ms | +2.7ms (0.05 to 4.85), p = 0.03, n = 16/16 |
+| Click -> first paint | 980ms | 1078ms | -98ms (-464 to +299), p = 0.68, n = 16/20 |
+| Response -> first paint | 800ms | 827ms | -27ms (-393 to +285), p = 0.85 |
+
+An earlier run put the request delay at +2.6ms (1 to 5, p = 0.002), so the
+figure reproduces. **Decision (2026-10-12): keep it.** The 2.7ms is the
+state flag: React renders `setAnimating(true)` before the router's
+transition. Triggering with an imperative `classList` would cost nothing,
+but leaves React not owning the icon wrapper's class, and the first
+conditional class added there later would clobber or strand the animation.
+The "never delays navigation" rule exists to rule out play-then-navigate
+(360ms on every click); 2.7ms is about a sixth of a frame. Deferring the
+effect's `getAnimations()` read by a frame was tried and made no difference,
+so that wasn't the cause.
+
+Two measurement traps, so the next run doesn't repeat them: a covered or
+minimised Chrome window reports `visibilityState: "hidden"` and stops
+painting (discard those trials), and running lint, tests or a build alongside
+the benchmark skewed one run by +150ms.

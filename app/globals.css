@@ -787,3 +787,299 @@ body {
     visibility: visible;
   }
 }
+
+/* =====================================================================
+   NAV ICON VERBS
+   =====================================================================
+
+   Each sidebar icon performs its own verb once, on click, while the route
+   change is already in flight (components/app-shell/AppShell.tsx). The
+   click never waits for this -- it is decoration on top of a navigation
+   that has already started.
+
+   One motion signature: the ease is the Sorrel mark's fold curve, and
+   every verb fits in --icon-anim-duration INCLUDING its stagger.
+
+   Transform and opacity only, so playback stays on the compositor: no
+   layout or paint per frame. That rules out stroke-dashoffset for
+   "writes itself" -- traced, it repainted every frame -- so the
+   transaction lines grow from their left end with scaleX instead.
+
+   The stagger is built into the keyframes, not animation-delay. Every part
+   runs the full duration from frame one and holds its start pose for its
+   offset. Traced in Chrome, delayed parts forced a style + layout pass on
+   nearly every frame of playback (12-14 per verb); the same parts with
+   built-in holds measured 0-2, the same as an unstaggered animation.
+   The catch: a keyframe selector can't read a custom property, so the
+   percentages below encode --icon-anim-stagger / --icon-anim-duration
+   (60 / 360ms). Change either token and re-derive them:
+     three steps  0 / 16.667 / 33.333% start, each travelling 66.667%
+     two steps    0 / 16.667% start, each travelling 83.333%
+   The ease is set per travelling keyframe (it applies interval by
+   interval); the animations themselves run linear. Chrome ignores var()
+   in a keyframe's animation-timing-function and runs that interval
+   linear, so postcss/inline-keyframe-easing.cjs swaps each
+   var(--icon-anim-ease) inside @keyframes for the token's value at build
+   time. The token stays the one place the curve is written; the plugin
+   fails the build if it meets a var() it can't resolve.
+
+   The parts are the icons' own children, selected by position. The
+   geometry lives in components/ui/icons.tsx; reordering a path there
+   changes which part moves here.
+
+   Two principles, both learned here:
+   - An icon whose shape can't carry a verb gets the shared fallback,
+     .nav-icon--respond (a scale pop with a 3deg rotate and settle), never
+     nothing. Six icons that move teach the user to expect a response; a
+     still one reads as a missed click. Budgets (a two-stroke pie, nothing
+     to fill) and Categories (a tag with one hole, no dots to sort) use it.
+   - When a shape has rotational symmetry, end the rotation on a multiple
+     of it. The reset to rest is then free -- see Settings below.
+
+   Defined only under no-preference: with reduced motion there is no
+   animation at all, not a shorter one. The click handler also skips
+   setting the flag, so nothing is left waiting on an animationend. */
+:root {
+  --icon-anim-duration: 360ms;
+  --icon-anim-stagger: 60ms;
+  /* The one copy of the curve. Inside @keyframes it reaches the browser
+     only through postcss/inline-keyframe-easing.cjs, which inlines this
+     value at build time -- Chrome would run a raw var() there linear. */
+  --icon-anim-ease: cubic-bezier(0.34, 0.02, 0.24, 1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Goals' rings start at 1.4x and would clip at the viewBox edge. */
+  .nav-icon {
+    overflow: visible;
+  }
+  .nav-icon.is-animating > * {
+    transform-box: view-box;
+    animation-duration: var(--icon-anim-duration);
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+  }
+
+  /* Dashboard -- comes into focus: roof, walls, door, in reading order. */
+  .nav-icon--dashboard.is-animating > :nth-child(1) {
+    transform-origin: 12px 7.75px;
+    animation-name: icon-focus-0;
+  }
+  .nav-icon--dashboard.is-animating > :nth-child(2) {
+    transform-origin: 12px 14.5px;
+    animation-name: icon-focus-1;
+  }
+  .nav-icon--dashboard.is-animating > :nth-child(3) {
+    transform-origin: 12px 16.5px;
+    animation-name: icon-focus-2;
+  }
+
+  /* Transactions -- writes itself: each line grows from its left end, top
+     to bottom. The bullets (children 4-6) stay put. */
+  .nav-icon--transactions.is-animating > :nth-child(-n + 3) {
+    transform-origin: 8px 0;
+  }
+  .nav-icon--transactions.is-animating > :nth-child(1) {
+    animation-name: icon-write-0;
+  }
+  .nav-icon--transactions.is-animating > :nth-child(2) {
+    animation-name: icon-write-1;
+  }
+  .nav-icon--transactions.is-animating > :nth-child(3) {
+    animation-name: icon-write-2;
+  }
+
+  /* Accounts -- fans and settles: the wallet's back flap, then its body
+     (with the clasp), swing from -8deg about the bottom-left corner. */
+  .nav-icon--accounts.is-animating > * {
+    transform-origin: 3px 19.5px;
+    animation-name: icon-fan-1;
+  }
+  .nav-icon--accounts.is-animating > :nth-child(1) {
+    animation-name: icon-fan-0;
+  }
+
+  /* Goals -- locks on: outer ring, inner ring, then the centre dot pops. */
+  .nav-icon--goals.is-animating > * {
+    transform-origin: 12px 12px;
+  }
+  .nav-icon--goals.is-animating > :nth-child(1) {
+    animation-name: icon-lock-0;
+  }
+  .nav-icon--goals.is-animating > :nth-child(2) {
+    animation-name: icon-lock-1;
+  }
+  .nav-icon--goals.is-animating > :nth-child(3) {
+    animation-name: icon-pop-2;
+  }
+
+  /* Recurring -- comes round again: one full turn of the whole icon. */
+  .nav-icon--recurring.is-animating {
+    animation: icon-turn var(--icon-anim-duration) var(--icon-anim-ease) both;
+  }
+
+  /* Categories, Budgets -- the shared fallback: a response, not a verb.
+     Ends at 0deg; neither shape has a symmetry to land on. */
+  .nav-icon--respond.is-animating {
+    animation: icon-respond var(--icon-anim-duration) var(--icon-anim-ease) both;
+  }
+
+  /* Settings -- adjusts: one tooth (45deg), overshooting to 54deg. Not the
+     spec's 60deg: the gear is 8-fold, so only multiples of 45deg land on
+     its rest silhouette. Rasterised at 20px, a 60deg end differs from rest
+     in 164 of 400 pixels; 45deg differs in 2 (anti-aliasing), so removing
+     the class doesn't visibly snap. */
+  .nav-icon--settings.is-animating {
+    animation: icon-adjust var(--icon-anim-duration) var(--icon-anim-ease) both;
+  }
+
+  @keyframes icon-focus-0 {
+    0% {
+      opacity: 0;
+      transform: scale(0.85);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    66.667% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes icon-focus-1 {
+    0%,
+    16.667% {
+      opacity: 0;
+      transform: scale(0.85);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    83.333% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes icon-focus-2 {
+    0%,
+    33.333% {
+      opacity: 0;
+      transform: scale(0.85);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes icon-write-0 {
+    0% {
+      transform: scaleX(0);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    66.667% {
+      transform: scaleX(1);
+    }
+  }
+  @keyframes icon-write-1 {
+    0%,
+    16.667% {
+      transform: scaleX(0);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    83.333% {
+      transform: scaleX(1);
+    }
+  }
+  @keyframes icon-write-2 {
+    0%,
+    33.333% {
+      transform: scaleX(0);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    100% {
+      transform: scaleX(1);
+    }
+  }
+
+  @keyframes icon-fan-0 {
+    0% {
+      transform: rotate(-8deg);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    83.333% {
+      transform: rotate(0deg);
+    }
+  }
+  @keyframes icon-fan-1 {
+    0%,
+    16.667% {
+      transform: rotate(-8deg);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    100% {
+      transform: rotate(0deg);
+    }
+  }
+
+  @keyframes icon-lock-0 {
+    0% {
+      opacity: 0;
+      transform: scale(1.4);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    66.667% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes icon-lock-1 {
+    0%,
+    16.667% {
+      opacity: 0;
+      transform: scale(1.4);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    83.333% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  /* The pop overshoots at 60% of its own 240ms travel. */
+  @keyframes icon-pop-2 {
+    0%,
+    33.333% {
+      transform: scale(0);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    73.333% {
+      transform: scale(1.15);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  @keyframes icon-respond {
+    from {
+      transform: scale(0.9) rotate(0deg);
+    }
+    60% {
+      transform: scale(1.04) rotate(3deg);
+    }
+    to {
+      transform: scale(1) rotate(0deg);
+    }
+  }
+  @keyframes icon-turn {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes icon-adjust {
+    70% {
+      transform: rotate(54deg);
+    }
+    to {
+      transform: rotate(45deg);
+    }
+  }
+}

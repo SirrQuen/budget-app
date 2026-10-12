@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { logout } from "@/lib/auth/actions";
 import { HomeIcon, ListIcon, WalletIcon, TagIcon, PieIcon, TargetIcon, RepeatIcon, SettingsIcon, MenuIcon, CloseIcon, type IconProps } from "@/components/ui/icons";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -20,15 +20,26 @@ export type QuickAddData = {
   defaultAccountId: string | null;
 };
 
-const NAV_ITEMS: { href: string; label: string; icon: (props: IconProps) => React.ReactNode }[] = [
-  { href: "/dashboard", label: "Dashboard", icon: HomeIcon },
-  { href: "/transactions", label: "Transactions", icon: ListIcon },
-  { href: "/accounts", label: "Accounts", icon: WalletIcon },
-  { href: "/categories", label: "Categories", icon: TagIcon },
-  { href: "/budgets", label: "Budgets", icon: PieIcon },
-  { href: "/goals", label: "Goals", icon: TargetIcon },
-  { href: "/recurring", label: "Recurring", icon: RepeatIcon },
-  { href: "/settings", label: "Settings", icon: SettingsIcon },
+type NavItem = {
+  href: string;
+  label: string;
+  icon: (props: IconProps) => React.ReactNode;
+  /** The .nav-icon--{verb} animation in globals.css ("NAV ICON VERBS").
+   * "respond" is the shared fallback for a shape that can't carry a verb. */
+  verb: string;
+};
+
+const NAV_ITEMS: NavItem[] = [
+  { href: "/dashboard", label: "Dashboard", icon: HomeIcon, verb: "dashboard" },
+  { href: "/transactions", label: "Transactions", icon: ListIcon, verb: "transactions" },
+  { href: "/accounts", label: "Accounts", icon: WalletIcon, verb: "accounts" },
+  // The fallback: a tag with one hole has no dots to sort.
+  { href: "/categories", label: "Categories", icon: TagIcon, verb: "respond" },
+  // The fallback: a two-stroke pie has no fill to fill.
+  { href: "/budgets", label: "Budgets", icon: PieIcon, verb: "respond" },
+  { href: "/goals", label: "Goals", icon: TargetIcon, verb: "goals" },
+  { href: "/recurring", label: "Recurring", icon: RepeatIcon, verb: "recurring" },
+  { href: "/settings", label: "Settings", icon: SettingsIcon, verb: "settings" },
 ];
 
 export function AppShell({
@@ -77,26 +88,14 @@ export function AppShell({
               <Wordmark />
             </div>
             <nav className="flex flex-col gap-1">
-              {NAV_ITEMS.map((item) => {
-                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setOpen(false)}
-                    aria-current={active ? "page" : undefined}
-                    className={`flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page ${
-                      active
-                        ? "bg-surface text-ink"
-                        : "text-ink-secondary hover:bg-surface hover:text-ink"
-                    }`}
-                  >
-                    <Icon className="h-5 w-5" aria-hidden="true" />
-                    {item.label}
-                  </Link>
-                );
-              })}
+              {NAV_ITEMS.map((item) => (
+                <NavLink
+                  key={item.href}
+                  item={item}
+                  active={pathname === item.href || pathname.startsWith(`${item.href}/`)}
+                  onNavigate={() => setOpen(false)}
+                />
+              ))}
             </nav>
           </div>
 
@@ -143,6 +142,104 @@ export function AppShell({
         </main>
       </div>
     </ConfirmPulseProvider>
+  );
+}
+
+// One sidebar link. The click navigates and the icon performs its verb in
+// parallel -- never in sequence. Link starts the route change itself, right
+// after this handler returns; nothing here awaits, delays or can cancel it.
+// The flag only adds a class, so the cost on the click path is one
+// re-render of this link, and the sidebar lives in the layout, so the
+// animation simply plays out over whatever the transition takes.
+function NavLink({
+  item,
+  active,
+  onNavigate,
+}: {
+  item: NavItem;
+  active: boolean;
+  onNavigate: () => void;
+}) {
+  const [animating, setAnimating] = useState(false);
+  // Bumped on every click, so the effect below re-runs even when the flag is
+  // already true. See the race it closes, below.
+  const [clicks, setClicks] = useState(0);
+  const iconRef = useRef<HTMLSpanElement>(null);
+  const Icon = item.icon;
+
+  // Clears the flag when the verb has played, never by remounting or
+  // re-keying. Driven by the animations themselves (Web Animations API), not
+  // animationend events, because of a race rapid clicking hit: the verb
+  // ends and queues setAnimating(false), a click lands before that commits
+  // and queues true, React batches them into "no change" -- so the class
+  // never leaves the DOM, the CSS animation never restarts, no event ever
+  // fires, and the flag stuck true for good, silencing that icon.
+  //   running  -> mid-verb; leave it, a click doesn't restart it
+  //   finished -> the class never left; replay it in place
+  //   none     -> nothing to play (reduced motion); clear now
+  // `finished` rejects when an animation is cancelled -- the mobile drawer
+  // hides on click -- so that clears the flag too, and the verb doesn't
+  // replay the next time the drawer opens.
+  useEffect(() => {
+    const el = iconRef.current;
+    if (!el || !animating) return;
+    let live = true;
+    const animations = el.getAnimations({ subtree: true });
+    if (animations.length === 0) {
+      setAnimating(false);
+      return;
+    }
+    for (const animation of animations) {
+      if (animation.playState === "finished") animation.play();
+    }
+    const settle = () => {
+      if (live) setAnimating(false);
+    };
+    Promise.all(animations.map((animation) => animation.finished)).then(settle, settle);
+    return () => {
+      live = false;
+    };
+  }, [animating, clicks]);
+
+  return (
+    <Link
+      href={item.href}
+      onClick={(event) => {
+        onNavigate();
+        // A new-tab / new-window click leaves this page where it is.
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        // The page you're already on: no navigation, no verb. Only the bare
+        // URL counts -- from /transactions?page=3 the link still goes back
+        // to page one, as it always has.
+        if (window.location.pathname === item.href && !window.location.search) {
+          event.preventDefault();
+          return;
+        }
+        // Measured cost of a state flag here: the route request starts ~2.7ms
+        // later (32 interleaved trials, 95% CI 0.05-4.85ms), from React
+        // rendering this update before the router's transition. No effect on
+        // time to first paint. Chosen over adding the class imperatively with
+        // classList, which costs nothing but leaves React not owning this
+        // element's class -- the first conditional class added to it later
+        // would clobber or strand the animation. docs/phase-7-findings.md.
+        if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          setAnimating(true);
+          setClicks((n) => n + 1);
+        }
+      }}
+      aria-current={active ? "page" : undefined}
+      className={`flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page ${
+        active ? "bg-surface text-ink" : "text-ink-secondary hover:bg-surface hover:text-ink"
+      }`}
+    >
+      <span ref={iconRef} className="contents">
+        <Icon
+          className={`nav-icon nav-icon--${item.verb} h-5 w-5${animating ? " is-animating" : ""}`}
+          aria-hidden="true"
+        />
+      </span>
+      {item.label}
+    </Link>
   );
 }
 

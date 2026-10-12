@@ -1,5 +1,10 @@
 export type IconProps = React.SVGProps<SVGSVGElement>;
 
+// HomeIcon, ListIcon, WalletIcon and TargetIcon are animated part by part
+// in the sidebar ("NAV ICON VERBS" in app/globals.css), which selects their
+// children by position. Reordering or splitting a path in one of them
+// changes which part moves -- update the selectors there with it.
+
 const base = {
   viewBox: "0 0 24 24",
   fill: "none",
