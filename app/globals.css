@@ -110,7 +110,7 @@
      bg-/text-/border-/ring-mark utility exists to reach for.
      Two values, not one: a single deep crimson is 2.86:1 on --dk-surface,
      under the 3:1 non-text minimum, so the dark-ground value runs brighter.
-       --mark-on-light  #c41230  5.79:1 on #fbfaf7
+       --mark-on-light  #c41230  5.13:1 on #ececf2, 5.70:1 on #f8f8fb
        --mark-on-dark   #e63946  4.05:1 on #1b1b2f, 4.40:1 on #131322
 
      The mark's colour follows the surface it sits on, not the theme

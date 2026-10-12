@@ -196,32 +196,38 @@ Charts read colours from CSS custom properties only -- never a hex literal in
 a component. Both palettes are defined in globals.css; a chart written against
 tokens themes itself.
 
-Dark mode is a SELECTED palette, not an inverted one. Both are validated
-against their own surface:
+Each theme has its own SELECTED palette. Light is not an inversion of dark:
+each set is validated against its own surfaces. globals.css holds the
+authoritative values (`--cat-*`, `--dk-cat-*`) and the measurements behind
+them. This table mirrors it, so change both together:
 
   Categorical -- dark      Categorical -- light
-  1 blue     #3987E5       1 blue     #2A78D6
-  2 orange   #D95926       2 orange   #EB6834
-  3 aqua     #199E70       3 aqua     #1BAF7A
-  4 yellow   #C98500       4 yellow   #EDA100
-  5 magenta  #D55181       5 magenta  #E87BA4
-  6 green    #008300       6 green    #008300
-  7 violet   #9085E9       7 violet   #4A3AA7
-  8 red      #E66767       8 red      #E34948
+  1 blue     #3987E5       1 blue     #1F5FB0
+  2 orange   #D95926       2 orange   #B8431A
+  3 aqua     #199E70       3 aqua     #0B8068
+  4 yellow   #C98500       4 yellow   #96610A
+  5 magenta  #D55181       5 magenta  #B03763
+  6 green    #008300       6 green    #0A6B0A
+  7 violet   #9085E9       7 violet   #6055C4
+  8 red      #E66767       8 red      #C23F3F
 
-  Chart chrome            dark            light
-  surface                 #1B1B2F         #FBFAF7
-  gridline                #2C2C42         #E1E0D9
-  baseline                #383850         #C3C2B7
-  axis/label ink          #8E8C86         #52514E   <-- NOT the dark value in light;
-                                                        it only reaches 3.44:1
+  Chart chrome            dark            light       token
+  page                    #131322         #ECECF2     --page
+  surface                 #1B1B2F         #F8F8FB     --surface
+  raised                  #23233A         #FFFFFF     --surface-raised
+  gridline                #2C2C42         #D8D8E2     --gridline
+  baseline                #383850         #C2C2D0     --baseline
+  axis/label ink          #8E8C86         #67677A     --ink-muted
 
-Status colours are identical in both modes:
-  good #0CA30C · warning #FAB219 · serious #EC835A
+The light set passes all six validator checks on all three light grounds.
+Every series is at least 4.15:1 there (aqua on --page is the lowest), so no
+light series needs extra relief. Re-run the validator against --page,
+--surface and --surface-raised before re-stepping any value.
 
-In LIGHT mode, aqua, yellow and magenta fall below 3:1 on the surface. The
-relief rule applies: those series MUST carry visible direct labels or a table
-view. Same for warning and serious, which always ship with icon + label.
+Status colours differ by theme. Both sets are validated:
+  dark   good #0CA30C · warning #FAB219 · serious #EC835A
+  light  good #097009 · warning #A46609 · serious #A84718
+Warning and serious always ship with icon + label.
 
 ### Hard rules
 - NEVER a dual-axis chart. Two measures of different scale = two charts.
