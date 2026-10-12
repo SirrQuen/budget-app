@@ -12,7 +12,7 @@ import type { TransactionAccountOption } from "../transactions/AddTransactionFor
 import { useToday } from "@/components/TodayProvider";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
 import { formatDateWithWeekday } from "@/lib/format";
-import { FormField } from "@/components/ui/FormField";
+import { FormField, useFieldId } from "@/components/ui/FormField";
 import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
@@ -293,6 +293,9 @@ export function RecurringForm({
   }, [pending, state, onSuccess]);
 
   const initialKind: Kind = seed?.kind ?? "Expense";
+  // The create form, open edit rows and Make recurring can share a page --
+  // see useFieldId. TransferAccountFields takes its own, below.
+  const fieldId = useFieldId();
   const [kind, setKind] = useState<Kind>(initialKind);
   // Mirrors TransferAccountFields' own "to account" selection so this form
   // can decide whether the destination is a Credit Card -- the only case
@@ -389,9 +392,9 @@ export function RecurringForm({
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="Description" htmlFor="description" required>
+        <FormField label="Description" htmlFor={fieldId("description")} required>
           <Input
-            id="description"
+            id={fieldId("description")}
             name="description"
             required
             maxLength={120}
@@ -403,12 +406,12 @@ export function RecurringForm({
         {showCardVariableFields ? (
           <FormField
             label="Statement day"
-            htmlFor="statement_day"
+            htmlFor={fieldId("statement_day")}
             required
             hint="Sorrel asks for the amount once the statement posts on this day each month, and estimates from the card's current balance until then."
           >
             <Input
-              id="statement_day"
+              id={fieldId("statement_day")}
               name="statement_day"
               type="number"
               inputMode="numeric"
@@ -419,9 +422,9 @@ export function RecurringForm({
             />
           </FormField>
         ) : (
-          <FormField label="Amount" htmlFor="amount" required>
+          <FormField label="Amount" htmlFor={fieldId("amount")} required>
             <Input
-              id="amount"
+              id={fieldId("amount")}
               name="amount"
               type="number"
               inputMode="decimal"
@@ -464,9 +467,9 @@ export function RecurringForm({
         </>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <FormField label="Category" htmlFor="categoryid" required>
+          <FormField label="Category" htmlFor={fieldId("categoryid")} required>
             <select
-              id="categoryid"
+              id={fieldId("categoryid")}
               name="categoryid"
               required
               // Remounts on kind change (key={kind}) so switching Expense/
@@ -494,9 +497,9 @@ export function RecurringForm({
             </select>
           </FormField>
 
-          <FormField label="Account" htmlFor="accountid" required>
+          <FormField label="Account" htmlFor={fieldId("accountid")} required>
             <select
-              id="accountid"
+              id={fieldId("accountid")}
               name="accountid"
               required
               defaultValue={kind === initialKind ? (seed?.accountid ?? "") : ""}
@@ -542,9 +545,9 @@ export function RecurringForm({
           </label>
 
           {dateVaries ? (
-            <FormField label="Give or take how many days?" htmlFor="date_tolerance_days">
+            <FormField label="Give or take how many days?" htmlFor={fieldId("date_tolerance_days")}>
               <Input
-                id="date_tolerance_days"
+                id={fieldId("date_tolerance_days")}
                 name="date_tolerance_days"
                 type="number"
                 inputMode="numeric"
@@ -568,10 +571,10 @@ export function RecurringForm({
           </fieldset>
 
           {repeats === "Weekly" ? (
-            <FormField label="Every" htmlFor="interval_count">
+            <FormField label="Every" htmlFor={fieldId("interval_count")}>
               <div className="flex items-center gap-2">
                 <Input
-                  id="interval_count"
+                  id={fieldId("interval_count")}
                   name="interval_count"
                   type="number"
                   inputMode="numeric"
@@ -587,9 +590,9 @@ export function RecurringForm({
           ) : null}
         </div>
 
-        <FormField label="Next due date" htmlFor="next_run_date" required hint={scheduleHint}>
+        <FormField label="Next due date" htmlFor={fieldId("next_run_date")} required hint={scheduleHint}>
           <input
-            id="next_run_date"
+            id={fieldId("next_run_date")}
             name="next_run_date"
             type="date"
             required
@@ -642,9 +645,9 @@ export function RecurringForm({
 
             {timingMode === "after" ? (
               <div className="pl-1">
-                <FormField label="How many business days?" htmlFor="timing_count">
+                <FormField label="How many business days?" htmlFor={fieldId("timing_count")}>
                   <Input
-                    id="timing_count"
+                    id={fieldId("timing_count")}
                     name="timing_count"
                     type="number"
                     inputMode="numeric"
@@ -669,9 +672,9 @@ export function RecurringForm({
         </fieldset>
 
         {ends === "count" ? (
-          <FormField label="Occurrences" htmlFor="occurrence_count" hint="How many times this posts before it stops.">
+          <FormField label="Occurrences" htmlFor={fieldId("occurrence_count")} hint="How many times this posts before it stops.">
             <Input
-              id="occurrence_count"
+              id={fieldId("occurrence_count")}
               name="occurrence_count"
               type="number"
               inputMode="numeric"
@@ -684,9 +687,9 @@ export function RecurringForm({
         ) : null}
 
         {ends === "date" ? (
-          <FormField label="End date" htmlFor="end_date">
+          <FormField label="End date" htmlFor={fieldId("end_date")}>
             <input
-              id="end_date"
+              id={fieldId("end_date")}
               name="end_date"
               type="date"
               required
@@ -722,15 +725,16 @@ function TransferAccountFields({
   /** Mirrors the selection up to RecurringForm, which needs it to know whether the destination is a Credit Card. */
   onToAccountChange: (accountId: string) => void;
 }) {
+  const fieldId = useFieldId();
   const [fromAccountId, setFromAccountId] = useState(initialFromAccountId);
   const [toAccountId, setToAccountId] = useState(initialToAccountId);
   const mismatch = fromAccountId !== "" && fromAccountId === toAccountId;
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <FormField label="From account" htmlFor="accountid" required>
+      <FormField label="From account" htmlFor={fieldId("accountid")} required>
         <select
-          id="accountid"
+          id={fieldId("accountid")}
           name="accountid"
           required
           value={fromAccountId}
@@ -751,12 +755,12 @@ function TransferAccountFields({
 
       <FormField
         label="To account"
-        htmlFor="to_accountid"
+        htmlFor={fieldId("to_accountid")}
         required
         error={mismatch ? "From and to accounts must be different." : undefined}
       >
         <select
-          id="to_accountid"
+          id={fieldId("to_accountid")}
           name="to_accountid"
           required
           value={toAccountId}

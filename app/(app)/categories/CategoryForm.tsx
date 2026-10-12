@@ -10,7 +10,7 @@ import {
 import { CATEGORY_COLOR_SWATCHES, categoryColorVar } from "@/lib/categoryOptions";
 import { CATEGORY_ICON_NAMES, CategoryIcon } from "@/components/ui/CategoryIcon";
 import type { CategoryWithGroup } from "@/lib/db/categories";
-import { FormField } from "@/components/ui/FormField";
+import { FormField, useFieldId } from "@/components/ui/FormField";
 import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
@@ -34,6 +34,8 @@ export function CategoryForm({
     isEdit ? updateCategoryAction : createCategoryAction,
     undefined,
   );
+  // The create form and any open edit row share a page -- see useFieldId.
+  const fieldId = useFieldId();
   const wasPending = useRef(false);
 
   useEffect(() => {
@@ -64,9 +66,9 @@ export function CategoryForm({
         </button>
       </div>
 
-      <FormField label="Name" htmlFor="category_name" required>
+      <FormField label="Name" htmlFor={fieldId("category_name")} required>
         <Input
-          id="category_name"
+          id={fieldId("category_name")}
           name="category_name"
           required
           maxLength={60}
@@ -96,9 +98,9 @@ export function CategoryForm({
         </div>
       </fieldset>
 
-      <FormField label="Group" htmlFor="groupid" required>
+      <FormField label="Group" htmlFor={fieldId("groupid")} required>
         <select
-          id="groupid"
+          id={fieldId("groupid")}
           name="groupid"
           required
           defaultValue={category?.groupid ?? ""}

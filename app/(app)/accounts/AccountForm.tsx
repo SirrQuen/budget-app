@@ -11,7 +11,7 @@ import { ACCOUNT_TYPES, isLiabilityAccountType } from "@/lib/accountOptions";
 import { useToday } from "@/components/TodayProvider";
 import { formatDate } from "@/lib/format";
 import type { Database } from "@/lib/database.types";
-import { FormField } from "@/components/ui/FormField";
+import { FormField, useFieldId } from "@/components/ui/FormField";
 import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
@@ -37,6 +37,8 @@ export function AccountForm({
     isEdit ? updateAccountAction : createAccountAction,
     undefined,
   );
+  // The create form and any open edit row share a page -- see useFieldId.
+  const fieldId = useFieldId();
   const wasPending = useRef(false);
   const [accountType, setAccountType] = useState(account?.account_type ?? "");
   const isLiability = isLiabilityAccountType(accountType);
@@ -86,9 +88,9 @@ export function AccountForm({
         </button>
       </div>
 
-      <FormField label="Name" htmlFor="account_name" required>
+      <FormField label="Name" htmlFor={fieldId("account_name")} required>
         <Input
-          id="account_name"
+          id={fieldId("account_name")}
           name="account_name"
           required
           maxLength={60}
@@ -97,9 +99,9 @@ export function AccountForm({
         />
       </FormField>
 
-      <FormField label="Type" htmlFor="account_type" required>
+      <FormField label="Type" htmlFor={fieldId("account_type")} required>
         <select
-          id="account_type"
+          id={fieldId("account_type")}
           name="account_type"
           required
           value={accountType}
@@ -117,9 +119,9 @@ export function AccountForm({
         </select>
       </FormField>
 
-      <FormField label="Institution" htmlFor="institution" hint="Optional">
+      <FormField label="Institution" htmlFor={fieldId("institution")} hint="Optional">
         <Input
-          id="institution"
+          id={fieldId("institution")}
           name="institution"
           maxLength={60}
           placeholder="e.g. Chase"
@@ -129,11 +131,11 @@ export function AccountForm({
 
       <FormField
         label="Balance as of"
-        htmlFor="opening_date"
+        htmlFor={fieldId("opening_date")}
         hint="Transactions dated before this don't count toward the balance."
       >
         <input
-          id="opening_date"
+          id={fieldId("opening_date")}
           name="opening_date"
           type="date"
           required
@@ -153,7 +155,7 @@ export function AccountForm({
               ? `Balance on ${formatDate(openingDate)}`
               : "Balance"
         }
-        htmlFor="opening_balance"
+        htmlFor={fieldId("opening_balance")}
         hint={
           isEdit
             ? "Changing this shifts every balance calculated from it."
@@ -163,7 +165,7 @@ export function AccountForm({
         }
       >
         <Input
-          id="opening_balance"
+          id={fieldId("opening_balance")}
           name="opening_balance"
           type="number"
           step="0.01"

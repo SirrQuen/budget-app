@@ -1,5 +1,18 @@
 import { cloneElement, isValidElement, useId } from "react";
 
+/**
+ * Per-instance field ids for a form that can be on screen more than once
+ * (an inline create form beside an open edit row, or the quick-add overlay
+ * over /transactions). A fixed id="amount" points every <label for> on the
+ * page at whichever field comes first in the DOM, leaving the rest unnamed.
+ * Call once per component: `const fieldId = useFieldId();` then
+ * `htmlFor={fieldId("amount")}` / `id={fieldId("amount")}`.
+ */
+export function useFieldId(): (name: string) => string {
+  const prefix = useId();
+  return (name) => `${prefix}${name}`;
+}
+
 export function FormField({
   label,
   htmlFor,

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { callAction, useActionForm } from "@/components/useActionForm";
 import {
   IDEMPOTENCY_FIELD,
@@ -19,7 +19,7 @@ import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { TransactionType } from "@/lib/db/transactions";
 import { useToday } from "@/components/TodayProvider";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { FormField } from "@/components/ui/FormField";
+import { FormField, useFieldId } from "@/components/ui/FormField";
 import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
@@ -162,12 +162,9 @@ export function AddTransactionForm({
   );
   const [paymentMethod, setPaymentMethod] = useState(initialValues?.payment_method ?? "");
   const [notes, setNotes] = useState(initialValues?.notes ?? "");
-  // Per-instance ids: this form can be on screen twice at once (the inline
-  // form on /transactions and the quick-add Full form overlay), and the
-  // filter bar beside it has its own Category/Account fields. A fixed id
-  // there points every <label for> at whichever field comes first in the DOM.
-  const idPrefix = useId();
-  const fieldId = (name: string) => `${idPrefix}${name}`;
+  // On screen twice at once (inline on /transactions and the Full form
+  // overlay) beside the filter bar's own Category/Account -- see useFieldId.
+  const fieldId = useFieldId();
   const [clientError, setClientError] = useState<string>();
   const [celebrate, setCelebrate] = useState(false);
   const [celebrateMessage, setCelebrateMessage] = useState("Logged");

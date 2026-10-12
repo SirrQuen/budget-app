@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { useActionForm } from "@/components/useActionForm";
 import { createGoalAction, type ActionState } from "@/lib/actions/goals";
 import { GOAL_TYPES } from "@/lib/goalOptions";
-import { FormField } from "@/components/ui/FormField";
+import { FormField, useFieldId } from "@/components/ui/FormField";
 import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
@@ -17,6 +17,8 @@ const fieldClassName = FIELD_CLASS;
 // not something this pass needs.
 export function GoalForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: () => void }) {
   const [state, action, pending, submit] = useActionForm<ActionState>(createGoalAction, undefined);
+  // Create-only today, but fixed ids would collide with any second instance -- see useFieldId.
+  const fieldId = useFieldId();
   const wasPending = useRef(false);
 
   useEffect(() => {
@@ -43,12 +45,12 @@ export function GoalForm({ onSuccess, onCancel }: { onSuccess: () => void; onCan
         </button>
       </div>
 
-      <FormField label="Name" htmlFor="goal_name" required>
-        <Input id="goal_name" name="goal_name" required maxLength={60} placeholder="e.g. Japan trip" />
+      <FormField label="Name" htmlFor={fieldId("goal_name")} required>
+        <Input id={fieldId("goal_name")} name="goal_name" required maxLength={60} placeholder="e.g. Japan trip" />
       </FormField>
 
-      <FormField label="Type" htmlFor="goal_type" required>
-        <select id="goal_type" name="goal_type" required defaultValue="" className={fieldClassName}>
+      <FormField label="Type" htmlFor={fieldId("goal_type")} required>
+        <select id={fieldId("goal_type")} name="goal_type" required defaultValue="" className={fieldClassName}>
           <option value="" disabled>
             Select a type
           </option>
@@ -61,9 +63,9 @@ export function GoalForm({ onSuccess, onCancel }: { onSuccess: () => void; onCan
       </FormField>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="Target amount" htmlFor="target_amount" required>
+        <FormField label="Target amount" htmlFor={fieldId("target_amount")} required>
           <Input
-            id="target_amount"
+            id={fieldId("target_amount")}
             name="target_amount"
             type="number"
             inputMode="decimal"
@@ -74,18 +76,18 @@ export function GoalForm({ onSuccess, onCancel }: { onSuccess: () => void; onCan
           />
         </FormField>
 
-        <FormField label="Target date" htmlFor="target_date" hint="Optional">
-          <input id="target_date" name="target_date" type="date" className={fieldClassName} />
+        <FormField label="Target date" htmlFor={fieldId("target_date")} hint="Optional">
+          <input id={fieldId("target_date")} name="target_date" type="date" className={fieldClassName} />
         </FormField>
       </div>
 
       <FormField
         label="Monthly contribution"
-        htmlFor="monthly_contribution"
+        htmlFor={fieldId("monthly_contribution")}
         hint="Optional -- what you're aiming to put toward it each month."
       >
         <Input
-          id="monthly_contribution"
+          id={fieldId("monthly_contribution")}
           name="monthly_contribution"
           type="number"
           inputMode="decimal"

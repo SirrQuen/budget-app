@@ -8,7 +8,7 @@ import {
   type ActionState,
 } from "@/lib/actions/budgets";
 import type { CategoryWithGroup } from "@/lib/db/categories";
-import { FormField } from "@/components/ui/FormField";
+import { FormField, useFieldId } from "@/components/ui/FormField";
 import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
@@ -60,6 +60,8 @@ export function BudgetForm({
     isEdit ? updateBudgetAction : createBudgetAction,
     undefined,
   );
+  // The create form and any open edit row share a page -- see useFieldId.
+  const fieldId = useFieldId();
   const wasPending = useRef(false);
 
   useEffect(() => {
@@ -92,9 +94,9 @@ export function BudgetForm({
         </button>
       </div>
 
-      <FormField label="Category" htmlFor="categoryid" required>
+      <FormField label="Category" htmlFor={fieldId("categoryid")} required>
         <select
-          id="categoryid"
+          id={fieldId("categoryid")}
           name="categoryid"
           required
           defaultValue={budget?.categoryid ?? ""}
@@ -116,9 +118,9 @@ export function BudgetForm({
       </FormField>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="Month" htmlFor="budget_month" required>
+        <FormField label="Month" htmlFor={fieldId("budget_month")} required>
           <input
-            id="budget_month"
+            id={fieldId("budget_month")}
             name="budget_month"
             type="month"
             required
@@ -127,9 +129,9 @@ export function BudgetForm({
           />
         </FormField>
 
-        <FormField label="Budgeted amount" htmlFor="budget_amount" required>
+        <FormField label="Budgeted amount" htmlFor={fieldId("budget_amount")} required>
           <Input
-            id="budget_amount"
+            id={fieldId("budget_amount")}
             name="budget_amount"
             type="number"
             inputMode="decimal"
