@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { SIGNED_IN_COOKIE, SIGNED_IN_MAX_AGE_S } from "@/lib/auth/signedInFlag";
 import { markSessionStart } from "@/lib/auth/firstSession";
 import { confirmFailure, type ConfirmFailure } from "@/lib/auth/errors";
+import { linkOutcomePath } from "@/lib/auth/linkOutcome";
 import { serviceUnavailable } from "@/lib/supabase/middleware";
 
 // The email-link callback for both signup confirmation and password recovery.
@@ -29,6 +30,11 @@ import { serviceUnavailable } from "@/lib/supabase/middleware";
 // that first hit. So by the time a human clicks a signup link, "token spent"
 // is the normal case and the address is already confirmed — which is success,
 // not failure. Send them to log in with a calm message, never an error page.
+//
+// The same goes for a code link opened in a browser that didn't start the
+// signup — the email read on a phone, in a mail app's own browser. Supabase
+// confirmed the address before issuing the code; only the session can't be
+// opened here. That's the common tester path, and it's success too.
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
 
@@ -51,14 +57,11 @@ export async function GET(request: NextRequest) {
   const isRecovery =
     type === "recovery" || next.startsWith("/reset-password");
 
-  const FAILURE = "/login?error=confirmation_failed";
-  const ALREADY_CONFIRMED = "/login?notice=email_confirmed";
-
   // An outage answers 503 in place rather than redirecting, so a reload
   // retries this same link once the auth server is back.
   const afterFailure = (outcome: ConfirmFailure): Response => {
     if (outcome === "unreachable") return serviceUnavailable();
-    redirect(outcome === "already-confirmed" ? ALREADY_CONFIRMED : FAILURE);
+    redirect(linkOutcomePath(outcome, isRecovery));
   };
 
   const supabase = await createClient();
@@ -91,7 +94,8 @@ export async function GET(request: NextRequest) {
       redirect(next);
     }
     // Spent or expired token. On a signup link that almost always means a
-    // scanner already confirmed the address.
+    // scanner already confirmed the address; on a recovery link it's a dead
+    // end the user must retry.
     return afterFailure(confirmFailure(error, "otp", isRecovery));
   }
 
@@ -104,7 +108,8 @@ export async function GET(request: NextRequest) {
       redirect(next);
     }
 
-    // The verifier-missing cases are explained in confirmFailure.
+    // A missing verifier is a confirmed signup with no session here, or a
+    // reset link opened in the wrong browser -- see confirmFailure.
     return afterFailure(confirmFailure(error, "code", isRecovery));
   }
 
@@ -117,13 +122,19 @@ export async function GET(request: NextRequest) {
     // link the scanner-already-confirmed case dominates, so treat it as done.
     // A user whose link truly expired while still unconfirmed will hit
     // "please confirm your email" when they try to log in and be sent back
-    // to their inbox — still calm, never an alarm.
+    // to their inbox — still calm, never an alarm. A recovery link gets no
+    // such benefit of the doubt: otp_expired is all Supabase tells us, so
+    // that's what the copy says.
     const usedOrExpired =
       errorCode === "otp_expired" || errorCode === "access_denied";
-    if (!isRecovery && usedOrExpired) redirect(ALREADY_CONFIRMED);
-    redirect(FAILURE);
+    if (!isRecovery && usedOrExpired) redirect(linkOutcomePath("confirmed", false));
+    if (isRecovery && errorCode === "otp_expired") {
+      redirect(linkOutcomePath("reset-expired", true));
+    }
+    console.error(`[auth:confirm] verify redirected with error=${errorParam} error_code=${errorCode}`);
+    redirect(linkOutcomePath("failed", isRecovery));
   }
 
   // --- Nothing usable in the URL: a malformed or truncated link ----------
-  redirect(FAILURE);
+  redirect(linkOutcomePath("incomplete", isRecovery));
 }

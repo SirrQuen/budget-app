@@ -58,19 +58,49 @@ for (const link of ["otp", "code"] as const) {
   });
 }
 
-test("confirm: a spent signup link is already confirmed", (t) => {
+test("confirm: a spent signup OTP is confirmed", (t) => {
   silenceAll(t);
   const expired = new AuthApiError("Token has expired or is invalid", 403, "otp_expired");
-  assert.equal(confirmFailure(expired, "otp", false), "already-confirmed");
-  const noVerifier = new AuthApiError("code verifier missing", 400, "bad_code_verifier");
-  assert.equal(confirmFailure(noVerifier, "code", false), "already-confirmed");
+  assert.equal(confirmFailure(expired, "otp", false), "confirmed");
 });
 
-test("confirm: a spent recovery link fails, and is logged", (t) => {
-  const logged = silenceAll(t);
+// The cross-device case: signed up on a laptop, opened the email on a phone.
+// auth-js raises pkce_code_verifier_not_found itself, before any request;
+// GoTrue's codes cover the same case server-side. Supabase confirmed the
+// address before issuing the code, so this is success, never "failed".
+for (const code of [
+  "pkce_code_verifier_not_found",
+  "bad_code_verifier",
+  "flow_state_not_found",
+  "flow_state_expired",
+]) {
+  test(`confirm code ${code}: a signup link is confirmed, not failed`, (t) => {
+    const logged = silenceLog(t);
+    t.mock.method(console, "info", () => {});
+    const noVerifier = new AuthApiError("PKCE code verifier not found in storage", 400, code);
+    assert.equal(confirmFailure(noVerifier, "code", false), "confirmed");
+    assert.deepEqual(logged, [], "a confirmed signup is not an error");
+  });
+
+  test(`confirm code ${code}: a recovery link asks for a new one on this device`, (t) => {
+    silenceAll(t);
+    const noVerifier = new AuthApiError("PKCE code verifier not found in storage", 400, code);
+    assert.equal(confirmFailure(noVerifier, "code", true), "reset-other-browser");
+  });
+}
+
+test("confirm: an expired or spent recovery OTP says exactly that", (t) => {
+  silenceAll(t);
   const expired = new AuthApiError("Token has expired or is invalid", 403, "otp_expired");
-  assert.equal(confirmFailure(expired, "otp", true), "failed");
-  assert.ok(logged.some((line) => line.includes("Token has expired")));
+  assert.equal(confirmFailure(expired, "otp", true), "reset-expired");
+});
+
+test("confirm: any other recovery failure fails, and is logged", (t) => {
+  const logged = silenceAll(t);
+  const odd = new AuthApiError("Something unexpected", 500, "unexpected_failure");
+  assert.equal(confirmFailure(odd, "otp", true), "failed");
+  assert.equal(confirmFailure(odd, "code", true), "failed");
+  assert.ok(logged.some((line) => line.includes("Something unexpected")));
 });
 
 test("confirm: a malformed code fails rather than claiming confirmation", (t) => {

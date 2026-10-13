@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { useActionForm } from "@/components/useActionForm";
-import { requestPasswordReset } from "@/lib/auth/actions";
+import { requestPasswordReset, type ActionState } from "@/lib/auth/actions";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
-export function ForgotPasswordForm() {
-  const [state, action, pending, submit] = useActionForm(requestPasswordReset, undefined);
+export function ForgotPasswordForm({ initialError }: { initialError?: string }) {
+  const [state, action, pending, submit] = useActionForm<ActionState>(
+    requestPasswordReset,
+    initialError ? { error: initialError } : undefined,
+  );
 
   if (state?.success) {
     return <p className="text-sm text-ink-secondary">{state.success}</p>;

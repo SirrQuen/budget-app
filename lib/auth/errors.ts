@@ -45,19 +45,47 @@ export function authErrorMessage(error: AuthError): string {
 
 // What app/auth/confirm/route.ts does when it can't open a session from an
 // email link. `link` is which call failed: "otp" (verifyOtp, our template)
-// or "code" (exchangeCodeForSession, Supabase's default email).
+// or "code" (exchangeCodeForSession, Supabase's default email). Each outcome
+// names only what the route actually knows -- never one failure reported as
+// another (docs/phase-7-findings.md, Section 10).
 //
-//   unreachable        the auth server didn't answer, so we learned nothing
-//                      about the link. Never "already confirmed": that would
-//                      tell someone an unconfirmed address is confirmed.
-//                      The route answers 503 in place, so a reload retries
-//                      the same link.
-//   already-confirmed  a signup link whose token was spent, almost always
-//                      by a mail scanner. Normal, so info, not error.
-//   failed             everything else, including any spent recovery link.
-export type ConfirmFailure = "unreachable" | "already-confirmed" | "failed";
+//   unreachable          the auth server didn't answer, so we learned nothing
+//                        about the link. Never "confirmed": that would tell
+//                        someone an unconfirmed address is confirmed. The
+//                        route answers 503 in place, so a reload retries the
+//                        same link.
+//   confirmed            a signup link Supabase already accepted. This is
+//                        success, not an error -- there is just no session in
+//                        this browser. On a code link the code is the proof:
+//                        /verify issues one only after it sets
+//                        email_confirmed_at, so a missing verifier means only
+//                        that this browser didn't start the signup (signed up
+//                        on a laptop, opened the email on a phone). On an OTP
+//                        link, a spent token is taken to be a mail scanner's
+//                        earlier hit (see the route).
+//   reset-other-browser  a recovery code link opened in a browser that didn't
+//                        request it. The reset form needs a session here, so
+//                        the user requests a new link on this device.
+//   reset-expired        a recovery token Supabase reports as otp_expired --
+//                        its one code for expired-or-used.
+//   failed               anything else. Logged; the copy claims no cause.
+export type ConfirmFailure =
+  | "unreachable"
+  | "confirmed"
+  | "reset-other-browser"
+  | "reset-expired"
+  | "failed";
 
-const VERIFIER_MISSING = new Set(["bad_code_verifier", "flow_state_not_found", "flow_state_expired"]);
+// A code exchange that found no verifier for this browser.
+const VERIFIER_MISSING = new Set([
+  // Raised by auth-js itself, before any request, when the verifier cookie
+  // is absent -- the case every cross-device click hits.
+  "pkce_code_verifier_not_found",
+  // GoTrue's server-side equivalents.
+  "bad_code_verifier",
+  "flow_state_not_found",
+  "flow_state_expired",
+]);
 
 export function confirmFailure(
   error: AuthError,
@@ -69,16 +97,22 @@ export function confirmFailure(
     return "unreachable";
   }
 
-  // On a code link, Supabase's verify endpoint already confirmed the address
-  // before issuing the code; the exchange only failed to open a session
-  // *here*, because the PKCE verifier cookie is missing (another device or
-  // browser, a scanner, a second click).
-  const spent = link === "otp" || VERIFIER_MISSING.has(error.code ?? "");
-  if (!isRecovery && spent) {
-    console.info(`[auth:confirm] ${link} link already used (code ${error.code ?? "none"})`);
-    return "already-confirmed";
+  const code = error.code ?? "none";
+  const verifierMissing = link === "code" && VERIFIER_MISSING.has(code);
+
+  if (!isRecovery && (link === "otp" || verifierMissing)) {
+    console.info(`[auth:confirm] ${link} signup link confirmed, no session here (code ${code})`);
+    return "confirmed";
+  }
+  if (isRecovery && verifierMissing) {
+    console.info(`[auth:confirm] recovery link opened in another browser (code ${code})`);
+    return "reset-other-browser";
+  }
+  if (isRecovery && code === "otp_expired") {
+    console.info(`[auth:confirm] ${link} recovery link expired or used (code ${code})`);
+    return "reset-expired";
   }
 
-  logDbError(`[auth:confirm] ${link} link failed (code ${error.code ?? "none"}):`, error);
+  logDbError(`[auth:confirm] ${link} link failed (code ${code}):`, error);
   return "failed";
 }
