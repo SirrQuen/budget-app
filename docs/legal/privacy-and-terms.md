@@ -12,8 +12,6 @@ Sorrel is currently in beta testing. This policy describes what we do today, not
 
 - Your email address
 - Your first and last name, and a preferred name if you give one
-- Your username
-- Your phone number, if you choose to provide one
 - Your time zone, detected from your browser
 
 **Financial information you enter**
@@ -30,7 +28,7 @@ Sorrel is currently in beta testing. This policy describes what we do today, not
 - Sign-in times and session records
 - Error logs when something goes wrong, which may include the page you were on and what failed
 
-We don't use advertising trackers, analytics pixels, or third-party cookies. The only cookies Sorrel sets are the ones that keep you signed in, support the sign-in process, and remember your theme preference.
+We don't use advertising trackers, analytics pixels, or third-party cookies. The only cookies Sorrel sets are the ones that keep you signed in and support the sign-in process. Your theme and a few display preferences are stored in your browser's local storage, on your device only.
 
 ## Where your information is stored
 
@@ -68,7 +66,7 @@ You can delete your account at any time from Settings. Deletion is immediate and
 
 **What is not deleted:**
 
-- **Security audit records.** Supabase keeps an authentication log recording events such as sign-ins and password changes. That log contains your account's internal identifier. It does not contain your financial data, your name, or anything you entered into Sorrel. We retain it because it is how account security incidents get investigated.
+- **Security audit records.** Supabase keeps an authentication log recording events such as sign-ins and password changes. Depending on the event, an entry may contain your account's internal identifier, your email address and the IP address the request came from. It does not contain your financial data, your name, or anything you entered into Sorrel. We retain it because it is how account security incidents get investigated. Entries are kept for seven days, then removed automatically.
 - **Backup copies**, until the backup they're in expires — at most seven days.
 - **Error logs**, which may reference your account identifier, for a limited period.
 
