@@ -1,8 +1,8 @@
 import { AuthBrandPanel } from "@/components/auth/AuthBrandPanel";
 import { LegalLinks } from "@/components/legal/LegalLinks";
 
-// The first screen a signed-out visitor sees ("/" forwards here), so it
-// carries the legal footer until there is a landing page.
+// Carries the legal footer: a visitor can arrive here directly, without
+// passing through the landing page at "/".
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col md:flex-row">

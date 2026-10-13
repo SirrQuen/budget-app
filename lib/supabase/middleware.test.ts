@@ -107,3 +107,12 @@ test("legal pages: readable signed out and signed in", async (t) => {
     }
   }
 });
+
+test("landing page: signed out sees it, signed in goes to the dashboard", async (t) => {
+  quiet(t);
+  stubFetch(t, respond(200, { id: "user-1", aud: "authenticated" }));
+  assert.equal(passedThrough(await updateSession(request("/", false))), true);
+  const res = await updateSession(request("/", true));
+  assert.equal(res.status, 307);
+  assert.equal(new URL(res.headers.get("location")!).pathname, "/dashboard");
+});

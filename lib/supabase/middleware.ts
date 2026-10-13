@@ -23,8 +23,9 @@ const PUBLIC_PATHS = new Set([
 
 // Paths an authenticated user should be bounced away from. /account-deleted
 // is here too: a signed-in user hitting it directly hasn't deleted anything,
-// and the page would wrongly tell them they had.
-const AUTH_REDIRECT_PATHS = new Set(["/login", "/signup", "/account-deleted"]);
+// and the page would wrongly tell them they had. "/" is the signed-out
+// landing page; it's static, so the signed-in fork to the dashboard lives here.
+const AUTH_REDIRECT_PATHS = new Set(["/", "/login", "/signup", "/account-deleted"]);
 
 function redirectTo(request: NextRequest, pathname: string, supabaseResponse: NextResponse) {
   const url = request.nextUrl.clone();

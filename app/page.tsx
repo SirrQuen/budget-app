@@ -1,10 +1,116 @@
-import { redirect } from "next/navigation";
-import { getUser } from "@/lib/auth/dal";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { SorrelMark } from "@/components/SorrelMark";
+import { Wordmark } from "@/components/Wordmark";
+import { PRIVACY_PATH, TERMS_PATH } from "@/lib/legal";
 
-// "/" is a public path in the proxy (lib/supabase/middleware.ts), so it has to
-// resolve for signed-out visitors too. There's no marketing page yet, so it's
-// purely a fork: straight to the dashboard if there's a session, otherwise to
-// login. Replace this with the landing page when there is one.
-export default async function Home() {
-  redirect((await getUser()) ? "/dashboard" : "/login");
+// What a stranger who types the domain sees. Not a marketing page: no feature
+// list, no screenshots, no funnel -- it says what Sorrel is and gives the legal
+// links a home.
+//
+// Static: nothing here reads a session, so it prerenders at build time. A
+// signed-in visitor never reaches it -- the proxy sends "/" to /dashboard
+// (AUTH_REDIRECT_PATHS in lib/supabase/middleware.ts).
+export const metadata: Metadata = {
+  title: "Sorrel · Know what's safe to spend",
+  description:
+    "Sorrel looks ahead at the money coming in and the bills going out, and tells you what you can spend without going under.",
+};
+
+const FOCUS =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page";
+
+const BUTTON = `inline-flex min-h-11 items-center justify-center rounded-full px-5 py-2 text-sm font-semibold transition-all duration-150 ease-out hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.97] motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100 ${FOCUS}`;
+
+const FOOTER_LINK = `rounded transition-colors duration-150 hover:text-ink hover:underline underline-offset-2 ${FOCUS}`;
+
+export default function Home() {
+  return (
+    <div className="flex min-h-dvh flex-col">
+      <main className="flex flex-1 items-center px-4 py-12 sm:px-6 sm:py-20">
+        <div className="mx-auto w-full max-w-xl">
+          <div className="flex items-center gap-3">
+            {/* The wordmark beside it names the brand; the mark's label would repeat it. */}
+            <span aria-hidden="true">
+              <SorrelMark size={48} className="h-12 w-12" />
+            </span>
+            <div>
+              <p className="text-2xl font-semibold tracking-tight text-ink">
+                <Wordmark tm />
+              </p>
+              <p className="text-sm text-ink-secondary">Built to Grow Through Any Season</p>
+            </div>
+          </div>
+
+          <h1 className="mt-12 text-4xl font-bold tracking-tight text-balance text-ink sm:text-5xl">
+            Know what&rsquo;s safe to spend
+          </h1>
+
+          <div className="mt-6 space-y-4 text-lg leading-relaxed text-ink-secondary">
+            <p>
+              Sorrel looks ahead at the money coming in and the bills going out, finds the
+              lowest point your balance will reach, and tells you what you can spend without
+              going under.
+            </p>
+            <p>
+              Most budgeting apps tell you what you&rsquo;ve spent. Sorrel tells you
+              what&rsquo;s coming.
+            </p>
+          </div>
+
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              href="/login"
+              className={`${BUTTON} bg-action text-action-ink hover:bg-action-hover active:bg-action-pressed`}
+            >
+              Sign in
+            </Link>
+            <Link
+              href="/signup"
+              className={`${BUTTON} border border-field-border text-ink hover:bg-surface-raised`}
+            >
+              Create account
+            </Link>
+          </div>
+
+          <section
+            aria-label="Private beta"
+            className="mt-12 rounded-xl border border-hairline bg-surface p-5 text-sm leading-relaxed text-ink-secondary"
+          >
+            <p>
+              Sorrel is in private beta. It&rsquo;s being tested by a small group before
+              opening more widely. If you don&rsquo;t have an invitation, there&rsquo;s
+              nothing to sign up for yet &mdash; but you&rsquo;re welcome to come back.
+            </p>
+          </section>
+        </div>
+      </main>
+
+      <footer className="border-t border-hairline">
+        <div className="mx-auto w-full max-w-xl px-4 py-6 sm:px-6">
+          <ul className="flex flex-wrap items-center gap-x-2 gap-y-2 text-sm text-ink-muted">
+            <li>
+              <Link href={PRIVACY_PATH} className={FOOTER_LINK}>
+                Privacy
+              </Link>
+            </li>
+            <li aria-hidden="true">·</li>
+            <li>
+              <Link href={TERMS_PATH} className={FOOTER_LINK}>
+                Terms
+              </Link>
+            </li>
+            <li aria-hidden="true">·</li>
+            <li>
+              <a href="mailto:hello@mysorrel.com" className={`${FOOTER_LINK} break-all`}>
+                hello@mysorrel.com
+              </a>
+            </li>
+            <li aria-hidden="true">·</li>
+            <li>&copy; 2026 MW Cyber Architects LLC</li>
+          </ul>
+        </div>
+      </footer>
+    </div>
+  );
 }
