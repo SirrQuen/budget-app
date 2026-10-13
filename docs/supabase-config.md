@@ -59,8 +59,10 @@ dashboard (Authentication / Settings), then keep this file current.
 - **Email templates** -- TODO. Supabase's defaults are in use;
   `supabase/templates/confirmation.html` is the custom template, not yet
   applied (it needs custom SMTP first).
-- **SMTP** -- default Supabase mailer. Custom SMTP on mysorrel.com with
-  SPF/DKIM/DMARC is launch blocker 5.
+- **SMTP** -- custom SMTP via Resend (`smtp.resend.com:465`, user
+  `resend`), sender "Sorrel" <hello@mysorrel.com>. Read from production
+  2026-10-12. SPF/DKIM/DMARC on mysorrel.com not yet verified here --
+  launch blocker 5 until they are.
 - **Rate limits** (emails/hour, sign-ups, token refreshes, verifications)
   -- TODO.
 - **Providers enabled** -- TODO (the app uses email + password only).
