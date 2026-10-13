@@ -9,6 +9,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { PRIVACY_PATH, TERMS_PATH } from "@/lib/legal";
 import { NAME_MAX, PREFERRED_NAME_MAX } from "@/lib/displayName";
 import {
   PASSWORD_RULES,
@@ -16,6 +17,11 @@ import {
   type SignupField,
   type SignupValues,
 } from "@/lib/signupValidation";
+
+// Underlined at rest: these sit inside a sentence, so colour alone
+// wouldn't mark them as links.
+const NOTICE_LINK =
+  "rounded text-ink underline underline-offset-2 transition-colors duration-150 hover:text-action focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 
 const EMPTY: SignupValues = {
   email: "",
@@ -146,7 +152,21 @@ export function SignupForm() {
         <ErrorMessage message={serverResult.error} />
       ) : null}
 
-      <Button type="submit" disabled={pending} className="mt-2 w-full">
+      {/* Notice, not a checkbox: creating the account is the agreement.
+          New tab, so following a link never costs the half-filled form. */}
+      <p className="mt-2 text-sm text-ink-secondary">
+        By creating an account you agree to our{" "}
+        <Link href={TERMS_PATH} target="_blank" className={NOTICE_LINK}>
+          Terms<span className="sr-only"> (opens in a new tab)</span>
+        </Link>{" "}
+        and{" "}
+        <Link href={PRIVACY_PATH} target="_blank" className={NOTICE_LINK}>
+          Privacy Policy<span className="sr-only"> (opens in a new tab)</span>
+        </Link>
+        .
+      </p>
+
+      <Button type="submit" disabled={pending} className="w-full">
         {pending ? "Creating account…" : "Create account"}
       </Button>
 

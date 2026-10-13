@@ -96,3 +96,14 @@ test("no session cookie: redirect to /login without asking the auth server", asy
   assert.equal(new URL(res.headers.get("location")!).pathname, "/login");
   assert.equal(fetch.mock.callCount(), 0);
 });
+
+test("legal pages: readable signed out and signed in", async (t) => {
+  quiet(t);
+  stubFetch(t, respond(200, { id: "user-1", aud: "authenticated" }));
+  for (const pathname of ["/privacy", "/terms"]) {
+    for (const signedIn of [false, true]) {
+      const res = await updateSession(request(pathname, signedIn));
+      assert.equal(passedThrough(res), true, `${pathname}, signed ${signedIn ? "in" : "out"}`);
+    }
+  }
+});

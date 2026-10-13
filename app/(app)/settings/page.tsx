@@ -10,6 +10,7 @@ import { SafeToSpendWindowToggle } from "./SafeToSpendWindowToggle";
 import { SafeToSpendCushionForm } from "./SafeToSpendCushionForm";
 import { ProfileForm } from "./ProfileForm";
 import { Wordmark } from "@/components/Wordmark";
+import { PRIVACY_PATH, TERMS_PATH } from "@/lib/legal";
 import pkg from "@/package.json";
 
 const INLINE_LINK =
@@ -175,17 +176,15 @@ export default async function SettingsPage() {
         </p>
 
         <ul className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-ink-secondary">
-          {/* TODO(launch blocker): point these at the real Privacy Policy and
-              Terms of Service once they exist. "#" is a placeholder. */}
           <li>
-            <a href="#" className={LEGAL_LINK}>
+            <Link href={PRIVACY_PATH} className={LEGAL_LINK}>
               Privacy Policy
-            </a>
+            </Link>
           </li>
           <li>
-            <a href="#" className={LEGAL_LINK}>
+            <Link href={TERMS_PATH} className={LEGAL_LINK}>
               Terms of Service
-            </a>
+            </Link>
           </li>
         </ul>
       </section>

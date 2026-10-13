@@ -16,6 +16,9 @@ const PUBLIC_PATHS = new Set([
   // The post-deletion confirmation. Reached right after the account (and its
   // session) is gone, so it has to be public.
   "/account-deleted",
+  // The legal documents (app/(public)/), readable before signing up.
+  "/privacy",
+  "/terms",
 ]);
 
 // Paths an authenticated user should be bounced away from. /account-deleted
