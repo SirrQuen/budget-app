@@ -10,8 +10,8 @@ Production project: `ybdwqyihvbokowocvlgq`.
 
 Status: draft, 2026-10-08. Sections 1 and 2 were read from production
 (read-only catalog queries via `supabase db query --linked`). Section 3
-cannot be read from the database; its values are still to be recorded
-from the dashboard -- every `TODO` there is unverified.
+cannot be read from the database; values there are recorded from the
+dashboard with the date read, and every `TODO` is still unverified.
 
 ## 1. Outside the `public` dump, carried into the baseline explicitly
 
@@ -49,16 +49,26 @@ dashboard (Authentication / Settings), then keep this file current.
 
 ### Auth
 
-- **Site URL** -- TODO.
-- **Redirect URL allowlist** -- TODO. Must allow `<origin>/auth/confirm`:
-  signup sends `emailRedirectTo: ${origin}/auth/confirm?next=/dashboard`
-  (`lib/auth/actions.ts`), and password recovery lands on the same route
-  with `next=/reset-password` (`app/auth/confirm/route.ts`). Every
-  deployed origin (production, previews, localhost) needs an entry.
+- **Site URL** -- `https://mysorrel.com` (set 2026-10-13). The confirm-signup
+  template builds its link from `{{ .SiteURL }}`, so every confirmation
+  email -- localhost signups included -- links to production.
+- **Redirect URL allowlist** -- `https://mysorrel.com/**`,
+  `http://localhost:3000/**` (set 2026-10-13). Must cover
+  `<origin>/auth/confirm`: signup sends
+  `emailRedirectTo: ${origin}/auth/confirm?next=/dashboard`
+  (`lib/auth/signup.ts`), and password recovery sends
+  `redirectTo: ${origin}/auth/confirm?next=/reset-password`
+  (`lib/auth/actions.ts`). `origin` is the request's Origin header, so any
+  other deployed origin (a preview) needs its own entry.
 - **Confirm email** (required before sign-in?) -- TODO.
-- **Email templates** -- TODO. Supabase's defaults are in use;
-  `supabase/templates/confirmation.html` is the custom template, not yet
-  applied (it needs custom SMTP first).
+- **Email templates** -- managed in the dashboard, pasted by hand from
+  `supabase/templates/`. Supabase never reads that directory (no
+  `config.toml`; `supabase config push` is never run). Edit the repo file,
+  paste it into the dashboard, keep the two identical.
+  - Confirm signup: custom, `supabase/templates/confirmation.html`
+    (2026-10-13). Link is `token_hash` + `type=email` to `/auth/confirm`.
+  - Every other template (reset password, magic link, email change,
+    invite): TODO -- record whether each is default or custom.
 - **SMTP** -- custom SMTP via Resend (`smtp.resend.com:465`, user
   `resend`), sender "Sorrel" <hello@mysorrel.com>. Read from production
   2026-10-12. SPF/DKIM/DMARC on mysorrel.com not yet verified here --

@@ -324,6 +324,10 @@ check anything taken from it against the migrations. The contract:
 2. `npx supabase@latest gen types --linked --lang typescript --schema public > lib/database.types.ts`
 3. Commit both together
 
+**Never run `supabase config push`.** It overwrites remote auth settings not
+represented locally. Auth configuration lives in the Supabase dashboard and is
+recorded in docs/supabase-config.md.
+
 ## Data layer rules
 
 - All database access goes through `lib/db/*.ts`. Pages and components never

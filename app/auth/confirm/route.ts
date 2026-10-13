@@ -13,17 +13,19 @@ import { serviceUnavailable } from "@/lib/supabase/middleware";
 //
 // Two link shapes land here, and this route handles both:
 //
-//  1. Supabase's DEFAULT confirmation email — what we send until custom SMTP
-//     is configured. Its link points at Supabase's own /auth/v1/verify
+//  1. A {{ .ConfirmationURL }} link, as in Supabase's DEFAULT confirmation
+//     email. It points at Supabase's own /auth/v1/verify
 //     endpoint, which confirms the address server-side and 302s back here
 //     with `?code=<uuid>` (PKCE flow). If that token was already spent it
 //     instead bounces back with `?error=access_denied&error_code=otp_expired`
 //     and no code. We trade the code for a session with
 //     exchangeCodeForSession().
 //
-//  2. Our custom template (supabase/templates/confirmation.html), which goes
-//     live once custom SMTP is set up. It links straight here with
-//     `?token_hash=<hash>&type=email`, handed to verifyOtp().
+//  2. Our custom template -- live in the dashboard, copied in
+//     supabase/templates/confirmation.html. It links straight here with
+//     `?token_hash=<hash>&type=email`, handed to verifyOtp(), which works
+//     in any browser. This is the signup path in production; shape 1 is
+//     kept for links sent before the switch and any default template.
 //
 // Link scanners (Gmail, Outlook Safe Links, corporate mail proxies) fetch
 // every URL in an email before the recipient sees it, spending the token on
