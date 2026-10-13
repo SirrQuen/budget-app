@@ -54,6 +54,9 @@ export function SignupForm() {
   const [touched, setTouched] = useState<Partial<Record<SignupField, boolean>>>({});
   // The server result whose field error the user has since edited away.
   const [dismissed, setDismissed] = useState<SignupActionState>(undefined);
+  // Private beta. Judged only by the server (lib/auth/inviteCode.ts), so
+  // it has no client-side rule; this is just the value and its server error.
+  const [inviteCode, setInviteCode] = useState("");
 
   if (state?.success) {
     return <p className="text-sm text-ink-secondary">{state.success}</p>;
@@ -95,6 +98,29 @@ export function SignupForm() {
 
   return (
     <form action={action} onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+      {/* First, so someone without a code finds out before typing the rest. */}
+      <FormField
+        label="Invite code"
+        htmlFor="inviteCode"
+        hint="Sorrel is in private beta. You'll have received a code with your invitation."
+        error={serverResult?.field === "inviteCode" ? serverResult.error : undefined}
+        required
+      >
+        <Input
+          id="inviteCode"
+          name="inviteCode"
+          value={inviteCode}
+          onChange={(e) => {
+            setInviteCode(e.target.value);
+            if (serverResult?.field === "inviteCode") setDismissed(serverResult);
+          }}
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          required
+        />
+      </FormField>
+
       <FormField label="Email" htmlFor="email" error={errorFor("email")} required>
         <Input {...bind("email")} type="email" autoComplete="email" required />
       </FormField>

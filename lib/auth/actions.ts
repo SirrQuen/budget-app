@@ -7,8 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { authErrorMessage } from "@/lib/auth/errors";
 import { SIGNED_IN_COOKIE, SIGNED_IN_MAX_AGE_S } from "@/lib/auth/signedInFlag";
 import { markSessionStart, clearSessionStart } from "@/lib/auth/firstSession";
-import { clean } from "@/lib/displayName";
-import { validateSignup, type SignupField, type SignupValues } from "@/lib/signupValidation";
+import { createAccount, type SignupActionState } from "@/lib/auth/signup";
 
 export type ActionState = { error?: string; success?: string } | undefined;
 
@@ -44,69 +43,18 @@ export async function login(
   redirect("/dashboard");
 }
 
-export type SignupActionState =
-  | { error?: string; field?: SignupField; success?: string }
-  | undefined;
+export type { SignupActionState } from "@/lib/auth/signup";
 
-// Collects everything a new account needs, so nobody finishes setup in
-// Settings: email, password, first name (required), last name and nickname
-// (optional). Nothing else -- every extra field is data we'd then hold.
-//
-// The form validates the same rules inline (lib/signupValidation.ts); this is
-// the authoritative pass, and the one a no-JS submit gets.
+// The work is createAccount() (lib/auth/signup.ts), which checks the invite
+// code before it asks for a Supabase client.
 export async function signup(
   _prevState: SignupActionState,
   formData: FormData,
 ): Promise<SignupActionState> {
-  const values: SignupValues = {
-    email: String(formData.get("email") ?? ""),
-    firstName: String(formData.get("firstName") ?? ""),
-    lastName: String(formData.get("lastName") ?? ""),
-    preferredName: String(formData.get("preferredName") ?? ""),
-    password: String(formData.get("password") ?? ""),
-    confirmPassword: String(formData.get("confirmPassword") ?? ""),
-  };
-
-  const errors = validateSignup(values);
-  const firstInvalid = (Object.keys(errors) as SignupField[]).find((field) => errors[field]);
-  if (firstInvalid) {
-    return { field: firstInvalid, error: errors[firstInvalid]! };
-  }
-
-  const email = clean(values.email)!;
-  const firstName = clean(values.firstName)!;
-  const lastName = clean(values.lastName);
-  const preferredName = clean(values.preferredName);
-
-  const supabase = await createClient();
-  const origin = (await headers()).get("origin");
-
-  const { error } = await supabase.auth.signUp({
-    email,
-    password: values.password,
-    options: {
-      emailRedirectTo: `${origin}/auth/confirm?next=/dashboard`,
-      // Read by handle_new_user() (migration 34), which already maps these
-      // keys -- no trigger change. Optional keys are omitted when blank: the
-      // trigger stores a missing last_name as '' and preferred_name as null.
-      data: {
-        first_name: firstName,
-        ...(lastName ? { last_name: lastName } : {}),
-        ...(preferredName ? { preferred_name: preferredName } : {}),
-      },
-    },
-  });
-
-  if (error) {
-    return {
-      error: authErrorMessage(error),
-      ...(error.code === "weak_password" ? { field: "password" as const } : {}),
-    };
-  }
-
-  return {
-    success: "Check your email to confirm your account before logging in.",
-  };
+  return createAccount(formData, async () => ({
+    auth: (await createClient()).auth,
+    origin: (await headers()).get("origin"),
+  }));
 }
 
 export async function requestPasswordReset(
