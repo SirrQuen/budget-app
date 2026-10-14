@@ -5,6 +5,10 @@
   (CLAUDE.md). It ships by hand -- edit here, paste into the dashboard, and
   keep the two identical. Recorded in docs/supabase-config.md.
 
+  This file is the source. Paste it INTO the dashboard. Never copy the
+  dashboard back over this file -- that silently reverts decisions, as
+  happened on 2026-10-13.
+
   Subject: Confirm your email for Sorrel
 
   The link is {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email,
@@ -37,7 +41,7 @@
   </p>
 
   <p style="margin:0;font-size:14px;color:#4a4a58;">
-    If you didn't sign up for Sorrel, you can ignore this email — no account will be created.
+    If you didn't sign up for Sorrel, you can safely ignore this email. Without confirmation, the address can't be used to sign in.
   </p>
 
 </div>
