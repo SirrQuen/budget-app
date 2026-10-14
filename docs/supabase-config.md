@@ -60,7 +60,9 @@ dashboard (Authentication / Settings), then keep this file current.
   `redirectTo: ${origin}/auth/confirm?next=/reset-password`
   (`lib/auth/actions.ts`). `origin` is the request's Origin header, so any
   other deployed origin (a preview) needs its own entry.
-- **Confirm email** (required before sign-in?) -- TODO.
+- **Confirm email** -- on (read 2026-10-13). An unconfirmed address can't
+  sign in; login gets `email_not_confirmed` (`lib/auth/errors.ts`). The
+  confirm-signup template's last line depends on this staying on.
 - **Email templates** -- managed in the dashboard, pasted by hand from
   `supabase/templates/`. Supabase never reads that directory (no
   `config.toml`; `supabase config push` is never run). Edit the repo file,
