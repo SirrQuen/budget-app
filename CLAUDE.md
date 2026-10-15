@@ -272,6 +272,12 @@ Warning and serious always ship with icon + label.
 Its own git repo — `supabase/migrations/` and `lib/database.types.ts` live
 here directly. `git log`/`git status` reflect this repo only.
 
+## Shipping
+
+Work is not shipped until it is on main and main has deployed. One branch
+per batch, merged to main when that batch's verification passes. Never
+accumulate more than one batch on a branch.
+
 ## Backend contract
 
 The migrations in `supabase/migrations/` and `lib/database.types.ts` are the
