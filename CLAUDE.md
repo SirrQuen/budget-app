@@ -17,6 +17,53 @@ over `lib/**/*.test.ts`, `app/**/*.test.tsx`, `components/**/*.test.tsx` and
 `postcss/**/*.test.ts`.
 These tests are pure: no database connection.
 
+## Environments — read before any database or deploy command
+
+Projects are identified by REF, not by name. Names can be changed in the
+dashboard; refs cannot. Always report the ref.
+
+| | Name | Ref | Used by |
+|---|---|---|---|
+| Production | `sorrel-prod` | `ybdwqyihvbokowocvlgq` | mysorrel.com. Real user data. |
+| Development | `sorrel-dev` | NOT YET CREATED | localhost, once it exists |
+
+**Until `sorrel-dev` exists there is one database, it is production, and the
+CLI is linked to it. Treat every database command as a production command.**
+
+### Before every `supabase db push`
+
+Run `supabase projects list` and state which project is linked, by ref, in
+your reply, before running the push. Every single time, including when you
+ran it ten minutes ago. The CLI's link is one global setting that persists
+between sessions — the link from last week is the link today.
+
+### Never run these
+
+- `supabase db reset --linked` — destroys the remote database.
+- `supabase config push` — overwrites remote auth settings that are not
+  represented locally.
+
+Ask me to do it in the dashboard instead.
+
+### Before any destructive migration against production
+
+Take a `pg_dump` backup first. Dumps live in `..\sorrel-backups\`, outside
+the repo. They contain financial records and password hashes — never commit
+one, never read one into context.
+
+### .env.local
+
+Today it points at production, because there is nowhere else to point. That
+is expected.
+
+Once `sorrel-dev` exists, `.env.local` must point at dev. From that moment,
+finding it on production is a stop condition — tell me, don't work around it.
+
+### Secrets
+
+Never print, echo, or read the value of a secret key, database password, or
+access token. Matt enters those himself.
+
 ## Rules
 
 - Every table holding user data must have Row Level Security enabled, with a
@@ -274,9 +321,19 @@ here directly. `git log`/`git status` reflect this repo only.
 
 ## Shipping
 
-Work is not shipped until it is on main and main has deployed. One branch
-per batch, merged to main when that batch's verification passes. Never
-accumulate more than one batch on a branch.
+Work is not shipped until it is on `main` and `main` has deployed. Vercel
+builds `main` to mysorrel.com. One branch per batch, merged when that
+batch's verification passes. Never accumulate more than one batch on a
+branch.
+
+## A page render never writes
+
+Rendering a page must not create, update, or delete rows. Phase 7 found
+three instances: recurring catch-up (`generateDueOccurrences()`) and
+`record_login()`, both still called from `app/(app)/layout.tsx` and the
+dashboard and to be removed, and a third the streak rebuild nearly added,
+caught before it shipped. If a feature seems to need a write during render,
+say so and stop — don't add it.
 
 ## Backend contract
 
