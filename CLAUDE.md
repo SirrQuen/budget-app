@@ -223,9 +223,10 @@ data contexts.
 - Every animation respects `prefers-reduced-motion`.
 - Motion uses one signature: the curve in `--icon-anim-ease` (globals.css),
   shared by the nav icon verbs and the dashboard flower's fold. Durations
-  differ by job; the curve never does. The brand mark itself is static. A `var()` easing inside
-  `@keyframes` is fine to write -- `postcss/inline-keyframe-easing.cjs`
-  inlines it, because Chrome would otherwise run it linear.
+  differ by job; the curve never does. The brand mark itself is static.
+  A `var()` easing inside `@keyframes` is fine to write --
+  `postcss/inline-keyframe-easing.cjs` inlines it, because Chrome would
+  otherwise run it linear.
 - When a shape has rotational symmetry, end a rotation on a multiple of
   it, so the reset to rest is invisible (the gear turns 45deg, not 60deg).
 - A nav icon whose shape can't carry its verb gets the shared fallback,
