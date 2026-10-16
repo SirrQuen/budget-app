@@ -1216,6 +1216,23 @@ they do now.
 4. Regenerate `lib/database.types.ts` after each migration, and run
    `docs/rls-isolation-test.sql`.
 
+## Net-worth sparkline before an anchor: limited by the data, not a bug (2026-10-16)
+
+`getNetWorthStat()` (`lib/db/dashboard.ts`) back-casts: each earlier
+month-end is today's net worth minus the cashflow that landed since,
+including transactions dated before an account's anchor, which the
+balance never counts. That is consistent with the anchor model, not a
+double count: a pre-anchor transaction is excluded because the anchor
+figure already contains it, so the balance *before* it really was the
+figure minus its effect.
+
+The assumption is that the pre-anchor transactions are a complete record,
+and the anchor exists because they usually aren't. A user who backdates a
+few transactions before their anchor gets a sparkline shaped only by
+those few; everything they didn't log is flat. Left as is (decided
+2026-10-16). Don't re-open it as a bug without a case where the model
+itself is wrong.
+
 ## Temporary code that must not ship
 
 | Path | Purpose | Added | Status |

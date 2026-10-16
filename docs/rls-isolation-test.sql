@@ -847,8 +847,24 @@ begin
       ('public.delete_own_account()',                            'authenticated', true),
       ('public.spendable_cash_balance()',                        'anon',          false),
       ('public.spendable_cash_balance()',                        'authenticated', true),
+      -- The balance anchor rule and its readers (migration 48), and the
+      -- Accounts page subtotals (49). Signed-in only.
+      ('public.anchor_includes(date,timestamptz,date,timestamptz)', 'anon',       false),
+      ('public.anchor_includes(date,timestamptz,date,timestamptz)', 'authenticated', true),
+      ('public.counts_toward_balance(public.transactions)',      'anon',          false),
+      ('public.counts_toward_balance(public.transactions)',      'authenticated', true),
+      ('public.counts_toward_balance_preview(uuid,date,uuid)',   'anon',          false),
+      ('public.counts_toward_balance_preview(uuid,date,uuid)',   'authenticated', true),
+      ('public.account_type_subtotals(boolean)',                 'anon',          false),
+      ('public.account_type_subtotals(boolean)',                 'authenticated', true),
       -- Trigger functions: closed in migration 36 so nobody has to
-      -- re-reason about them.
+      -- re-reason about them. 48's are closed the same way.
+      ('public.lock_transaction_created_at()',                   'anon',          false),
+      ('public.lock_transaction_created_at()',                   'authenticated', false),
+      ('public.lock_account_opening_set_at()',                   'anon',          false),
+      ('public.lock_account_opening_set_at()',                   'authenticated', false),
+      ('public.stamp_account_opening_set_at()',                  'anon',          false),
+      ('public.stamp_account_opening_set_at()',                  'authenticated', false),
       ('public.handle_new_user()',                               'anon',          false),
       ('public.handle_new_user()',                               'authenticated', false),
       ('public.enforce_category_type()',                         'anon',          false),

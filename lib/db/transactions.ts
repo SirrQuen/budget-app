@@ -15,6 +15,12 @@ export type TransactionWithRelations = TransactionRow & {
   account_name: string | null;
 };
 
+// The edit page's read: the row plus whether it counts toward its
+// account's balance, answered in SQL (counts_toward_balance, migration 48).
+export type TransactionForEdit = TransactionWithRelations & {
+  counts_toward_balance: boolean | null;
+};
+
 export type DbResult<T> = { data: T; error: null } | { data: null; error: string };
 
 export const TRANSACTIONS_PAGE_SIZE = 50;
@@ -216,21 +222,24 @@ export async function getTransactionCount(): Promise<DbResult<number>> {
 // legitimate here, so .maybeSingle() -- an error is a real load failure.
 export async function getTransaction(
   id: string,
-): Promise<DbResult<TransactionWithRelations | null>> {
+): Promise<DbResult<TransactionForEdit | null>> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("transactions")
-    .select(TRANSACTION_SELECT)
+    .select(`${TRANSACTION_SELECT}, counts_toward_balance`)
     .eq("id", id)
     .maybeSingle()
-    .returns<RawTransactionRow | null>();
+    .returns<(RawTransactionRow & { counts_toward_balance: boolean | null }) | null>();
 
   if (error) {
     return { data: null, error: describeReadError(error, "transaction") };
   }
 
-  return { data: data ? flatten(data) : null, error: null };
+  return {
+    data: data ? { ...flatten(data), counts_toward_balance: data.counts_toward_balance } : null,
+    error: null,
+  };
 }
 
 export type CreateTransactionInput = Omit<
@@ -679,4 +688,29 @@ export async function getMostRecentTransactionAccountId(): Promise<DbResult<stri
   }
 
   return { data: data?.accountid ?? null, error: null };
+}
+
+// Would a transaction on this account and date count toward the account's
+// balance? The anchor rule's answer for values the user is still choosing
+// (counts_toward_balance_preview, migration 48). transactionId names the
+// transaction being edited -- its own recorded time decides; null means a
+// new one, recorded now. data is null when the account isn't visible.
+export async function countsTowardBalancePreview(
+  accountId: string,
+  transactionDate: string,
+  transactionId: string | null,
+): Promise<DbResult<boolean | null>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("counts_toward_balance_preview", {
+    p_accountid: accountId,
+    p_transaction_date: transactionDate,
+    p_transaction_id: transactionId ?? undefined,
+  });
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "transaction") };
+  }
+
+  return { data, error: null };
 }

@@ -59,6 +59,14 @@ export function AccountForm({
   // day was just cleared) -- only format it into the label once it's a
   // complete date, so the label never shows a stale or blank date fragment.
   const openingDateIsComplete = /^\d{4}-\d{2}-\d{2}$/.test(openingDate);
+  // An edit posts the balance and its date only once the user changes
+  // one of them -- the database re-stamps the anchor's time whenever they
+  // arrive (migration 48), so a rename must not send them. A type change
+  // across asset/liability flips the stored sign, so it posts them too.
+  const [anchorTouched, setAnchorTouched] = useState(false);
+  const signFlipped =
+    isEdit && isLiabilityAccountType(account.account_type ?? "") !== isLiability;
+  const postAnchor = !isEdit || anchorTouched || signFlipped;
 
   useEffect(() => {
     if (wasPending.current && !pending && !state?.error) {
@@ -136,11 +144,14 @@ export function AccountForm({
       >
         <input
           id={fieldId("opening_date")}
-          name="opening_date"
+          name={postAnchor ? "opening_date" : undefined}
           type="date"
           required
           value={openingDate}
-          onChange={(e) => setOpeningDate(e.target.value)}
+          onChange={(e) => {
+            setOpeningDate(e.target.value);
+            setAnchorTouched(true);
+          }}
           className={FIELD_CLASS}
         />
       </FormField>
@@ -166,13 +177,14 @@ export function AccountForm({
       >
         <Input
           id={fieldId("opening_balance")}
-          name="opening_balance"
+          name={postAnchor ? "opening_balance" : undefined}
           type="number"
           step="0.01"
           min={isLiability ? 0 : undefined}
           inputMode="decimal"
           placeholder="0.00"
           defaultValue={initialOpeningBalance}
+          onChange={() => setAnchorTouched(true)}
         />
       </FormField>
 

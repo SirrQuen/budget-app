@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.18"
   }
   public: {
     Tables: {
@@ -26,6 +26,7 @@ export type Database = {
           is_active: boolean
           opening_balance: number
           opening_date: string
+          opening_set_at: string
           updated_at: string
           userid: string
         }
@@ -40,6 +41,7 @@ export type Database = {
           is_active?: boolean
           opening_balance?: number
           opening_date?: string
+          opening_set_at?: string
           updated_at?: string
           userid: string
         }
@@ -54,6 +56,7 @@ export type Database = {
           is_active?: boolean
           opening_balance?: number
           opening_date?: string
+          opening_set_at?: string
           updated_at?: string
           userid?: string
         }
@@ -1254,9 +1257,25 @@ export type Database = {
       }
     }
     Functions: {
+      account_type_subtotals: {
+        Args: { p_include_archived: boolean }
+        Returns: {
+          account_type: string
+          subtotal: number
+        }[]
+      }
       add_business_days: {
         Args: { anchor: string; n: number }
         Returns: string
+      }
+      anchor_includes: {
+        Args: {
+          p_anchor_date: string
+          p_anchor_set_at: string
+          p_recorded_at: string
+          p_transaction_date: string
+        }
+        Returns: boolean
       }
       apply_user_timezone: { Args: never; Returns: undefined }
       category_spend_between: {
@@ -1269,6 +1288,18 @@ export type Database = {
           group_sort_order: number
           total_spend: number
         }[]
+      }
+      counts_toward_balance: {
+        Args: { t: Database["public"]["Tables"]["transactions"]["Row"] }
+        Returns: boolean
+      }
+      counts_toward_balance_preview: {
+        Args: {
+          p_accountid: string
+          p_transaction_date: string
+          p_transaction_id?: string
+        }
+        Returns: boolean
       }
       delete_own_account: { Args: never; Returns: undefined }
       email_for_username: { Args: { p_username: string }; Returns: string }
