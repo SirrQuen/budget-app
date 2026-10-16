@@ -221,8 +221,9 @@ data contexts.
 - Meters: fill carries severity (accent -> warning, never red); the unfilled
   track is a lighter step of the same hue, so state reads across the whole bar.
 - Every animation respects `prefers-reduced-motion`.
-- Motion uses one signature: the Sorrel mark's fold curve, via the
-  `--icon-anim-*` tokens in globals.css. A `var()` easing inside
+- Motion uses one signature: the curve in `--icon-anim-ease` (globals.css),
+  shared by the nav icon verbs and the dashboard flower's fold. Durations
+  differ by job; the curve never does. The brand mark itself is static. A `var()` easing inside
   `@keyframes` is fine to write -- `postcss/inline-keyframe-easing.cjs`
   inlines it, because Chrome would otherwise run it linear.
 - When a shape has rotational symmetry, end a rotation on a multiple of
