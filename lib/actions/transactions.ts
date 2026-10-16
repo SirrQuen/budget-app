@@ -11,6 +11,7 @@ import {
   bulkDeleteTransactions,
   getTransactionCount,
   suggestCategoryForMerchant,
+  countsTowardBalancePreview,
   type CreateTransactionInput,
   type CreateTransferInput,
   type TransactionType,
@@ -155,6 +156,22 @@ export async function suggestCategoryAction(
   transactionType: TransactionType,
 ): Promise<MerchantCategorySuggestion | null> {
   const result = await suggestCategoryForMerchant(merchant, transactionType);
+  return result.data;
+}
+
+// Also a lookup, not a mutation: the transaction form's "won't change
+// that balance" note asks this whenever the account or date changes. null
+// when it can't be answered -- the note is advisory, so it stays hidden
+// rather than guessing.
+export async function countsTowardBalanceAction(
+  accountId: string,
+  transactionDate: string,
+  transactionId: string | null,
+): Promise<boolean | null> {
+  if (!accountId || !/^\d{4}-\d{2}-\d{2}$/.test(transactionDate)) {
+    return null;
+  }
+  const result = await countsTowardBalancePreview(accountId, transactionDate, transactionId);
   return result.data;
 }
 

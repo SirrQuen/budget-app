@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { callAction, useActionForm } from "@/components/useActionForm";
 import {
   IDEMPOTENCY_FIELD,
@@ -10,11 +10,11 @@ import {
   type IdempotencyAttempt,
 } from "@/lib/idempotency";
 import {
+  countsTowardBalanceAction,
   createTransactionAction,
   updateTransactionAction,
   type ActionState,
 } from "@/lib/actions/transactions";
-import { updateAccountOpeningDateAction } from "@/lib/actions/accounts";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { TransactionType } from "@/lib/db/transactions";
 import { useToday } from "@/components/TodayProvider";
@@ -31,9 +31,9 @@ const fieldClassName = FIELD_CLASS;
 
 // Minimal shape the account picker needs -- AccountRow/AccountBalanceRow
 // both satisfy this structurally, so callers can pass either straight
-// through with no mapping. opening_date drives the "this predates the
-// account's balance" note below -- transactions dated before it don't
-// move that account's balance (v_account_balances filters them out).
+// through with no mapping. opening_date is shown in the "won't change that
+// balance" note below; whether the note shows is SQL's answer, never
+// worked out here.
 export type TransactionAccountOption = {
   id: string;
   account_name: string;
@@ -73,6 +73,8 @@ export type TransactionInitialValues = {
   merchant: string | null;
   notes: string | null;
   payment_method: string | null;
+  /** counts_toward_balance as loaded -- seeds the note for the stored account and date. */
+  counts_toward_balance?: boolean | null;
 };
 
 // Groups an already type-filtered category list by its category group for
@@ -170,15 +172,19 @@ export function AddTransactionForm({
   const [celebrateMessage, setCelebrateMessage] = useState("Logged");
   const [celebrateIcon, setCelebrateIcon] = useState<React.ReactNode>("✓");
   const pulse = useConfirmPulse();
-  // Optimistic local view of an account's opening_date after "Move the
-  // balance date" -- keyed by account id, so it survives switching between
-  // fields without waiting on the server round-trip that revalidates
-  // `accounts`.
-  const [openingDateOverrides, setOpeningDateOverrides] = useState<Record<string, string>>({});
-  const [isMovingOpeningDate, startMoveOpeningDate] = useTransition();
-  // Keyed by account id like the overrides above, so the message stays with
-  // the note it belongs to (a Transfer can show two).
-  const [moveOpeningDateErrors, setMoveOpeningDateErrors] = useState<Record<string, string>>({});
+  // The "won't change that balance" note's answers, from SQL
+  // (counts_toward_balance, migration 48), keyed "accountId|date" so going
+  // back to an earlier choice doesn't ask again. An edit seeds its stored
+  // account and date from the row it loaded.
+  const [balanceAnswers, setBalanceAnswers] = useState<Record<string, boolean | null>>(() =>
+    initialValues?.counts_toward_balance !== undefined
+      ? {
+          [`${initialValues.accountid}|${initialValues.transaction_date}`]:
+            initialValues.counts_toward_balance,
+        }
+      : {},
+  );
+  const balanceAsked = useRef(new Set<string>());
   const formRef = useRef<HTMLFormElement>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
   const wasPending = useRef(false);
@@ -194,52 +200,51 @@ export function AddTransactionForm({
     type === "Transfer" ? [] : groupByCategoryGroup(type === "Income" ? incomeCategories : expenseCategories);
   const accountsMismatch = type === "Transfer" && fromAccountId !== "" && fromAccountId === toAccountId;
 
-  function handleMoveOpeningDate(accountId: string, newOpeningDate: string) {
-    startMoveOpeningDate(async () => {
-      const result = await callAction(() => updateAccountOpeningDateAction(accountId, newOpeningDate));
-      const error = result?.error;
-      if (error) {
-        setMoveOpeningDateErrors((prev) => ({ ...prev, [accountId]: error }));
-        return;
-      }
-      setMoveOpeningDateErrors((prev) => {
-        const next = { ...prev };
-        delete next[accountId];
-        return next;
+  // Asks SQL about every account the form currently names, once per
+  // account and date. An edit always asks about its own transaction: its
+  // recorded time decides a date on the balance date.
+  const noteAccountIds = type === "Transfer" ? [fromAccountId, toAccountId] : [accountid];
+  const unaskedKeys = noteAccountIds
+    .filter((id) => id !== "" && /^\d{4}-\d{2}-\d{2}$/.test(transactionDate))
+    .map((id) => `${id}|${transactionDate}`)
+    .filter((key) => !(key in balanceAnswers))
+    .join(",");
+  const editingId = initialValues?.id ?? null;
+  useEffect(() => {
+    if (unaskedKeys === "") return;
+    for (const key of unaskedKeys.split(",")) {
+      if (balanceAsked.current.has(key)) continue;
+      balanceAsked.current.add(key);
+      const [accountId, date] = key.split("|");
+      void callAction(() => countsTowardBalanceAction(accountId, date, editingId)).then((answer) => {
+        setBalanceAnswers((prev) => ({ ...prev, [key]: typeof answer === "boolean" ? answer : null }));
       });
-      setOpeningDateOverrides((prev) => ({ ...prev, [accountId]: newOpeningDate }));
-    });
-  }
+    }
+  }, [unaskedKeys, editingId]);
 
-  // Renders the "this predates the account's balance" note for whichever
-  // account id is passed in (the single Account field, or either leg of a
-  // Transfer) -- null when there's nothing to say.
-  function renderOpeningDateNote(accountId: string) {
+  // The note for whichever account id is passed in (the single Account
+  // field, or either leg of a Transfer) -- shown only when SQL says this
+  // transaction won't count toward that account's balance. The fix is the
+  // account's edit form, where a new balance and its date are set together.
+  function renderBalanceNote(accountId: string) {
     const account = accounts.find((a) => a.id === accountId);
     if (!account) return null;
-    const openingDate = openingDateOverrides[account.id] ?? account.opening_date;
-    if (transactionDate >= openingDate) return null;
-    const moveError = moveOpeningDateErrors[account.id];
+    if (balanceAnswers[`${accountId}|${transactionDate}`] !== false) return null;
 
     return (
-      <div className="flex flex-col gap-2">
-        <p className="flex items-start gap-2 rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink-secondary">
-          <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
-          <span className="flex-1">
-            This is before your {account.account_name} balance date of {formatDate(openingDate)}, so
-            it won&apos;t change that balance.{" "}
-            <button
-              type="button"
-              onClick={() => handleMoveOpeningDate(account.id, transactionDate)}
-              disabled={isMovingOpeningDate}
-              className="font-medium text-action underline-offset-2 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised"
-            >
-              Move the balance date to {formatDate(transactionDate)}
-            </button>
-          </span>
-        </p>
-        {moveError ? <ErrorMessage message={moveError} /> : null}
-      </div>
+      <p className="flex items-start gap-2 rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink-secondary">
+        <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
+        <span className="flex-1">
+          Your {account.account_name} balance is set as of {formatDate(account.opening_date)} and
+          already includes this, so it won&apos;t change that balance.{" "}
+          <Link
+            href={`/accounts?edit=${account.id}#account-${account.id}`}
+            className="font-medium text-action underline-offset-2 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised"
+          >
+            Update the {account.account_name} balance
+          </Link>
+        </span>
+      </p>
     );
   }
   // Closed by default (most entries skip these), but an edit or a prefill
@@ -497,7 +502,7 @@ export function AddTransactionForm({
                     ))}
                   </select>
                 </FormField>
-                {fromAccountId ? renderOpeningDateNote(fromAccountId) : null}
+                {fromAccountId ? renderBalanceNote(fromAccountId) : null}
 
                 <FormField
                   label="To account"
@@ -524,7 +529,7 @@ export function AddTransactionForm({
                     ))}
                   </select>
                 </FormField>
-                {toAccountId ? renderOpeningDateNote(toAccountId) : null}
+                {toAccountId ? renderBalanceNote(toAccountId) : null}
               </>
             ) : (
               <>
@@ -573,7 +578,7 @@ export function AddTransactionForm({
                     ))}
                   </select>
                 </FormField>
-                {accountid ? renderOpeningDateNote(accountid) : null}
+                {accountid ? renderBalanceNote(accountid) : null}
               </>
             )}
           </div>

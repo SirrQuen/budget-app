@@ -20,6 +20,7 @@ export function AccountRow({
   account,
   transactionAccounts,
   defaultFromAccountId,
+  initiallyEditing = false,
   incomeCategories,
   expenseCategories,
 }: {
@@ -28,10 +29,12 @@ export function AccountRow({
   transactionAccounts: TransactionAccountOption[];
   /** Pre-fills "From" on a payment transfer -- the user's most-used asset account. */
   defaultFromAccountId: string | null;
+  /** Opens with the edit form showing -- /accounts?edit=<id>. */
+  initiallyEditing?: boolean;
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
 }) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(initiallyEditing);
   const [makingPayment, setMakingPayment] = useState(false);
   const [confirmingArchive, setConfirmingArchive] = useState(false);
   const [archiveError, setArchiveError] = useState<string>();
@@ -67,7 +70,7 @@ export function AccountRow({
 
   if (editing) {
     return (
-      <li className="p-4 sm:col-span-4">
+      <li id={`account-${account.account_id}`} className="scroll-mt-4 p-4 sm:col-span-4">
         <AccountForm
           account={account}
           onSuccess={() => setEditing(false)}

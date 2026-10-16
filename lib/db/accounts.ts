@@ -56,9 +56,10 @@ export async function getAccount(id: string): Promise<DbResult<AccountRow>> {
   return { data, error: null };
 }
 
+// opening_set_at is the database's: triggers stamp it (migration 48).
 export type CreateAccountInput = Omit<
   AccountInsert,
-  "userid" | "id" | "created_at" | "updated_at"
+  "userid" | "id" | "created_at" | "updated_at" | "opening_set_at"
 > & {
   account_type: AccountType;
 };
@@ -89,7 +90,7 @@ export async function createAccount(
 
 export type UpdateAccountPatch = Omit<
   AccountUpdate,
-  "id" | "userid" | "created_at" | "updated_at"
+  "id" | "userid" | "created_at" | "updated_at" | "opening_set_at"
 >;
 
 export async function updateAccount(
@@ -202,4 +203,23 @@ export async function listAccountBalances(
   }
 
   return { data, error: null };
+}
+
+// The Accounts page's per-type subtotals, summed in SQL
+// (account_type_subtotals, migration 49) over exactly the rows the page
+// lists: active accounts, or every account when archived ones are shown.
+export async function listAccountTypeSubtotals(
+  includeArchived: boolean,
+): Promise<DbResult<Map<string, number>>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("account_type_subtotals", {
+    p_include_archived: includeArchived,
+  });
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "accounts") };
+  }
+
+  return { data: new Map(data.map((row) => [row.account_type, row.subtotal])), error: null };
 }

@@ -18,6 +18,15 @@ type ParsedAccountFields = {
   account_name: string;
   account_type: AccountType;
   institution: string | null;
+};
+
+// The balance anchor: the figure and the date it was true on.
+// Re-setting it is its own act -- the database stamps opening_set_at
+// whenever an update names either column (migration 48), and that time
+// decides which same-day transactions count. So an update carries these
+// only when the form posted them, which it does only once the user edits
+// the balance, its date, or a type change that flips the sign.
+type ParsedAnchor = {
   opening_balance: number;
   opening_date: string;
 };
@@ -29,8 +38,6 @@ function parseAccountFields(formData: FormData): ParsedAccountFields | { error: 
   const account_name = String(formData.get("account_name") ?? "").trim();
   const account_type = String(formData.get("account_type") ?? "");
   const institution = String(formData.get("institution") ?? "").trim();
-  const opening_balance_raw = String(formData.get("opening_balance") ?? "").trim();
-  const opening_date = String(formData.get("opening_date") ?? "").trim();
 
   if (!account_name) {
     return { error: "Account name is required." };
@@ -38,6 +45,26 @@ function parseAccountFields(formData: FormData): ParsedAccountFields | { error: 
   if (!VALID_TYPES.has(account_type as AccountType)) {
     return { error: "Choose an account type." };
   }
+
+  return {
+    account_name,
+    account_type: account_type as AccountType,
+    institution: institution || null,
+  };
+}
+
+// null when the form didn't post the anchor (an edit that left it alone).
+function parseAnchor(
+  formData: FormData,
+  account_type: AccountType,
+): ParsedAnchor | null | { error: string } {
+  if (!formData.has("opening_date") && !formData.has("opening_balance")) {
+    return null;
+  }
+
+  const opening_balance_raw = String(formData.get("opening_balance") ?? "").trim();
+  const opening_date = String(formData.get("opening_date") ?? "").trim();
+
   if (!ISO_DATE.test(opening_date)) {
     return { error: "Choose the date this balance is as of." };
   }
@@ -57,13 +84,7 @@ function parseAccountFields(formData: FormData): ParsedAccountFields | { error: 
     opening_balance = -opening_balance;
   }
 
-  return {
-    account_name,
-    account_type: account_type as AccountType,
-    institution: institution || null,
-    opening_balance,
-    opening_date,
-  };
+  return { opening_balance, opening_date };
 }
 
 export async function createAccountAction(
@@ -74,8 +95,15 @@ export async function createAccountAction(
   if ("error" in parsed) {
     return parsed;
   }
+  const anchor = parseAnchor(formData, parsed.account_type);
+  if (anchor === null) {
+    return { error: "Choose the date this balance is as of." };
+  }
+  if ("error" in anchor) {
+    return anchor;
+  }
 
-  const { error } = await createAccount(parsed);
+  const { error } = await createAccount({ ...parsed, ...anchor });
 
   if (error) {
     return { error };
@@ -97,32 +125,12 @@ export async function updateAccountAction(
   if ("error" in parsed) {
     return parsed;
   }
-
-  const { error } = await updateAccount(id, parsed);
-
-  if (error) {
-    return { error };
+  const anchor = parseAnchor(formData, parsed.account_type);
+  if (anchor !== null && "error" in anchor) {
+    return anchor;
   }
 
-  revalidatePath("/accounts");
-}
-
-// Called from the transaction form's "move the balance date back" note --
-// a transaction dated before an account's opening_date doesn't touch that
-// account's balance, so this is the fix offered right where the user
-// notices it, rather than a trip to the account's edit form.
-export async function updateAccountOpeningDateAction(
-  accountId: string,
-  openingDate: string,
-): Promise<ActionState> {
-  if (!accountId) {
-    return { error: "Missing account id." };
-  }
-  if (!ISO_DATE.test(openingDate)) {
-    return { error: "Invalid date." };
-  }
-
-  const { error } = await updateAccount(accountId, { opening_date: openingDate });
+  const { error } = await updateAccount(id, anchor === null ? parsed : { ...parsed, ...anchor });
 
   if (error) {
     return { error };

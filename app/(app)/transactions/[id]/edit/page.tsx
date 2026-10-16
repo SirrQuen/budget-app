@@ -171,6 +171,7 @@ export default async function EditTransactionPage({
           merchant: tx.merchant,
           notes: tx.notes,
           payment_method: tx.payment_method,
+          counts_toward_balance: tx.counts_toward_balance,
         }}
         incomeCategories={incomeCategories}
         expenseCategories={expenseCategories}

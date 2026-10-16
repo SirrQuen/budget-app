@@ -1,6 +1,11 @@
 import { Fragment } from "react";
 import Link from "next/link";
-import { listAccountBalances, listAccounts, getMostUsedAssetAccountId } from "@/lib/db/accounts";
+import {
+  listAccountBalances,
+  listAccounts,
+  listAccountTypeSubtotals,
+  getMostUsedAssetAccountId,
+} from "@/lib/db/accounts";
 import { getNetWorth } from "@/lib/db/dashboard";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -48,6 +53,9 @@ function buildHref(archived: boolean) {
 export default async function AccountsPage({ searchParams }: PageProps<"/accounts">) {
   const params = await searchParams;
   const showArchived = params.archived === "1";
+  // Opens one row's edit form -- the transaction form's "won't change that
+  // balance" note links here so the balance and its date are set together.
+  const editAccountId = typeof params.edit === "string" ? params.edit : null;
 
   const [
     accountsResult,
@@ -56,6 +64,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
     incomeCategoriesResult,
     expenseCategoriesResult,
     accountsTableResult,
+    subtotalsResult,
   ] = await Promise.all([
     listAccountBalances(),
     getNetWorth(),
@@ -66,6 +75,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
     listCategoriesForType("Income"),
     listCategoriesForType("Expense"),
     listAccounts(),
+    listAccountTypeSubtotals(showArchived),
   ]);
 
   // A failed read is an error state, never an empty list
@@ -77,7 +87,8 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
     netWorthResult.error !== null ||
     incomeCategoriesResult.error !== null ||
     expenseCategoriesResult.error !== null ||
-    accountsTableResult.error !== null
+    accountsTableResult.error !== null ||
+    subtotalsResult.error !== null
   ) {
     return (
       <div className="flex flex-col gap-6">
@@ -89,6 +100,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
             incomeCategoriesResult.error ??
             expenseCategoriesResult.error ??
             accountsTableResult.error ??
+            subtotalsResult.error ??
             "We couldn't load your accounts. Refresh the page to try again."
           }
         />
@@ -152,7 +164,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
       .filter((account) => account.account_type === type)
       .slice()
       .sort((a, b) => (a.account_name ?? "").localeCompare(b.account_name ?? ""));
-    const subtotal = accounts.reduce((sum, account) => sum + (account.balance ?? 0), 0);
+    const subtotal = subtotalsResult.data.get(type) ?? 0;
     return { type, accounts, subtotal };
   }).filter((group) => group.accounts.length > 0);
 
@@ -183,6 +195,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
               account={account}
               transactionAccounts={transactionAccounts}
               defaultFromAccountId={defaultFromAccountId}
+              initiallyEditing={account.account_id === editAccountId}
               incomeCategories={incomeCategories}
               expenseCategories={expenseCategories}
             />
