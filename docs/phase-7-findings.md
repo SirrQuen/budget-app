@@ -1372,15 +1372,17 @@ trade.
 If the leaflet's shape is ever meant to change, change it in both files on
 purpose, and re-run the /login diff.
 
-### Left for a later cleanup: `state="looping"` on SorrelMark
+### Cleaned up: `state="looping"` on SorrelMark (removed 2026-10-16)
 
 SorrelLoader now renders SorrelFlower with the stem sway, because nothing
 may loop the fold -- the fold means one thing, that the time of day
 changed, and a loader that folded made the two indistinguishable. That
 leaves SorrelMark's `"looping"` state and its `.sorrel-mark--looping`
 CSS (the 1.6s fold loop and its keyframes) with no callers. They were left
-in place because removing them edits the protected file. Remove them in a
-batch of their own, with a /login diff.
+in place because removing them edits the protected file, then removed in
+a batch of their own (/login diffed identical before and after). The
+loader's reveal delay, `--sorrel-loop-start`, was renamed
+`--sorrel-loader-delay` with them, since there is no loop left to start.
 
 ### Measured cost of the fold (2026-10-16)
 
