@@ -24,16 +24,16 @@ dashboard; refs cannot. Always report the ref.
 
 | | Name | Ref | Used by |
 |---|---|---|---|
-| Production | `evernestdb` | `ybdwqyihvbokowocvlgq` | mysorrel.com. Real user data. |
+| Production | `sorrel-prod` | `ybdwqyihvbokowocvlgq` | mysorrel.com. Real user data. |
 | Development | `sorrel-dev` | `jmuqtjbntiqmjmpenywl` | localhost (created 2026-10-15) |
 
-Production has not been renamed; its dashboard name is still `evernestdb`.
-Go by the ref.
+Production was `evernestdb` until 2026-10-16. Go by the ref.
 
-**As of 2026-10-16 the CLI is linked to `sorrel-dev`
-(`jmuqtjbntiqmjmpenywl`), not production.** A command meant for production
-needs the link changed first, and that is my call, not yours. Never relink
-on your own.
+**The CLI's resting state is sorrel-dev. After any deliberate push to
+production, relink to dev before ending the session.** A command meant for
+production needs the link changed first, and that is my call, not yours.
+Never relink on your own, and never add `supabase db push` to a permission
+allowlist -- I run it myself, every time, for dev and production.
 
 ### Before every `supabase db push`
 
@@ -65,6 +65,21 @@ on production is a stop condition — tell me, don't work around it.
 
 Never print, echo, or read the value of a secret key, database password, or
 access token. Matt enters those himself.
+
+### Timezone
+
+Every calendar date means the user's day in `settings.timezone` (an IANA
+name the browser reports through `TodayProvider`, updated when they travel;
+null or a name Postgres doesn't know means UTC). The database applies it
+per request: the `apply_user_timezone()` pre-request hook (migration 40)
+sets the session TimeZone, so `current_date` and `timestamptz::date` casts
+in SQL are the user's day -- inside an API request. App code never
+reads the process clock for a date: the server uses `getToday()`, Client
+Components `useToday()`, both derived from the same stored zone. Comparing
+two `date` columns needs no zone; turning a `timestamptz` into a date, or a
+date into an instant (start or end of a day), must name the user's zone
+explicitly, as migration 48's backfill does, because migrations and the
+service role run outside the hook, in UTC.
 
 ## Rules
 
