@@ -4,9 +4,7 @@ type SorrelMarkProps = {
   // "folded" is the closing-umbrella silhouette (see .sorrel-mark in
   // app/globals.css). Changing the prop is the whole animation -- the
   // transition lives in CSS, so every caller gets the same fold.
-  // "looping" folds and reopens continuously -- the loading indicator
-  // (components/SorrelLoader.tsx); reduced motion holds it open.
-  state?: "open" | "folded" | "looping";
+  state?: "open" | "folded";
 };
 
 const PETAL =
