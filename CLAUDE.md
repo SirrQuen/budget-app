@@ -24,11 +24,16 @@ dashboard; refs cannot. Always report the ref.
 
 | | Name | Ref | Used by |
 |---|---|---|---|
-| Production | `sorrel-prod` | `ybdwqyihvbokowocvlgq` | mysorrel.com. Real user data. |
-| Development | `sorrel-dev` | NOT YET CREATED | localhost, once it exists |
+| Production | `evernestdb` | `ybdwqyihvbokowocvlgq` | mysorrel.com. Real user data. |
+| Development | `sorrel-dev` | `jmuqtjbntiqmjmpenywl` | localhost (created 2026-10-15) |
 
-**Until `sorrel-dev` exists there is one database, it is production, and the
-CLI is linked to it. Treat every database command as a production command.**
+Production has not been renamed; its dashboard name is still `evernestdb`.
+Go by the ref.
+
+**As of 2026-10-16 the CLI is linked to `sorrel-dev`
+(`jmuqtjbntiqmjmpenywl`), not production.** A command meant for production
+needs the link changed first, and that is my call, not yours. Never relink
+on your own.
 
 ### Before every `supabase db push`
 
@@ -53,11 +58,8 @@ one, never read one into context.
 
 ### .env.local
 
-Today it points at production, because there is nowhere else to point. That
-is expected.
-
-Once `sorrel-dev` exists, `.env.local` must point at dev. From that moment,
-finding it on production is a stop condition — tell me, don't work around it.
+It points at `sorrel-dev` (`jmuqtjbntiqmjmpenywl`), as it must. Finding it
+on production is a stop condition — tell me, don't work around it.
 
 ### Secrets
 
