@@ -103,7 +103,8 @@
   --gridline: #d8d8e2;
   --baseline: #c2c2d0;
 
-  /* The Sorrel mark -- components/SorrelMark.tsx, and nothing else. Red
+  /* The Sorrel mark -- components/SorrelMark.tsx and the dashboard's
+     flower, components/SorrelFlower.tsx, and nothing else. Red
      never describes the user's money (CLAUDE.md); outside this mark it
      appears only as --critical, on destructive actions and on errors.
      This token is deliberately NOT registered in @theme below, so no
@@ -638,73 +639,6 @@ body {
   }
 }
 
-/* =====================================================================
-   SORREL MARK -- open / folded
-   =====================================================================
-
-   components/SorrelMark.tsx is the only consumer. Folded is a closing
-   umbrella: each leaflet rotates toward pointing down and narrows along
-   its own axis. rotate() comes BEFORE scale(), so the narrowing happens in
-   the leaflet's own frame and then gets rotated -- reordering them narrows
-   in screen space and skews the fold. The 171/180/189 spread and the
-   uneven scaleY are deliberate; a symmetric fold looks dead.
-
-   Rotation lives in CSS, not the path's transform attribute, so open and
-   folded are one transform list each and interpolate function by function.
-   The origin is the viewBox centre (50 50) for every leaflet.
-
-   All three converge downward from 50,50, so the folded shape's centroid
-   sits ~22 units low. .sorrel-leaves lifts it back to the middle so the
-   mark doesn't appear to fall as it closes. It is a separate UNROTATED
-   wrapper on purpose: a translate inside each leaflet's transform would
-   run in that leaflet's rotated frame and scatter them. */
-.sorrel-leaves {
-  transform-box: view-box;
-  transition: transform 600ms cubic-bezier(0.34, 0.02, 0.24, 1);
-}
-.sorrel-mark--folded .sorrel-leaves {
-  transform: translateY(-22px);
-}
-
-.sorrel-leaf {
-  transform-box: view-box;
-  transform-origin: 50px 50px;
-  transition: transform 600ms cubic-bezier(0.34, 0.02, 0.24, 1);
-}
-
-.sorrel-leaf--1 {
-  transform: rotate(0deg) scaleX(1) scaleY(1);
-}
-.sorrel-leaf--2 {
-  transform: rotate(120deg) scaleX(1) scaleY(1);
-  transition-delay: 45ms;
-}
-.sorrel-leaf--3 {
-  transform: rotate(240deg) scaleX(1) scaleY(1);
-  transition-delay: 90ms;
-}
-
-.sorrel-mark--folded .sorrel-leaf--1 {
-  transform: rotate(171deg) scaleX(0.62) scaleY(0.9);
-}
-.sorrel-mark--folded .sorrel-leaf--2 {
-  transform: rotate(180deg) scaleX(0.62) scaleY(0.95);
-}
-.sorrel-mark--folded .sorrel-leaf--3 {
-  transform: rotate(189deg) scaleX(0.62) scaleY(0.9);
-}
-
-/* The state still changes; it just doesn't travel. `transition: none`
-   rather than leaning on the global safety net, which shortens durations
-   but leaves transition-delay alone -- the stagger would otherwise hold
-   the second and third leaflets back for 45/90ms. */
-@media (prefers-reduced-motion: reduce) {
-  .sorrel-leaves,
-  .sorrel-leaf {
-    transition: none !important;
-  }
-}
-
 /* The loader's reveal. Hidden, then shown after --sorrel-loader-delay, in
    CSS rather than a JS timer: a route-level loading.tsx is streamed as
    server HTML and paints before hydration, so a useEffect delay would
@@ -737,16 +671,19 @@ body {
    than wide (36.4 x 70.9). See docs/Sorrel-Flower-Animation.md.
 
    Every leaflet pivots at its own hinge, the junction (50 50). rotate()
-   before scale(), as in the mark, so narrowing happens along the
-   leaflet's own axis. Leaflet 1 (back, pointing up) folds toward the
+   before scale(), so narrowing happens along the leaflet's own axis and
+   then gets rotated -- reordering them narrows in screen space and skews
+   the fold. Leaflet 1 (back, pointing up) folds toward the
    viewer: its scaleY passes through 0 to -0.8, which is the projection of
    a hinge fold. Leaflets 2 and 3 (front) swing down to hang 10deg either
    side of vertical. scaleX 0.5 is the crease along the midrib.
    .sorrel-flower__lift raises the folded shape 6 units so it stays
-   centred in its box -- an unrotated wrapper, as in the mark.
+   centred in its box. It is a separate UNROTATED wrapper on purpose: a
+   translate inside each leaflet's transform would run in that leaflet's
+   rotated frame and scatter them.
 
-   The SorrelMark block above is NOT shared and must not be edited for
-   the flower: /login's mark is verified pixel-identical after flower work.
+   The brand mark (components/SorrelMark.tsx) shares none of this: it is
+   static, with no stem, fold or CSS of its own.
 
    Two motions, two meanings, never swapped:
    - the fold (.sorrel-flower--fold / --unfold) plays once, when the time
@@ -759,8 +696,9 @@ body {
 :root {
   /* Slower than the nav icons (360ms), not different: the nav verbs sit in
      front of a navigation, the flower blocks nothing. The curve is
-     --icon-anim-ease, the same one the mark's fold transition writes out;
-     postcss/inline-keyframe-easing.test.ts asserts they match. */
+     --icon-anim-ease, the nav verbs' curve;
+     postcss/inline-keyframe-easing.test.ts asserts every flower keyframe
+     uses it. */
   --flower-fold-duration: 820ms;
   --flower-petal-stagger: 100ms;
 }
@@ -1004,7 +942,7 @@ body {
    click never waits for this -- it is decoration on top of a navigation
    that has already started.
 
-   One motion signature: the ease is the Sorrel mark's fold curve, and
+   One motion signature: the ease is the Sorrel fold curve, and
    every verb fits in --icon-anim-duration INCLUDING its stagger.
 
    Transform and opacity only, so playback stays on the compositor: no
