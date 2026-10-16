@@ -43,26 +43,19 @@ test("app/globals.css: no unresolved var() easing survives inside @keyframes", (
   });
 });
 
-// One motion signature. The mark's fold writes the curve out in its own
-// transition (that block is frozen -- /login is diffed against it), the
-// flower's keyframes reach it through --icon-anim-ease. Durations differ
-// on purpose; the curve may not.
-test("app/globals.css: the flower's fold and sway use the mark's fold curve", () => {
+// One motion signature. The flower's fold and sway are slower than the
+// nav verbs, not different: every interval eases with --icon-anim-ease.
+test("app/globals.css: the flower's fold and sway use --icon-anim-ease", () => {
   const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
   const out = postcss([inlineKeyframeEasing()]).process(css, { from: undefined });
   const norm = (v: string) => v.replace(/\s+/g, "");
   let token = "";
-  let markCurve = "";
-  out.root.walkRules((rule) => {
-    rule.walkDecls((decl) => {
-      if (rule.selector === ":root" && decl.prop === "--icon-anim-ease") token = norm(decl.value);
-      if (rule.selector === ".sorrel-leaf" && decl.prop === "transition") {
-        markCurve = norm(decl.value.match(/cubic-bezier\([^)]*\)/)![0]);
-      }
+  out.root.walkRules(":root", (rule) => {
+    rule.walkDecls("--icon-anim-ease", (decl) => {
+      token = norm(decl.value);
     });
   });
   assert.ok(token, "--icon-anim-ease not found");
-  assert.equal(markCurve, token, "the mark's fold curve and --icon-anim-ease differ");
 
   let flowerFrames = 0;
   out.root.walkAtRules("keyframes", (atRule) => {

@@ -1384,6 +1384,13 @@ a batch of their own (/login diffed identical before and after). The
 loader's reveal delay, `--sorrel-loop-start`, was renamed
 `--sorrel-loader-delay` with them, since there is no loop left to start.
 
+`state="folded"` went next, in its own batch: once the dashboard moved to
+SorrelFlower, every SorrelMark caller rendered it open. With no states
+left the mark is static -- its rotations moved from CSS into SVG
+`transform` attributes and its `globals.css` block was deleted. /login,
+the landing page and /privacy diffed identical before and after. The
+mark has no fold now; the app's motion curve lives in `--icon-anim-ease`.
+
 ### Measured cost of the fold (2026-10-16)
 
 Traced in headless Chrome against the dev server, 56px flower: across each

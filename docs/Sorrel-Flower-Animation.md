@@ -96,7 +96,7 @@ The flower blocks nothing. It's a state display. So the constraint is inverted: 
 }
 ```
 
-Same easing curve as the mark's fold and the navigation icons. **One motion signature for the whole app** — the flower is slower, not different.
+Same easing curve as the navigation icons (`--icon-anim-ease`). **One motion signature for the whole app** — the flower is slower, not different.
 
 Total elapsed including stagger: roughly 1.1s for a three-petal flower. That is fine for something nobody is waiting on.
 
