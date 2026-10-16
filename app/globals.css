@@ -789,6 +789,278 @@ body {
 }
 
 /* =====================================================================
+   SORREL FLOWER -- the dashboard flower and the loader (not the mark)
+   =====================================================================
+
+   components/SorrelFlower.tsx. Wood sorrel is nyctinastic: at night each
+   leaflet hinges DOWN at its base. The mark is drawn top-down, where that
+   fold would project as radial foreshortening -- a smaller flower with the
+   same proportions -- so the closed state is the plant's other view: the
+   leaflets hang from the junction like a shut umbrella around the stem,
+   which leaflet 1 covers while open. The invariant is the aspect ratio:
+   open is wider than tall (93.5 x 84.5 viewBox units), folded is taller
+   than wide (36.4 x 70.9). See docs/Sorrel-Flower-Animation.md.
+
+   Every leaflet pivots at its own hinge, the junction (50 50). rotate()
+   before scale(), as in the mark, so narrowing happens along the
+   leaflet's own axis. Leaflet 1 (back, pointing up) folds toward the
+   viewer: its scaleY passes through 0 to -0.8, which is the projection of
+   a hinge fold. Leaflets 2 and 3 (front) swing down to hang 10deg either
+   side of vertical. scaleX 0.5 is the crease along the midrib.
+   .sorrel-flower__lift raises the folded shape 6 units so it stays
+   centred in its box -- an unrotated wrapper, as in the mark.
+
+   The SorrelMark block above is NOT shared and must not be edited for
+   the flower: /login's mark is verified pixel-identical after flower work.
+
+   Two motions, two meanings, never swapped:
+   - the fold (.sorrel-flower--fold / --unfold) plays once, when the time
+     of day changes. Nothing loops it.
+   - the sway (.sorrel-flower--sway) loops while waiting for data, the
+     flower held in whatever state it's in.
+
+   Resting poses are outside any media query, so reduced motion renders
+   the correct state; all animation is defined only under no-preference. */
+:root {
+  /* Slower than the nav icons (360ms), not different: the nav verbs sit in
+     front of a navigation, the flower blocks nothing. The curve is
+     --icon-anim-ease, the same one the mark's fold transition writes out;
+     postcss/inline-keyframe-easing.test.ts asserts they match. */
+  --flower-fold-duration: 820ms;
+  --flower-petal-stagger: 100ms;
+}
+
+.sorrel-flower {
+  overflow: visible;
+}
+.sorrel-flower__sway,
+.sorrel-flower__lift,
+.sorrel-flower__leaf {
+  transform-box: view-box;
+}
+.sorrel-flower__leaf {
+  transform-origin: 50px 50px;
+}
+/* The stem's tip: the flower swings from its pole, like a closed umbrella
+   from its handle. */
+.sorrel-flower__sway {
+  transform-origin: 53px 24px;
+}
+
+.sorrel-flower--open .sorrel-flower__leaf--1 {
+  transform: rotate(0deg) scaleX(1) scaleY(1);
+}
+.sorrel-flower--open .sorrel-flower__leaf--2 {
+  transform: rotate(120deg) scaleX(1) scaleY(1);
+}
+.sorrel-flower--open .sorrel-flower__leaf--3 {
+  transform: rotate(240deg) scaleX(1) scaleY(1);
+}
+/* The stem is geometrically inside leaflet 1 while open, but the three
+   leaflet tips meet at the junction in anti-aliased seams it would show
+   through (up to 19 pixels at 56px, measured). So it also rests at
+   opacity 0 open, and fades in during the fold once leaflet 1 has
+   started to uncover it. */
+.sorrel-flower--open .sorrel-flower__stem {
+  opacity: 0;
+}
+.sorrel-flower--folded .sorrel-flower__lift {
+  transform: translateY(-6px);
+}
+.sorrel-flower--folded .sorrel-flower__leaf--1 {
+  transform: rotate(-4deg) scaleX(0.5) scaleY(-0.8);
+}
+.sorrel-flower--folded .sorrel-flower__leaf--2 {
+  transform: rotate(170deg) scaleX(0.5) scaleY(0.9);
+}
+.sorrel-flower--folded .sorrel-flower__leaf--3 {
+  transform: rotate(190deg) scaleX(0.5) scaleY(0.9);
+}
+
+/* The fold. Keyframes, not transitions with transition-delay: delayed
+   parts cost a style + layout pass per frame (docs/phase-7-findings.md,
+   "animation-delay costs a layout pass per frame"), so, like the nav
+   verbs, every part runs the full duration and holds its start pose for
+   its stagger. Back leaflet leads, front pair trail.
+
+   The percentages encode the tokens. Duration is fold + 2 staggers =
+   1020ms; each leaflet travels 820/1020 = 80.392% of it, starting at
+   0 / 9.804 / 19.608% (100/1020 per step). Change either token and
+   re-derive them, and FOLD_MS in components/DayNightMark.tsx.
+
+   fill-mode both holds the end pose, which equals the resting pose for
+   the new state, so nothing snaps when the class later goes away. A fold
+   cut short by an unmount is just an element leaving the DOM: no JS, no
+   animationend listener, nothing to throw. */
+@media (prefers-reduced-motion: no-preference) {
+  .sorrel-flower--fold .sorrel-flower__lift,
+  .sorrel-flower--fold .sorrel-flower__stem,
+  .sorrel-flower--fold .sorrel-flower__leaf,
+  .sorrel-flower--unfold .sorrel-flower__lift,
+  .sorrel-flower--unfold .sorrel-flower__stem,
+  .sorrel-flower--unfold .sorrel-flower__leaf {
+    animation-duration: calc(var(--flower-fold-duration) + 2 * var(--flower-petal-stagger));
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+  }
+  .sorrel-flower--fold .sorrel-flower__lift {
+    animation-name: sorrel-flower-fold-lift;
+  }
+  .sorrel-flower--fold .sorrel-flower__stem {
+    animation-name: sorrel-flower-fold-stem;
+  }
+  .sorrel-flower--fold .sorrel-flower__leaf--1 {
+    animation-name: sorrel-flower-fold-1;
+  }
+  .sorrel-flower--fold .sorrel-flower__leaf--2 {
+    animation-name: sorrel-flower-fold-2;
+  }
+  .sorrel-flower--fold .sorrel-flower__leaf--3 {
+    animation-name: sorrel-flower-fold-3;
+  }
+  .sorrel-flower--unfold .sorrel-flower__lift {
+    animation-name: sorrel-flower-unfold-lift;
+  }
+  .sorrel-flower--unfold .sorrel-flower__stem {
+    animation-name: sorrel-flower-unfold-stem;
+  }
+  .sorrel-flower--unfold .sorrel-flower__leaf--1 {
+    animation-name: sorrel-flower-unfold-1;
+  }
+  .sorrel-flower--unfold .sorrel-flower__leaf--2 {
+    animation-name: sorrel-flower-unfold-2;
+  }
+  .sorrel-flower--unfold .sorrel-flower__leaf--3 {
+    animation-name: sorrel-flower-unfold-3;
+  }
+
+  @keyframes sorrel-flower-fold-lift {
+    0% {
+      transform: translateY(0);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    100% {
+      transform: translateY(-6px);
+    }
+  }
+  /* In as leaflet 1 clears it (its scaleY is below ~0.7 by 10%); out
+     once leaflet 1 is back over it (above ~0.7 by 50%). */
+  @keyframes sorrel-flower-fold-stem {
+    0%,
+    10% {
+      opacity: 0;
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    30%,
+    100% {
+      opacity: 1;
+    }
+  }
+  @keyframes sorrel-flower-fold-1 {
+    0% {
+      transform: rotate(0deg) scaleX(1) scaleY(1);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    80.392%,
+    100% {
+      transform: rotate(-4deg) scaleX(0.5) scaleY(-0.8);
+    }
+  }
+  @keyframes sorrel-flower-fold-2 {
+    0%,
+    9.804% {
+      transform: rotate(120deg) scaleX(1) scaleY(1);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    90.196%,
+    100% {
+      transform: rotate(170deg) scaleX(0.5) scaleY(0.9);
+    }
+  }
+  @keyframes sorrel-flower-fold-3 {
+    0%,
+    19.608% {
+      transform: rotate(240deg) scaleX(1) scaleY(1);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    100% {
+      transform: rotate(190deg) scaleX(0.5) scaleY(0.9);
+    }
+  }
+
+  @keyframes sorrel-flower-unfold-lift {
+    0% {
+      transform: translateY(-6px);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    100% {
+      transform: translateY(0);
+    }
+  }
+  @keyframes sorrel-flower-unfold-stem {
+    0%,
+    50% {
+      opacity: 1;
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    70%,
+    100% {
+      opacity: 0;
+    }
+  }
+  @keyframes sorrel-flower-unfold-1 {
+    0% {
+      transform: rotate(-4deg) scaleX(0.5) scaleY(-0.8);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    80.392%,
+    100% {
+      transform: rotate(0deg) scaleX(1) scaleY(1);
+    }
+  }
+  @keyframes sorrel-flower-unfold-2 {
+    0%,
+    9.804% {
+      transform: rotate(170deg) scaleX(0.5) scaleY(0.9);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    90.196%,
+    100% {
+      transform: rotate(120deg) scaleX(1) scaleY(1);
+    }
+  }
+  @keyframes sorrel-flower-unfold-3 {
+    0%,
+    19.608% {
+      transform: rotate(190deg) scaleX(0.5) scaleY(0.9);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    100% {
+      transform: rotate(240deg) scaleX(1) scaleY(1);
+    }
+  }
+
+  /* The sway: 2.5deg either side of rest, 3.2s a cycle, eased into and out
+     of each extreme with the same curve. A loop can be cut at any frame, so
+     it looks right whether the data takes 200ms or 5s -- which a fold
+     never could. */
+  .sorrel-flower--sway .sorrel-flower__sway {
+    animation: sorrel-flower-sway 3200ms linear infinite;
+  }
+  @keyframes sorrel-flower-sway {
+    0%,
+    100% {
+      transform: rotate(-2.5deg);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    50% {
+      transform: rotate(2.5deg);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+  }
+}
+
+/* =====================================================================
    NAV ICON VERBS
    =====================================================================
 

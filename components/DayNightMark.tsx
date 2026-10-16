@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SorrelMark } from "@/components/SorrelMark";
+import { SorrelFlower } from "@/components/SorrelFlower";
 import { SIGNED_IN_COOKIE } from "@/lib/auth/signedInFlag";
 
 type MarkState = "open" | "folded";
@@ -40,12 +40,13 @@ function consumeSignedInFlag(): boolean {
   return present;
 }
 
-// Fold runs 600ms plus the last leaflet's 90ms stagger (app/globals.css).
-const FOLD_MS = 690;
+// Fold runs --flower-fold-duration (820ms) plus two --flower-petal-stagger
+// (100ms) steps (app/globals.css, SORREL FLOWER).
+const FOLD_MS = 1020;
 const HOLD_MS = 400;
 
 /**
- * The dashboard's Sorrel mark: open 7:00am-6:59pm, folded 7:00pm-6:59am,
+ * The dashboard's Sorrel flower: open 7:00am-6:59pm, folded 7:00pm-6:59am,
  * flipping live when the clock crosses either boundary. Straight after
  * sign-in it plays fold -> hold -> reopen, then settles into the hour's
  * state. Ambient only -- decorative to assistive tech.
@@ -121,7 +122,7 @@ export function DayNightMark({ size = 56 }: { size?: number }) {
 
   return (
     <span aria-hidden="true" className="block shrink-0" style={{ width: size, height: size }}>
-      {state ? <SorrelMark size={size} state={state} /> : null}
+      {state ? <SorrelFlower size={size} state={state} /> : null}
     </span>
   );
 }
