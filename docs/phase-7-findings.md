@@ -1351,3 +1351,44 @@ Two measurement traps, so the next run doesn't repeat them: a covered or
 minimised Chrome window reports `visibilityState: "hidden"` and stops
 painting (discard those trials), and running lint, tests or a build alongside
 the benchmark skewed one run by +150ms.
+
+## Sorrel flower: the leaflet path lives in two files (2026-10-16)
+
+`components/SorrelMark.tsx` (the brand mark: /login, nav, landing, public
+layout) and `components/SorrelFlower.tsx` (the dashboard's day/night flower
+and the route loader) each hold their own copy of the leaflet path.
+**This duplication is deliberate. Do not deduplicate it** -- not into a
+shared constant, not by parameterising SorrelMark with a stem or fold.
+
+Why: the dashboard flower used to *be* SorrelMark, so any change to the
+flower was a change to the brand mark. The flower's fold and stem
+(docs/Sorrel-Flower-Animation.md) were built with SorrelMark.tsx and its
+`globals.css` block byte-for-byte unchanged, so that /login could be
+verified by a pixel-identical screenshot diff (it was: 0 differing bytes,
+both themes, 2x). A shared constant puts the two back on one edit path and
+loses that guarantee. Three lines of path data is the cheaper side of the
+trade.
+
+If the leaflet's shape is ever meant to change, change it in both files on
+purpose, and re-run the /login diff.
+
+### Left for a later cleanup: `state="looping"` on SorrelMark
+
+SorrelLoader now renders SorrelFlower with the stem sway, because nothing
+may loop the fold -- the fold means one thing, that the time of day
+changed, and a loader that folded made the two indistinguishable. That
+leaves SorrelMark's `"looping"` state and its `.sorrel-mark--looping`
+CSS (the 1.6s fold loop and its keyframes) with no callers. They were left
+in place because removing them edits the protected file. Remove them in a
+batch of their own, with a /login diff.
+
+### Measured cost of the fold (2026-10-16)
+
+Traced in headless Chrome against the dev server, 56px flower: across each
+1020ms fold or unfold, style + layout + paint run on 3 frames as it starts
+(the class change and handoff to the compositor) and 3 as it finishes, and
+on none in between. The sway costs the same 3 frames as it starts, then
+nothing for as long as it loops. The leaflets are SVG children, which
+composite in current Chrome (see "animation-delay costs a layout pass per
+frame" above, which is also why the fold's stagger is held keyframes, not
+delays).
