@@ -53,7 +53,6 @@ function safeToSpend(schedules: ProjectionSchedule[], cash: number, cushion: num
     ...projection,
     windowReason: projection.mode === "projection" ? null : "end_of_month",
     cushionIsDefault: false,
-    overdueBills: [],
     nextIncome: null,
   };
 }

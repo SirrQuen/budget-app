@@ -248,8 +248,8 @@ function TimingRadioList<T extends string>({
 // user ends up with is whatever the chosen category carries, and the
 // enforce_category_type trigger checks it exactly like it does for a normal
 // transaction once an occurrence actually posts. Kind "Transfer" instead
-// posts the same two-leg shape a manual transfer does (see
-// lib/db/recurring.ts's generateDueOccurrences) -- no category at all.
+// is confirmed as the same two-leg shape a manual transfer has (see
+// lib/db/recurring.ts's confirmOccurrence) -- no category at all.
 export function RecurringForm({
   recurring,
   prefill,
@@ -310,12 +310,12 @@ export function RecurringForm({
   const [amountIsVariable, setAmountIsVariable] = useState(recurring?.amount_is_variable ?? false);
   const showCardVariableToggle = kind === "Transfer" && toAccountIsCreditCard;
   const showCardVariableFields = showCardVariableToggle && amountIsVariable;
-  // "Amount changes each time" / "Date varies" -- Income and Expense (not a
-  // card-payment transfer, which keeps its own toggle above and stays
-  // confirm-required), independent of each other and of the card-payment
-  // toggle above (see lib/actions/recurring.ts's parseRecurringFields).
-  // amountIsVariable is shared with the card checkbox -- kind alone decides
-  // which one renders, so only one is ever in play at a time.
+  // "Amount changes each time" -- Income and Expense (a card-payment
+  // transfer keeps its own toggle above). amountIsVariable is shared with
+  // the card checkbox -- kind alone decides which one renders, so only one
+  // is ever in play at a time. "Date varies" renders for every kind,
+  // transfers included (migration 50) -- see lib/actions/recurring.ts's
+  // parseRecurringFields.
   const showVariabilityToggles = kind === "Income" || kind === "Expense";
   const [dateVaries, setDateVaries] = useState((recurring?.date_tolerance_days ?? 0) > 0);
   const [dateToleranceDays, setDateToleranceDays] = useState(recurring?.date_tolerance_days || 2);
@@ -520,8 +520,8 @@ export function RecurringForm({
         </div>
       )}
 
-      {showVariabilityToggles ? (
-        <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2">
+        {showVariabilityToggles ? (
           <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-secondary">
             <input
               type="checkbox"
@@ -532,36 +532,36 @@ export function RecurringForm({
             />
             Amount changes each time
           </label>
+        ) : null}
 
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-secondary">
-            <input
-              type="checkbox"
-              name="date_varies"
-              checked={dateVaries}
-              onChange={(e) => setDateVaries(e.target.checked)}
-              className="h-4 w-4 rounded border-hairline text-action focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action"
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-secondary">
+          <input
+            type="checkbox"
+            name="date_varies"
+            checked={dateVaries}
+            onChange={(e) => setDateVaries(e.target.checked)}
+            className="h-4 w-4 rounded border-hairline text-action focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action"
+          />
+          Date varies
+        </label>
+
+        {dateVaries ? (
+          <FormField label="Give or take how many days?" htmlFor={fieldId("date_tolerance_days")}>
+            <Input
+              id={fieldId("date_tolerance_days")}
+              name="date_tolerance_days"
+              type="number"
+              inputMode="numeric"
+              min="0"
+              max="14"
+              required
+              value={dateToleranceDays}
+              onChange={(e) => setDateToleranceDays(Number(e.target.value))}
+              className="w-20"
             />
-            Date varies
-          </label>
-
-          {dateVaries ? (
-            <FormField label="Give or take how many days?" htmlFor={fieldId("date_tolerance_days")}>
-              <Input
-                id={fieldId("date_tolerance_days")}
-                name="date_tolerance_days"
-                type="number"
-                inputMode="numeric"
-                min="0"
-                max="14"
-                required
-                value={dateToleranceDays}
-                onChange={(e) => setDateToleranceDays(Number(e.target.value))}
-                className="w-20"
-              />
-            </FormField>
-          ) : null}
-        </div>
-      ) : null}
+          </FormField>
+        ) : null}
+      </div>
 
       <div className="flex flex-col gap-4 rounded-xl border border-hairline p-4">
         <div className="flex flex-wrap items-end gap-4">

@@ -18,14 +18,15 @@ import {
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { TransactionType } from "@/lib/db/transactions";
 import { useToday } from "@/components/TodayProvider";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import { FormField, useFieldId } from "@/components/ui/FormField";
 import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { Celebration } from "@/components/ui/Celebration";
 import { useConfirmPulse } from "@/components/ui/ConfirmPulse";
-import { ChevronDownIcon, FlameIcon, InfoIcon } from "@/components/ui/icons";
+import { BalanceDateNote } from "@/components/BalanceDateNote";
+import { ChevronDownIcon, FlameIcon } from "@/components/ui/icons";
 
 const fieldClassName = FIELD_CLASS;
 
@@ -232,19 +233,11 @@ export function AddTransactionForm({
     if (balanceAnswers[`${accountId}|${transactionDate}`] !== false) return null;
 
     return (
-      <p className="flex items-start gap-2 rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink-secondary">
-        <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
-        <span className="flex-1">
-          Your {account.account_name} balance is set as of {formatDate(account.opening_date)} and
-          already includes this, so it won&apos;t change that balance.{" "}
-          <Link
-            href={`/accounts?edit=${account.id}#account-${account.id}`}
-            className="font-medium text-action underline-offset-2 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised"
-          >
-            Update the {account.account_name} balance
-          </Link>
-        </span>
-      </p>
+      <BalanceDateNote
+        accountId={account.id}
+        accountName={account.account_name}
+        openingDate={account.opening_date}
+      />
     );
   }
   // Closed by default (most entries skip these), but an edit or a prefill
@@ -299,9 +292,8 @@ export function AddTransactionForm({
       setCelebrateMessage(milestone?.message ?? loggedMessage);
       setCelebrateIcon(milestone?.kind === "streak" ? <FlameIcon className="h-4 w-4" /> : "✓");
       setCelebrate(true);
-      // Fires only on user-initiated create. Recurring catch-up runs
-      // server-side in the layout and has no path here -- keep it that
-      // way if that notice ever becomes a client component.
+      // Fires only on user-initiated create. A recurring confirmation has
+      // its own sheet and its own pulse, never this one.
       pulse(loggedType === "Income" ? "income" : "default");
       clearTimeout(celebrateTimeout.current);
       celebrateTimeout.current = setTimeout(() => {

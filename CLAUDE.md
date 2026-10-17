@@ -119,12 +119,21 @@ Every expected income occurrence in the horizon appears in the safe-to-spend
 projection whether or not it is confirmed — unconfirmed ones at the low end of
 the amount estimate and the late edge of the date tolerance; confirmed ones at
 their confirmed values. Obligations already project across the full horizon
-without confirmation; income is symmetric with them.
+without confirmation; income is symmetric with them. Once income passes its
+late edge unconfirmed it leaves the projection (counting money that probably
+isn't coming over-promises) -- but it never leaves the confirmation queue,
+so a late paycheck that does land stays confirmable.
 
-**Auto-create outflows. Confirm inflows.**
-Applies to writing rows into the ledger only. Never to forecasting.
-Assuming money left when it didn't makes the user cautious; assuming money
-arrived when it didn't makes them overspend.
+**Confirmation creates every recurring transaction.**
+A schedule never writes a transaction -- for any type: income, expense,
+transfer, card payment. Only a person's answer in the confirmation queue
+does (`confirmOccurrence()` in `lib/db/recurring.ts`, the one write path).
+No grace period, no auto-post, no write on app open. Applies to the ledger
+only, never to forecasting: an unconfirmed outflow stays in the projection
+(counted today once its date passes) until it's answered. Any code path
+that writes a recurring transaction without an explicit user action is a
+bug, whatever its comment says. See "Recurring transactions" below and
+docs/Recurring-Confirmation.md.
 
 **Uncertainty always pushes the forecast down.**
 Income: low amount, late date. Obligations: high amount, early date.
@@ -348,10 +357,11 @@ branch.
 ## A page render never writes
 
 Rendering a page must not create, update, or delete rows. Phase 7 found
-three instances: recurring catch-up (`generateDueOccurrences()`) and
-`record_login()`, both still called from `app/(app)/layout.tsx` and the
-dashboard and to be removed, and a third the streak rebuild nearly added,
-caught before it shipped. If a feature seems to need a write during render,
+three instances: recurring catch-up (`generateDueOccurrences()`, removed
+2026-10-17 -- recurring transactions are now created only by confirmation),
+`record_login()`, still called from `app/(app)/layout.tsx` and the dashboard
+and to be removed, and a third the streak rebuild nearly added, caught
+before it shipped. If a feature seems to need a write during render,
 say so and stop — don't add it.
 
 ## Backend contract
@@ -451,11 +461,13 @@ recorded in docs/supabase-config.md.
   are observed Monday, Saturday holidays are NOT observed Friday (the Fed
   is open). See migration 41.
 - **A page render never writes.** Writes belong in server actions or
-  scheduled work. Two known violations, to be removed, not copied:
-  recurring catch-up (`generateDueOccurrences()`, from
-  `app/(app)/layout.tsx` and the dashboard) and `record_login()` (every
-  full page load and dashboard view). The streak rebuild nearly added a
-  third. See `docs/phase-7-findings.md`.
+  scheduled work. One known violation, to be removed, not copied:
+  `record_login()` (every full page load and dashboard view). Recurring
+  catch-up was the other; it was removed 2026-10-17. The streak rebuild
+  nearly added a third. See `docs/phase-7-findings.md`.
+- `transactions.is_estimated` is deprecated (migration 50). Only the
+  removed catch-up set it; nothing writes it true. The column stays, and
+  an edit still clears it on legacy rows. Don't build on it.
 - "First login" is decided when the session starts (`lib/auth/firstSession.ts`),
   never from `lastlogin`, which `record_login()` stamps on every request.
 - Tier is profiles.subscription_plan / subscription_status, via getPlan().
@@ -472,38 +484,101 @@ recorded in docs/supabase-config.md.
 
 ## Recurring transactions
 
-Generated automatically on the due date -- never prompted. The app has no bank
-sync, so it cannot know a payment cleared; the trade is that generated rows are
-obvious and trivially correctable rather than confirmed in advance.
+A schedule produces an EXPECTATION, never a transaction. The app has no bank
+sync, so it cannot know a payment cleared or a paycheck landed -- so it asks.
+When an occurrence's date comes it enters the confirmation queue, and only
+the user's answer writes to the ledger. Four answers:
 
-- `transactions.recurringid` non-null means the row was generated from a
+- **Landed as expected** -- one tap. Writes the predicted amount on the
+  predicted date (or today, if it landed early inside its tolerance).
+- **Landed differently** -- amount and date, both pre-filled, both
+  editable, always. The confirmed date IS the transaction date; there is no
+  second date column anywhere.
+- **Hasn't landed yet** -- writes nothing. The expectation is untouched,
+  stays in the projection, and the queue asks again tomorrow (a cookie, not
+  a column). No revised dates in v1.
+- **Not happening** -- drops this occurrence only (the schedule advances a
+  cycle); the schedule stands.
+
+Plus **Confirm all as expected** for the whole queue: exactly the items
+shown, each once. Never an automatic write.
+
+The queue is a queue, never a modal: nothing is blocked while it has items.
+"4 to confirm" -- neutral ink, never "overdue", never a status colour,
+never red. Housekeeping, not failure. One item per schedule (one cursor,
+`next_run_date`); when more than one cycle is open the item says how many.
+`lib/confirmationQueue.ts` is the single source of what's in it -- the
+dashboard, its count and the recurring page all read it. Never re-derive
+"needs confirming" anywhere else.
+
+A confirmation dated before an account's balance date is allowed; the
+confirm sheet shows the same "before your balance date" note as the
+transaction form, from the same SQL rule (`counts_toward_balance_preview`,
+migration 48).
+
+- `transactions.recurringid` non-null means the row was confirmed from a
   schedule. Nothing else distinguishes them.
-- Generated rows carry a small recurring icon in lists -- an icon, not a
+- Those rows carry a small recurring icon in lists -- an icon, not a
   separate status or a different colour. They are normal transactions.
-- Editing or deleting a generated transaction is unremarkable: no extra
-  confirmation, no warning, no special path.
-- When a user edits the AMOUNT on a generated transaction, offer once to update
-  the schedule too ("Update the Rent schedule to $1,450?"). Declining leaves the
-  schedule alone and is never asked again for that edit. This is what makes
-  variable bills (utilities) workable. NOT BUILT YET: editing a generated
-  transaction's amount doesn't offer this today.
-- Deleting a schedule must NOT delete transactions already generated from it.
-  `recurringid` is ON DELETE SET NULL; that history is real.
+- Editing or deleting one is unremarkable: no extra confirmation, no
+  warning, no special path.
+- When a user edits the AMOUNT on a recurring transaction, offer once to
+  update the schedule too ("Update the Rent schedule to $1,450?"). Declining
+  leaves the schedule alone and is never asked again for that edit. This is
+  what makes variable bills (utilities) workable. NOT BUILT YET: editing a
+  recurring transaction's amount doesn't offer this today.
+- Deleting a schedule must NOT delete transactions already confirmed from
+  it. `recurringid` is ON DELETE SET NULL; that history is real.
+- Transactions the old catch-up created before 2026-10-17 stay as they are.
+  Never retroactively mark them unconfirmed.
 
 ### Counting, and the safe-to-spend boundary
-- Before its due date, a recurrence is a COMMITMENT: it appears in
-  `v_upcoming_recurring` and is subtracted from safe-to-spend.
-- On its due date it becomes a TRANSACTION: it leaves the commitments list and
-  reduces the account balance instead.
+- Until it's confirmed, a recurrence is a COMMITMENT: it appears in
+  `v_upcoming_recurring` and is subtracted from safe-to-spend -- on its
+  early edge, and from today once that has passed.
+- When it's confirmed it becomes a TRANSACTION: it leaves the commitments
+  list (the schedule advances a cycle) and reduces the account balance
+  instead.
 - The money is counted exactly once. The hero number must NOT change at that
-  boundary -- if it jumps, something is double-counting.
+  boundary -- if it jumps, something is double-counting. A date passing with
+  no answer changes nothing either: no write, still counted. Both pinned by
+  `lib/confirmationQueue.test.ts`.
 
-### Generation
-- Lazy catch-up when a user opens the app. No scheduler. Today it runs
-  from a render, a known violation of "A page render never writes".
-- MUST be idempotent, enforced by a database constraint -- not by
-  application logic. Two page loads must never create two rows. The unique
-  index is `recurring_tx_no_double_post` on
-  `(recurringid, transaction_date, transaction_type)` (migration 19). The
-  type is in the key because both legs of a recurring transfer share an
-  occurrence date.
+### Confirmation writes
+- `confirmOccurrence()` is the only write path; `skipOccurrence()` is "not
+  happening". Both claim the occurrence first: the schedule advances only
+  while `next_run_date` still holds the value read, so of two racing answers
+  exactly one writes. A failed insert puts the schedule back, so the
+  occurrence stays open and counted rather than silently skipped.
+- Every answer is keyed on the occurrence's due date; a stale button acts on
+  nothing rather than the next cycle.
+- `recurring_tx_no_double_post`, unique on
+  `(recurringid, transaction_date, transaction_type)` (migration 19), still
+  stands: a schedule can't have two transactions of one type on one date.
+  Confirming two cycles onto one day is refused with a message.
+- Checked against the database by `docs/recurring-confirmation-test.sql`
+  (one throwaway user, rolled back).
+
+## Prompt timing
+
+When something asks the user, and what each ask can write.
+
+- **Confirmation queue** -- every recurring type. An occurrence enters on
+  `confirmationOpensOn(dueDate, date_tolerance_days)`
+  (`lib/recurringSchedule.ts`): the expected date for a fixed schedule,
+  the early edge for an approximate one (it can land up to that many days
+  early). It stays until answered; there is no closing date. Writes a
+  transaction only on "landed".
+- **Statement amount** -- variable card payments only. From the
+  statement date (`statementDateForCycle`) through the payment's due date
+  (`isAwaitingStatementAmount`). Revises the expectation (`next_amount`),
+  which the projection and the queue's "landed as expected" then use. Never
+  writes a transaction.
+- **Fixed vs approximate** is `date_tolerance_days` on the schedule (0 =
+  fixed), available on every type including transfers (migration 50). One
+  concept, three readers: the queue opens on the early edge; the projection
+  counts income on the late edge and obligations on the early edge
+  ("Uncertainty always pushes the forecast down"). Never add a second
+  date-variance concept.
+- Asks are quiet lines and a queue, never modals, never badges in a status
+  colour.

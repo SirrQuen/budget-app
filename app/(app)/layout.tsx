@@ -3,7 +3,6 @@ import { recordLogin } from "@/lib/db/profile";
 import { listAccounts } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { getMostRecentTransactionAccountId } from "@/lib/db/transactions";
-import { generateDueOccurrences } from "@/lib/db/recurring";
 import { getTheme, getTimeZone, getToday } from "@/lib/db/settings";
 import { AppShell } from "@/components/app-shell/AppShell";
 import { identityName } from "@/lib/displayName";
@@ -11,18 +10,6 @@ import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { TodayProvider } from "@/components/TodayProvider";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  // Every authenticated route runs this layout -- lazy catch-up (see
-  // CLAUDE.md "Recurring transactions") belongs here, not just on
-  // /dashboard, or a schedule goes stale for anyone who always lands
-  // straight on /transactions. Must finish before
-  // getMostRecentTransactionAccountId() below, which reads transactions
-  // and would otherwise race its inserts. cache()d (like
-  // recordLogin), so DashboardPage's own call for the created list, to
-  // build its banner, is free -- both resolve to this one run.
-  // Its result is read on the dashboard; a failure here posts nothing, which
-  // the projection already treats as overdue, and the next load retries.
-  await generateDueOccurrences();
-
   const [user, loginResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme, timeZone, today] =
     await Promise.all([
       requireUser(),
@@ -41,7 +28,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       // row resolves to "system" rather than failing every authenticated
       // route. See lib/db/settings.ts.
       getTheme(),
-      // Both cached -- generateDueOccurrences above already read them.
       getTimeZone(),
       getToday(),
     ]);

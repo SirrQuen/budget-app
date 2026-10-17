@@ -1,19 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState, useTransition } from "react";
+import { useId, useState } from "react";
 import type {
   SafeToSpend,
   SafeToSpendCommitment,
-  SafeToSpendOverdueBill,
   SafeToSpendWindowReason,
 } from "@/lib/db/dashboard";
 import type { OverdueOccurrence } from "@/lib/safeToSpendProjection";
-import { resolveOverdueBillAction } from "@/lib/actions/recurring";
-import { daysBetweenInclusive } from "@/lib/date";
-import { useToday } from "@/components/TodayProvider";
-import { ConfirmVariableAmountSheet } from "../recurring/ConfirmVariableAmountSheet";
-import { INLINE_ACTION, UnconfirmedIncomeNote } from "./UnconfirmedIncomeNote";
+import { UnconfirmedIncomeNote, UnconfirmedObligationNote } from "./UnconfirmedIncomeNote";
 import type { HorizonReason } from "@/lib/safeToSpendProjection";
 import { Amount } from "@/components/ui/Amount";
 import { useCountUp } from "@/components/ui/useCountUp";
@@ -25,7 +20,6 @@ import {
   formatDayMonth,
 } from "@/lib/format";
 import { ChevronDownIcon, InfoIcon, PlusIcon } from "@/components/ui/icons";
-import { callAction } from "@/components/useActionForm";
 
 // A projection or a real payday gets the weekday ("Friday 3 October" -- a
 // date worth checking against your own bank); the end-of-month fallback
@@ -101,65 +95,12 @@ function UnconfirmedIncomeLine({ item }: { item: OverdueOccurrence }) {
   );
 }
 
-function daysAgo(dateISO: string, today: string): string {
-  const days = daysBetweenInclusive(dateISO, today) - 1;
-  return days === 1 ? "yesterday" : `${days} days ago`;
-}
-
-// A bill past due that never posted -- subtracted today until it's
-// answered, so a stale schedule can't quietly hold the figure down.
-function OverdueBillLine({ item }: { item: SafeToSpendOverdueBill }) {
-  const today = useToday();
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-
-  const resolve = (outcome: "posted" | "skipped") => {
-    setError(null);
-    startTransition(async () => {
-      const result = await callAction(() => resolveOverdueBillAction(item.recurringId, outcome));
-      if (result?.error) setError(result.error);
-    });
-  };
-
+// A bill past its due date that nobody has confirmed -- still subtracted
+// today, so the figure has a findable cause. Answered in the queue.
+function UnconfirmedObligationLine({ item }: { item: OverdueOccurrence }) {
   return (
     <li className="text-xs text-ink-secondary">
-      {item.name} was due {daysAgo(item.dueDate, today)} — did it go out?{" "}
-      <span className="inline-flex flex-wrap gap-x-3">
-        {item.cardPayment ? (
-          <ConfirmVariableAmountSheet
-            target={{
-              id: item.recurringId,
-              cardName: item.cardPayment.cardName,
-              estimatedAmount: item.amount,
-              statementDay: item.cardPayment.statementDay,
-              dueDate: item.cardPayment.runDate,
-            }}
-            trigger={(open) => (
-              <button type="button" onClick={open} className={INLINE_ACTION}>
-                Yes, confirm the amount
-              </button>
-            )}
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={() => resolve("posted")}
-            disabled={pending}
-            className={INLINE_ACTION}
-          >
-            Yes, it went out
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => resolve("skipped")}
-          disabled={pending}
-          className={INLINE_ACTION}
-        >
-          No, skip it
-        </button>
-      </span>
-      {error ? <span className="mt-1 block text-ink-muted">{error}</span> : null}
+      <UnconfirmedObligationNote item={item} />
     </li>
   );
 }
@@ -258,13 +199,13 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
         <div id={panelId} className="border-t border-hairline px-5 py-4">
           {/* Anything quietly moving the figure goes first, so the cause of
               a surprising number is the first thing read. */}
-          {data.unconfirmedIncome.length > 0 || data.overdueBills.length > 0 ? (
+          {data.unconfirmedIncome.length > 0 || data.overdueObligations.length > 0 ? (
             <ul className="mb-3 flex flex-col gap-2 border-b border-hairline pb-3">
               {data.unconfirmedIncome.map((item) => (
                 <UnconfirmedIncomeLine key={item.recurringId} item={item} />
               ))}
-              {data.overdueBills.map((item) => (
-                <OverdueBillLine key={item.recurringId} item={item} />
+              {data.overdueObligations.map((item) => (
+                <UnconfirmedObligationLine key={item.recurringId} item={item} />
               ))}
             </ul>
           ) : null}

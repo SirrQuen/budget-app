@@ -5,18 +5,19 @@ import type { Database } from "@/lib/database.types";
 import { addDaysISO, endOfMonthISO, daysBetweenInclusive, monthStartISO } from "@/lib/date";
 import type { DashboardRange } from "@/lib/dashboardRange";
 import { describeReadError } from "@/lib/db/errors";
-import { getSafeToSpendWindowPref, getSafeToSpendCushion, getToday } from "@/lib/db/settings";
+import { getSafeToSpendWindowPref, getSafeToSpendCushion, getTimeZone, getToday } from "@/lib/db/settings";
 import { getBankHolidays } from "@/lib/db/holidays";
 import { paydayWindowEnd } from "@/lib/recurringSchedule";
 import type { NonBusinessDayRule } from "@/lib/businessDays";
 import {
   projectSafeToSpend,
-  type OverdueOccurrence,
   type ProjectedObligation,
   type ProjectionSchedule,
   type SafeToSpendProjection,
 } from "@/lib/safeToSpendProjection";
 import { isSpendableAccountType } from "@/lib/safeToSpend";
+import { buildConfirmationQueue, type ConfirmationItem } from "@/lib/confirmationQueue";
+import { getNotYetKeys } from "@/lib/confirmationLater";
 import { deriveLoggingStreak, type LoggingStreakSummary } from "@/lib/streak";
 
 type NetWorthRow = Database["public"]["Views"]["v_net_worth"]["Row"];
@@ -552,23 +553,12 @@ export type SafeToSpend = SafeToSpendProjection & {
   /** True when the cushion is the suggestion rather than a stored choice. */
   cushionIsDefault: boolean;
   /**
-   * overdueObligations, plus what the breakdown's "did it go out?" line
-   * needs. cardPayment is set for a variable card payment still waiting on
-   * its amount -- "yes" there means confirming the amount, not posting a
-   * guess.
-   */
-  overdueBills: SafeToSpendOverdueBill[];
-  /**
    * The soonest upcoming Income schedule landing in a Checking or Savings
    * account -- a context line beneath the total, outside the breakdown's
    * arithmetic. null when there isn't one, which the UI reads as "show a
    * prompt to add a paycheck."
    */
   nextIncome: SafeToSpendIncome | null;
-};
-
-export type SafeToSpendOverdueBill = OverdueOccurrence & {
-  cardPayment: { cardName: string; statementDay: number; runDate: string } | null;
 };
 
 type UpcomingProjectionRow = {
@@ -628,7 +618,7 @@ export type IncomeSchedules = {
 // tell the two idle cases apart without a second round trip. account_type
 // comes from v_upcoming_recurring's own join to accounts -- an Income
 // category schedule's accountid is where the money lands, same as any
-// category schedule (see lib/db/recurring.ts's generateDueOccurrences).
+// category schedule (see lib/db/recurring.ts's confirmOccurrence).
 export const getIncomeSchedules = cache(async (): Promise<DbResult<IncomeSchedules>> => {
   const supabase = await createClient();
 
@@ -723,6 +713,30 @@ function toProjectionSchedule(row: UpcomingProjectionRow): ProjectionSchedule | 
   };
 }
 
+// Every active schedule as the projection reads it. cache()d: the
+// safe-to-spend figure and the confirmation queue are two uses of the same
+// rows, read once per request, so the two can never be built from
+// different data.
+const getProjectionSchedules = cache(async (): Promise<DbResult<ProjectionSchedule[]>> => {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("v_upcoming_recurring")
+    .select(
+      "recurring_id, description, amount, amount_low, is_estimated_amount, category_type, accountid, account_type, to_accountid, to_account_type, card_balance_owed, next_run_date, next_due_date, start_date, end_date, frequency, interval_count, business_day_offset, non_business_day_rule, date_tolerance_days, occurrences_remaining, amount_is_variable, next_amount_confirmed_at, statement_day, to_account_name",
+    )
+    .returns<UpcomingProjectionRow[]>();
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "dashboard") };
+  }
+
+  return {
+    data: data.map(toProjectionSchedule).filter((s): s is ProjectionSchedule => s !== null),
+    error: null,
+  };
+});
+
 // "Safe to spend" = the lowest the spendable balance gets between today
 // and the horizon, minus a cushion, floored at zero. The calculation
 // itself -- horizon, which rows count, the date/amount edges, the
@@ -750,12 +764,7 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
 
   const [cashRes, recurringRes, incomeRes, cushionRes, holidaysRes, windowPref] = await Promise.all([
     supabase.rpc("spendable_cash_balance"),
-    supabase
-      .from("v_upcoming_recurring")
-      .select(
-        "recurring_id, description, amount, amount_low, is_estimated_amount, category_type, accountid, account_type, to_accountid, to_account_type, card_balance_owed, next_run_date, next_due_date, start_date, end_date, frequency, interval_count, business_day_offset, non_business_day_rule, date_tolerance_days, occurrences_remaining, amount_is_variable, next_amount_confirmed_at, statement_day, to_account_name",
-      )
-      .returns<UpcomingProjectionRow[]>(),
+    getProjectionSchedules(),
     getSoonestIncomeOccurrence(),
     getSafeToSpendCushion(),
     getBankHolidays(),
@@ -765,8 +774,8 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   if (cashRes.error) {
     return { data: null, error: describeReadError(cashRes.error, "dashboard") };
   }
-  if (recurringRes.error) {
-    return { data: null, error: describeReadError(recurringRes.error, "dashboard") };
+  if (recurringRes.error !== null) {
+    return { data: null, error: recurringRes.error };
   }
   if (incomeRes.error) {
     return { data: null, error: incomeRes.error };
@@ -800,44 +809,71 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
     today,
     cash: cashRes.data,
     cushion: cushionRes.data.amount,
-    schedules: recurringRes.data
-      .map(toProjectionSchedule)
-      .filter((s): s is ProjectionSchedule => s !== null),
-    // A failed holiday read degrades to weekends-only, same as
-    // generateDueOccurrences -- not a reason to fail the hero.
+    schedules: recurringRes.data,
+    // A failed holiday read degrades to weekends-only -- not a reason to
+    // fail the hero.
     holidays: holidaysRes.data ?? new Set<string>(),
     fallbackWindowEnd,
-  });
-
-  const rowsById = new Map(recurringRes.data.map((r) => [r.recurring_id, r]));
-  const overdueBills = projection.overdueObligations.map((o): SafeToSpendOverdueBill => {
-    const row = rowsById.get(o.recurringId);
-    const awaitingCardAmount =
-      row !== undefined &&
-      row.to_accountid !== null &&
-      row.amount_is_variable &&
-      row.next_amount_confirmed_at === null &&
-      row.statement_day !== null;
-    return {
-      ...o,
-      cardPayment: awaitingCardAmount
-        ? {
-            cardName: row.to_account_name ?? "the card",
-            statementDay: row.statement_day!,
-            runDate: row.next_run_date,
-          }
-        : null,
-    };
   });
 
   return {
     data: {
       ...projection,
-      overdueBills,
       windowReason: projection.mode === "window" ? fallbackReason : null,
       cushionIsDefault: cushionRes.data.isDefault,
       nextIncome: incomeRes.data,
     },
+    error: null,
+  };
+}
+
+/** A queue item plus the account details its confirm sheet shows. */
+export type ConfirmationQueueItem = ConfirmationItem & {
+  /** The account(s) the transaction lands on -- two for a transfer. */
+  accounts: { id: string; name: string; openingDate: string }[];
+};
+
+// The confirmation queue (lib/confirmationQueue.ts) for this user, today.
+// Same schedule rows as getSafeToSpend -- the queue and the projection are
+// two readings of one set, never two queries that could drift. Read-only:
+// building the queue writes nothing; only an answer does.
+export async function getConfirmationQueue(): Promise<DbResult<ConfirmationQueueItem[]>> {
+  const supabase = await createClient();
+
+  // Until the browser has reported the user's zone (TodayProvider), "today"
+  // is UTC's -- a day ahead every US evening, which would open tomorrow's
+  // items tonight. The report revalidates the layout straight away.
+  if ((await getTimeZone()) === null) {
+    return { data: [], error: null };
+  }
+  const today = await getToday();
+
+  const [schedulesRes, holidaysRes, notYet, accountsRes] = await Promise.all([
+    getProjectionSchedules(),
+    getBankHolidays(),
+    getNotYetKeys(today),
+    supabase.from("accounts").select("id, account_name, opening_date"),
+  ]);
+
+  if (schedulesRes.error !== null) {
+    return { data: null, error: schedulesRes.error };
+  }
+  if (accountsRes.error) {
+    return { data: null, error: describeReadError(accountsRes.error, "dashboard") };
+  }
+
+  const accountById = new Map(accountsRes.data.map((a) => [a.id, a]));
+  const items = buildConfirmationQueue(schedulesRes.data, today, holidaysRes.data ?? new Set<string>(), notYet);
+
+  return {
+    data: items.map((item) => ({
+      ...item,
+      accounts: [item.accountId, item.toAccountId]
+        .filter((id): id is string => id !== null)
+        .map((id) => accountById.get(id))
+        .filter((a) => a !== undefined)
+        .map((a) => ({ id: a.id, name: a.account_name, openingDate: a.opening_date })),
+    })),
     error: null,
   };
 }

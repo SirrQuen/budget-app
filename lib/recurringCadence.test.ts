@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { nextOccurrenceISO, shouldReanchor } from "@/lib/recurringCadence";
 
-// Steps a Monthly schedule the way generateDueOccurrences does: the cursor
-// advances, the anchor (start_date) doesn't.
+// Steps a Monthly schedule the way confirmOccurrence advances it, one
+// cycle per answer: the cursor advances, the anchor (start_date) doesn't.
 function monthly(start: string, anchor: string, steps: number): string[] {
   const out = [start];
   let cursor = start;

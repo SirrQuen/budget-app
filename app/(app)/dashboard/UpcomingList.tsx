@@ -13,7 +13,6 @@ import {
   type UpcomingOccurrences,
 } from "@/lib/upcomingOccurrences";
 import { ConfirmVariableAmountSheet, type VariableAmountTarget } from "../recurring/ConfirmVariableAmountSheet";
-import { ConfirmIncomeSheet, type IncomeConfirmTarget } from "../recurring/ConfirmIncomeSheet";
 import { INLINE_ACTION, UnconfirmedIncomeNote } from "./UnconfirmedIncomeNote";
 
 /** Per-schedule display details the projection doesn't carry. */
@@ -21,14 +20,13 @@ export type UpcomingScheduleMeta = {
   categoryIcon: string | null;
   isTransfer: boolean;
   /**
-   * The Confirm action, when this schedule has one. It belongs to exactly
-   * one occurrence -- the schedule's next_due_date, the one confirming acts
-   * on -- so it's matched by dueDate, never shown on every row.
+   * A card payment's "enter the statement amount", when it has one -- a
+   * revision of the expectation, not a confirmation (those live in the
+   * confirmation queue). It belongs to exactly one occurrence, the
+   * schedule's next_due_date, so it's matched by dueDate, never shown on
+   * every row.
    */
-  confirm:
-    | { kind: "income"; dueDate: string; target: IncomeConfirmTarget }
-    | { kind: "card"; dueDate: string; target: VariableAmountTarget }
-    | null;
+  confirm: { kind: "card"; dueDate: string; target: VariableAmountTarget } | null;
 };
 
 // Every occurrence the safe-to-spend projection counts, bills and income
@@ -151,25 +149,14 @@ function OccurrenceRow({ item, meta }: { item: UpcomingOccurrence; meta: Upcomin
 
       {confirm ? (
         <div className="flex justify-end pl-7">
-          {confirm.kind === "income" ? (
-            <ConfirmIncomeSheet
-              target={confirm.target}
-              trigger={(open) => (
-                <button type="button" onClick={open} className={INLINE_ACTION}>
-                  Confirm
-                </button>
-              )}
-            />
-          ) : (
-            <ConfirmVariableAmountSheet
-              target={confirm.target}
-              trigger={(open) => (
-                <button type="button" onClick={open} className={INLINE_ACTION}>
-                  Confirm
-                </button>
-              )}
-            />
-          )}
+          <ConfirmVariableAmountSheet
+            target={confirm.target}
+            trigger={(open) => (
+              <button type="button" onClick={open} className={INLINE_ACTION}>
+                Enter statement amount
+              </button>
+            )}
+          />
         </div>
       ) : null}
     </li>
