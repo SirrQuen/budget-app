@@ -114,6 +114,18 @@ export async function updatePassword(
   redirect("/dashboard");
 }
 
+// Idle sign-out (components/IdleTimeout.tsx). Ends THIS session only --
+// being idle on one device mustn't sign out another -- and returns rather
+// than redirecting: the client follows with a full navigation to
+// /login?reason=timeout, so no client state or router cache outlives the
+// session. Safe to call twice (every open tab of the session times out at
+// once); signing out with no session is a no-op.
+export async function idleSignOut(): Promise<void> {
+  const supabase = await createClient();
+  await supabase.auth.signOut({ scope: "local" });
+  await clearSessionStart();
+}
+
 export async function logout() {
   const supabase = await createClient();
   await supabase.auth.signOut();

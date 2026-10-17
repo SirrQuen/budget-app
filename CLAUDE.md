@@ -354,6 +354,31 @@ builds `main` to mysorrel.com. One branch per batch, merged when that
 batch's verification passes. Never accumulate more than one batch on a
 branch.
 
+## Idle sign-out
+
+Two halves. Server: Supabase Auth's inactivity timeout and JWT expiry (30
+min, dashboard; `docs/supabase-config.md`), the backstop when JS never runs.
+Client: `components/IdleTimeout.tsx`, mounted by `AppShell`, so only
+authenticated routes run it -- warning modal at 10 min, sign-out at 15.
+
+- Durations live in one place, `lib/idleTimeout.ts`; override with
+  `NEXT_PUBLIC_IDLE_WARNING_SECONDS` / `NEXT_PUBLIC_IDLE_SIGN_OUT_SECONDS`
+  to test (e.g. 30/60; restart `next dev`).
+- Activity is a person: pointermove, pointerdown, keydown, scroll,
+  touchstart, focus. Never a request, a refetch, or a timer.
+- Timestamps, never ticks: `lastActivityAt` vs `Date.now()`, re-evaluated
+  on an interval, on visibilitychange and window focus, and BEFORE any
+  activity is recorded -- the first mouse move after waking a laptop signs
+  out, it doesn't count.
+- Multi-tab: the timestamp is shared through localStorage, keyed to the
+  session's JWT `session_id`, so activity in any tab counts for all, and a
+  stale timestamp from an earlier sign-in is ignored.
+- Never write activity to the database. That's the `record_login()`
+  pattern.
+- Timeout lands on `/login?reason=timeout`, which says what happened.
+  "Sign out now" from the warning goes to plain `/login` -- it wasn't a
+  timeout.
+
 ## A page render never writes
 
 Rendering a page must not create, update, or delete rows. Phase 7 found

@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/auth/dal";
+import { getSessionId, requireUser } from "@/lib/auth/dal";
 import { recordLogin } from "@/lib/db/profile";
 import { listAccounts } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
@@ -10,7 +10,7 @@ import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { TodayProvider } from "@/components/TodayProvider";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const [user, loginResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme, timeZone, today] =
+  const [user, loginResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme, timeZone, today, sessionId] =
     await Promise.all([
       requireUser(),
       // Every authenticated route runs this layout, including the
@@ -30,6 +30,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       getTheme(),
       getTimeZone(),
       getToday(),
+      // Keys the idle sign-out's shared activity clock (components/
+      // IdleTimeout.tsx). Read-only.
+      getSessionId(),
     ]);
 
   // A load failure here just means no quick-add bar for this request, not a
@@ -53,7 +56,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <ThemeProvider stored={theme}>
       <TodayProvider today={today} timeZone={timeZone}>
-        <AppShell accountName={accountName} quickAdd={quickAdd}>
+        <AppShell accountName={accountName} quickAdd={quickAdd} sessionId={sessionId}>
           {children}
         </AppShell>
       </TodayProvider>

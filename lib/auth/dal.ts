@@ -38,3 +38,13 @@ export const requireUser = cache(async () => {
 
   return user;
 });
+
+// The current Supabase session's id (the JWT's session_id claim) -- what
+// the idle sign-out keys its shared activity timestamp to, so a timestamp
+// left in localStorage by an earlier sign-in never counts against a new
+// one. Read-only; getClaims() verifies the JWT and writes nothing.
+export const getSessionId = cache(async (): Promise<string | null> => {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  return data?.claims?.session_id ?? null;
+});
