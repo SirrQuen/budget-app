@@ -178,9 +178,8 @@ export function QuickAddBar({
       setCelebrateMessage(message);
       setCelebrateIcon(icon);
       setCelebrate(true);
-      // Fires only on user-initiated create. Recurring catch-up runs
-      // server-side in the layout and has no path here -- keep it that
-      // way if that notice ever becomes a client component.
+      // Fires only on user-initiated create. A recurring confirmation has
+      // its own sheet and its own pulse, never this one.
       pulse(isIncome ? "income" : "default");
       setText("");
       setSheetOpen(false);

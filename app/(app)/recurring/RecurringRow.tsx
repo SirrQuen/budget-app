@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { RecurringForm, type EditableRecurring } from "./RecurringForm";
 import { ConfirmVariableAmountSheet } from "./ConfirmVariableAmountSheet";
-import { ConfirmIncomeSheet } from "./ConfirmIncomeSheet";
 import {
   deleteRecurringAction,
   pauseRecurringAction,
@@ -76,11 +75,11 @@ export function RecurringRow({
   }
 
   const isTransfer = recurring.to_accountid !== null;
-  // Transfer only -- amount_is_variable now also covers a variable-amount
-  // Income schedule (29_recurring_income_confirmation.sql), which has its
-  // own confirmation chip below (needsIncomeConfirmation) and never sets
-  // next_amount_confirmed_at, so without this guard both blocks rendered
-  // for the same Income row.
+  // A variable card payment waiting on its statement amount -- Transfer
+  // only (amount_is_variable also covers Income and Expense schedules,
+  // which never set next_amount). Entering it revises the expected
+  // payment; the payment itself is confirmed in the queue like anything
+  // else.
   const needsConfirmation =
     isTransfer && recurring.amount_is_variable && recurring.next_amount_confirmed_at === null;
   const isOverdueNeedsAmount = needsConfirmation && recurring.next_run_date <= today;
@@ -89,17 +88,8 @@ export function RecurringRow({
     : recurring.next_amount_confirmed_at !== null
       ? Number(recurring.next_amount)
       : estimatedAmount;
-  // Every Income schedule requires confirmation, always (CLAUDE.md
-  // "Auto-create outflows. Confirm inflows.") -- unlike the card-payment
-  // chip above, not gated on amount_is_variable: even a fixed-amount,
-  // fixed-date paycheck still needs a "did it land?" before it posts.
-  // Always shown, like the card chip -- the recurring row is a manual
-  // override, not gated to the dashboard prompt's own confirmation window.
-  const needsIncomeConfirmation = !isTransfer && recurring.requires_confirmation;
-  const isOverdueNeedsConfirmation = needsIncomeConfirmation && recurring.next_due_date <= today;
   // A variable-amount Expense schedule (31_recurring_expense_variability.sql)
-  // never needs confirmation -- CLAUDE.md "Auto-create outflows." -- so it
-  // gets no chip of its own below, unlike the card/Income cases above. Still
+  // has no statement amount to enter, unlike the card case above. Still
   // needs SOME visible marker that displayAmount is a guess rather than a
   // known figure (CLAUDE.md "Display"), hence this inline label instead.
   const isEstimatedExpenseSchedule =
@@ -250,8 +240,8 @@ export function RecurringRow({
           <span className="inline-flex items-center gap-1.5 text-ink-muted">
             <InfoIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             {isOverdueNeedsAmount
-              ? "Needs your amount before it can post"
-              : "Estimate -- confirm once the statement posts"}
+              ? "Estimate -- enter the statement amount if you have it"
+              : "Estimate -- enter the amount once the statement is out"}
           </span>
           <ConfirmVariableAmountSheet
             target={{
@@ -267,38 +257,7 @@ export function RecurringRow({
                 onClick={open}
                 className="shrink-0 rounded-full bg-surface-raised px-3 py-1 text-xs font-medium text-ink transition-colors duration-150 hover:bg-hairline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
               >
-                Confirm amount
-              </button>
-            )}
-          />
-        </div>
-      ) : null}
-
-      {needsIncomeConfirmation ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-sm @4xl:col-span-5">
-          <span className="inline-flex items-center gap-1.5 text-ink-muted">
-            <InfoIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            {isOverdueNeedsConfirmation
-              ? "Should have landed by now -- confirm when it does"
-              : recurring.amount_is_variable
-                ? "Estimate -- confirm once it lands"
-                : "Confirm once it lands"}
-          </span>
-          <ConfirmIncomeSheet
-            target={{
-              id: recurring.id,
-              name: recurring.description,
-              estimatedAmount,
-              isEstimate: recurring.amount_is_variable,
-              dueDate: recurring.next_due_date,
-            }}
-            trigger={(open) => (
-              <button
-                type="button"
-                onClick={open}
-                className="shrink-0 rounded-full bg-surface-raised px-3 py-1 text-xs font-medium text-ink transition-colors duration-150 hover:bg-hairline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-              >
-                Confirm
+                Enter amount
               </button>
             )}
           />

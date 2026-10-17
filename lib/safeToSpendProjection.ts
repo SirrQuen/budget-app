@@ -186,8 +186,9 @@ export type SafeToSpendProjection = {
    */
   unconfirmedIncome: OverdueOccurrence[];
   /**
-   * Obligations past their due date that haven't posted -- subtracted
-   * today, and surfaced for the same reason. One per schedule, earliest.
+   * Obligations past their due date that haven't been confirmed --
+   * subtracted today, and surfaced for the same reason. One per schedule,
+   * earliest.
    */
   overdueObligations: OverdueOccurrence[];
   /** Every run below the cushion, chronological. Empty when there are none. */
@@ -232,7 +233,7 @@ export type OverdueOccurrence = {
 const toCents = (dollars: number) => Math.round(dollars * 100);
 const toDollars = (cents: number) => cents / 100;
 
-type Occurrence = {
+export type Occurrence = {
   /** Raw cadence date -- what statementDateForCycle is keyed on. */
   cursor: string;
   /** Business-day-resolved due date. */
@@ -240,10 +241,12 @@ type Occurrence = {
 };
 
 // Every occurrence of a schedule, starting with its stored next_due_date,
-// until one passes `until`. Mirrors generateDueOccurrences' loop
-// (lib/db/recurring.ts): the raw cursor steps, the resolved date is
-// derived, end_date is checked against the raw cursor.
-function expandOccurrences(s: ProjectionSchedule, until: string, holidays: ReadonlySet<string>): Occurrence[] {
+// until one passes `until`: the raw cursor steps, the resolved date is
+// derived, end_date is checked against the raw cursor. The one expansion --
+// the confirmation queue (lib/confirmationQueue.ts) counts outstanding
+// cycles with it too, so the queue and the projection can't disagree
+// about which occurrences exist.
+export function expandOccurrences(s: ProjectionSchedule, until: string, holidays: ReadonlySet<string>): Occurrence[] {
   const out: Occurrence[] = [];
   let cursor = s.nextRunDate;
   let due = s.nextDueDate;
@@ -344,7 +347,8 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
 
   // Income, at the late edge. An occurrence whose late edge has already
   // passed is an unconfirmed paycheck -- never assumed to have arrived
-  // (CLAUDE.md "Confirm inflows"), so it isn't counted and isn't a payday.
+  // (CLAUDE.md "Confirmation gates transaction creation"), so it isn't counted
+  // and isn't a payday. It stays in the confirmation queue all the same.
   const paydaySearchEnd = addDaysISO(today, PAYDAY_SEARCH_DAYS);
   const allIncomes: ProjectedIncome[] = [];
   const unconfirmedIncome: OverdueOccurrence[] = [];
@@ -397,7 +401,8 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
   const incomes = mode === "projection" ? allIncomes.filter((i) => i.date <= horizonEnd) : [];
 
   // Obligations, at the early edge, never before today (an overdue one
-  // that hasn't posted yet still has to come out of today's cash).
+  // nobody has confirmed yet still has to come out of today's cash -- it
+  // stays counted until a confirmation turns it into a transaction).
   const obligations: ProjectedObligation[] = [];
   const overdueObligations: OverdueOccurrence[] = [];
   const obligationSearchEnd = addDaysISO(horizonEnd, MAX_DATE_TOLERANCE_DAYS);

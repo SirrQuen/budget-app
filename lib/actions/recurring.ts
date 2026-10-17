@@ -10,9 +10,13 @@ import {
   resumeRecurring,
   getRecurring,
   confirmVariableAmount,
-  confirmIncomeOccurrence,
-  resolveOverdueOccurrence,
+  confirmOccurrence,
+  skipOccurrence,
+  confirmOccurrencesAsExpected,
 } from "@/lib/db/recurring";
+import { confirmationKey } from "@/lib/confirmationQueue";
+import { addNotYetKey } from "@/lib/confirmationLater";
+import { getToday } from "@/lib/db/settings";
 
 export type ActionState = { error?: string } | undefined;
 
@@ -52,14 +56,15 @@ type ParsedRecurringFields = {
   // never has one.
   amount_is_variable: boolean;
   statement_day: number | null;
-  // "Date varies" -- Income or Expense, independent of amount_is_variable (a
+  // "Date varies" -- any type, independent of amount_is_variable (a
   // paycheck can have a fixed date but variable hours, or the reverse). 0
   // when not set: identical in effect to "doesn't vary" (see
   // rectx_date_tolerance_range / lib/recurringSchedule.ts), never null.
   date_tolerance_days: number;
   // True for every Income schedule, forced here rather than read from the
-  // form -- CLAUDE.md "Auto-create outflows. Confirm inflows." is not a
-  // user preference.
+  // form. Vestigial since migration 50: every schedule now needs a
+  // confirmation to write a transaction, and nothing branches on this any
+  // more. Still written so the column stays truthful for Income.
   requires_confirmation: boolean;
   // Business-day resolution (20260914000024_24_recurring_business_day_rules.sql)
   // -- derived from RecurringForm's timing_mode/timing_direction/timing_count
@@ -90,6 +95,18 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
   let amount_is_variable = false;
   let statement_day: number | null = null;
   let date_tolerance_days = 0;
+
+  // "Date varies" -- any type (a card statement is the case that needed
+  // it most; migration 50 lets a transfer carry one). Independent of
+  // amount_is_variable. Drives both the projection's edges and when the
+  // confirmation queue opens (CLAUDE.md "Prompt timing").
+  if (formData.get("date_varies") === "on") {
+    const toleranceInput = String(formData.get("date_tolerance_days") ?? "").trim();
+    date_tolerance_days = Math.trunc(Number(toleranceInput));
+    if (!Number.isFinite(date_tolerance_days) || date_tolerance_days < 0 || date_tolerance_days > 14) {
+      return { error: "Enter a tolerance between 0 and 14 days." };
+    }
+  }
 
   if (kind === "Transfer") {
     // "accountid" doubles as the transfer's source ("from") account --
@@ -133,22 +150,12 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
       return { error: "Choose an account." };
     }
 
-    // "Amount changes each time" / "Date varies" -- Income or Expense (the
-    // checkboxes only render there, same trust-the-client reasoning as the
-    // Transfer branch's own amount_is_variable read above; enforce_recurring_
-    // variability_scope rejects either one on any other category
-    // regardless). Independent of each other -- a bill can vary in amount,
-    // in date, in both, or in neither, same as a paycheck.
+    // "Amount changes each time" -- Income or Expense (the checkbox only
+    // renders there, same trust-the-client reasoning as the Transfer
+    // branch's own amount_is_variable read above; enforce_recurring_
+    // variability_scope rejects it on any other category regardless).
     if (kind === "Income" || kind === "Expense") {
       amount_is_variable = formData.get("amount_is_variable") === "on";
-      const dateVaries = formData.get("date_varies") === "on";
-      if (dateVaries) {
-        const toleranceInput = String(formData.get("date_tolerance_days") ?? "").trim();
-        date_tolerance_days = Math.trunc(Number(toleranceInput));
-        if (!Number.isFinite(date_tolerance_days) || date_tolerance_days < 0 || date_tolerance_days > 14) {
-          return { error: "Enter a tolerance between 0 and 14 days." };
-        }
-      }
     }
   }
 
@@ -429,51 +436,97 @@ export async function confirmVariableAmountAction(
   revalidatePath("/dashboard");
 }
 
-// Confirming an Income schedule writes the transaction immediately (see
-// confirmIncomeOccurrence) rather than staging a pending amount -- reachable
-// from the same three places as confirmVariableAmountAction: the upcoming
-// list, the recurring row, and the dashboard prompt (see ConfirmIncomeSheet).
-export async function confirmIncomeAction(
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Every answer changes the ledger, the projection, or the queue -- all
+// three pages read at least one.
+function revalidateAnswered() {
+  revalidatePath("/recurring");
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+}
+
+// The four answers to a confirmation-queue item (docs/Recurring-
+// Confirmation.md), each keyed on the occurrence's due date so a stale
+// button acts on nothing rather than on the next cycle. An answer that
+// finds the occurrence already answered (another tab, a double press)
+// succeeds quietly -- the outcome the user asked for already exists.
+
+/** Landed as expected -- one tap: the predicted date and amount. */
+export async function confirmAsExpectedAction(id: string, dueDate: string): Promise<ActionState> {
+  if (!id || !ISO_DATE.test(dueDate)) {
+    return { error: "We couldn't tell which one that was." };
+  }
+  const { error } = await confirmOccurrence(id, { dueDate });
+  if (error) {
+    return { error };
+  }
+  revalidateAnswered();
+}
+
+/** Landed differently -- the sheet's form: amount and date, both pre-filled, both editable. */
+export async function confirmDifferentlyAction(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
   const id = String(formData.get("id") ?? "");
-  if (!id) {
-    return { error: "Missing schedule id." };
+  const dueDate = String(formData.get("due_date") ?? "");
+  if (!id || !ISO_DATE.test(dueDate)) {
+    return { error: "We couldn't tell which one that was." };
   }
 
-  const amountInput = String(formData.get("amount") ?? "").trim();
-  const amount = Number(amountInput);
+  const amount = Number(String(formData.get("amount") ?? "").trim());
   if (!Number.isFinite(amount) || amount <= 0) {
     return { error: "Enter an amount greater than zero." };
   }
+  const date = String(formData.get("date") ?? "").trim();
+  if (!ISO_DATE.test(date)) {
+    return { error: "Choose the date it landed." };
+  }
 
-  const { error } = await confirmIncomeOccurrence(id, amount);
+  const { error } = await confirmOccurrence(id, { dueDate, amount, date });
   if (error) {
     return { error };
   }
+  revalidateAnswered();
+}
 
+/**
+ * Hasn't landed yet -- writes nothing. The expectation stays as it is, in
+ * the projection and on the schedule; the queue asks again tomorrow.
+ */
+export async function notYetAction(id: string, dueDate: string): Promise<ActionState> {
+  if (!id || !ISO_DATE.test(dueDate)) {
+    return { error: "We couldn't tell which one that was." };
+  }
+  await addNotYetKey(confirmationKey(id, dueDate), await getToday());
   revalidatePath("/recurring");
   revalidatePath("/dashboard");
 }
 
-// The safe-to-spend breakdown's "did it go out?" line for an overdue bill
-// (see resolveOverdueOccurrence). Bound per button with .bind(null, id,
-// outcome), so there's no form field to validate beyond these two.
-export async function resolveOverdueBillAction(
-  id: string,
-  outcome: "posted" | "skipped",
-): Promise<ActionState> {
-  if (!id || (outcome !== "posted" && outcome !== "skipped")) {
-    return { error: "We couldn't tell which bill that was." };
+/** Not happening -- drops this occurrence only; the schedule stands. */
+export async function skipOccurrenceAction(id: string, dueDate: string): Promise<ActionState> {
+  if (!id || !ISO_DATE.test(dueDate)) {
+    return { error: "We couldn't tell which one that was." };
   }
-
-  const { error } = await resolveOverdueOccurrence(id, outcome);
+  const { error } = await skipOccurrence(id, dueDate);
   if (error) {
     return { error };
   }
+  revalidateAnswered();
+}
 
-  revalidatePath("/recurring");
-  revalidatePath("/transactions");
-  revalidatePath("/dashboard");
+/**
+ * Confirm all as expected -- exactly the items the queue showed, each once.
+ * Reports how many went through and why any didn't.
+ */
+export async function confirmAllAsExpectedAction(
+  items: { id: string; dueDate: string }[],
+): Promise<{ confirmed: number; error?: string }> {
+  const valid = items.filter((i) => i.id && ISO_DATE.test(i.dueDate));
+  const result = await confirmOccurrencesAsExpected(valid);
+  revalidateAnswered();
+  return result.errors.length > 0
+    ? { confirmed: result.confirmed, error: result.errors.join(" ") }
+    : { confirmed: result.confirmed };
 }

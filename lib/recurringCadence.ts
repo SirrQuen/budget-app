@@ -1,6 +1,6 @@
 // Pure cadence math, moved out of lib/db/recurring.ts so the safe-to-spend
 // projection (lib/safeToSpendProjection.ts) can step a schedule forward
-// with exactly the same rules generateDueOccurrences uses, and be unit
+// with exactly the same rules confirmOccurrence advances by, and be unit
 // tested without a database. No "server-only" -- nothing here touches one.
 import { addDaysISO } from "@/lib/date";
 
@@ -11,7 +11,7 @@ import { addDaysISO } from "@/lib/date";
 // Daily/Weekly/Biweekly/Monthly/Quarterly/Yearly (see CLAUDE.md "Recurring
 // transactions"). Day-of-month/weekday isn't stored anywhere: the schedule is
 // entirely "one cadence step from next_run_date", so this is the one place
-// that owns the calendar edge cases. Both generateDueOccurrences and any
+// that owns the calendar edge cases. Both confirmOccurrence and any
 // future "preview the next occurrence" UI should go through this rather than
 // re-deriving it.
 // ---------------------------------------------------------------------------

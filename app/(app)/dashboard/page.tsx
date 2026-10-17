@@ -12,12 +12,12 @@ import {
   getGroupMovement,
   getGoalProgress,
   getUpcomingRecurring,
+  getConfirmationQueue,
 } from "@/lib/db/dashboard";
 import { getBudgetProgress } from "@/lib/db/budgets";
 import { listAccountBalances } from "@/lib/db/accounts";
-import { generateDueOccurrences } from "@/lib/db/recurring";
 import { getReturnSummaryFacts } from "@/lib/actions/activity";
-import { isAwaitingStatementAmount, isAwaitingIncomeConfirmation } from "@/lib/recurringSchedule";
+import { isAwaitingStatementAmount } from "@/lib/recurringSchedule";
 import { resolveDashboardRange } from "@/lib/dashboardRange";
 import { getTimeZone, getToday } from "@/lib/db/settings";
 import { sinceLabel } from "@/lib/sinceLabel";
@@ -25,9 +25,8 @@ import { monthStartISO } from "@/lib/date";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatTile } from "@/components/ui/StatTile";
 import { ReturnSummaryStrip } from "@/components/ui/ReturnSummaryStrip";
-import { GeneratedOccurrencesBanner } from "./GeneratedOccurrencesBanner";
 import { VariableAmountPrompt } from "./VariableAmountPrompt";
-import { IncomeConfirmPrompt } from "./IncomeConfirmPrompt";
+import { ConfirmationQueue } from "../recurring/ConfirmationQueue";
 import { SafeToSpendHero } from "./SafeToSpendHero";
 import { ScopedRegion } from "./ScopedRegion";
 import { CashflowChart } from "./CashflowChart";
@@ -60,19 +59,6 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     return prev ? getReturnSummaryFacts(prev) : ([] as string[]);
   });
 
-  // Lazy catch-up (see CLAUDE.md "Recurring transactions") -- must finish
-  // before anything below reads a balance, a budget, cashflow, or the
-  // upcoming list, every one of which this can change by inserting
-  // transactions and advancing next_run_date. Unrelated to the greeting/
-  // return-facts chain above, so it's still in flight concurrently with
-  // that request; only the batch below has to wait for it.
-  const generatedResult = await generateDueOccurrences();
-  // A failed catch-up only loses the "while you were away" banner. No
-  // figure goes wrong: an occurrence that didn't post stays a commitment
-  // (the projection carries it as overdue), and the next load retries it.
-  // lib/db already logs the failure.
-  const generatedOccurrences = generatedResult.data ?? [];
-
   // One batch, all in flight together. A brand-new user (stages 1-2) fetches
   // a few results it won't render -- all cheap and empty -- which is the price
   // of not adding a waterfall for the common full-dashboard case.
@@ -85,6 +71,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     budgetResult,
     goalResult,
     recurringResult,
+    confirmationResult,
     returnFacts,
     rangeStatsResult,
     cashflowResult,
@@ -101,6 +88,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     getBudgetProgress({ budget_month: currentMonth }),
     getGoalProgress(),
     getUpcomingRecurring(),
+    getConfirmationQueue(),
     returnFactsPromise,
     getRangeCashflowStats(range),
     getCashflowChart(),
@@ -168,34 +156,22 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       {
         categoryIcon: r.category_icon,
         isTransfer: r.to_accountid !== null,
+        // The card's statement amount -- a revision of the expectation,
+        // never a transaction (that's the confirmation queue's job).
         confirm:
-          r.next_due_date == null
-            ? null
-            : r.to_accountid === null && r.requires_confirmation
-              ? {
-                  kind: "income" as const,
-                  dueDate: r.next_due_date,
-                  target: {
-                    id: r.recurring_id ?? "",
-                    name: r.description ?? "",
-                    estimatedAmount: r.amount ?? 0,
-                    isEstimate: r.is_estimated_amount ?? false,
-                    dueDate: r.next_due_date,
-                  },
-                }
-              : r.to_accountid !== null && r.is_estimated_amount
-                ? {
-                    kind: "card" as const,
-                    dueDate: r.next_due_date,
-                    target: {
-                      id: r.recurring_id ?? "",
-                      cardName: r.to_account_name ?? "the card",
-                      estimatedAmount: r.amount ?? 0,
-                      statementDay: r.statement_day ?? 1,
-                      dueDate: r.next_run_date ?? "",
-                    },
-                  }
-                : null,
+          r.next_due_date != null && r.to_accountid !== null && r.is_estimated_amount
+            ? {
+                kind: "card" as const,
+                dueDate: r.next_due_date,
+                target: {
+                  id: r.recurring_id ?? "",
+                  cardName: r.to_account_name ?? "the card",
+                  estimatedAmount: r.amount ?? 0,
+                  statementDay: r.statement_day ?? 1,
+                  dueDate: r.next_run_date ?? "",
+                },
+              }
+            : null,
       },
     ]),
   );
@@ -203,8 +179,9 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   // Both prompt lists below read recurringResult. On a failed read they're
   // empty, but never silently: the Upcoming section reports the failure.
   //
-  // The nudge to confirm a card's statement amount runs from the statement
-  // date through the due date (see CLAUDE.md "Prompt timing") -- scanned
+  // The nudge to enter a card's statement amount runs from the statement
+  // date through the due date (see CLAUDE.md "Prompt timing"). It revises
+  // the expected payment; the payment itself goes through the queue -- scanned
   // over the FULL upcoming list, not just the 5-item slice above, so a
   // variable schedule further out still gets its prompt.
   const variableAmountPrompts = (recurringResult.data ?? [])
@@ -224,34 +201,13 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       dueDate: r.next_run_date!,
     }));
 
-  // Every Income schedule requires confirmation (CLAUDE.md "Auto-create
-  // outflows. Confirm inflows.") -- the prompt opens EARLY, at
-  // next_due_date - date_tolerance_days, never the other way round (see
-  // lib/recurringSchedule.ts's incomeConfirmationOpensAt/paydayWindowEnd),
-  // and stays open indefinitely once due, unlike the card prompt above,
-  // since nothing ever auto-posts it closed.
-  const incomeConfirmPrompts = (recurringResult.data ?? [])
-    .filter(
-      (r) =>
-        r.to_accountid === null &&
-        r.requires_confirmation === true &&
-        r.next_due_date != null &&
-        isAwaitingIncomeConfirmation(today, r.next_due_date, r.date_tolerance_days ?? 0),
-    )
-    .map((r) => ({
-      id: r.recurring_id ?? "",
-      name: r.description ?? "",
-      estimatedAmount: r.amount ?? 0,
-      isEstimate: r.is_estimated_amount ?? false,
-      dueDate: r.next_due_date!,
-    }));
-
   const upcomingError = recurringResult.error ?? safeToSpendResult.error;
 
   // Every section that renders a SectionError on failure, by its label.
   const failedSections = (
     [
       ["Safe to spend", safeToSpendResult.error],
+      ["To confirm", confirmationResult.error],
       ["Net worth", netWorthStatResult.error],
       ["Budgets", budgetResult.error],
       ["Goals", goalResult.error],
@@ -321,19 +277,20 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
           <ReturnSummaryStrip since={sinceLabel(previousLoginAt, today, timeZone)} facts={returnFacts} />
         ) : null}
 
-        {generatedOccurrences.length > 0 ? (
-          <GeneratedOccurrencesBanner
-            descriptions={generatedOccurrences.map((t) => t.description)}
-          />
-        ) : null}
-
         <VariableAmountPrompt items={variableAmountPrompts} />
-        <IncomeConfirmPrompt items={incomeConfirmPrompts} />
 
         {safeToSpendResult.error ? (
           sectionError("Safe to spend")
         ) : safeToSpendResult.data ? (
           <SafeToSpendHero data={safeToSpendResult.data} />
+        ) : null}
+
+        {/* Beneath the figure it never changes: an unanswered item is
+            already counted there. Only an answer writes. */}
+        {confirmationResult.error ? (
+          sectionError("To confirm")
+        ) : confirmationResult.data ? (
+          <ConfirmationQueue items={confirmationResult.data} />
         ) : null}
 
         {/* One column below 360px: two columns there left each tile

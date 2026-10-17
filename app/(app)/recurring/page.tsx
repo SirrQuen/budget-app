@@ -4,12 +4,14 @@ import { listCategoriesForType } from "@/lib/db/categories";
 import { getBankHolidays } from "@/lib/db/holidays";
 import { estimateCardPaymentDue } from "@/lib/accountOptions";
 import { getToday } from "@/lib/db/settings";
+import { getConfirmationQueue } from "@/lib/db/dashboard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadError } from "@/components/ui/LoadError";
 import { RepeatIcon } from "@/components/ui/icons";
 import { CreateRecurringForm } from "./CreateRecurringForm";
 import { RecurringRow } from "./RecurringRow";
+import { ConfirmationQueue } from "./ConfirmationQueue";
 import type { TransactionAccountOption } from "../transactions/AddTransactionForm";
 
 // Name, schedule, next due, amount, actions -- identical on every row on
@@ -28,7 +30,7 @@ function RecurringLoadError({ message }: { message: string }) {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Recurring"
-        description="Bills and paychecks that repeat -- posted automatically on their due date."
+        description="Bills and paychecks that repeat. When one comes due, you confirm what happened."
       />
       <LoadError message={message} />
     </div>
@@ -43,6 +45,7 @@ export default async function RecurringPage() {
     incomeCategoriesResult,
     expenseCategoriesResult,
     holidaysResult,
+    confirmationResult,
   ] = await Promise.all([
     listRecurring(),
     listAccounts({ is_active: true }),
@@ -50,6 +53,7 @@ export default async function RecurringPage() {
     listCategoriesForType("Income"),
     listCategoriesForType("Expense"),
     getBankHolidays(),
+    getConfirmationQueue(),
   ]);
 
   // RecurringForm's live timing preview degrades to "weekend-aware only"
@@ -69,7 +73,8 @@ export default async function RecurringPage() {
     accountsResult.error !== null ||
     balancesResult.error !== null ||
     incomeCategoriesResult.error !== null ||
-    expenseCategoriesResult.error !== null
+    expenseCategoriesResult.error !== null ||
+    confirmationResult.error !== null
   ) {
     return (
       <RecurringLoadError
@@ -79,6 +84,7 @@ export default async function RecurringPage() {
           balancesResult.error ??
           incomeCategoriesResult.error ??
           expenseCategoriesResult.error ??
+          confirmationResult.error ??
           "We couldn't load your recurring transactions. Refresh the page to try again."
         }
       />
@@ -143,12 +149,12 @@ export default async function RecurringPage() {
       <div className="flex flex-col gap-6">
         <PageHeader
           title="Recurring"
-          description="Bills and paychecks that repeat -- posted automatically on their due date."
+          description="Bills and paychecks that repeat. When one comes due, you confirm what happened."
         />
         <EmptyState
           icon={<RepeatIcon className="h-10 w-10" />}
-          heading="Put a repeating bill on autopilot"
-          message="Rent, a subscription, your paycheck -- set it up once and it posts itself on the due date, no confirmation needed."
+          heading="Set up a repeating bill or paycheck"
+          message="Rent, a subscription, your paycheck -- set it up once. When its date comes, one tap confirms it and it goes in your transactions."
           action={
             accounts.length > 0 ? (
               <CreateRecurringForm
@@ -169,7 +175,7 @@ export default async function RecurringPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Recurring"
-        description="Bills and paychecks that repeat -- posted automatically on their due date."
+        description="Bills and paychecks that repeat. When one comes due, you confirm what happened."
       />
 
       <CreateRecurringForm
@@ -178,6 +184,8 @@ export default async function RecurringPage() {
         accounts={accounts}
         holidays={holidays}
       />
+
+      <ConfirmationQueue items={confirmationResult.data} />
 
       {/* Paused schedules stay in this one list, dimmed and badged, rather
           than dropping out of sight behind a toggle (AccountsPage hides

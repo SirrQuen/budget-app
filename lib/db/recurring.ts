@@ -1,20 +1,17 @@
 import "server-only";
-import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import { describeReadError, describeWriteError, logDbError, sessionUserId } from "@/lib/db/errors";
-import { addDaysISO } from "@/lib/date";
-import { getTimeZone, getToday } from "@/lib/db/settings";
+import { getToday } from "@/lib/db/settings";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
 import { getBankHolidays } from "@/lib/db/holidays";
 import { nextOccurrenceISO } from "@/lib/recurringCadence";
+import { confirmEach, type BulkConfirmResult } from "@/lib/confirmationQueue";
 
 type RecurringRow = Database["public"]["Tables"]["recurring_transactions"]["Row"];
 type RecurringInsert = Database["public"]["Tables"]["recurring_transactions"]["Insert"];
 type RecurringUpdate = Database["public"]["Tables"]["recurring_transactions"]["Update"];
-type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"];
 type TransactionInsert = Database["public"]["Tables"]["transactions"]["Insert"];
-type UpcomingRecurringRow = Database["public"]["Views"]["v_upcoming_recurring"]["Row"];
 
 export type DbResult<T> = { data: T; error: null } | { data: null; error: string };
 
@@ -232,9 +229,9 @@ export async function deleteRecurring(id: string): Promise<DbResult<{ id: string
 
 // Pausing (not deleting) is the right move for something that will likely
 // come back -- a subscription on hold, a bill you're disputing. is_active
-// also gates v_upcoming_recurring and generateDueOccurrences, so a paused
-// template quietly stops appearing as a commitment and stops generating
-// transactions without losing its settings.
+// also gates v_upcoming_recurring, so a paused template quietly stops
+// appearing as a commitment and in the confirmation queue without losing
+// its settings.
 export async function pauseRecurring(id: string): Promise<DbResult<RecurringRow>> {
   const supabase = await createClient();
 
@@ -254,9 +251,9 @@ export async function pauseRecurring(id: string): Promise<DbResult<RecurringRow>
 
 // Resuming skips whatever the schedule missed while paused, rather than
 // leaving next_run_date wherever it was. Without this, a subscription paused
-// for a few months would dump a backlog of backdated transactions into the
-// account the next time occurrences are generated -- the opposite of what
-// pausing was for. next_run_date only ever moves forward here: a template
+// for a few months would come back as a backlog of missed cycles -- counted
+// against today in the projection and waiting in the confirmation queue --
+// the opposite of what pausing was for. next_run_date only ever moves forward here: a template
 // that's still due today or ahead of schedule is untouched.
 export async function resumeRecurring(id: string): Promise<DbResult<RecurringRow>> {
   const supabase = await createClient();
@@ -291,9 +288,11 @@ export async function resumeRecurring(id: string): Promise<DbResult<RecurringRow
   return { data, error: null };
 }
 
-// Sets the confirmed amount for a variable schedule's NEXT occurrence only --
-// generateDueOccurrences clears both fields the moment that occurrence
-// posts (see rectx_next_amount_confirmed_together). The
+// Sets the statement amount for a variable card payment's NEXT occurrence
+// only -- a revision of the expectation, never a transaction. The
+// projection and the queue's "landed as expected" both use it; answering
+// that occurrence (confirmOccurrence/skipOccurrence) clears both fields
+// (see rectx_next_amount_confirmed_together). The
 // amount_is_variable filter is for intent, not security (RLS already scopes
 // this to the caller's own row) -- it stops a stray call from writing
 // next_amount onto a fixed-amount schedule, which rectx_next_amount_
@@ -350,10 +349,8 @@ export async function estimateIncomeAmount(
 }
 
 // Same as estimateIncomeAmount, but the Expense counterpart
-// (estimate_expense_amount, 31_recurring_expense_variability.sql) -- also
-// called directly from generateDueOccurrences below, since an Expense
-// occurrence posts at this estimate immediately rather than waiting on a
-// confirmation the way a card payment or Income does.
+// (estimate_expense_amount, 31_recurring_expense_variability.sql), for the
+// recurring list page for the same reason.
 export async function estimateExpenseAmount(
   recurringId: string,
   fallbackAmount: number,
@@ -372,633 +369,253 @@ export async function estimateExpenseAmount(
   return { data: data ?? fallbackAmount, error: null };
 }
 
-type IncomeConfirmScheduleRow = {
-  id: string;
-  description: string;
-  accountid: string;
-  categoryid: string | null;
-  next_run_date: string;
-  start_date: string | null;
-  frequency: string;
-  interval_count: number;
-  business_day_offset: number;
-  non_business_day_rule: string;
-  requires_confirmation: boolean;
-  category: { category_type: string } | null;
-};
+// The schedule fields a confirmation needs. Read from v_upcoming_recurring,
+// not the base table, so "landed as expected" writes the same predicted
+// amount the queue showed -- the view is where that figure is decided (the
+// fixed amount, a confirmed statement amount, a card's balance owed, or
+// the income/expense estimate). A paused or finished schedule isn't in the
+// view, and has nothing to confirm.
+const CONFIRM_SELECT =
+  "recurring_id, description, amount, accountid, categoryid, to_accountid, category_type, next_run_date, next_due_date, start_date, frequency, interval_count, business_day_offset, non_business_day_rule, next_amount, next_amount_confirmed_at";
 
-// The ONLY way an Income occurrence ever posts (CLAUDE.md "Auto-create
-// outflows. Confirm inflows.") -- generateDueOccurrences always skips a
-// requires_confirmation template (see its own comment), so this is the
-// dedicated write path for it, reachable from the dashboard prompt, the
-// upcoming list, and the recurring row (see ConfirmIncomeSheet).
-//
-// Unlike confirmVariableAmount (which just records next_amount and waits
-// for the due date to arrive naturally -- fine when the date itself is
-// certain, as a card statement's is), this writes the transaction
-// immediately and never touches next_amount/next_amount_confirmed_at: a
-// variable-DATE paycheck can land before its own anchor, and there is no
-// later "due date" moment to defer posting to. transaction_date is always
-// today -- the day the user is actually confirming money landed, not the
-// schedule's anchor (shown to them only for context), which may still be a
-// few days off in either direction.
-export async function confirmIncomeOccurrence(
-  id: string,
-  amount: number,
-): Promise<DbResult<TransactionRow>> {
-  const supabase = await createClient();
-
-  const session = sessionUserId(await supabase.auth.getClaims(), "recurring");
-  if (session.userid === null) {
-    return { data: null, error: session.error };
-  }
-  const { userid } = session;
-
-  const { data: template, error: readError } = await supabase
-    .from("recurring_transactions")
-    .select(
-      "id, description, accountid, categoryid, next_run_date, start_date, frequency, interval_count, business_day_offset, non_business_day_rule, requires_confirmation, category:categories(category_type)",
-    )
-    .eq("id", id)
-    .single()
-    .returns<IncomeConfirmScheduleRow>();
-
-  if (readError) {
-    return { data: null, error: describeReadError(readError, "recurring transaction") };
-  }
-
-  if (!template.requires_confirmation || template.category?.category_type !== "Income") {
-    return { data: null, error: "This schedule doesn't need a confirmation." };
-  }
-
-  const { data: rows, error: insertError } = await supabase
-    .from("transactions")
-    .insert({
-      userid,
-      accountid: template.accountid,
-      categoryid: template.categoryid,
-      amount,
-      transaction_type: "Income",
-      transaction_date: await getToday(),
-      description: template.description,
-      recurringid: template.id,
-    })
-    .select();
-
-  if (insertError) {
-    return { data: null, error: describeWriteError(insertError, "transaction") };
-  }
-
-  // Advances exactly one cycle, same as confirmVariableAmount/
-  // generateDueOccurrences -- a schedule missed for several cycles needs
-  // one confirmation per cycle, not a silent multi-cycle skip.
-  const anchor = template.start_date ?? template.next_run_date;
-  const nextRunDate = nextOccurrenceISO(
-    template.next_run_date,
-    template.frequency,
-    template.interval_count,
-    anchor,
-  );
-  const next_due_date = await computeNextDueDate(
-    nextRunDate,
-    template.business_day_offset,
-    template.non_business_day_rule,
-  );
-
-  const { error: advanceError } = await supabase
-    .from("recurring_transactions")
-    .update({ next_run_date: nextRunDate, next_due_date })
-    .eq("id", id);
-
-  if (advanceError) {
-    logDbError(
-      `[db:recurring] failed advancing next_run_date after income confirmation for ${id}:`,
-      advanceError,
-    );
-  }
-
-  return { data: rows[0], error: null };
-}
-
-/** A transaction row that was posted from a schedule, for the "we added N transactions while you were away" summary. */
-export type GeneratedOccurrence = TransactionRow;
-
-const DUE_RECURRING_SELECT =
-  "id, description, amount, accountid, categoryid, to_accountid, next_run_date, next_due_date, start_date, end_date, frequency, interval_count, occurrence_limit, business_day_offset, non_business_day_rule, category:categories(category_type), amount_is_variable, next_amount, next_amount_confirmed_at, requires_confirmation";
-
-type DueRecurringRow = {
-  id: string;
+type ConfirmScheduleRow = {
+  recurring_id: string;
   description: string;
   amount: number;
   accountid: string;
-  // Null for a transfer template -- to_accountid is set instead, and
-  // category/category_type never get read for that row.
+  // Null for a transfer template -- to_accountid is set instead.
   categoryid: string | null;
   to_accountid: string | null;
+  category_type: string | null;
   next_run_date: string;
-  // Resolved date of the occurrence at next_run_date -- see resolveDueDate.
   next_due_date: string;
-  // The schedule's stable anchor for Monthly/Quarterly/Yearly's day-of-month
-  // -- see nextOccurrenceISO. Nullable in the schema; falls back to
-  // next_run_date below for a row somehow missing it rather than crashing
-  // catch-up for every other schedule in the same batch.
   start_date: string | null;
-  end_date: string | null;
   frequency: string;
   interval_count: number;
-  occurrence_limit: number | null;
-  // Business-day resolution (20260914000024_24_recurring_business_day_rules.sql)
-  // -- see lib/businessDays.ts's resolveDueDate for what these mean.
   business_day_offset: number;
   non_business_day_rule: string;
-  category: { category_type: string } | null;
-  // Variable-amount schedule (20260912000023_23_recurring_variable_amount.sql,
-  // widened by 29_recurring_income_confirmation.sql to allow a variable-
-  // amount Income category schedule, then by
-  // 31_recurring_expense_variability.sql to allow Expense too -- see
-  // isCardVariable below for how the three now diverge at generation time).
-  amount_is_variable: boolean;
   next_amount: number | null;
   next_amount_confirmed_at: string | null;
-  // True for every Income schedule (29_recurring_income_confirmation.sql) --
-  // see CLAUDE.md "Auto-create outflows. Confirm inflows." Never true for
-  // an Expense or Transfer template.
-  requires_confirmation: boolean;
 };
 
-// The transaction row(s) one occurrence posts. A transfer template posts
-// both legs in one insert statement -- one call, one transaction, so a
-// failure can't land only one leg (same reason createTransfer batches its
-// two legs together). Shared by generateDueOccurrences and
-// resolveOverdueOccurrence so the two can never post different shapes.
+// The transaction row(s) one confirmed occurrence writes. A transfer
+// template writes both legs in one insert statement -- one call, one
+// transaction, so a failure can't land only one leg (same reason
+// createTransfer batches its two legs together). Both legs carry the
+// template's recurringid, so they show the recurring icon and link back.
 function occurrenceRows(
-  template: DueRecurringRow,
+  s: ConfirmScheduleRow,
   userid: string,
   amount: number,
-  dueDate: string,
-  isEstimated: boolean,
+  date: string,
 ): TransactionInsert[] {
-  if (template.to_accountid !== null) {
-    const transfer_group_id = crypto.randomUUID();
+  if (s.to_accountid !== null) {
+    const leg = {
+      userid,
+      categoryid: null,
+      amount,
+      transaction_date: date,
+      description: s.description,
+      recurringid: s.recurring_id,
+      transfer_group_id: crypto.randomUUID(),
+    };
     return [
-      {
-        userid,
-        accountid: template.accountid,
-        categoryid: null,
-        amount,
-        transaction_type: "Expense",
-        transaction_date: dueDate,
-        description: template.description,
-        recurringid: template.id,
-        transfer_group_id,
-      },
-      {
-        userid,
-        accountid: template.to_accountid,
-        categoryid: null,
-        amount,
-        transaction_type: "Income",
-        transaction_date: dueDate,
-        description: template.description,
-        recurringid: template.id,
-        transfer_group_id,
-      },
+      { ...leg, accountid: s.accountid, transaction_type: "Expense" },
+      { ...leg, accountid: s.to_accountid, transaction_type: "Income" },
     ];
   }
   return [
     {
       userid,
-      accountid: template.accountid,
-      categoryid: template.categoryid,
+      accountid: s.accountid,
+      categoryid: s.categoryid,
       amount,
-      // Non-null: a category template's select embeds categories with
-      // categoryid not null (rectx_category_required guarantees it), so
-      // category is always present here.
-      transaction_type: template.category!.category_type,
-      transaction_date: dueDate,
-      description: template.description,
-      recurringid: template.id,
-      is_estimated: isEstimated,
+      // A category schedule carries no transaction_type of its own --
+      // direction comes from its category (rectx_category_required
+      // guarantees one), the same rule enforce_category_type checks.
+      transaction_type: s.category_type!,
+      transaction_date: date,
+      description: s.description,
+      recurringid: s.recurring_id,
     },
   ];
 }
 
-// Lazy catch-up, run when a user opens the app -- there is no scheduler.
-// A category schedule carries no transaction_type of its own; direction
-// comes from the linked category's category_type, same rule createTransaction
-// enforces via the enforce_category_type trigger. A transfer template
-// (to_accountid set) instead posts the same two-leg shape createTransfer
-// does: an Expense leg on accountid, an Income leg on to_accountid, sharing
-// a fresh transfer_group_id -- both legs still carry this template's
-// recurringid, so they show the recurring icon and link back like any
-// other generated row.
-//
-// Idempotency is a database guarantee, not an application one:
-// recurring_tx_no_double_post is a unique index on (recurringid,
-// transaction_date, transaction_type) where recurringid is not null
-// (widened in the 19_recurring_transfers migration -- a transfer occurrence
-// posts two rows for the same date under the same recurringid, and
-// transaction_type is what tells those two apart). Two concurrent page
-// loads racing to generate the same occurrence both attempt the insert
-// (both legs at once for a transfer, in one statement, so it can't land
-// half-posted); exactly one succeeds, and the loser's 23505 is treated as
-// success -- the occurrence exists, which is the only thing that was ever
-// being asked for. A non-23505 failure stops that template's loop without
-// advancing next_run_date, so the missed occurrence is retried on the next
-// catch-up rather than silently skipped, but doesn't block generation for
-// the user's other schedules.
-//
-// cache()d like recordLogin/getLoggingStreak: app/(app)/layout.tsx runs this
-// on every authenticated route so a schedule can't go stale just because a
-// user always lands on /transactions, and DashboardPage asks again for the
-// created list to build its "while you were away" banner. Both calls
-// resolve to the one run this request actually did, in whichever of the two
-// happens to reach it first -- never two independent generation passes
-// racing each other in the same request.
-export const generateDueOccurrences = cache(async (): Promise<
-  DbResult<GeneratedOccurrence[]>
-> => {
-  const supabase = await createClient();
+export type ConfirmOutcome = "answered" | "already_answered";
 
-  const session = sessionUserId(await supabase.auth.getClaims(), "recurring");
-  if (session.userid === null) {
-    return { data: null, error: session.error };
-  }
-  const { userid } = session;
+type Supabase = Awaited<ReturnType<typeof createClient>>;
 
-  // Until the browser has reported the user's zone (components/
-  // TodayProvider, on the first page load after signup or after migration
-  // 40), "today" would be UTC's -- a day ahead every US evening, which
-  // would post tomorrow's bills tonight. Waiting is free: the report
-  // revalidates the layout, which runs this again straight away.
-  if ((await getTimeZone()) === null) {
-    return { data: [], error: null };
-  }
-
-  const today = await getToday();
-
-  // A raw next_run_date past today can still be DUE today once resolved --
-  // non_business_day_rule = 'before' can shift the resolved date earlier
-  // than the raw one (e.g. a Saturday anchor shifting back to Friday). This
-  // prefilter is a coarse net, not the correctness boundary: the loop below
-  // re-checks the resolved date against `today` before posting anything.
-  // 7 days safely covers the longest holiday+weekend cluster in the seeded
-  // bank_holidays calendar (e.g. a Friday-observed Christmas running into
-  // the weekend).
-  const BUSINESS_DAY_QUERY_BUFFER_DAYS = 7;
-
-  // RLS scopes this to the caller's own rows already -- no manual userid
-  // filter needed (see CLAUDE.md "Data layer rules").
-  const { data: due, error: dueError } = await supabase
-    .from("recurring_transactions")
-    .select(DUE_RECURRING_SELECT)
-    .eq("is_active", true)
-    .lte("next_run_date", addDaysISO(today, BUSINESS_DAY_QUERY_BUFFER_DAYS))
-    .returns<DueRecurringRow[]>();
-
-  if (dueError) {
-    return { data: null, error: describeReadError(dueError, "recurring transactions") };
-  }
-
-  // Fetched once for the whole batch -- resolveDueDate is a pure in-memory
-  // call from here on, no per-occurrence round trip. A failed read degrades
-  // to an empty holiday set (every schedule resolves as if no holidays
-  // exist -- still weekend-aware) rather than blocking catch-up entirely.
-  const holidaysRes = await getBankHolidays();
-  const holidays = holidaysRes.data ?? new Set<string>();
-
-  const created: GeneratedOccurrence[] = [];
-
-  for (const template of due) {
-    let cursor = template.next_run_date;
-    let advanced = false;
-    const anchor = template.start_date ?? template.next_run_date;
-    // Mutable copy of next_amount_confirmed_at's presence -- template itself
-    // is a snapshot from the initial read, so a catch-up spanning more than
-    // one missed cycle needs its own tracking: the confirmation is good for
-    // exactly one occurrence, and must read as "gone" for the next loop
-    // iteration the moment it's consumed below, not just once the DB is
-    // patched after the loop ends.
-    let hasConfirmedAmount = template.next_amount_confirmed_at !== null;
-
-    // "Ends after N occurrences" is tracked by counting the ledger, never a
-    // stored counter (see the 18_recurring_schedule migration) -- so a
-    // capped template gets one extra read here, up front, rather than a
-    // query per occurrence. Uncapped templates (the common case) skip it.
-    let remaining = Infinity;
-    if (template.occurrence_limit !== null) {
-      const { count, error: countError } = await supabase
-        .from("transactions")
-        .select("id", { count: "exact", head: true })
-        .eq("recurringid", template.id);
-
-      if (countError) {
-        logDbError(`[db:recurring] failed counting occurrences for ${template.id}:`, countError);
-        continue;
-      }
-
-      remaining = template.occurrence_limit - (count ?? 0);
-    }
-
-    while (remaining > 0) {
-      // Mirrors v_upcoming_recurring's own end-date guard: a template that
-      // has already ended isn't due again even if next_run_date wasn't
-      // advanced past it. Leave next_run_date as-is -- there's nothing left
-      // to catch up. Deliberately keyed off the raw cursor, not the
-      // resolved due date -- the same simplification 25_bank_holidays.sql's
-      // v_upcoming_recurring guard makes; the two can differ by at most a
-      // few days right at a schedule's last occurrence.
-      if (template.end_date && cursor > template.end_date) break;
-
-      // The date money actually moves for this occurrence -- see
-      // lib/businessDays.ts's resolveDueDate. cursor itself keeps stepping
-      // through the raw cadence below (nextOccurrenceISO), never this
-      // adjusted value -- resolving cursor before advancing would drift a
-      // Monthly/Quarterly/Yearly schedule's day-of-month the moment a
-      // business-day shift crosses a month boundary (same hazard
-      // addMonthsClampedISO's own comment warns about for a clamped date).
-      const dueDate = resolveDueDate(
-        cursor,
-        template.business_day_offset,
-        template.non_business_day_rule as NonBusinessDayRule,
-        holidays,
-      );
-      if (dueDate > today) break;
-
-      // A variable-amount CARD PAYMENT can't post without a confirmed
-      // amount for this occurrence -- rectx_next_amount_requires_variable
-      // and rectx_next_amount_confirmed_together guarantee next_amount is
-      // set whenever next_amount_confirmed_at is. A variable-amount
-      // EXPENSE category schedule is deliberately NOT gated the same way
-      // (see occurrenceAmount below) -- CLAUDE.md "Auto-create outflows.
-      // Confirm inflows." means an outflow's guess is good enough to post,
-      // unlike a card payment's, which the user set up expecting to review
-      // each cycle.
-      const isCardVariable = template.amount_is_variable && template.to_accountid !== null;
-
-      // requires_confirmation is the separate, unconditional gate CLAUDE.md
-      // "Auto-create outflows. Confirm inflows." requires: every Income
-      // schedule carries it (29_recurring_income_confirmation.sql),
-      // regardless of amount_is_variable/date_tolerance_days, and
-      // confirmIncomeOccurrence -- the only way an Income occurrence ever
-      // posts -- writes the transaction directly rather than setting
-      // next_amount_confirmed_at, so hasConfirmedAmount is always false for
-      // an Income template here. That means this branch always breaks for
-      // one, every time -- lazy catch-up must never auto-generate income.
-      //
-      // Either way: stop this template's loop entirely rather than posting
-      // a guess/unconfirmed row; it surfaces as "needs confirming" instead
-      // of a transaction. Nothing further is due until the user confirms,
-      // so there's no occurrence past this one to catch up on either.
-      if ((isCardVariable || template.requires_confirmation) && !hasConfirmedAmount) {
-        break;
-      }
-
-      // A confirmed card-payment amount is this occurrence's real amount --
-      // template.amount is an unused placeholder for a variable transfer
-      // (see the 23_recurring_variable_amount migration). A variable-amount
-      // EXPENSE schedule instead posts at a live estimate
-      // (estimate_expense_amount, 31_recurring_expense_variability.sql) --
-      // the mean of its last three generated Expense transactions, or the
-      // setup amount with fewer than three -- and the posted row is marked
-      // is_estimated so it stays visibly a guess until someone edits it.
-      let occurrenceAmount: number;
-      let isEstimated = false;
-      if (isCardVariable) {
-        occurrenceAmount = template.next_amount!;
-      } else if (template.amount_is_variable) {
-        const estimateRes = await supabase.rpc("estimate_expense_amount", {
-          p_recurring_id: template.id,
-          p_fallback_amount: template.amount,
-        });
-        if (estimateRes.error) {
-          logDbError(
-            `[db:recurring] failed estimating expense amount for ${template.id}:`,
-            estimateRes.error,
-          );
-          break;
-        }
-        occurrenceAmount = estimateRes.data ?? template.amount;
-        isEstimated = true;
-      } else {
-        occurrenceAmount = template.amount;
-      }
-
-      const insertRows = occurrenceRows(template, userid, occurrenceAmount, dueDate, isEstimated);
-
-      const { data: rows, error: insertError } = await supabase
-        .from("transactions")
-        .insert(insertRows)
-        .select();
-
-      if (insertError) {
-        if (insertError.code === "23505") {
-          // Someone else's request already generated this exact occurrence
-          // (both legs, for a transfer -- the whole statement above is one
-          // insert, so this fires if either leg's key already exists).
-          // That's the desired outcome, not a failure -- move on as if this
-          // insert had succeeded. Already reflected in the count `remaining`
-          // was seeded from, so it doesn't get decremented again here.
-          cursor = nextOccurrenceISO(cursor, template.frequency, template.interval_count, anchor);
-          advanced = true;
-          hasConfirmedAmount = false;
-          continue;
-        }
-
-        logDbError(
-          `[db:recurring] failed generating occurrence for ${template.id} on ${dueDate}:`,
-          insertError,
-        );
-        break;
-      }
-
-      // One entry per occurrence for the "while you were away" banner, even
-      // for a transfer's two rows -- both legs share the same description,
-      // so pushing both would read as two things happening, not one.
-      created.push(rows[0]);
-      cursor = nextOccurrenceISO(cursor, template.frequency, template.interval_count, anchor);
-      advanced = true;
-      remaining -= 1;
-      hasConfirmedAmount = false;
-    }
-
-    if (advanced && cursor !== template.next_run_date) {
-      // A variable schedule only ever advances past its unconfirmed
-      // occurrence via the break above -- reaching here with advanced true
-      // means the confirmed next_amount was just consumed (posted, or
-      // already posted by a racing request -- see the 23505 branch above),
-      // so it's cleared for the next cycle to prompt again.
-      const patch: RecurringUpdate = {
-        next_run_date: cursor,
-        next_due_date: resolveDueDate(
-          cursor,
-          template.business_day_offset,
-          template.non_business_day_rule as NonBusinessDayRule,
-          holidays,
-        ),
-      };
-      if (template.amount_is_variable) {
-        patch.next_amount = null;
-        patch.next_amount_confirmed_at = null;
-      }
-
-      const { error: advanceError } = await supabase
-        .from("recurring_transactions")
-        .update(patch)
-        .eq("id", template.id);
-
-      if (advanceError) {
-        logDbError(`[db:recurring] failed advancing next_run_date for ${template.id}:`, advanceError);
-      }
-    }
-  }
-
-  return { data: created, error: null };
-});
-
-export type OverdueOutcome = "posted" | "skipped";
-
-// The safe-to-spend breakdown's "Rent was due 3 days ago -- did it go
-// out?" An outflow is only overdue-and-unposted when catch-up couldn't
-// post it (an insert failed, or a card payment is still waiting on its
-// amount), and until it's resolved the projection subtracts it today --
-// so a stale one would depress safe-to-spend forever with no visible
-// cause. Two answers:
-//
-//   posted   it went out: post this one occurrence, dated its due date,
-//            exactly as catch-up would have, then advance the schedule.
-//   skipped  it didn't: advance the schedule past this occurrence without
-//            posting anything.
-//
-// Income never comes through here -- confirmIncomeOccurrence owns that
-// ("Confirm inflows"). A card payment's "posted" needs its amount
-// confirmed first (ConfirmVariableAmountSheet); catch-up then posts it.
-//
-// Safe to double-submit: the advance only applies while next_run_date is
-// still the one this call read, and a duplicate insert is the same 23505
-// catch-up already treats as success.
-export async function resolveOverdueOccurrence(
+// Reads the schedule an answer is about. data null with no error means
+// the occurrence was already answered -- another tab, a second press, or
+// a bulk confirm that got there first. Answering is keyed on the
+// occurrence's due date, so a stale button can never act on the cycle
+// after the one it showed.
+async function readOpenOccurrence(
+  supabase: Supabase,
   id: string,
-  outcome: OverdueOutcome,
-): Promise<DbResult<{ id: string }>> {
-  const supabase = await createClient();
-
-  const session = sessionUserId(await supabase.auth.getClaims(), "recurring");
-  if (session.userid === null) {
-    return { data: null, error: session.error };
-  }
-  const { userid } = session;
-
-  const { data: template, error: readError } = await supabase
-    .from("recurring_transactions")
-    .select(DUE_RECURRING_SELECT)
-    .eq("id", id)
-    .maybeSingle()
-    .returns<DueRecurringRow>();
-
-  if (readError) {
-    return { data: null, error: describeReadError(readError, "recurring transactions") };
-  }
-  if (!template) {
-    return { data: null, error: "That schedule isn't there anymore." };
-  }
-  if (template.requires_confirmation) {
-    return { data: null, error: "Paychecks are confirmed with their own amount, not here." };
-  }
-
-  // Already resolved (another tab, or a second click) -- nothing to do.
-  if (template.next_due_date >= (await getToday())) {
-    return { data: { id }, error: null };
-  }
-
-  if (outcome === "posted") {
-    const isCardVariable = template.amount_is_variable && template.to_accountid !== null;
-    let amount = template.amount;
-    let isEstimated = false;
-
-    if (isCardVariable) {
-      if (template.next_amount_confirmed_at === null || template.next_amount === null) {
-        return { data: null, error: "Confirm this payment's amount first." };
-      }
-      amount = template.next_amount;
-    } else if (template.amount_is_variable) {
-      const estimateRes = await supabase.rpc("estimate_expense_amount", {
-        p_recurring_id: template.id,
-        p_fallback_amount: template.amount,
-      });
-      if (estimateRes.error) {
-        return { data: null, error: describeReadError(estimateRes.error, "recurring transactions") };
-      }
-      amount = estimateRes.data ?? template.amount;
-      isEstimated = true;
-    }
-
-    const { error: insertError } = await supabase
-      .from("transactions")
-      .insert(occurrenceRows(template, userid, amount, template.next_due_date, isEstimated));
-
-    if (insertError && insertError.code !== "23505") {
-      return { data: null, error: describeWriteError(insertError, "transaction") };
-    }
-  }
-
-  const holidaysRes = await getBankHolidays();
-  const holidays = holidaysRes.data ?? new Set<string>();
-  const anchor = template.start_date ?? template.next_run_date;
-  const cursor = nextOccurrenceISO(
-    template.next_run_date,
-    template.frequency,
-    template.interval_count,
-    anchor,
-  );
-
-  const patch: RecurringUpdate = {
-    next_run_date: cursor,
-    next_due_date: resolveDueDate(
-      cursor,
-      template.business_day_offset,
-      template.non_business_day_rule as NonBusinessDayRule,
-      holidays,
-    ),
-  };
-  if (template.amount_is_variable) {
-    patch.next_amount = null;
-    patch.next_amount_confirmed_at = null;
-  }
-
-  const { error: advanceError } = await supabase
-    .from("recurring_transactions")
-    .update(patch)
-    .eq("id", id)
-    .eq("next_run_date", template.next_run_date);
-
-  if (advanceError) {
-    return { data: null, error: describeWriteError(advanceError, "recurring") };
-  }
-
-  return { data: { id }, error: null };
-}
-
-// Wraps v_upcoming_recurring, bounded to a horizon -- the view itself has no
-// date window (see CLAUDE.md "Recurring transactions"). No lower bound: an
-// overdue template (is_overdue true, negative days_until) keeps showing
-// rather than disappearing, since that's exactly what needs surfacing --
-// under the lazy-catch-up model it should be rare and short-lived, not
-// hidden.
-export async function getUpcoming(daysAhead: number): Promise<DbResult<UpcomingRecurringRow[]>> {
-  const supabase = await createClient();
-
-  const horizon = addDaysISO(await getToday(), daysAhead);
-
+  dueDate: string,
+): Promise<DbResult<ConfirmScheduleRow | null>> {
   const { data, error } = await supabase
     .from("v_upcoming_recurring")
-    .select("*")
-    .lte("next_due_date", horizon)
-    .order("next_due_date", { ascending: true });
+    .select(CONFIRM_SELECT)
+    .eq("recurring_id", id)
+    .maybeSingle()
+    .returns<ConfirmScheduleRow>();
 
   if (error) {
-    return { data: null, error: describeReadError(error, "upcoming transactions") };
+    return { data: null, error: describeReadError(error, "recurring transaction") };
+  }
+  if (!data) {
+    return { data: null, error: "That schedule isn't there anymore." };
+  }
+  return { data: data.next_due_date === dueDate ? data : null, error: null };
+}
+
+// Moves a schedule one cycle on, and is the claim on the occurrence: the
+// update only applies while next_run_date is still the one read, so of two
+// racing answers exactly one advances it, and only that one writes. A
+// staged statement amount belongs to the cycle just answered, so it clears.
+async function advanceOneCycle(
+  supabase: Supabase,
+  s: ConfirmScheduleRow,
+): Promise<DbResult<boolean>> {
+  const cursor = nextOccurrenceISO(
+    s.next_run_date,
+    s.frequency,
+    s.interval_count,
+    s.start_date ?? s.next_run_date,
+  );
+  const patch: RecurringUpdate = {
+    next_run_date: cursor,
+    next_due_date: await computeNextDueDate(cursor, s.business_day_offset, s.non_business_day_rule),
+    next_amount: null,
+    next_amount_confirmed_at: null,
+  };
+
+  const { data, error } = await supabase
+    .from("recurring_transactions")
+    .update(patch)
+    .eq("id", s.recurring_id)
+    .eq("next_run_date", s.next_run_date)
+    .select("id");
+
+  if (error) {
+    return { data: null, error: describeWriteError(error, "recurring") };
+  }
+  return { data: data.length > 0, error: null };
+}
+
+export type ConfirmOccurrenceInput = {
+  /** The occurrence being answered -- the queue item's dueDate. */
+  dueDate: string;
+  /** "Landed differently": the real amount. Omitted = the predicted amount. */
+  amount?: number;
+  /** "Landed differently": the real date. Omitted = the predicted date. */
+  date?: string;
+};
+
+// The ONLY path from a schedule to a transaction (CLAUDE.md "Confirmation
+// creates every recurring transaction"), for every type -- Income, Expense,
+// Transfer, card payment. Reached only from a user's answer in the
+// confirmation queue: "landed as expected" (no amount/date) and "landed
+// differently" (either or both edited). The confirmed date IS the
+// transaction date; there is no second date anywhere.
+//
+// "As expected" dates the transaction on the predicted date -- or today,
+// if the queue opened early (date_tolerance_days) and it landed before the
+// predicted date. A date after today is refused: it hasn't landed yet,
+// which is a different answer.
+//
+// Claim, then write: advanceOneCycle first, so a double submit writes once.
+// If the insert then fails the schedule is put back, so the occurrence
+// stays open (and counted) rather than silently skipped.
+export async function confirmOccurrence(
+  id: string,
+  input: ConfirmOccurrenceInput,
+): Promise<DbResult<ConfirmOutcome>> {
+  const supabase = await createClient();
+
+  const session = sessionUserId(await supabase.auth.getClaims(), "recurring");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
+  }
+  const { userid } = session;
+
+  const read = await readOpenOccurrence(supabase, id, input.dueDate);
+  if (read.error !== null) return read;
+  const s = read.data;
+  if (s === null) return { data: "already_answered", error: null };
+
+  const today = await getToday();
+  const amount = input.amount ?? Number(s.amount);
+  const date = input.date ?? (s.next_due_date <= today ? s.next_due_date : today);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { data: null, error: "Enter the amount that landed." };
+  }
+  if (date > today) {
+    return { data: null, error: "That date hasn't happened yet. Choose today or earlier." };
   }
 
-  return { data, error: null };
+  const claim = await advanceOneCycle(supabase, s);
+  if (claim.error !== null) return claim;
+  if (!claim.data) return { data: "already_answered", error: null };
+
+  const { error: insertError } = await supabase
+    .from("transactions")
+    .insert(occurrenceRows(s, userid, amount, date));
+
+  if (insertError) {
+    const { error: restoreError } = await supabase
+      .from("recurring_transactions")
+      .update({
+        next_run_date: s.next_run_date,
+        next_due_date: s.next_due_date,
+        next_amount: s.next_amount,
+        next_amount_confirmed_at: s.next_amount_confirmed_at,
+      })
+      .eq("id", id);
+    if (restoreError) {
+      logDbError(`[db:recurring] failed restoring ${id} after a failed confirmation:`, restoreError);
+    }
+    // recurring_tx_no_double_post: this schedule already has a transaction
+    // of this type on that date (two cycles confirmed onto one day).
+    if (insertError.code === "23505") {
+      return {
+        data: null,
+        error: `${s.description} already has a transaction on that date. Choose the day this one landed.`,
+      };
+    }
+    return { data: null, error: describeWriteError(insertError, "transaction") };
+  }
+
+  return { data: "answered", error: null };
+}
+
+// "Not happening": drop this one occurrence -- skipped, cancelled,
+// refunded. Writes no transaction; the schedule stands and moves on to its
+// next cycle. Same claim as confirmOccurrence, so it's safe to double-submit.
+export async function skipOccurrence(
+  id: string,
+  dueDate: string,
+): Promise<DbResult<ConfirmOutcome>> {
+  const supabase = await createClient();
+
+  const read = await readOpenOccurrence(supabase, id, dueDate);
+  if (read.error !== null) return read;
+  if (read.data === null) return { data: "already_answered", error: null };
+
+  const claim = await advanceOneCycle(supabase, read.data);
+  if (claim.error !== null) return claim;
+  return { data: claim.data ? "answered" : "already_answered", error: null };
+}
+
+// "Confirm all as expected": exactly the items the user was shown, each
+// confirmed once at its predicted date and amount -- one cycle per
+// schedule per press, never a catch-up. Sequential and independent: one
+// failure doesn't stop the rest, and is reported by name.
+export async function confirmOccurrencesAsExpected(
+  items: { id: string; dueDate: string }[],
+): Promise<BulkConfirmResult> {
+  return confirmEach(items, (item) => confirmOccurrence(item.id, { dueDate: item.dueDate }));
 }

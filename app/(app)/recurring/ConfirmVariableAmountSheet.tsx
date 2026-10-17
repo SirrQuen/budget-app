@@ -22,7 +22,7 @@ export type VariableAmountTarget = {
 
 // A single-field sheet, reachable from three places (the upcoming
 // commitments list, a recurring row, and the dashboard prompt -- see
-// CLAUDE.md "Confirm flow") -- each supplies its own trigger markup via the
+// CLAUDE.md "Prompt timing") -- each supplies its own trigger markup via the
 // render-prop rather than this component owning one fixed button style.
 // Same native-<dialog> shell as MakeRecurringButton/ConfirmDialog.
 export function ConfirmVariableAmountSheet({

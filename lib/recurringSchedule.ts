@@ -115,9 +115,10 @@ export function statementDateForCycle(dueDateISO: string, statementDay: number):
   return `${prevYear}-${String(prevMonth).padStart(2, "0")}-${String(prevMonthDay).padStart(2, "0")}`;
 }
 
-// Whether today falls inside the "ask for the amount" window for a
-// variable schedule -- from the statement date (inclusive) through the due
-// date (inclusive). See CLAUDE.md "Prompt timing".
+// Whether today falls inside the "enter the statement amount" window for a
+// variable card payment -- from the statement date (inclusive) through the
+// due date (inclusive). That only revises the expectation (next_amount); it
+// never writes a transaction. See CLAUDE.md "Prompt timing".
 export function isAwaitingStatementAmount(
   todayISO: string,
   dueDateISO: string,
@@ -127,23 +128,22 @@ export function isAwaitingStatementAmount(
   return statementDateISO <= todayISO && todayISO <= dueDateISO;
 }
 
-// Phase 6.75 item 6 -- a variable-date Income schedule's paycheck can land
-// EARLIER than its anchor (next_due_date), never later by design (a bill
-// posts late; in this model a paycheck doesn't). date_tolerance_days'
-// two readers round in OPPOSITE directions:
+// date_tolerance_days' readers, every one deliberate (CLAUDE.md "Prompt
+// timing" and "Uncertainty always pushes the forecast down"):
 //
-//   - the confirmation prompt opens EARLY (anchor - tolerance), so an
-//     early paycheck can be confirmed the day it actually lands.
-//   - the payday window (getSafeToSpend's "next payday" end, item 5) is
-//     the LATEST plausible date (anchor + tolerance), so a commitment due
-//     between the earliest and latest guess is never dropped out of the
-//     window -- using anchor - tolerance there would shorten the window
-//     and understate what's committed, inflating the safe-to-spend hero.
+//   - confirmationOpensOn: the confirmation queue opens on the EARLY edge
+//     (anchor - tolerance), for every type, so something that lands early
+//     can be confirmed the day it lands. For a fixed-date schedule
+//     (tolerance 0) that is the expected date itself.
+//   - paydayWindowEnd: the projection counts income on the LATE edge
+//     (anchor + tolerance), so it is never assumed to arrive early.
+//   - expenseCommitmentDate: the projection counts an outflow on the
+//     EARLY edge (below).
 //
-// Never swap these two -- paydayWindowEnd(anchor, N) must never land
-// before incomeConfirmationOpensAt(anchor, N) for the same inputs. Pinned
-// by lib/recurringSchedule.test.ts.
-export function incomeConfirmationOpensAt(anchorISO: string, toleranceDays: number): string {
+// Never swap these -- paydayWindowEnd(anchor, N) must never land before
+// confirmationOpensOn(anchor, N) for the same inputs. Pinned by
+// lib/recurringSchedule.test.ts.
+export function confirmationOpensOn(anchorISO: string, toleranceDays: number): string {
   return addDaysISO(anchorISO, -toleranceDays);
 }
 
@@ -151,21 +151,7 @@ export function paydayWindowEnd(anchorISO: string, toleranceDays: number): strin
   return addDaysISO(anchorISO, toleranceDays);
 }
 
-// Whether today falls inside the "did your paycheck land?" window for an
-// Income schedule -- open-ended, no upper bound. generateDueOccurrences
-// never auto-posts an Income occurrence (CLAUDE.md "Auto-create outflows.
-// Confirm inflows."), so unlike isAwaitingStatementAmount there is no due
-// date past which the schedule stops needing a prompt -- it just gets more
-// overdue until the user confirms it.
-export function isAwaitingIncomeConfirmation(
-  todayISO: string,
-  anchorISO: string,
-  toleranceDays: number,
-): boolean {
-  return todayISO >= incomeConfirmationOpensAt(anchorISO, toleranceDays);
-}
-
-// Phase 6.76 -- the EXPENSE mirror of incomeConfirmationOpensAt/
+// Phase 6.76 -- the EXPENSE mirror of confirmationOpensOn/
 // paydayWindowEnd, and deliberately the OPPOSITE edge from paydayWindowEnd
 // for a reason that looks like a bug if it isn't spelled out: a variable-
 // date Income schedule's paycheck can only land EARLY (payroll doesn't
@@ -177,7 +163,7 @@ export function isAwaitingIncomeConfirmation(
 // must start treating it as a commitment from the EARLY edge (anchor -
 // tolerance), or a bill that's about to charge early would still read as
 // "not due yet" and safe-to-spend would overstate what's actually
-// available. Same formula as incomeConfirmationOpensAt, different caller,
+// available. Same formula as confirmationOpensOn, different caller,
 // different reason -- do not fold the two together or a future edit to one
 // will silently change the other's meaning. Pinned by
 // lib/recurringSchedule.test.ts alongside paydayWindowEnd.
