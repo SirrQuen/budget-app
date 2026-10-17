@@ -7,7 +7,7 @@ export function Button({
   variant = "primary",
   className = "",
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "critical" }) {
+}: React.ComponentProps<"button"> & { variant?: "primary" | "critical" }) {
   return (
     <button
       {...props}

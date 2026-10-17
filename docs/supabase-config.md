@@ -79,10 +79,15 @@ dashboard (Authentication / Settings), then keep this file current.
   -- TODO.
 - **Providers enabled** -- TODO (the app uses email + password only).
 - **Password requirements, leaked-password protection** -- TODO.
-- **Session settings** (timebox, inactivity timeout, single session) --
-  TODO.
+- **Session settings** -- INTENDED, not yet confirmed (decided
+  2026-10-17): inactivity timeout 30 min, time-box off; single session
+  TODO. The server half of the idle sign-out: the backstop for when the
+  client timer (`components/IdleTimeout.tsx`, 15 min) never runs. Replace
+  "intended" with the value read from each dashboard and the date once set.
 - **MFA, CAPTCHA** -- TODO.
-- **JWT expiry** -- 3600s per section 2; confirm in the auth settings.
+- **JWT expiry** -- 3600s per section 2; INTENDED 1800s (30 min,
+  2026-10-17), with the session settings above. Once changed, update
+  section 2's `app.settings.jwt_exp` row to match what Postgres reports.
 
 ### API
 

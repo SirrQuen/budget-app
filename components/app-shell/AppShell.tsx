@@ -10,6 +10,7 @@ import { QuickAddBar } from "@/components/quick-add/QuickAddBar";
 import { OptimisticTransactionsProvider } from "@/components/quick-add/OptimisticTransactionsContext";
 import { ConfirmPulseProvider } from "@/components/ui/ConfirmPulse";
 import { SorrelMark } from "@/components/SorrelMark";
+import { IdleTimeout } from "@/components/IdleTimeout";
 import type { TransactionAccountOption } from "@/app/(app)/transactions/AddTransactionForm";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 
@@ -45,12 +46,20 @@ const NAV_ITEMS: NavItem[] = [
 export function AppShell({
   accountName,
   quickAdd,
+  sessionId,
   children,
 }: {
   /** Resolved by identityName() -- never the full email address. */
   accountName: string;
   /** null if any of its data failed to load -- the page still renders without it. */
   quickAdd: QuickAddData | null;
+  /**
+   * The Supabase session id, for the idle sign-out. Only the (app) layout
+   * renders this shell, which is what scopes the timeout to authenticated
+   * pages. null (no readable claims) runs no timer; the server's own
+   * inactivity timeout still applies.
+   */
+  sessionId: string | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -58,6 +67,7 @@ export function AppShell({
 
   return (
     <ConfirmPulseProvider>
+      {sessionId ? <IdleTimeout sessionId={sessionId} /> : null}
       <div className="min-h-dvh bg-page text-ink md:flex">
         {/* First tab stop on every authenticated page -- jumps past the nav
             straight to the page content. Visually hidden until focused. */}
