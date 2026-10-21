@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useActionForm } from "@/components/useActionForm";
 import { Check, Circle } from "lucide-react";
@@ -10,6 +11,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { PRIVACY_PATH, TERMS_PATH } from "@/lib/legal";
+import { rememberSignupEmail } from "@/lib/auth/signupEmailHandoff";
 import { NAME_MAX, PREFERRED_NAME_MAX } from "@/lib/displayName";
 import {
   PASSWORD_RULES,
@@ -57,9 +59,30 @@ export function SignupForm() {
   // Private beta. Judged only by the server (lib/auth/inviteCode.ts), so
   // it has no client-side rule; this is just the value and its server error.
   const [inviteCode, setInviteCode] = useState("");
+  const router = useRouter();
 
+  // The screen a cross-device signup leaves behind on this computer. No
+  // polling for "confirmed yet?": an endpoint that answers that for an
+  // address is an email-enumeration oracle. The person says when, and
+  // /login opens with their address filled in.
   if (state?.success) {
-    return <p className="text-sm text-ink-secondary">{state.success}</p>;
+    return (
+      <div className="flex flex-col gap-6">
+        <p role="status" className="text-sm text-ink-secondary">
+          {state.success}
+        </p>
+        <Button
+          type="button"
+          className="w-full"
+          onClick={() => {
+            rememberSignupEmail(values.email.trim());
+            router.push("/login");
+          }}
+        >
+          I&rsquo;ve confirmed &mdash; sign in
+        </Button>
+      </div>
+    );
   }
 
   const clientErrors = validateSignup(values);

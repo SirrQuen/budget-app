@@ -1,20 +1,25 @@
 import type { ConfirmFailure } from "@/lib/auth/errors";
 
 // Where app/auth/confirm/route.ts sends someone when an email link doesn't
-// open a session, and what that page says. Signup outcomes land on /login,
-// recovery outcomes on /forgot-password, where a new link is one field away.
+// open a session, and what that page says. Signup failures land on
+// /confirm-email, recovery failures on /forgot-password -- either way a new
+// link is one field away. A confirmed-elsewhere signup lands on /login.
 //
 // The copy states what happened and what to do next. It never guesses a
 // cause the route can't know: "expired or used" appears only where Supabase
-// itself said otp_expired.
+// itself said otp_expired, and nothing but a code link's proof says
+// "confirmed".
 
 export type LinkOutcome = Exclude<ConfirmFailure, "unreachable"> | "incomplete";
 
 export const LINK_ERRORS = {
-  // Signup, on /login
-  link_failed: "That link didn't sign you in. Try logging in below.",
+  // Signup, on /confirm-email (with a resend form)
+  link_expired:
+    "That confirmation link has expired or was already used. If you've already confirmed, log in. If not, we can send you a new link.",
+  link_failed:
+    "That confirmation link didn't work. If you've already confirmed, log in. If not, we can send you a new link.",
   link_incomplete:
-    "That link is incomplete. Open it again from the email, or copy the whole address.",
+    "That link is incomplete. Open it again from the email, or we can send you a new link.",
   // Recovery, on /forgot-password
   reset_other_browser:
     "Reset links only work in the browser you requested them from. Request a new one here to reset on this device.",
@@ -32,14 +37,16 @@ export function linkOutcomePath(outcome: LinkOutcome, isRecovery: boolean): stri
   switch (outcome) {
     case "confirmed":
       return "/login?notice=email_confirmed";
+    case "expired":
+      return "/confirm-email?error=link_expired";
     case "reset-other-browser":
       return "/forgot-password?error=reset_other_browser";
     case "reset-expired":
       return "/forgot-password?error=reset_expired";
     case "incomplete":
-      return isRecovery ? "/forgot-password?error=reset_incomplete" : "/login?error=link_incomplete";
+      return isRecovery ? "/forgot-password?error=reset_incomplete" : "/confirm-email?error=link_incomplete";
     case "failed":
-      return isRecovery ? "/forgot-password?error=reset_failed" : "/login?error=link_failed";
+      return isRecovery ? "/forgot-password?error=reset_failed" : "/confirm-email?error=link_failed";
   }
 }
 

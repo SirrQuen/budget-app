@@ -58,10 +58,29 @@ for (const link of ["otp", "code"] as const) {
   });
 }
 
-test("confirm: a spent signup OTP is confirmed", (t) => {
-  silenceAll(t);
+// The OTP is verified only by the interstitial's POST, so a scanner can't
+// have spent it first: an expired-or-used token is a real failure, and
+// never "your email is confirmed". The code stays in the log line.
+test("confirm: an expired or spent signup OTP says so, never confirmed", (t) => {
+  const logged = silenceAll(t);
   const expired = new AuthApiError("Token has expired or is invalid", 403, "otp_expired");
-  assert.equal(confirmFailure(expired, "otp", false), "confirmed");
+  assert.equal(confirmFailure(expired, "otp", false), "expired");
+  assert.ok(logged.some((line) => line.includes("otp_expired")));
+});
+
+test("confirm: any other signup OTP failure fails, logged with its code", (t) => {
+  const logged = silenceAll(t);
+  const odd = new AuthApiError("Something unexpected", 500, "unexpected_failure");
+  assert.equal(confirmFailure(odd, "otp", false), "failed");
+  assert.ok(logged.some((line) => line.includes("unexpected_failure")));
+});
+
+test("confirm: no signup OTP failure is ever reported as confirmed", (t) => {
+  silenceAll(t);
+  for (const code of ["otp_expired", "pkce_code_verifier_not_found", "flow_state_not_found", "validation_failed"]) {
+    const error = new AuthApiError("x", 400, code);
+    assert.notEqual(confirmFailure(error, "otp", false), "confirmed", code);
+  }
 });
 
 // The cross-device case: signed up on a laptop, opened the email on a phone.

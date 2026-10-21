@@ -13,6 +13,9 @@ const PUBLIC_PATHS = new Set([
   "/signup",
   "/forgot-password",
   "/reset-password",
+  // The email-link interstitial (app/auth/confirm/route.ts forwards here).
+  // A new signup has no session yet; that's who it's for.
+  "/confirm-email",
   // The post-deletion confirmation. Reached right after the account (and its
   // session) is gone, so it has to be public.
   "/account-deleted",

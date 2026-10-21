@@ -57,6 +57,39 @@ export async function signup(
   }));
 }
 
+// "Send a new link" on /confirm-email, after a confirmation link failed.
+// One answer whatever the address: Supabase's resend returns success for an
+// unknown or already-confirmed address, and the copy must not tell those
+// apart either, or this form becomes an email-enumeration oracle.
+export async function resendConfirmation(
+  _prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const email = String(formData.get("email") ?? "").trim();
+
+  if (!email) {
+    return { error: "Email is required." };
+  }
+
+  const supabase = await createClient();
+  const origin = (await headers()).get("origin");
+
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: `${origin}/auth/confirm?next=/dashboard` },
+  });
+
+  if (error) {
+    return { error: authErrorMessage(error) };
+  }
+
+  return {
+    success:
+      "If that address has an account waiting to be confirmed, a new link is on its way. It works on any device.",
+  };
+}
+
 export async function requestPasswordReset(
   _prevState: ActionState,
   formData: FormData,

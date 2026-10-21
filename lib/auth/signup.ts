@@ -78,7 +78,11 @@ export async function createAccount(
     };
   }
 
+  // Said up front because the common path is cross-device: signed up here,
+  // the email opened on a phone. The link confirms wherever it's clicked,
+  // and this screen offers the way back in (app/(auth)/signup/signup-form.tsx).
   return {
-    success: "Check your email to confirm your account before logging in.",
+    success:
+      "Check your email for a confirmation link. It works on any device, so opening it on your phone is fine. Once you've confirmed, you can sign in here.",
   };
 }
