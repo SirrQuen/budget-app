@@ -1,13 +1,15 @@
-import { type EmailOtpType } from "@supabase/supabase-js";
-import { type NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import type { Database } from "@/lib/database.types";
 import { SIGNED_IN_COOKIE, SIGNED_IN_MAX_AGE_S } from "@/lib/auth/signedInFlag";
 import { markSessionStart } from "@/lib/auth/firstSession";
-import { confirmFailure, type ConfirmFailure } from "@/lib/auth/errors";
+import { confirmFailure } from "@/lib/auth/errors";
 import { linkOutcomePath } from "@/lib/auth/linkOutcome";
 import { serviceUnavailable } from "@/lib/supabase/middleware";
+import { interstitialPath, isRecoveryLink, readOtpLink, safeNext } from "@/lib/auth/confirmLink";
 
 // The email-link callback for both signup confirmation and password recovery.
 //
@@ -22,97 +24,51 @@ import { serviceUnavailable } from "@/lib/supabase/middleware";
 //     exchangeCodeForSession().
 //
 //  2. Our custom template -- live in the dashboard, copied in
-//     supabase/templates/confirmation.html. It links straight here with
-//     `?token_hash=<hash>&type=email`, handed to verifyOtp(), which works
-//     in any browser. This is the signup path in production; shape 1 is
-//     kept for links sent before the switch and any default template.
+//     supabase/templates/confirmation.html. It links here with
+//     `?token_hash=<hash>&type=email`. This is the signup path in
+//     production; shape 1 is kept for links sent before the switch and any
+//     default template.
 //
-// Link scanners (Gmail, Outlook Safe Links, corporate mail proxies) fetch
-// every URL in an email before the recipient sees it, spending the token on
-// that first hit. So by the time a human clicks a signup link, "token spent"
-// is the normal case and the address is already confirmed — which is success,
-// not failure. Send them to log in with a calm message, never an error page.
+// A GET never spends a one-time token. Link scanners (Gmail, Outlook Safe
+// Links, corporate mail proxies) and link-preview fetchers GET every URL in
+// an email before the recipient sees it; when this route verified on GET,
+// that first fetch spent the token and the person clicking got no session.
+// So a token_hash GET only forwards to the interstitial
+// (app/(auth)/confirm-email), whose "Confirm and sign in" button POSTs the
+// link back here, and only that POST calls verifyOtp(). Scanners don't
+// submit forms. Because of that, a failed POST is a real failure, reported
+// as one -- never as "already confirmed".
 //
-// The same goes for a code link opened in a browser that didn't start the
-// signup — the email read on a phone, in a mail app's own browser. Supabase
-// confirmed the address before issuing the code; only the session can't be
-// opened here. That's the common tester path, and it's success too.
+// Shape 1's token is spent by Supabase's own /verify before we see the
+// request, so it can't get the same protection; its outcomes keep their
+// benefit of the doubt below.
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
 
-  // `next` is only ever an in-app path — never let the link smuggle an
-  // absolute URL through as an open redirect.
-  const nextParam = searchParams.get("next");
-  const next =
-    nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//")
-      ? nextParam
-      : "/dashboard";
+  // --- Shape 2: forward to the interstitial, spending nothing -------------
+  const otpLink = readOtpLink(searchParams);
+  if (otpLink) redirect(interstitialPath(otpLink));
 
-  const tokenHash = searchParams.get("token_hash");
-  const type = searchParams.get("type") as EmailOtpType | null;
-
-  // A recovery link has to reach /reset-password, which needs the session the
-  // exchange establishes — so a spent recovery link is a genuine dead end the
-  // user must retry. It never gets the "already confirmed" treatment.
-  // `type` is set by the custom template; `next` by the flow that built the
-  // link (see requestPasswordReset in lib/auth/actions.ts).
-  const isRecovery =
-    type === "recovery" || next.startsWith("/reset-password");
-
-  // An outage answers 503 in place rather than redirecting, so a reload
-  // retries this same link once the auth server is back.
-  const afterFailure = (outcome: ConfirmFailure): Response => {
-    if (outcome === "unreachable") return serviceUnavailable();
-    redirect(linkOutcomePath(outcome, isRecovery));
-  };
+  const next = safeNext(searchParams.get("next"));
+  const type = searchParams.get("type");
+  const isRecovery = isRecoveryLink(type, next);
 
   const supabase = await createClient();
-
-  // A confirmed signup is a brand-new user's first sight of the app, so the
-  // dashboard mark plays its sign-in fold. A recovery link does not: someone
-  // resetting a password is mid-task, and the flourish would be noise.
-  //
-  // This route opens a session without going through login(), so it
-  // captures first-session state too -- for a new signup it's the usual
-  // way in.
-  const signedIn = async () => {
-    if (isRecovery) return;
-    await markSessionStart(supabase);
-    (await cookies()).set(SIGNED_IN_COOKIE, "1", {
-      maxAge: SIGNED_IN_MAX_AGE_S,
-      path: "/",
-      sameSite: "lax",
-    });
-  };
-
-  // --- Shape 2: custom template — token_hash + type -> verifyOtp ----------
-  if (tokenHash && type) {
-    const { error } = await supabase.auth.verifyOtp({
-      type,
-      token_hash: tokenHash,
-    });
-    if (!error) {
-      await signedIn();
-      redirect(next);
-    }
-    // Spent or expired token. On a signup link that almost always means a
-    // scanner already confirmed the address; on a recovery link it's a dead
-    // end the user must retry.
-    return afterFailure(confirmFailure(error, "otp", isRecovery));
-  }
 
   // --- Shape 1a: default email — ?code -> exchangeCodeForSession ----------
   const code = searchParams.get("code");
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      await signedIn();
+      await markSignedIn(supabase, isRecovery);
       redirect(next);
     }
 
     // A missing verifier is a confirmed signup with no session here, or a
     // reset link opened in the wrong browser -- see confirmFailure.
-    return afterFailure(confirmFailure(error, "code", isRecovery));
+    const outcome = confirmFailure(error, "code", isRecovery);
+    if (outcome === "unreachable") return serviceUnavailable();
+    redirect(linkOutcomePath(outcome, isRecovery));
   }
 
   // --- Shape 1b: default email — verify endpoint bounced back an error ----
@@ -139,4 +95,53 @@ export async function GET(request: NextRequest) {
 
   // --- Nothing usable in the URL: a malformed or truncated link ----------
   redirect(linkOutcomePath("incomplete", isRecovery));
+}
+
+// The interstitial's button. The only place a token_hash is spent.
+//
+// Every redirect is a 303: after a POST, a 307 (redirect()'s default in a
+// route handler) would make the browser POST again to the destination.
+export async function POST(request: NextRequest) {
+  const form = await request.formData();
+  const field = (name: string) => {
+    const value = form.get(name);
+    return typeof value === "string" ? value : null;
+  };
+  const link = readOtpLink({ get: field });
+  const seeOther = (path: string) => NextResponse.redirect(new URL(path, request.url), 303);
+
+  if (!link) {
+    return seeOther(linkOutcomePath("incomplete", isRecoveryLink(field("type"), safeNext(field("next")))));
+  }
+  const isRecovery = isRecoveryLink(link.type, link.next);
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.verifyOtp({ type: link.type, token_hash: link.tokenHash });
+  if (!error) {
+    await markSignedIn(supabase, isRecovery);
+    return seeOther(link.next);
+  }
+
+  // An outage answers 503 in place rather than redirecting; the browser
+  // offers to resubmit the form on reload, which retries the same token.
+  const outcome = confirmFailure(error, "otp", isRecovery);
+  if (outcome === "unreachable") return serviceUnavailable();
+  return seeOther(linkOutcomePath(outcome, isRecovery));
+}
+
+// A confirmed signup is a brand-new user's first sight of the app, so the
+// dashboard mark plays its sign-in fold. A recovery link does not: someone
+// resetting a password is mid-task, and the flourish would be noise.
+//
+// This route opens a session without going through login(), so it
+// captures first-session state too -- for a new signup it's the usual
+// way in.
+async function markSignedIn(supabase: SupabaseClient<Database>, isRecovery: boolean) {
+  if (isRecovery) return;
+  await markSessionStart(supabase);
+  (await cookies()).set(SIGNED_IN_COOKIE, "1", {
+    maxAge: SIGNED_IN_MAX_AGE_S,
+    path: "/",
+    sameSite: "lax",
+  });
 }

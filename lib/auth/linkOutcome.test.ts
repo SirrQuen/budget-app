@@ -10,6 +10,7 @@ import {
 
 const OUTCOMES: LinkOutcome[] = [
   "confirmed",
+  "expired",
   "reset-other-browser",
   "reset-expired",
   "incomplete",
@@ -23,9 +24,10 @@ test("a confirmed signup is a notice, never an error", () => {
   assert.equal(EMAIL_CONFIRMED_NOTICE, "Your email is confirmed. Log in to continue.");
 });
 
-test("signup outcomes land on /login, recovery outcomes on /forgot-password", () => {
-  assert.match(linkOutcomePath("failed", false), /^\/login\?/);
-  assert.match(linkOutcomePath("incomplete", false), /^\/login\?/);
+test("signup failures land on /confirm-email, recovery failures on /forgot-password", () => {
+  for (const outcome of ["expired", "failed", "incomplete"] as const) {
+    assert.match(linkOutcomePath(outcome, false), /^\/confirm-email\?error=/);
+  }
   for (const outcome of ["reset-other-browser", "reset-expired", "failed", "incomplete"] as const) {
     assert.match(linkOutcomePath(outcome, true), /^\/forgot-password\?error=/);
   }
@@ -47,7 +49,7 @@ test("every error a path names has copy, and each cause gets its own", () => {
 
 test('only otp_expired outcomes say "expired or used"', () => {
   for (const [key, copy] of Object.entries(LINK_ERRORS)) {
-    if (key === "reset_expired") continue;
+    if (key === "reset_expired" || key === "link_expired") continue;
     assert.doesNotMatch(copy, /expired|already used/i, key);
   }
 });

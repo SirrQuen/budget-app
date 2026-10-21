@@ -13,9 +13,10 @@
 
   The link is {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email,
   in both the button and the plain-text fallback. app/auth/confirm/route.ts
-  reads token_hash and type and hands them to verifyOtp(), which opens a
-  session in whatever browser the link is clicked in. No `next`: the route
-  defaults to /dashboard. Do not use {{ .ConfirmationURL }} -- its ?code=
+  forwards it, unspent, to the /confirm-email interstitial; its "Confirm and
+  sign in" button POSTs it back, and only that calls verifyOtp(), which
+  opens a session in whatever browser the button is pressed in. A link
+  scanner's GET spends nothing. No `next`: the route defaults to /dashboard. Do not use {{ .ConfirmationURL }} -- its ?code=
   exchange needs the PKCE verifier, which is missing whenever the email is
   opened on a different device from the signup.
 

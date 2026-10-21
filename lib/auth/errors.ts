@@ -54,24 +54,28 @@ export function authErrorMessage(error: AuthError): string {
 //                        someone an unconfirmed address is confirmed. The
 //                        route answers 503 in place, so a reload retries the
 //                        same link.
-//   confirmed            a signup link Supabase already accepted. This is
-//                        success, not an error -- there is just no session in
-//                        this browser. On a code link the code is the proof:
-//                        /verify issues one only after it sets
-//                        email_confirmed_at, so a missing verifier means only
-//                        that this browser didn't start the signup (signed up
-//                        on a laptop, opened the email on a phone). On an OTP
-//                        link, a spent token is taken to be a mail scanner's
-//                        earlier hit (see the route).
+//   confirmed            a signup CODE link Supabase already accepted. Success,
+//                        not an error -- there is just no session in this
+//                        browser. The code is the proof: /verify issues one
+//                        only after it sets email_confirmed_at, so a missing
+//                        verifier means only that this browser didn't start
+//                        the signup (signed up on a laptop, opened the email
+//                        on a phone).
+//   expired              a signup OTP Supabase reports as otp_expired -- its
+//                        one code for expired-or-used. A real failure: the
+//                        OTP is verified only by the interstitial's POST, a
+//                        person pressing a button, so a scanner's GET can't
+//                        have spent it. It is NOT evidence the address is
+//                        confirmed; the user is offered a new link.
 //   reset-other-browser  a recovery code link opened in a browser that didn't
 //                        request it. The reset form needs a session here, so
 //                        the user requests a new link on this device.
-//   reset-expired        a recovery token Supabase reports as otp_expired --
-//                        its one code for expired-or-used.
+//   reset-expired        a recovery token Supabase reports as otp_expired.
 //   failed               anything else. Logged; the copy claims no cause.
 export type ConfirmFailure =
   | "unreachable"
   | "confirmed"
+  | "expired"
   | "reset-other-browser"
   | "reset-expired"
   | "failed";
@@ -100,9 +104,13 @@ export function confirmFailure(
   const code = error.code ?? "none";
   const verifierMissing = link === "code" && VERIFIER_MISSING.has(code);
 
-  if (!isRecovery && (link === "otp" || verifierMissing)) {
+  if (!isRecovery && verifierMissing) {
     console.info(`[auth:confirm] ${link} signup link confirmed, no session here (code ${code})`);
     return "confirmed";
+  }
+  if (!isRecovery && link === "otp" && code === "otp_expired") {
+    console.info(`[auth:confirm] ${link} signup link expired or used (code ${code})`);
+    return "expired";
   }
   if (isRecovery && verifierMissing) {
     console.info(`[auth:confirm] recovery link opened in another browser (code ${code})`);
