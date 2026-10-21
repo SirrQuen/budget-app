@@ -354,6 +354,22 @@ builds `main` to mysorrel.com. One branch per batch, merged when that
 batch's verification passes. Never accumulate more than one batch on a
 branch.
 
+## Privacy policy notice
+
+The privacy policy (`docs/legal/privacy-and-terms.md`) promises testers an
+email before any material change takes effect. Three kinds of change
+trigger it:
+
+- adding a processor (today: Supabase, Vercel, Resend)
+- adding a bank connection
+- changing deletion behaviour
+
+If work would do any of these, say so before it ships. The policy text
+and its "Last updated" date change with it, and testers are emailed
+first. Matt sends that email; never send it yourself. The obligation
+starts at the first tester account. Dates and status are in
+`docs/phase-7-findings.md`, "Privacy policy and terms (A2)".
+
 ## Idle sign-out
 
 Two halves. Server: Supabase Auth's inactivity timeout and JWT expiry (30

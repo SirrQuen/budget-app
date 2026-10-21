@@ -41,11 +41,10 @@ leaves this list only when it is verified done, with the date and how.
 5. **Custom SMTP with a verified sending domain** on mysorrel.com,
    including SPF, DKIM and DMARC. The default Supabase mailer is
    rate-limited and its mail lands in spam.
-6. **Privacy policy and terms of service.** The real item behind the
-   `TODO(launch blocker)` at `app/(app)/settings/page.tsx:178`. Adding the
-   links takes minutes; writing the policy is the work. It has to describe
-   what the app actually does, including the audit-log retention decision
-   (see "Phase 8 policy item" below).
+6. ~~Privacy policy and terms of service.~~ **Closed 2026-10-20.** Live at
+   /privacy and /terms, linked from Settings, the landing page footer and
+   the signup form. See "Privacy policy and terms (A2)" below for the
+   dates and the standing obligation they carry.
 7. **The PITR decision.** Pro gives daily snapshots, so worst-case data loss
    is up to 24 hours. That needs a deliberate answer, not a default.
 8. **The Section 10 error-handling fix pass**, in full. Its design decisions
@@ -468,6 +467,27 @@ Open items carried forward:
   design), or signup failed silently. Not yet determined which.
 - Deletion of an account holding transactions, schedules, goals and budgets
   hasn't been verified end to end in production.
+
+## Privacy policy and terms (A2)
+
+Source: `docs/legal/privacy-and-terms.md` (rendered by `lib/legal.ts`).
+
+- **Privacy policy:** published 2026-10-12. Revised 2026-10-20 to
+  clarify the data-sharing wording ("Not now," dropped from the
+  no-sharing sentence).
+- **Terms of service:** published 2026-10-12, unchanged since.
+- **Operator:** MW Cyber Architects LLC. **Contact:** hello@mysorrel.com.
+
+**Standing obligation.** The policy promises testers an email before any
+material change takes effect. Each of these triggers it:
+
+- adding a processor (today: Supabase, Vercel, Resend)
+- adding a bank connection
+- changing deletion behaviour
+
+Bump the policy's "Last updated" date with any revision. The obligation
+starts when the first tester account exists. As of 2026-10-20 nobody has
+signed up, so nothing is owed yet.
 
 ## Phase 8 policy item: auth audit log retained after deletion (2026-10-06)
 
