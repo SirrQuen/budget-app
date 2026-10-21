@@ -2,7 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import type { GoalType } from "@/lib/goalOptions";
-import { describeWriteError, sessionUserId } from "@/lib/db/errors";
+import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/errors";
 
 type GoalRow = Database["public"]["Tables"]["goals"]["Row"];
 type GoalInsert = Database["public"]["Tables"]["goals"]["Insert"];
@@ -70,6 +70,68 @@ export async function contributeToGoal(
     .from("goal_contributions")
     .insert({ ...input, goalid, userid, funding_method: "manual" })
     .select()
+    .single();
+
+  if (error) {
+    return { data: null, error: describeWriteError(error, "contribution") };
+  }
+
+  return { data, error: null };
+}
+
+export type GoalContribution = Pick<GoalContributionRow, "id" | "goalid" | "amount" | "date">;
+
+// Every contribution, newest first, for the per-goal history on /goals. The
+// goal's total is never added up from these -- v_goal_progress sums the
+// table on each read, which is also why deleting or editing one is enough to
+// recompute the goal: there is no stored total to keep in step.
+export async function getGoalContributions(): Promise<DbResult<GoalContribution[]>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("goal_contributions")
+    .select("id, goalid, amount, date")
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "goals") };
+  }
+
+  return { data, error: null };
+}
+
+export async function updateGoalContribution(
+  id: string,
+  input: ContributeToGoalInput,
+): Promise<DbResult<GoalContribution>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("goal_contributions")
+    .update(input)
+    .eq("id", id)
+    .select("id, goalid, amount, date")
+    .single();
+
+  if (error) {
+    return { data: null, error: describeWriteError(error, "contribution") };
+  }
+
+  return { data, error: null };
+}
+
+// A real DELETE, never a hidden flag: a hidden row would still be in
+// v_goal_progress's sum, and the goal would keep counting money that was
+// taken back out.
+export async function deleteGoalContribution(id: string): Promise<DbResult<{ id: string }>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("goal_contributions")
+    .delete()
+    .eq("id", id)
+    .select("id")
     .single();
 
   if (error) {

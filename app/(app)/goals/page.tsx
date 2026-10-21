@@ -1,4 +1,5 @@
 import { getGoalProgress, getGoalsSummary } from "@/lib/db/dashboard";
+import { getGoalContributions, type GoalContribution } from "@/lib/db/goals";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadError } from "@/components/ui/LoadError";
@@ -8,12 +9,17 @@ import { CreateGoalForm } from "./CreateGoalForm";
 import { GoalRow } from "./GoalRow";
 
 export default async function GoalsPage() {
-  const [progressResult, summaryResult] = await Promise.all([
+  const [progressResult, summaryResult, contributionsResult] = await Promise.all([
     getGoalProgress(),
     getGoalsSummary(),
+    getGoalContributions(),
   ]);
 
-  if (progressResult.error !== null || summaryResult.error !== null) {
+  if (
+    progressResult.error !== null ||
+    summaryResult.error !== null ||
+    contributionsResult.error !== null
+  ) {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader
@@ -24,6 +30,7 @@ export default async function GoalsPage() {
           message={
             progressResult.error ??
             summaryResult.error ??
+            contributionsResult.error ??
             "We couldn't load your goals. Refresh the page to try again."
           }
         />
@@ -32,6 +39,13 @@ export default async function GoalsPage() {
   }
 
   const goals = progressResult.data;
+
+  const contributionsByGoal = new Map<string, GoalContribution[]>();
+  for (const contribution of contributionsResult.data) {
+    const list = contributionsByGoal.get(contribution.goalid) ?? [];
+    list.push(contribution);
+    contributionsByGoal.set(contribution.goalid, list);
+  }
 
   // A brand-new goals list means nothing else on this page (the saved-so-far
   // hero figure) means anything yet -- same narrowing accounts/page.tsx does
@@ -74,7 +88,11 @@ export default async function GoalsPage() {
 
       <ul className="divide-y divide-hairline rounded-2xl border border-hairline bg-surface">
         {goals.map((goal) => (
-          <GoalRow key={goal.goal_id} goal={goal} />
+          <GoalRow
+            key={goal.goal_id}
+            goal={goal}
+            contributions={contributionsByGoal.get(goal.goal_id ?? "") ?? []}
+          />
         ))}
       </ul>
     </div>

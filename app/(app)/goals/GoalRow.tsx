@@ -10,17 +10,26 @@ import { Button } from "@/components/ui/Button";
 import { Input, FIELD_EDGE } from "@/components/ui/Input";
 import { FormField } from "@/components/ui/FormField";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
-import { TargetIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, TargetIcon } from "@/components/ui/icons";
 import { formatCurrency } from "@/lib/format";
 import type { Database } from "@/lib/database.types";
+import type { GoalContribution } from "@/lib/db/goals";
+import { ContributionList } from "./ContributionList";
 
 type GoalProgressRow = Database["public"]["Views"]["v_goal_progress"]["Row"];
 
 const fieldClassName = `w-full ${FIELD_EDGE} bg-surface px-3 py-2 text-sm text-ink`;
 
-export function GoalRow({ goal }: { goal: GoalProgressRow }) {
+export function GoalRow({
+  goal,
+  contributions,
+}: {
+  goal: GoalProgressRow;
+  contributions: GoalContribution[];
+}) {
   const today = useToday();
   const [contributing, setContributing] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [state, action, pending, submit] = useActionForm<ContributeActionState>(
     contributeToGoalAction,
     undefined,
@@ -103,6 +112,29 @@ export function GoalRow({ goal }: { goal: GoalProgressRow }) {
           {remaining > 0 ? `${formatCurrency(remaining)} to go` : "Goal reached"}
         </span>
       </div>
+
+      {contributions.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => setShowHistory((v) => !v)}
+            aria-expanded={showHistory}
+            aria-controls={`history-${goal.goal_id}`}
+            className="-mx-2 inline-flex min-h-11 items-center gap-1 self-start rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          >
+            <ChevronDownIcon
+              className={`h-4 w-4 motion-safe:transition-transform motion-safe:duration-150 ${showHistory ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            />
+            {contributions.length === 1 ? "1 contribution" : `${contributions.length} contributions`}
+          </button>
+          {showHistory ? (
+            <div id={`history-${goal.goal_id}`}>
+              <ContributionList goalName={goal.goal_name ?? "this goal"} contributions={contributions} />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {contributing ? (
         <form
