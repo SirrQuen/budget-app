@@ -1,27 +1,51 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import { useActionForm } from "@/components/useActionForm";
 import { login, type ActionState } from "@/lib/auth/actions";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { takeSignupEmail } from "@/lib/auth/signupEmailHandoff";
 
 export function LoginForm({ initialError }: { initialError?: string }) {
   const [state, action, pending, submit] = useActionForm<ActionState>(
     login,
     initialError ? { error: initialError } : undefined,
   );
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+
+  // Arriving from "I've confirmed — sign in" on the signup screen: the
+  // address is already known, so the password is all that's left. After
+  // hydration, never in the render -- sessionStorage doesn't exist on the
+  // server. Never overwrites anything already typed.
+  useEffect(() => {
+    const email = takeSignupEmail();
+    const input = emailRef.current;
+    if (!email || !input || input.value) return;
+    input.value = email;
+    passwordRef.current?.focus();
+  }, []);
 
   return (
     <form action={action} onSubmit={submit} className="flex flex-col gap-4">
       <FormField label="Email" htmlFor="email" required>
-        <Input id="email" name="email" type="email" autoComplete="email" required />
+        <Input
+          ref={emailRef}
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+        />
       </FormField>
 
       <FormField label="Password" htmlFor="password" required>
         <Input
+          ref={passwordRef}
           id="password"
           name="password"
           type="password"
