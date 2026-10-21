@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated: October 12, 2026**
+**Last updated: October 20, 2026**
 
 Sorrel is a personal budgeting app operated by **MW Cyber Architects LLC**. This policy explains what we collect, where it lives, who can see it, and what happens when you leave.
 
@@ -36,7 +36,7 @@ Your data is held in a PostgreSQL database operated by **Supabase**, hosted in A
 
 The app itself is served by **Vercel**. Emails from Sorrel — confirmations and password resets — are sent through **Resend**.
 
-These three providers process data on our behalf. We don't share your information with anyone else, and we don't sell it. Not now, and this policy will be updated before that ever changes.
+These three providers process data on our behalf. We don't share your information with anyone else, and we don't sell it. This policy will be updated before that ever changes.
 
 ## Who can see your information
 
