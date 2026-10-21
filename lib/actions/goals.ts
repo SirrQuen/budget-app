@@ -1,7 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createGoal, contributeToGoal } from "@/lib/db/goals";
+import {
+  createGoal,
+  contributeToGoal,
+  deleteGoalContribution,
+  updateGoalContribution,
+} from "@/lib/db/goals";
 import { getGoalProgress } from "@/lib/db/dashboard";
 import { GOAL_TYPES, type GoalType } from "@/lib/goalOptions";
 import { formatCurrency } from "@/lib/format";
@@ -67,6 +72,21 @@ export async function createGoalAction(
   revalidatePath("/goals");
 }
 
+// Shared by logging a contribution and editing one, so the two can't
+// accept different amounts or dates.
+function parseContributionFields(formData: FormData) {
+  const date = String(formData.get("date") ?? "").trim();
+  const amount = Number(String(formData.get("amount") ?? "").trim());
+
+  if (!date || Number.isNaN(Date.parse(date))) {
+    return { error: "Enter a valid date." };
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { error: "Enter an amount greater than zero." };
+  }
+  return { amount, date };
+}
+
 export type ContributeActionState =
   | { error?: string; milestone?: { message: string } }
   | undefined;
@@ -76,20 +96,15 @@ export async function contributeToGoalAction(
   formData: FormData,
 ): Promise<ContributeActionState> {
   const goalid = String(formData.get("goalid") ?? "");
-  const date = String(formData.get("date") ?? "").trim();
-  const amount = Number(String(formData.get("amount") ?? "").trim());
-
   if (!goalid) {
     return { error: "Missing goal id." };
   }
-  if (!date || Number.isNaN(Date.parse(date))) {
-    return { error: "Enter a valid date." };
-  }
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return { error: "Enter an amount greater than zero." };
+  const parsed = parseContributionFields(formData);
+  if ("error" in parsed) {
+    return parsed;
   }
 
-  const { error } = await contributeToGoal(goalid, { amount, date });
+  const { error } = await contributeToGoal(goalid, parsed);
 
   if (error) {
     return { error };
@@ -111,4 +126,42 @@ export async function contributeToGoalAction(
   }
 
   return undefined;
+}
+
+export async function updateContributionAction(
+  _prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const id = String(formData.get("id") ?? "");
+  if (!id) {
+    return { error: "Missing contribution id." };
+  }
+  const parsed = parseContributionFields(formData);
+  if ("error" in parsed) {
+    return parsed;
+  }
+
+  const { error } = await updateGoalContribution(id, parsed);
+
+  if (error) {
+    return { error };
+  }
+
+  // The page re-reads v_goal_progress, which re-sums the table: the edited
+  // amount is the goal's total and percentage from here on.
+  revalidatePath("/goals");
+}
+
+export async function deleteContributionAction(id: string): Promise<ActionState> {
+  if (!id) {
+    return { error: "Missing contribution id." };
+  }
+
+  const { error } = await deleteGoalContribution(id);
+
+  if (error) {
+    return { error };
+  }
+
+  revalidatePath("/goals");
 }
