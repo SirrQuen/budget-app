@@ -68,7 +68,9 @@ dashboard (Authentication / Settings), then keep this file current.
   `config.toml`; `supabase config push` is never run). Edit the repo file,
   paste it into the dashboard, keep the two identical.
   - Confirm signup: custom, `supabase/templates/confirmation.html`
-    (2026-10-13). Link is `token_hash` + `type=email` to `/auth/confirm`.
+    (2026-10-13; re-pasted 2026-10-20, comment updated for the
+    /confirm-email interstitial). Link is `token_hash` + `type=email` to
+    `/auth/confirm`.
   - Every other template (reset password, magic link, email change,
     invite): TODO -- record whether each is default or custom.
 - **SMTP** -- custom SMTP via Resend (`smtp.resend.com:465`, user
