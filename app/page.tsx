@@ -14,7 +14,7 @@ import { PRIVACY_PATH, TERMS_PATH } from "@/lib/legal";
 export const metadata: Metadata = {
   title: "Sorrel · Know what's safe to spend",
   description:
-    "Sorrel looks ahead at the money coming in and the bills going out, and tells you what you can spend without going under.",
+    "Sorrel looks ahead at the money coming in and the bills going out, finds the lowest point your balance will reach, and tells you what you can spend while keeping that low point above zero.",
 };
 
 const FOCUS =
@@ -49,8 +49,8 @@ export default function Home() {
           <div className="mt-6 space-y-4 text-lg leading-relaxed text-ink-secondary">
             <p>
               Sorrel looks ahead at the money coming in and the bills going out, finds the
-              lowest point your balance will reach, and tells you what you can spend without
-              going under.
+              lowest point your balance will reach, and tells you what you can spend while
+              keeping that low point above zero.
             </p>
             <p>
               Most budgeting apps tell you what you&rsquo;ve spent. Sorrel tells you
