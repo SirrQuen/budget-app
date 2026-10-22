@@ -24,6 +24,7 @@
 -- next run fails loudly on a duplicate key in auth.users rather than
 -- passing on stale rows. Cleanup check after a run (must be 0):
 --   select count(*) from auth.users where email like 'rls-test-%@example.invalid';
+--   select count(*) from public.waitlist where email like 'rls-test-%@example.invalid';
 --
 -- Impersonation is the PostgREST pattern: request.jwt.claims carries the
 -- user's sub, and the role becomes `authenticated`, so auth.uid() and
@@ -49,6 +50,9 @@
 --                 (RLS bypassed) must be rejected by the FK itself
 --   5  Coverage   every public table/view is tested here or exempted
 --   2d Function grants (Phase 7)
+--   2e Waitlist   operator-only table (migration 51): anon and
+--                 authenticated can't read or touch it; join_waitlist()
+--                 answers a duplicate exactly as it answers a new address
 --
 -- Every "must be 0" read carries a positive control: A must see the
 -- same row the table owner sees. Without it, a 0 from B proves nothing
@@ -753,6 +757,142 @@ $$;
 
 
 -- ---------------------------------------------------------------------
+-- 2e -- Waitlist (migration 51)
+--
+-- Not user data, so not in section 1: it has no userid and no policy.
+-- The operator is its only reader. What must hold:
+--   - anon and authenticated: no SELECT/INSERT/UPDATE/DELETE, and an
+--     actual attempt is refused (not just the grant read back)
+--   - join_waitlist() as anon: a new address and the same address again
+--     answer identically (no error either time) and leave ONE row,
+--     stored trimmed and lower-cased
+--   - at the hourly ceiling, a duplicate and a new address are refused
+--     identically too
+-- ---------------------------------------------------------------------
+create function pg_temp.become_anon() returns void language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
+  execute 'set local role anon';
+end
+$$;
+
+do $$
+declare
+  v_role text;
+  v_priv text;
+  v_has boolean;
+  v_sql text;
+  v_state text;
+  v_msg text;
+  v_first text;
+  v_second text;
+  v_n bigint;
+  v_raw constant text := '  RLS-Test-Waitlist@Example.invalid ';
+  v_email constant text := 'rls-test-waitlist@example.invalid';
+begin
+  -- Grants, read back.
+  foreach v_role in array array['anon', 'authenticated'] loop
+    foreach v_priv in array array['SELECT', 'INSERT', 'UPDATE', 'DELETE'] loop
+      v_has := has_table_privilege(v_role, 'public.waitlist', v_priv);
+      perform pg_temp.rec('2e waitlist', 'waitlist', v_role || ' ' || v_priv || ' granted',
+        'false', v_has::text, not v_has);
+    end loop;
+  end loop;
+
+  v_has := has_function_privilege('anon', 'public.join_waitlist(text)'::regprocedure, 'execute');
+  perform pg_temp.rec('2e waitlist', 'join_waitlist(text)', 'anon EXECUTE', 'true', v_has::text, v_has);
+  v_has := has_function_privilege('authenticated', 'public.join_waitlist(text)'::regprocedure, 'execute');
+  perform pg_temp.rec('2e waitlist', 'join_waitlist(text)', 'authenticated EXECUTE', 'false', v_has::text, not v_has);
+
+  -- Join twice as anon, the way PostgREST runs an unauthenticated rpc.
+  for i in 1..2 loop
+    v_state := null;
+    begin
+      perform pg_temp.become_anon();
+      perform public.join_waitlist(v_raw);
+    exception when others then
+      v_state := sqlstate;
+    end;
+    perform pg_temp.unbecome();
+    if i = 1 then v_first := coalesce(v_state, 'ok'); else v_second := coalesce(v_state, 'ok'); end if;
+  end loop;
+  perform pg_temp.rec('2e waitlist', 'join_waitlist(text)', 'new address as anon', 'ok', v_first, v_first = 'ok');
+  perform pg_temp.rec('2e waitlist', 'join_waitlist(text)', 'same address again: identical answer',
+    v_first, v_second, v_second = v_first);
+
+  -- Positive control for the refusals below: the owner sees the one row.
+  select count(*) into v_n from public.waitlist where email = v_email;
+  perform pg_temp.rec('2e waitlist', 'waitlist', 'owner: one row, normalised', '1', v_n::text, v_n = 1);
+
+  -- Every direct statement, attempted as anon and as a signed-in user.
+  foreach v_role in array array['anon', 'authenticated'] loop
+    foreach v_sql in array array[
+      'select count(*) from public.waitlist',
+      format('insert into public.waitlist (email) values (%L)', 'rls-test-direct@example.invalid'),
+      format('update public.waitlist set created_at = now() where email = %L', v_email),
+      format('delete from public.waitlist where email = %L', v_email)
+    ] loop
+      v_state := null;
+      begin
+        if v_role = 'anon' then
+          perform pg_temp.become_anon();
+        else
+          perform pg_temp.become(pg_temp.fx('A'));
+        end if;
+        execute v_sql;
+      exception when others then
+        v_state := sqlstate;
+      end;
+      perform pg_temp.unbecome();
+      perform pg_temp.rec('2e waitlist', 'waitlist', v_role || ': ' || split_part(v_sql, ' ', 1) || ' refused',
+        '42501', coalesce(v_state, 'ran'), v_state = '42501');
+    end loop;
+  end loop;
+
+  select count(*) into v_n from public.waitlist where email like 'rls-test-%@example.invalid';
+  perform pg_temp.rec('2e waitlist', 'waitlist', 'owner: still one test row after the refusals',
+    '1', v_n::text, v_n = 1);
+
+  -- The shape check in SQL, for a caller that skipped the app.
+  v_state := null;
+  begin
+    perform pg_temp.become_anon();
+    perform public.join_waitlist('not an address');
+  exception when others then
+    v_state := sqlstate;
+  end;
+  perform pg_temp.unbecome();
+  perform pg_temp.rec('2e waitlist', 'join_waitlist(text)', 'implausible address rejected', '22023',
+    coalesce(v_state, 'ok'), v_state = '22023');
+
+  -- The hourly ceiling (100). Fill to it as the owner; now() is fixed for
+  -- the transaction, so every filler row is inside the window.
+  insert into public.waitlist (email)
+  select format('rls-test-fill-%s@example.invalid', g)
+    from generate_series(1, 100 - (select count(*) from public.waitlist
+                                    where created_at > now() - interval '1 hour')::int) g;
+
+  for i in 1..2 loop
+    v_state := null;
+    v_msg := null;
+    begin
+      perform pg_temp.become_anon();
+      perform public.join_waitlist(case i when 1 then v_email else 'rls-test-new@example.invalid' end);
+    exception when others then
+      v_state := sqlstate;
+      v_msg := sqlerrm;
+    end;
+    perform pg_temp.unbecome();
+    perform pg_temp.rec('2e waitlist', 'join_waitlist(text)',
+      'at the ceiling: ' || case i when 1 then 'duplicate' else 'new address' end || ' refused',
+      'P0001 waitlist_rate_limited', coalesce(v_state || ' ' || v_msg, 'ok'),
+      v_state = 'P0001' and v_msg = 'waitlist_rate_limited');
+  end loop;
+end
+$$;
+
+
+-- ---------------------------------------------------------------------
 -- 5 Coverage
 --
 -- Fails when a migration adds a table or view this file doesn't test.
@@ -776,11 +916,15 @@ begin
       'tested',
       case
         when r.relname = 'bank_holidays' then 'exempt: global reference data, SELECT using (true)'
+        when r.relname = 'waitlist' and exists (select 1 from rls_results where section = '2e waitlist')
+          then 'tested in 2e' || case when not r.relrowsecurity then ', but RLS DISABLED' else '' end
         when r.relname in (select object from rls_results where section in ('1 reads', '2 views'))
           then 'tested' || case when r.relkind in ('r', 'p') and not r.relrowsecurity then ', but RLS DISABLED' else '' end
         else 'NOT TESTED'
       end,
       r.relname = 'bank_holidays'
+        or (r.relname = 'waitlist' and r.relrowsecurity
+            and exists (select 1 from rls_results where section = '2e waitlist'))
         or (r.relname in (select object from rls_results where section in ('1 reads', '2 views'))
             and (r.relkind not in ('r', 'p') or r.relrowsecurity)));
   end loop;

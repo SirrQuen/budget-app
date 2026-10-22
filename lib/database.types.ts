@@ -842,6 +842,21 @@ export type Database = {
           },
         ]
       }
+      waitlist: {
+        Row: {
+          created_at: string
+          email: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       v_account_balances: {
@@ -1317,6 +1332,7 @@ export type Database = {
       }
       is_business_day: { Args: { d: string }; Returns: boolean }
       is_spendable_account_type: { Args: { p_type: string }; Returns: boolean }
+      join_waitlist: { Args: { p_email: string }; Returns: undefined }
       leaves_spendable_set: {
         Args: { p_from_type: string; p_to_type: string }
         Returns: boolean

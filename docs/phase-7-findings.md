@@ -475,6 +475,13 @@ Source: `docs/legal/privacy-and-terms.md` (rendered by `lib/legal.ts`).
 - **Privacy policy:** published 2026-10-12. Revised 2026-10-20 to
   clarify the data-sharing wording ("Not now," dropped from the
   no-sharing sentence).
+- **Privacy policy, revised 2026-10-21:** new section "If you join the
+  waitlist" (migration 51, the landing-page waitlist): an email address,
+  collected to send one message when Sorrel opens, used for nothing else,
+  removed on request to hello@mysorrel.com. Revised before any account
+  other than the operator's own test accounts existed. No notification
+  obligation triggered. No new processor: the list lives in the same
+  Supabase database.
 - **Terms of service:** published 2026-10-12, unchanged since.
 - **Operator:** MW Cyber Architects LLC. **Contact:** hello@mysorrel.com.
 

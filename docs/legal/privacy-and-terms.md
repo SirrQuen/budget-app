@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated: October 20, 2026**
+**Last updated: October 21, 2026**
 
 Sorrel is a personal budgeting app operated by **MW Cyber Architects LLC**. This policy explains what we collect, where it lives, who can see it, and what happens when you leave.
 
@@ -29,6 +29,14 @@ Sorrel is currently in beta testing. This policy describes what we do today, not
 - Error logs when something goes wrong, which may include the page you were on and what failed
 
 We don't use advertising trackers, analytics pixels, or third-party cookies. The only cookies Sorrel sets are the ones that keep you signed in and support the sign-in process. Your theme and a few display preferences are stored in your browser's local storage, on your device only.
+
+## If you join the waitlist
+
+The waitlist on our home page collects **your email address** and nothing else — no name, and no record of where you came from.
+
+We use it to send you one email when Sorrel opens. We don't use it for anything else, and we don't add it to any other list. Only we can see it; it's held in the same Supabase database described below.
+
+Your waitlist entry is held separately from any Sorrel account, including one you create later with the same address. Deleting an account doesn't remove it. To be removed from the waitlist, email hello@mysorrel.com and we'll delete your address.
 
 ## Where your information is stored
 
@@ -67,6 +75,7 @@ You can delete your account at any time from Settings. Deletion is immediate and
 **What is not deleted:**
 
 - **Security audit records.** Supabase keeps an authentication log recording events such as sign-ins and password changes. Depending on the event, an entry may contain your account's internal identifier, your email address and the IP address the request came from. It does not contain your financial data, your name, or anything you entered into Sorrel. We retain it because it is how account security incidents get investigated. Entries are kept for seven days, then removed automatically.
+- **A waitlist entry**, if you joined the waitlist. It's separate from your account; email hello@mysorrel.com to have it removed.
 - **Backup copies**, until the backup they're in expires — at most seven days.
 - **Error logs**, which may reference your account identifier, for a limited period.
 
