@@ -98,8 +98,8 @@ dashboard (Authentication / Settings), then keep this file current.
 
 ### Database / project
 
-- **Backups / PITR** -- daily snapshots on Pro; the PITR decision is
-  launch blocker 7.
+- **Backups / PITR** -- daily snapshots on Pro. PITR is OFF for the beta,
+  by decision (launch blocker 7, closed); revisit before charging.
 - **SSL enforcement, network restrictions** -- TODO.
 - **Connection pooler settings** -- TODO.
 - **Branching** -- enabled; no GitHub integration (preview branches are
