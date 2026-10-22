@@ -35,9 +35,11 @@ leaves this list only when it is verified done, with the date and how.
    the dashboard (wrap below sm, truncate from sm up), plus dashboard stat
    tiles (one column below 360px). Measured in the running app at 320 and
    375px: no route overflows and no text truncates.
-4. **No marketing page.** `app/page.tsx` only redirects, so a stranger
-   hitting the domain sees a login form with no explanation of what they're
-   logging into.
+4. ~~No marketing page.~~ **Closed.** A static landing page replaced the
+   `/` redirect on 2026-10-13 (`8416d2a`): it says what Sorrel is and
+   links the legal pages. The waitlist was added 2026-10-22 (migration
+   51). The original finding -- `app/page.tsx` only redirected, so a
+   stranger saw a login form with no explanation -- no longer applies.
 5. **Custom SMTP with a verified sending domain** on mysorrel.com,
    including SPF, DKIM and DMARC. The default Supabase mailer is
    rate-limited and its mail lands in spam.
@@ -45,8 +47,10 @@ leaves this list only when it is verified done, with the date and how.
    /privacy and /terms, linked from Settings, the landing page footer and
    the signup form. See "Privacy policy and terms (A2)" below for the
    dates and the standing obligation they carry.
-7. **The PITR decision.** Pro gives daily snapshots, so worst-case data loss
-   is up to 24 hours. That needs a deliberate answer, not a default.
+7. ~~The PITR decision.~~ **Closed by decision.** PITR is OFF for the
+   beta. Daily backups (Pro), so up to 24 hours of data can be lost;
+   that's disclosed in the privacy policy ("Backups") and the terms
+   ("Sorrel is in beta"). Revisit before charging.
 8. **The Section 10 error-handling fix pass**, in full. Its design decisions
    are already made; see "Error handling audit" below.
 
