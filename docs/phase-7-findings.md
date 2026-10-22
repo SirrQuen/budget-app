@@ -77,10 +77,10 @@ without one are tracked in this table.
 | A3 | Composite foreign keys | 1 | see blocker 1 |
 | A4 | Error visibility you can actually read | 8 | see blocker 8 |
 | A5 | A landing page that explains what this is | 4 | see blocker 4 |
-| A6 | Decide how people get in | -- | Invite code at signup, `lib/auth/inviteCode.ts`, 2026-10-13 (`65e823f`). Not formally closed. |
+| A6 | Decide how people get in | -- | **Closed.** Invite code at signup, `lib/auth/inviteCode.ts`, shipped 2026-10-13 (`65e823f`). |
 | A7 | Decide the PITR question | 7 | see blocker 7 |
-| A8 | Check it on devices you don't own | -- | Not recorded. |
-| A9 | A feedback channel that isn't texts | -- | Not recorded. |
+| A8 | Check it on devices you don't own | -- | **Open.** |
+| A9 | A feedback channel that isn't texts | -- | **Open.** |
 
 Blockers 2 and 3 have no Stage A equivalent; they came out of Phase 7.
 
