@@ -84,7 +84,7 @@ export default function Home() {
               className="text-base leading-relaxed font-normal text-ink-secondary"
             >
               Sorrel is in private beta right now, so sign-ups are invite-only &mdash; but you
-              can be first to know when it opens.
+              can be first to know when it&rsquo;s live.
             </h2>
             <WaitlistForm />
           </section>

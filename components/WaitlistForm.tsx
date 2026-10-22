@@ -46,9 +46,8 @@ export function WaitlistForm() {
         role="status"
         className="rounded text-base text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
       >
-        You&rsquo;re on the list. We&rsquo;ll email you at{" "}
-        <span className="font-semibold break-all">{state.joined}</span> when Sorrel opens
-        &mdash; nothing else.
+        You&rsquo;re on the list. Sorrel will send an email to{" "}
+        <span className="font-semibold break-all">{state.joined}</span> once it launches.
       </p>
     );
   }
@@ -94,7 +93,7 @@ export function WaitlistForm() {
       </FormField>
 
       <p id="waitlist-notice" className="text-sm text-ink-muted">
-        One email when we launch. Nothing else, ever.{" "}
+        Sorrel will send you an email once it launches.{" "}
         <Link href={PRIVACY_PATH} className={NOTICE_LINK}>
           Privacy policy
         </Link>
@@ -103,7 +102,7 @@ export function WaitlistForm() {
       {formError ? <ErrorMessage message={formError} /> : null}
 
       <Button type="submit" disabled={pending} className="self-start">
-        {pending ? "Adding you…" : "Tell me when it opens"}
+        {pending ? "Adding you…" : "Join waitlist"}
       </Button>
     </form>
   );
