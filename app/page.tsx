@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { SorrelMark } from "@/components/SorrelMark";
 import { Wordmark } from "@/components/Wordmark";
+import { WaitlistForm } from "@/components/WaitlistForm";
 import { PRIVACY_PATH, TERMS_PATH } from "@/lib/legal";
 
 // What a stranger who types the domain sees. Not a marketing page: no feature
-// list, no screenshots, no funnel -- it says what Sorrel is and gives the legal
-// links a home.
+// list, no screenshots, no funnel -- it says what Sorrel is, takes an address
+// for the one "it's open" email (components/WaitlistForm), and gives the
+// legal links a home.
 //
 // Static: nothing here reads a session, so it prerenders at build time. A
 // signed-in visitor never reaches it -- the proxy sends "/" to /dashboard
@@ -74,14 +76,17 @@ export default function Home() {
           </div>
 
           <section
-            aria-label="Private beta"
-            className="mt-12 rounded-xl border border-hairline bg-surface p-5 text-sm leading-relaxed text-ink-secondary"
+            aria-labelledby="waitlist-heading"
+            className="mt-12 flex flex-col gap-4 rounded-xl border border-hairline bg-surface p-5"
           >
-            <p>
-              Sorrel is in private beta. It&rsquo;s being tested by a small group before
-              opening more widely. If you don&rsquo;t have an invitation, there&rsquo;s
-              nothing to sign up for yet &mdash; but you&rsquo;re welcome to come back.
-            </p>
+            <h2
+              id="waitlist-heading"
+              className="text-base leading-relaxed font-normal text-ink-secondary"
+            >
+              Sorrel is in private beta right now, so sign-ups are invite-only &mdash; but you
+              can be first to know when it opens.
+            </h2>
+            <WaitlistForm />
           </section>
         </div>
       </main>
