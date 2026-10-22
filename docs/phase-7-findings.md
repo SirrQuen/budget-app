@@ -63,6 +63,27 @@ leaves this list only when it is verified done, with the date and how.
    Next's `create-error-handler.js`, not observed). Close this item once
    that's checked with the auth server blocked.
 
+### Phase 8 Stage A, mapped to this list
+
+`docs/Phase-8-Beta-and-Launch.md` is the original plan (written
+2026-10-13) and names its items A1-A9. Status lives here, not there. For
+items with a blocker number, the blocker above is the status; the three
+without one are tracked in this table.
+
+| Stage A | Item | Blocker | Status |
+|---|---|---|---|
+| A1 | Custom SMTP with a verified domain | 5 | see blocker 5 |
+| A2 | Privacy policy and terms of service | 6 | see blocker 6 |
+| A3 | Composite foreign keys | 1 | see blocker 1 |
+| A4 | Error visibility you can actually read | 8 | see blocker 8 |
+| A5 | A landing page that explains what this is | 4 | see blocker 4 |
+| A6 | Decide how people get in | -- | Invite code at signup, `lib/auth/inviteCode.ts`, 2026-10-13 (`65e823f`). Not formally closed. |
+| A7 | Decide the PITR question | 7 | see blocker 7 |
+| A8 | Check it on devices you don't own | -- | Not recorded. |
+| A9 | A feedback channel that isn't texts | -- | Not recorded. |
+
+Blockers 2 and 3 have no Stage A equivalent; they came out of Phase 7.
+
 Not blockers: the streak redefinition (see "Streak: redefined as days
 opened" below) is decided and scheduled after Batch 1.2 and these
 blockers. The strip is hidden until then.
