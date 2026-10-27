@@ -23,7 +23,9 @@
 --      to the total sets it.
 --   7  A client can't write completed_at: the trigger re-derives it.
 --   8  Archiving (is_active = false) keeps the contributions, and
---      v_goals_summary's total_saved stops counting the goal.
+--      v_goals_summary's total_saved stops counting the goal;
+--      v_goal_progress still lists it, saying it's archived and when it
+--      completed (the reader filters, as with v_account_balances).
 --   9  Deleting a goal cascades its contributions without an error from
 --      the contribution trigger.
 --  10  Reading the goal and the summary writes nothing (updated_at
@@ -134,6 +136,9 @@ begin
   perform pg_temp.rec('8b archived: summary stops counting it', '0', saved::text);
   perform pg_temp.rec('8c archived: contributions kept', '1',
     (select count(*) from public.goal_contributions where goalid = g)::text);
+  perform pg_temp.rec('8d archived: v_goal_progress lists it as inactive, completed', 'false true',
+    (select is_active::text || ' ' || (completed_at is not null)::text
+       from public.v_goal_progress where goal_id = g));
 
   insert into public.goals (id, userid, goal_name, goal_type, target_amount, tracking_method)
   values (g2, u, 'Trip', 'Vacation', 100, 'Manual');

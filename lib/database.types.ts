@@ -989,11 +989,13 @@ export type Database = {
       v_goal_progress: {
         Row: {
           accountid: string | null
+          completed_at: string | null
           contributed_amount: number | null
           contribution_count: number | null
           goal_id: string | null
           goal_name: string | null
           goal_type: string | null
+          is_active: boolean | null
           is_on_track: boolean | null
           last_contribution_date: string | null
           monthly_contribution: number | null

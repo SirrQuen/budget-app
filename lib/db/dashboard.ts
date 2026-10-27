@@ -368,10 +368,9 @@ export async function getGroupMovement(
   return { data: { groups: groupMovements, topMover, prevLabel: range.prevLabel }, error: null };
 }
 
-// A goal as the goals page and dashboard show it: its v_goal_progress row
-// plus completed_at (migration 53), which v_goal_progress doesn't carry --
-// see that migration's header for why the view isn't redefined.
-export type GoalProgress = GoalProgressRow & { completed_at: string | null };
+// A goal as the goals page and dashboard show it. v_goal_progress carries
+// completed_at and is_active since migration 53.
+export type GoalProgress = GoalProgressRow;
 
 // target_date/last_contribution_date describe each goal, not a bucketed
 // series -- there's no meaningful range filter here, unlike the cashflow
@@ -379,31 +378,21 @@ export type GoalProgress = GoalProgressRow & { completed_at: string | null };
 //
 // Archived goals (is_active = false) are left out, everywhere this is
 // read: the goals list, the dashboard, and the goal-completion copy. The
-// filter is on goals, joined here by id -- not a money aggregate, which
-// stays in SQL (v_goals_summary skips archived goals itself).
+// view shows every goal; the filter is here, in the query, as
+// listAccounts filters v_account_balances. (v_goals_summary, which sums
+// money, skips archived goals itself.)
 export async function getGoalProgress(): Promise<DbResult<GoalProgress[]>> {
   const supabase = await createClient();
 
-  const [progress, goals] = await Promise.all([
-    supabase
-      .from("v_goal_progress")
-      .select("*")
-      .order("target_date", { ascending: true, nullsFirst: false }),
-    supabase.from("goals").select("id, is_active, completed_at"),
-  ]);
+  const { data, error } = await supabase
+    .from("v_goal_progress")
+    .select("*")
+    .eq("is_active", true)
+    .order("target_date", { ascending: true, nullsFirst: false });
 
-  if (progress.error) {
-    return { data: null, error: describeReadError(progress.error, "goals") };
+  if (error) {
+    return { data: null, error: describeReadError(error, "goals") };
   }
-  if (goals.error) {
-    return { data: null, error: describeReadError(goals.error, "goals") };
-  }
-
-  const byId = new Map(goals.data.map((g) => [g.id, g]));
-  const data = progress.data.flatMap((row) => {
-    const goal = row.goal_id ? byId.get(row.goal_id) : undefined;
-    return goal && goal.is_active ? [{ ...row, completed_at: goal.completed_at }] : [];
-  });
 
   return { data, error: null };
 }

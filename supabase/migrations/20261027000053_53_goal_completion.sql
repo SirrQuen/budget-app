@@ -15,7 +15,7 @@
 --    Reaching the target keeps the first completion's timestamp; falling
 --    below it clears the column -- silently. Re-completing stamps anew.
 --
---    When linked goals land (migration 52, held), a linked goal's
+--    When linked goals land (held on feat/linked-goals), a linked goal's
 --    progress is an account balance, not contributions, and these
 --    triggers don't see it change. Completion then belongs to whatever
 --    action moves that balance -- never to a render.
@@ -27,12 +27,16 @@
 --    deleting. (goals.status, Active/Paused/Completed/Cancelled, predates
 --    this and nothing writes it; it is not used for archive or completion.)
 --
--- v_goal_progress is NOT redefined here: migration 52 (held, but applied
--- to sorrel-dev) redefines it with columns this migration doesn't have,
--- and CREATE OR REPLACE can't drop them. The app reads completed_at and
--- is_active from goals directly (lib/db/dashboard.ts getGoalProgress).
--- v_goals_summary, which 52 doesn't touch, is replaced to skip archived
--- goals -- money is summed in SQL, so the filter has to be here.
+-- 3. v_goal_progress gains completed_at and is_active, appended (the only
+--    change CREATE OR REPLACE allows), so the goals list and dashboard
+--    filter archived goals in SQL, as accounts do with v_account_balances.
+--    v_goals_summary, its one dependent, filters archived goals too --
+--    money is summed in SQL, so that filter has to be in the view.
+--
+-- Derived against main's schema: the baseline's v_goal_progress and
+-- v_goals_summary, untouched by 44-51. The held linked-goals migration
+-- (52) redefines v_goal_progress too; whichever of the two ships second
+-- must be re-derived on top of the first.
 -- =====================================================================
 
 alter table public.goals
@@ -163,11 +167,56 @@ create trigger trg_goal_contributions_completed_at
   for each row execute function public.goal_contributions_sync_completed_at();
 
 -- ---------------------------------------------------------------------
--- 4. v_goals_summary skips archived goals
+-- 4. v_goal_progress carries completed_at and is_active
 --
--- Same columns, same order, same security_invoker; only archived goals
--- are filtered out, joined from goals because v_goal_progress doesn't
--- carry is_active (see the header).
+-- main's definition (the baseline's, untouched since) exactly, with the
+-- two columns appended. It does not filter: like v_account_balances, it
+-- shows every goal and says which are archived, and the reader filters
+-- (lib/db/dashboard.ts getGoalProgress) -- so a "show archived" view later
+-- needs no new view.
+-- ---------------------------------------------------------------------
+create or replace view public.v_goal_progress with (security_invoker = true) as
+ SELECT g.id AS goal_id,
+    g.userid,
+    g.goal_name,
+    g.goal_type,
+    g.status,
+    g.tracking_method,
+    g.accountid,
+    g.target_amount,
+    g.target_date,
+    g.monthly_contribution,
+    COALESCE(c.contributed, (0)::numeric) AS contributed_amount,
+    GREATEST((g.target_amount - COALESCE(c.contributed, (0)::numeric)), (0)::numeric) AS remaining_amount,
+    round((LEAST((COALESCE(c.contributed, (0)::numeric) / NULLIF(g.target_amount, (0)::numeric)), (1)::numeric) * (100)::numeric), 1) AS pct_complete,
+    COALESCE(c.contribution_count, (0)::bigint) AS contribution_count,
+    c.last_contribution_date,
+        CASE
+            WHEN (COALESCE(c.contributed, (0)::numeric) >= g.target_amount) THEN CURRENT_DATE
+            WHEN (g.monthly_contribution > (0)::numeric) THEN ((CURRENT_DATE + ((ceil(((g.target_amount - COALESCE(c.contributed, (0)::numeric)) / g.monthly_contribution)))::double precision * '1 mon'::interval)))::date
+            ELSE NULL::date
+        END AS projected_completion_date,
+        CASE
+            WHEN (g.target_date IS NULL) THEN NULL::boolean
+            WHEN (COALESCE(c.contributed, (0)::numeric) >= g.target_amount) THEN true
+            WHEN (g.monthly_contribution > (0)::numeric) THEN (((CURRENT_DATE + ((ceil(((g.target_amount - COALESCE(c.contributed, (0)::numeric)) / g.monthly_contribution)))::double precision * '1 mon'::interval)))::date <= g.target_date)
+            ELSE false
+        END AS is_on_track,
+    g.completed_at,
+    g.is_active
+   FROM (public.goals g
+     LEFT JOIN LATERAL ( SELECT sum(gc.amount) AS contributed,
+            count(*) AS contribution_count,
+            max(gc.date) AS last_contribution_date
+           FROM public.goal_contributions gc
+          WHERE (gc.goalid = g.id)) c ON (true));
+
+-- ---------------------------------------------------------------------
+-- 5. v_goals_summary skips archived goals
+--
+-- main's definition (the baseline's) with archived goals filtered out --
+-- from the view's own is_active, and in the this-month lateral, which
+-- reads goals directly. Same columns, same order, same security_invoker.
 -- ---------------------------------------------------------------------
 create or replace view public.v_goals_summary with (security_invoker = true) as
 select g.userid,
@@ -188,7 +237,6 @@ select g.userid,
          else null::numeric
        end as overall_pct_complete
   from public.v_goal_progress g
-  join public.goals active on active.id = g.goal_id and active.is_active
   left join lateral (
     select sum(gc.amount) as contributed_this_month
       from public.goal_contributions gc
@@ -198,4 +246,5 @@ select g.userid,
        and gc.date >= date_trunc('month', current_date::timestamptz)::date
        and gc.date < (date_trunc('month', current_date::timestamptz) + '1 mon'::interval)::date
   ) m on true
+ where g.is_active
  group by g.userid, m.contributed_this_month;
