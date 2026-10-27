@@ -25,15 +25,25 @@ dashboard; refs cannot. Always report the ref.
 | | Name | Ref | Used by |
 |---|---|---|---|
 | Production | `sorrel-prod` | `ybdwqyihvbokowocvlgq` | mysorrel.com. Real user data. |
-| Development | `sorrel-dev` | `jmuqtjbntiqmjmpenywl` | localhost (created 2026-10-15) |
+| Development | `sorrel-dev` | `tztbebdzlezlhvsbylsf` | localhost (rebuilt from main 2026-10-27) |
 
-Production was `evernestdb` until 2026-10-16. Go by the ref.
+Production was `evernestdb` until 2026-10-16. Go by the ref. The previous
+sorrel-dev (`jmuqtjbntiqmjmpenywl`, created 2026-10-15) was deleted on
+2026-10-27 because a held migration had been left on it (see below); a
+command that names that ref is stale.
 
 **The CLI's resting state is sorrel-dev. After any deliberate push to
 production, relink to dev before ending the session.** A command meant for
 production needs the link changed first, and that is my call, not yours.
 Never relink on your own, and never add `supabase db push` to a permission
 allowlist -- I run it myself, every time, for dev and production.
+
+**A held branch's migration must never be pushed to the shared dev
+database.** Test it on its own throwaway project, or rebuild dev from main
+immediately afterwards. A held migration left on dev silently shapes every
+migration written after it: linked-goals' 52 sat on sorrel-dev and
+migration 53 was written around it -- against a schema production never
+had.
 
 ### Before every `supabase db push`
 
@@ -67,7 +77,7 @@ one, never read one into context.
 
 ### .env.local
 
-It points at `sorrel-dev` (`jmuqtjbntiqmjmpenywl`), as it must. Finding it
+It points at `sorrel-dev` (`tztbebdzlezlhvsbylsf`), as it must. Finding it
 on production is a stop condition — tell me, don't work around it.
 
 ### Secrets
