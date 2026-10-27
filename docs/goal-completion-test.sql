@@ -46,8 +46,10 @@ grant usage on sequence gc_results_seq_seq to authenticated;
 
 create function pg_temp.rec(p_check text, p_expected text, p_actual text) returns void
 language sql as $$
+  -- A NULL actual is recorded as '<null>' and compared as that, so a check
+  -- that expects NULL can pass (p_expected = NULL is unknown, not true).
   insert into gc_results (check_, expected, actual, pass)
-  values (p_check, p_expected, coalesce(p_actual, '<null>'), coalesce(p_expected = p_actual, false))
+  values (p_check, p_expected, coalesce(p_actual, '<null>'), p_expected = coalesce(p_actual, '<null>'))
 $$;
 
 create function pg_temp.become(p_user uuid) returns void language plpgsql as $$
