@@ -426,20 +426,6 @@
   }
 }
 
-/* Goal meter 100% confetti -- the only place in the app this fires. Each
-   piece supplies --x/--r via inline style so the burst reads as scattered,
-   not mechanical. */
-@keyframes goal-confetti {
-  0% {
-    transform: translate(-50%, 0) rotate(0deg);
-    opacity: 1;
-  }
-  100% {
-    transform: translate(calc(-50% + var(--x, 0px)), -42px) rotate(var(--r, 180deg));
-    opacity: 0;
-  }
-}
-
 /* A freshly-added row's one-time entrance -- relies on React reusing the
    DOM node for rows it already knew about (same key) and only mounting
    fresh for a genuinely new one, so this can be applied unconditionally to
@@ -992,6 +978,14 @@ body {
      never could. */
   .sorrel-flower--sway .sorrel-flower__sway {
     animation: sorrel-flower-sway 3200ms linear infinite;
+  }
+  /* A bloom that resolves into the sway (the welcome overlay waiting on a
+     slow page) is at rest, 0deg, when the sway is added -- but the sway
+     starts at -2.5deg, a visible snap. So it joins the cycle where the
+     swing crosses 0deg: 542ms into the -2.5 -> 2.5 half (where
+     --icon-anim-ease reaches 0.5, solved numerically; 0.3391 x 1600ms). */
+  .sorrel-flower--bloom.sorrel-flower--sway .sorrel-flower__sway {
+    animation-delay: -542ms;
   }
   @keyframes sorrel-flower-sway {
     0%,

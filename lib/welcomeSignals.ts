@@ -18,3 +18,36 @@ export function setBloomClaimed(claimed: boolean) {
 export function isBloomClaimed(): boolean {
   return bloomClaimed;
 }
+
+// The page behind the daily welcome reports when its data has landed
+// (components/WelcomeReady.tsx), so the overlay can dissolve onto a ready
+// page, or keep swaying until there is one. Reset by the overlay as it
+// mounts: a dashboard visited earlier in this page's life says nothing
+// about the one loading now.
+let pageReady = false;
+const readyListeners = new Set<() => void>();
+
+export function resetPageReady() {
+  pageReady = false;
+}
+
+export function markPageReady() {
+  pageReady = true;
+  for (const listener of [...readyListeners]) listener();
+}
+
+/** Calls `listener` once the page is ready (now, if it already is). */
+export function onPageReady(listener: () => void): () => void {
+  if (pageReady) {
+    listener();
+    return () => {};
+  }
+  const once = () => {
+    readyListeners.delete(once);
+    listener();
+  };
+  readyListeners.add(once);
+  return () => {
+    readyListeners.delete(once);
+  };
+}

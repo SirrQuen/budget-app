@@ -95,6 +95,74 @@ export async function deleteGoal(id: string): Promise<DbResult<{ id: string }>> 
   return { data, error: null };
 }
 
+// Archive: the accounts/categories soft delete (is_active). The goal leaves
+// the goals list, the dashboard and "Saved toward your goals"; its
+// contributions stay exactly as they are.
+export async function archiveGoal(id: string): Promise<DbResult<{ id: string }>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("goals")
+    .update({ is_active: false })
+    .eq("id", id)
+    .select("id")
+    .single();
+
+  if (error) {
+    return { data: null, error: describeWriteError(error, "goal") };
+  }
+
+  return { data, error: null };
+}
+
+// completed_at is kept by the database (migration 53's triggers) on every
+// write. A server action reads it before and after its own write; only a
+// change from null to set, in that action, is a completion to celebrate.
+export async function getGoalCompletedAt(id: string): Promise<DbResult<string | null>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.from("goals").select("completed_at").eq("id", id).single();
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "goal") };
+  }
+
+  return { data: data.completed_at, error: null };
+}
+
+// The goal a contribution belongs to, read before editing it.
+export async function getContributionGoalId(id: string): Promise<DbResult<string>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.from("goal_contributions").select("goalid").eq("id", id).single();
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "contribution") };
+  }
+
+  return { data: data.goalid, error: null };
+}
+
+// The goal's first contribution date, for the completion line's "over four
+// months" or "since March". Null when it has none.
+export async function getFirstContributionDate(goalid: string): Promise<DbResult<string | null>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("goal_contributions")
+    .select("date")
+    .eq("goalid", goalid)
+    .order("date", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "contribution") };
+  }
+
+  return { data: data?.date ?? null, error: null };
+}
+
 export type ContributeToGoalInput = {
   amount: number;
   date: string;

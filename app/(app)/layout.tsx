@@ -5,7 +5,7 @@ import { listCategoriesForType } from "@/lib/db/categories";
 import { getMostRecentTransactionAccountId } from "@/lib/db/transactions";
 import { getTheme, getTimeZone, getToday } from "@/lib/db/settings";
 import { AppShell } from "@/components/app-shell/AppShell";
-import { identityName } from "@/lib/displayName";
+import { greetingName, identityName } from "@/lib/displayName";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { TodayProvider } from "@/components/TodayProvider";
 import { WelcomeBloom } from "@/components/WelcomeBloom";
@@ -60,7 +60,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {/* Above every page's loading state, so the page streams in behind
             it. Before AppShell, so it has decided before anything inside a
             page (DayNightMark) asks whether it played. */}
-        <WelcomeBloom userId={user.id} timeZone={timeZone} />
+        <WelcomeBloom userId={user.id} timeZone={timeZone} name={greetingName(loginResult.data ?? {})} />
         <AppShell accountName={accountName} quickAdd={quickAdd} sessionId={sessionId}>
           {children}
         </AppShell>

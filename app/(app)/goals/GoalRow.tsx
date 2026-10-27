@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { callAction, useActionForm } from "@/components/useActionForm";
 import { useToday } from "@/components/TodayProvider";
-import { contributeToGoalAction, deleteGoalAction, type ContributeActionState } from "@/lib/actions/goals";
+import {
+  archiveGoalAction,
+  contributeToGoalAction,
+  deleteGoalAction,
+  type ContributeActionState,
+} from "@/lib/actions/goals";
 import { GoalMeter } from "@/components/ui/GoalMeter";
 import { Celebration } from "@/components/ui/Celebration";
 import { Button } from "@/components/ui/Button";
@@ -11,14 +16,15 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Input, FIELD_EDGE } from "@/components/ui/Input";
 import { FormField } from "@/components/ui/FormField";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
-import { ChevronDownIcon, TargetIcon, TrashIcon } from "@/components/ui/icons";
-import { formatCurrency } from "@/lib/format";
-import type { Database } from "@/lib/database.types";
+import { CheckIcon, ChevronDownIcon, TargetIcon, TrashIcon } from "@/components/ui/icons";
+import { formatCurrency, formatDate } from "@/lib/format";
+import type { GoalProgress } from "@/lib/db/dashboard";
 import type { GoalContribution } from "@/lib/db/goals";
+import type { GoalCompletion } from "@/lib/goalCompletion";
 import { ContributionList } from "./ContributionList";
 import { GoalForm } from "./GoalForm";
-
-type GoalProgressRow = Database["public"]["Views"]["v_goal_progress"]["Row"];
+import { GoalCompletePanel } from "./GoalCompletePanel";
+import { NEW_GOAL_EVENT } from "./CreateGoalForm";
 
 const fieldClassName = `w-full ${FIELD_EDGE} bg-surface px-3 py-2 text-sm text-ink`;
 
@@ -38,9 +44,12 @@ function deleteTitle(goalName: string, contributionCount: number): string {
 export function GoalRow({
   goal,
   contributions,
+  completedOn,
 }: {
-  goal: GoalProgressRow;
+  goal: GoalProgress;
   contributions: GoalContribution[];
+  /** completed_at as the user's calendar day, or null while not complete. */
+  completedOn: string | null;
 }) {
   const today = useToday();
   const [contributing, setContributing] = useState(false);
@@ -53,6 +62,10 @@ export function GoalRow({
   const [celebrateMessage, setCelebrateMessage] = useState("");
   const [milestoneCelebrate, setMilestoneCelebrate] = useState(false);
   const [milestoneMessage, setMilestoneMessage] = useState("");
+  // Set only from a server action's response in this interaction -- the
+  // one that completed the goal. Never derived from the goal's state, so a
+  // reload or another device never shows it.
+  const [completion, setCompletion] = useState<GoalCompletion | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const wasPending = useRef(false);
   const celebrateTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -66,6 +79,9 @@ export function GoalRow({
     if (succeeded) {
       formRef.current?.reset();
       setContributing(false);
+    }
+    if (succeeded && state?.completed) {
+      setCompletion(state.completed);
     }
     if (succeeded && milestone) {
       setCelebrateMessage(milestone.message);
@@ -87,6 +103,55 @@ export function GoalRow({
 
   const [editing, setEditing] = useState(false);
   const closeEdit = useCallback(() => setEditing(false), []);
+
+  // "Set the next one": the edit form opens with focus on the target.
+  const focusTarget = useRef(false);
+  const editRef = useRef<HTMLLIElement>(null);
+
+  useEffect(() => {
+    if (editing && focusTarget.current) {
+      focusTarget.current = false;
+      editRef.current?.querySelector<HTMLInputElement>('input[name="target_amount"]')?.focus();
+    }
+  }, [editing]);
+
+  // Closing hands focus back to the goal, which is still right here.
+  function closeCompletion() {
+    setCompletion(null);
+    document.getElementById(`add-contribution-${goal.goal_id}`)?.focus();
+  }
+
+  function completionPrimary() {
+    const next = completion?.next;
+    setCompletion(null);
+    if (next === "set-next") {
+      focusTarget.current = true;
+      setEditing(true);
+    } else {
+      window.dispatchEvent(new Event(NEW_GOAL_EVENT));
+    }
+  }
+
+  const panel = completion ? (
+    <GoalCompletePanel completion={completion} onClose={closeCompletion} onPrimary={completionPrimary} />
+  ) : null;
+
+  const [archiveError, setArchiveError] = useState<string>();
+  const [isArchiving, startArchive] = useTransition();
+
+  // Archive leaves the contributions alone and takes the goal off this
+  // page, so focus goes to the page heading, as it does after a delete.
+  function handleArchive() {
+    setArchiveError(undefined);
+    startArchive(async () => {
+      const result = await callAction(() => archiveGoalAction(goal.goal_id ?? ""));
+      if (result?.error) {
+        setArchiveError(result.error);
+      } else {
+        document.getElementById("page-title")?.focus();
+      }
+    });
+  }
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string>();
   const [isDeleting, startDelete] = useTransition();
@@ -115,7 +180,8 @@ export function GoalRow({
 
   if (editing) {
     return (
-      <li className="px-4 py-4">
+      <li ref={editRef} className="px-4 py-4">
+        {panel}
         <GoalForm
           goal={{
             goal_id: goal.goal_id ?? "",
@@ -127,6 +193,7 @@ export function GoalRow({
           }}
           onSuccess={closeEdit}
           onCancel={closeEdit}
+          onCompleted={setCompletion}
         />
       </li>
     );
@@ -162,6 +229,17 @@ export function GoalRow({
           >
             Edit
           </button>
+          {completedOn ? (
+            <button
+              type="button"
+              onClick={handleArchive}
+              disabled={isArchiving}
+              className={TEXT_BUTTON}
+              aria-label={`Archive ${goalName}`}
+            >
+              {isArchiving ? "Archiving…" : "Archive"}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => {
@@ -176,6 +254,7 @@ export function GoalRow({
         </div>
       </div>
       {deleteError ? <ErrorMessage message={deleteError} /> : null}
+      {archiveError ? <ErrorMessage message={archiveError} /> : null}
 
       <GoalMeter
         goalId={goal.goal_id ?? ""}
@@ -189,7 +268,16 @@ export function GoalRow({
           {formatCurrency(contributed)} of {formatCurrency(target)} saved
         </span>
         <span className="text-ink-secondary">
-          {remaining > 0 ? `${formatCurrency(remaining)} to go` : "Goal reached"}
+          {completedOn ? (
+            <span className="inline-flex items-center gap-1">
+              <CheckIcon className="h-4 w-4" aria-hidden="true" />
+              Completed {formatDate(completedOn)}
+            </span>
+          ) : remaining > 0 ? (
+            `${formatCurrency(remaining)} to go`
+          ) : (
+            "Goal reached"
+          )}
         </span>
       </div>
 
@@ -210,7 +298,11 @@ export function GoalRow({
           </button>
           {showHistory ? (
             <div id={`history-${goal.goal_id}`}>
-              <ContributionList goalName={goal.goal_name ?? "this goal"} contributions={contributions} />
+              <ContributionList
+                goalName={goal.goal_name ?? "this goal"}
+                contributions={contributions}
+                onCompleted={setCompletion}
+              />
             </div>
           ) : null}
         </div>
@@ -271,6 +363,7 @@ export function GoalRow({
         onCancel={() => setConfirmingDelete(false)}
       />
 
+      {panel}
       <Celebration show={celebrate} message={celebrateMessage} icon="✦" />
       <Celebration show={milestoneCelebrate} message={milestoneMessage} icon="✦" />
     </li>

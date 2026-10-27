@@ -2,14 +2,24 @@ import { BLOOM_MS } from "@/lib/bloom";
 import { todayInZone } from "@/lib/date";
 
 // The welcome overlay (components/WelcomeBloom.tsx): the bloom in front of
-// the app on a successful email confirmation. See docs/Goal-Completion.md,
-// placement B.
+// the app on the first sign-in of the day (placement A) and on a
+// successful email confirmation (B). See docs/Goal-Completion.md.
+
+/**
+ * Placement A, the daily welcome, in one line. Ask two testers in week two
+ * whether it still charms; "I've started tapping through it" means turn
+ * this off. B (email confirmed) is not behind it.
+ */
+export const WELCOME_DAILY_ENABLED = true;
+/** The bloom, then the ~200ms dissolve -- 1.1s, the ceiling. */
+export const WELCOME_BLOOM_MS = BLOOM_MS;
+export const WELCOME_DISSOLVE_MS = 200;
 
 /** The redirect query that says "this load is a confirmed signup". */
 export const WELCOME_PARAM = "welcome";
 export const WELCOME_CONFIRMED = "confirmed";
 
-export type WelcomeReason = "confirmed";
+export type WelcomeReason = "confirmed" | "daily";
 
 /**
  * `next` (an in-app path, already safeNext()-checked) with the confirmed
@@ -21,11 +31,14 @@ export function withWelcome(next: string): string {
   return url.pathname + url.search + url.hash;
 }
 
-/** The bloom, then the ~200ms dissolve -- 1.1s, the ceiling. */
-export const WELCOME_BLOOM_MS = BLOOM_MS;
-export const WELCOME_DISSOLVE_MS = 200;
 /** How long the confirmation message stays before it dissolves on its own. */
 export const CONFIRMED_HOLD_MS = 2400;
+/**
+ * The daily welcome waits for the page behind it, swaying, past the bloom
+ * -- but never longer than this. A page that never reports ready must not
+ * hold anyone behind a flower.
+ */
+export const DAILY_READY_TIMEOUT_MS = 8000;
 
 // localStorage, never a database column: a "last welcomed" write on page
 // load is the record_login() shape this codebase already removed. Keyed
@@ -63,4 +76,54 @@ export function readWelcomed(storage: () => WelcomeStorage, userId: string): str
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Whether the daily welcome plays, and if it does, marks the day -- at the
+ * START, so a refresh 400ms in doesn't replay it. Every failure means
+ * don't play: storage that can't be read, or a mark that can't be kept
+ * (which would otherwise bloom on every single sign-in).
+ */
+export function claimDailyWelcome({
+  enabled,
+  reducedMotion,
+  storage,
+  userId,
+  day,
+}: {
+  enabled: boolean;
+  /** WCAG: reduced motion skips the daily welcome entirely. */
+  reducedMotion: boolean;
+  storage: () => WelcomeStorage;
+  userId: string;
+  day: string;
+}): boolean {
+  if (!enabled || reducedMotion) return false;
+  const last = readWelcomed(storage, userId);
+  if (last === undefined || last === day) return false;
+  return markWelcomed(storage, userId, day);
+}
+
+/** The hour (0-23) on the wall clock in `timeZone`; UTC if it's unknown. */
+export function hourInZone(timeZone: string, now: Date): number {
+  const format = (zone: string) =>
+    Number(
+      new Intl.DateTimeFormat("en-US", { timeZone: zone, hour: "numeric", hourCycle: "h23" })
+        .formatToParts(now)
+        .find((p) => p.type === "hour")!.value,
+    );
+  try {
+    return format(timeZone);
+  } catch {
+    return format("UTC");
+  }
+}
+
+/**
+ * "Good morning, Matt." -- a name and nothing else: no figures, no counts.
+ * With no name (greetingName() is null), no name at all; never "there".
+ */
+export function dailyGreeting(hour: number, name: string | null): string {
+  const part = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+  return name ? `Good ${part}, ${name}.` : `Good ${part}.`;
 }

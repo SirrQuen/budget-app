@@ -461,6 +461,15 @@ check anything taken from it against the migrations. The contract:
   exclude rows where `transfer_group_id is not null`, or a transfer inflates
   both sides. Recurring transfers exist too (`recurring_transactions.to_accountid`).
 - Accounts/categories are soft-deleted (`is_active`), never hard-deleted.
+  Goals archive the same way (`goals.is_active`, migration 53); an
+  archived goal's contributions are kept. `goals.status` is not used for
+  archive or completion.
+- `goals.completed_at` is kept by triggers (migration 53) on every
+  contribution or goal write -- the app never writes it. The completion
+  panel is the RESPONSE of the server action whose write moved it from
+  null to set (`lib/actions/goals.ts`); nothing stores a pending
+  celebration, and no render detects completion. When linked goals land,
+  detection moves to whatever action changes the linked account's balance.
 - Regenerate `lib/database.types.ts` after every migration (see "After any
   migration" below).
 

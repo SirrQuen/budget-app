@@ -1,5 +1,7 @@
 import { getGoalProgress, getGoalsSummary } from "@/lib/db/dashboard";
 import { getGoalContributions, type GoalContribution } from "@/lib/db/goals";
+import { getTimeZone } from "@/lib/db/settings";
+import { todayInZone } from "@/lib/date";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadError } from "@/components/ui/LoadError";
@@ -9,10 +11,11 @@ import { CreateGoalForm } from "./CreateGoalForm";
 import { GoalRow } from "./GoalRow";
 
 export default async function GoalsPage() {
-  const [progressResult, summaryResult, contributionsResult] = await Promise.all([
+  const [progressResult, summaryResult, contributionsResult, timeZone] = await Promise.all([
     getGoalProgress(),
     getGoalsSummary(),
     getGoalContributions(),
+    getTimeZone(),
   ]);
 
   if (
@@ -92,6 +95,8 @@ export default async function GoalsPage() {
             key={goal.goal_id}
             goal={goal}
             contributions={contributionsByGoal.get(goal.goal_id ?? "") ?? []}
+            // completed_at is an instant; the day it names is the user's.
+            completedOn={goal.completed_at ? todayInZone(timeZone, new Date(goal.completed_at)) : null}
           />
         ))}
       </ul>

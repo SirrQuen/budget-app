@@ -283,9 +283,11 @@ export type Database = {
         Row: {
           accountid: string | null
           created_at: string
+          completed_at: string | null
           goal_name: string
           goal_type: string
           id: string
+          is_active: boolean
           monthly_contribution: number | null
           status: string
           target_amount: number
@@ -297,9 +299,11 @@ export type Database = {
         Insert: {
           accountid?: string | null
           created_at?: string
+          completed_at?: string | null
           goal_name: string
           goal_type: string
           id?: string
+          is_active?: boolean
           monthly_contribution?: number | null
           status?: string
           target_amount: number
@@ -311,9 +315,11 @@ export type Database = {
         Update: {
           accountid?: string | null
           created_at?: string
+          completed_at?: string | null
           goal_name?: string
           goal_type?: string
           id?: string
+          is_active?: boolean
           monthly_contribution?: number | null
           status?: string
           target_amount?: number

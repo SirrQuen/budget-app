@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 
 const STORAGE_PREFIX = "goal-pct-";
-const MILESTONES = [25, 50, 75, 100] as const;
+// No 100: completing a goal is celebrated once, by the panel the server
+// action that completed it returns (app/(app)/goals/GoalCompletePanel.tsx)
+// -- never here, on a render that compares against a last-seen value.
+const MILESTONES = [25, 50, 75] as const;
 type Milestone = (typeof MILESTONES)[number];
 
 function readStoredPct(goalId: string): number | null {
@@ -44,8 +47,6 @@ function crossedMilestone(from: number, to: number): Milestone | null {
 
 function milestoneMessage(goalName: string, pct: Milestone): string {
   switch (pct) {
-    case 100:
-      return `${goalName} is fully funded`;
     case 75:
       return `${goalName} is three-quarters there`;
     case 50:
@@ -53,22 +54,6 @@ function milestoneMessage(goalName: string, pct: Milestone): string {
     default:
       return `${goalName} is a quarter there`;
   }
-}
-
-type ConfettiPiece = { x: number; r: number; delay: number; color: string };
-
-const CONFETTI_COLORS = ["var(--gold)", "var(--good)", "var(--cat-3)", "var(--cat-7)"];
-const CONFETTI_COUNT = 12;
-
-// Randomised here, in an event/effect context, never during render --
-// React Compiler forbids calling Math.random while rendering.
-function makeConfettiPieces(): ConfettiPiece[] {
-  return Array.from({ length: CONFETTI_COUNT }, (_, i) => ({
-    x: Math.round((Math.random() - 0.5) * 70),
-    r: Math.round((Math.random() - 0.5) * 320),
-    delay: Math.round(Math.random() * 80),
-    color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-  }));
 }
 
 export function GoalMeter({
@@ -90,7 +75,6 @@ export function GoalMeter({
   // point either API is actually read.
   const [displayPct, setDisplayPct] = useState(0);
   const [pulse, setPulse] = useState<number | null>(null);
-  const [confetti, setConfetti] = useState<{ key: number; pieces: ConfettiPiece[] } | null>(null);
   const mountTweenDone = useRef(false);
 
   // "On load" is literal: this compares last-seen to now once per real
@@ -118,7 +102,7 @@ export function GoalMeter({
       const milestone = crossedMilestone(from, value);
 
       // The text banner fires regardless of motion preference -- only the
-      // visual fill animation, pulse ring, and confetti are motion-gated.
+      // visual fill animation and pulse ring are motion-gated.
       if (milestone !== null) {
         onMilestone?.({ pct: milestone, message: milestoneMessage(goalName, milestone) });
       }
@@ -135,16 +119,13 @@ export function GoalMeter({
       // hydration safety, so this is the first time it reflects the real
       // last-seen percentage), then two more rAFs let that paint land
       // before flipping to `value`, so the CSS transition has something to
-      // interpolate from. The pulse/confetti fire alongside the flip.
+      // interpolate from. The pulse fires alongside the flip.
       setDisplayPct(from);
       raf2 = requestAnimationFrame(() => {
         raf3 = requestAnimationFrame(() => {
           setDisplayPct(value);
           mountTweenDone.current = true;
-          if (milestone !== null) {
-            setPulse(Date.now());
-            if (milestone === 100) setConfetti({ key: Date.now(), pieces: makeConfettiPieces() });
-          }
+          if (milestone !== null) setPulse(Date.now());
         });
       });
     };
@@ -173,12 +154,6 @@ export function GoalMeter({
     const t = setTimeout(() => setPulse(null), 900);
     return () => clearTimeout(t);
   }, [pulse]);
-
-  useEffect(() => {
-    if (confetti === null) return;
-    const t = setTimeout(() => setConfetti(null), 900);
-    return () => clearTimeout(t);
-  }, [confetti]);
 
   // Continuous, not threshold-snapped -- negligible below ~30%, pronounced
   // near 100%. Cubic so the low end stays visually flat. Tracks displayPct
@@ -217,32 +192,7 @@ export function GoalMeter({
             style={{ width: `${displayPct}%` }}
           />
         ) : null}
-        {confetti !== null ? <ConfettiBurst key={confetti.key} pieces={confetti.pieces} /> : null}
       </div>
-    </div>
-  );
-}
-
-// The only place confetti fires in the app -- kept local to GoalMeter (not
-// exported) so nothing else can reach for it. Pieces are generated once by
-// the caller (in the milestone effect, not during render) and handed down.
-function ConfettiBurst({ pieces }: { pieces: ConfettiPiece[] }) {
-  return (
-    <div aria-hidden="true" className="pointer-events-none absolute -top-1 left-1/2 h-0 w-0">
-      {pieces.map((p, i) => (
-        <span
-          key={i}
-          className="absolute h-1.5 w-1.5 rounded-[1px] motion-safe:animate-[goal-confetti_800ms_ease-out_1]"
-          style={
-            {
-              backgroundColor: p.color,
-              animationDelay: `${p.delay}ms`,
-              "--x": `${p.x}px`,
-              "--r": `${p.r}deg`,
-            } as React.CSSProperties
-          }
-        />
-      ))}
     </div>
   );
 }

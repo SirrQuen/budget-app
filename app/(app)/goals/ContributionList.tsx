@@ -15,6 +15,7 @@ import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { TrashIcon } from "@/components/ui/icons";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { GoalContribution } from "@/lib/db/goals";
+import type { GoalCompletion } from "@/lib/goalCompletion";
 
 const fieldClassName = `w-full ${FIELD_EDGE} bg-surface px-3 py-2 text-sm text-ink`;
 
@@ -28,14 +29,22 @@ const TEXT_BUTTON = `${TEXT_BUTTON_BASE} hover:text-ink`;
 export function ContributionList({
   goalName,
   contributions,
+  onCompleted,
 }: {
   goalName: string;
   contributions: GoalContribution[];
+  /** An edit completed the goal: GoalRow shows the panel. */
+  onCompleted: (completion: GoalCompletion) => void;
 }) {
   return (
     <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-hairline bg-surface-raised">
       {contributions.map((contribution) => (
-        <ContributionItem key={contribution.id} goalName={goalName} contribution={contribution} />
+        <ContributionItem
+          key={contribution.id}
+          goalName={goalName}
+          contribution={contribution}
+          onCompleted={onCompleted}
+        />
       ))}
     </ul>
   );
@@ -44,9 +53,11 @@ export function ContributionList({
 function ContributionItem({
   goalName,
   contribution,
+  onCompleted,
 }: {
   goalName: string;
   contribution: GoalContribution;
+  onCompleted: (completion: GoalCompletion) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [state, action, pending, submit] = useActionForm<ActionState>(
@@ -63,7 +74,8 @@ function ContributionItem({
     const succeeded = wasPending.current && !pending && !state?.error;
     wasPending.current = pending;
     if (succeeded) setEditing(false);
-  }, [pending, state]);
+    if (succeeded && state?.completed) onCompleted(state.completed);
+  }, [pending, state, onCompleted]);
 
   const amountText = formatCurrency(contribution.amount);
   const dateText = formatDate(contribution.date);

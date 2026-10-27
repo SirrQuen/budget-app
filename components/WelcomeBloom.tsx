@@ -4,126 +4,194 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SorrelFlower } from "@/components/SorrelFlower";
 import {
   CONFIRMED_HOLD_MS,
+  DAILY_READY_TIMEOUT_MS,
+  WELCOME_BLOOM_MS,
   WELCOME_CONFIRMED,
+  WELCOME_DAILY_ENABLED,
   WELCOME_DISSOLVE_MS,
   WELCOME_PARAM,
+  claimDailyWelcome,
+  dailyGreeting,
+  hourInZone,
   markWelcomed,
   welcomeDay,
   type WelcomeReason,
 } from "@/lib/welcome";
-import { setBloomClaimed } from "@/lib/welcomeSignals";
+import { onPageReady, resetPageReady, setBloomClaimed } from "@/lib/welcomeSignals";
 
-type Phase = "bloom" | "dissolving" | "done";
+// bloom: the flower assembling. waiting (daily only): the bloom is done
+// but the page behind isn't, so the same flower sways until it is.
+type Phase = "bloom" | "waiting" | "dissolving" | "done";
+
+type Decision = { reason: WelcomeReason; greeting: string } | null;
 
 const INPUT_EVENTS = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
+
+// The daily welcome is the dashboard's: the page that reports ready. Any
+// other landing page skips it, without marking the day.
+const DAILY_PATH = "/dashboard";
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-function decide(userId: string, timeZone: string | null): WelcomeReason | null {
+function decide(userId: string, timeZone: string | null, name: string | null): Decision {
   const url = new URL(window.location.href);
-  if (url.searchParams.get(WELCOME_PARAM) !== WELCOME_CONFIRMED) return null;
-
-  // Off the URL at once, so a refresh or a back-and-forward never replays
-  // a once-ever moment.
-  url.searchParams.delete(WELCOME_PARAM);
-  window.history.replaceState(null, "", url.pathname + url.search + url.hash);
-
-  // The first bloom of the session marks the day, so the daily welcome
-  // doesn't follow it five seconds later.
   const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  markWelcomed(() => window.localStorage, userId, welcomeDay(timeZone, browserZone, new Date()));
-  return "confirmed";
+  const now = new Date();
+  const day = welcomeDay(timeZone, browserZone, now);
+
+  if (url.searchParams.get(WELCOME_PARAM) === WELCOME_CONFIRMED) {
+    // Off the URL at once, so a refresh or a back-and-forward never
+    // replays a once-ever moment.
+    url.searchParams.delete(WELCOME_PARAM);
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    // A force: no day check. But the first bloom of the session marks the
+    // day, so the daily welcome doesn't follow it five seconds later.
+    markWelcomed(() => window.localStorage, userId, day);
+    return { reason: "confirmed", greeting: "Sorrel is yours." };
+  }
+
+  if (url.pathname !== DAILY_PATH) return null;
+  const play = claimDailyWelcome({
+    enabled: WELCOME_DAILY_ENABLED,
+    reducedMotion: prefersReducedMotion(),
+    storage: () => window.localStorage,
+    userId,
+    day,
+  });
+  return play ? { reason: "daily", greeting: dailyGreeting(hourInZone(timeZone ?? browserZone, now), name) } : null;
 }
 
 /**
  * The bloom in front of the app (docs/Goal-Completion.md). Mounted by the
  * authenticated layout, above every page's loading state, so the page
  * renders and streams behind it the whole time -- it never waits on, or
- * delays, anything.
+ * delays, anything. The flower is the same element start to finish: it
+ * shows the mark fully open whatever the hour -- a greeting, not the fold.
  *
- * "confirmed": a successful email confirmation, signalled by
+ * "daily" (A): the first dashboard load of the user's day. A gate: it
+ * plays to completion and no input dismisses it. The dashboard's request
+ * is already in flight behind it -- that request is what rendered this --
+ * so it costs max(bloom, load), never bloom + load. If the page isn't
+ * ready when the bloom ends, the same flower sways until it is
+ * (components/WelcomeReady.tsx says so), then dissolves. Reduced motion
+ * skips it entirely. Behind WELCOME_DAILY_ENABLED.
+ *
+ * "confirmed" (B): a successful email confirmation, signalled by
  * /auth/confirm's redirect (?welcome=confirmed). Once ever, so it bypasses
  * the day check, but it marks the day as welcomed. Any input dismisses it
  * at once, and it never takes the click: the overlay lets pointer events
  * through. Under reduced motion the flower arrives open and the message
  * appears unchanged -- here the message is the point, not decoration.
  *
- * On a load where it plays, the dashboard mark's sign-in fold doesn't.
+ * On a load where either plays, the dashboard mark's sign-in fold doesn't.
  */
 export function WelcomeBloom({
   userId,
   timeZone,
+  name,
 }: {
   userId: string;
   /** settings.timezone; null until the browser has reported one. */
   timeZone: string | null;
+  /** greetingName(): preferred name, else first name, else null. */
+  name: string | null;
 }) {
-  const [reason, setReason] = useState<WelcomeReason | null>(null);
+  const [decided, setDecided] = useState<Decision>(null);
   const [phase, setPhase] = useState<Phase>("done");
+  const [ready, setReady] = useState(false);
 
   // Decided once per mount -- the layout persists across client
   // navigations -- and held in a ref, because deciding has side effects
   // (the URL, the day mark) that StrictMode's re-run must not repeat.
-  const decision = useRef<WelcomeReason | null | undefined>(undefined);
+  const decision = useRef<Decision | undefined>(undefined);
 
   // A layout effect, so the decision is made before the first paint after
-  // hydration and before DayNightMark's first frame reads it.
+  // hydration and before DayNightMark's first frame reads it. The page's
+  // ready marker is a passive effect, so it always lands after the reset.
   useLayoutEffect(() => {
     if (decision.current === undefined) {
-      decision.current = decide(userId, timeZone);
+      resetPageReady();
+      decision.current = decide(userId, timeZone, name);
     }
-    const decided = decision.current;
-    setBloomClaimed(decided !== null);
-    if (decided === null) return;
+    const current = decision.current;
+    setBloomClaimed(current !== null);
+    if (current === null) return;
 
+    const unsubscribe = current.reason === "daily" ? onPageReady(() => setReady(true)) : () => {};
     // The decision and its side effects are synchronous; only the render
     // waits a frame, as GoalMeter's does.
     const frame = requestAnimationFrame(() => {
-      setReason(decided);
+      setDecided(current);
       setPhase("bloom");
     });
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      unsubscribe();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- decided once, on mount
   }, []);
 
-  // It dissolves on its own.
+  const reason = decided?.reason;
+
+  // It dissolves on its own. Daily: when the bloom has played AND the page
+  // is ready -- whichever is later. Confirmed: after a reading hold.
   useEffect(() => {
     if (phase === "bloom") {
-      const timer = setTimeout(() => setPhase("dissolving"), CONFIRMED_HOLD_MS);
+      const timer = setTimeout(
+        () => setPhase(reason === "daily" ? "waiting" : "dissolving"),
+        reason === "daily" ? WELCOME_BLOOM_MS : CONFIRMED_HOLD_MS,
+      );
       return () => clearTimeout(timer);
+    }
+    if (phase === "waiting" && ready) {
+      const frame = requestAnimationFrame(() => setPhase("dissolving"));
+      return () => cancelAnimationFrame(frame);
     }
     if (phase === "dissolving") {
       const timer = setTimeout(() => setPhase("done"), prefersReducedMotion() ? 0 : WELCOME_DISSOLVE_MS);
       return () => clearTimeout(timer);
     }
-  }, [phase]);
+  }, [phase, reason, ready]);
 
-  // Any input dismisses it instantly. Listening on window, passive, and
-  // never preventing the default: the click or key still does its job.
+  // Never trapped behind a flower: a page that never reports ready still
+  // lets the daily welcome go.
   useEffect(() => {
-    if (phase === "done") return;
+    if (reason !== "daily") return;
+    const timer = setTimeout(() => setReady(true), DAILY_READY_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [reason]);
+
+  // Confirmed only -- the daily welcome is a gate. Any input dismisses it
+  // instantly. On window, passive, never preventing the default: the click
+  // or key still does its job.
+  useEffect(() => {
+    if (reason !== "confirmed" || phase === "done") return;
     const dismiss = () => setPhase("done");
     for (const type of INPUT_EVENTS) window.addEventListener(type, dismiss, { passive: true });
     return () => {
       for (const type of INPUT_EVENTS) window.removeEventListener(type, dismiss);
     };
-  }, [phase]);
+  }, [reason, phase]);
 
-  if (phase === "done" || reason === null) return null;
+  if (phase === "done" || decided === null) return null;
 
   return (
     <div
       role="status"
-      className={`welcome-bloom pointer-events-none fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-page px-4 text-center ${
-        phase === "dissolving" ? "welcome-bloom--out" : ""
-      }`}
+      className={`welcome-bloom fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-page px-4 text-center ${
+        reason === "confirmed" ? "pointer-events-none" : ""
+      } ${phase === "dissolving" ? "welcome-bloom--out" : ""}`}
     >
-      <SorrelFlower size={120} state="bloom" />
+      {/* One element throughout: the bloom's class stays on, and the sway
+          is added beside it, so there's no flash of another component. */}
+      <SorrelFlower size={120} state="bloom" swaying={phase === "waiting"} />
       <div className="flex flex-col gap-2">
-        <h2 className="text-3xl font-bold text-ink">Sorrel is yours.</h2>
-        <p className="text-base text-ink-secondary">You&rsquo;re signed in and ready to go.</p>
+        <h2 className="text-3xl font-bold text-ink">{decided.greeting}</h2>
+        {reason === "confirmed" ? (
+          <p className="text-base text-ink-secondary">You&rsquo;re signed in and ready to go.</p>
+        ) : null}
       </div>
     </div>
   );
