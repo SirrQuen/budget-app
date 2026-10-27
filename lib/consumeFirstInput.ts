@@ -6,24 +6,31 @@
 // Consuming the first event isn't enough: a click is pointerdown, then
 // mousedown, pointerup, mouseup and click, and the overlay is gone by the
 // time the rest arrive -- so the rest would land on the page. The whole
-// gesture is swallowed: until its last event (click for a pointer, keyup
-// for a key) or a short timeout, whichever comes first.
+// gesture is swallowed, and ends when it's released (pointerup, mouseup or
+// touchend; keyup for a key) or at a short timeout.
+//
+// It ends at the end of the task that released it, not on `click`: when the
+// pressed element is removed mid-gesture -- the overlay unmounting on
+// pointerdown -- Chrome dispatches no click at all, and waiting for one held
+// the swallow open for its whole timeout, eating a quick second click (seen
+// in the browser check). A click that does follow is dispatched in the same
+// task as the mouseup, so it is still swallowed.
 //
 // Listening on window in the capture phase, so these run before anything
 // on the page, React's root listener included.
 
 const DISMISS_EVENTS = ["pointerdown", "mousedown", "touchstart", "keydown", "wheel"] as const;
 
-type Gesture = { events: string[]; endsOn: string | null; timeoutMs: number };
+type Gesture = { events: string[]; releasedBy: string[]; timeoutMs: number };
 
 const POINTER: Gesture = {
   events: ["pointerdown", "mousedown", "touchend", "pointerup", "mouseup", "click", "auxclick", "contextmenu"],
-  endsOn: "click",
+  releasedBy: ["pointerup", "mouseup", "touchend", "click"],
   timeoutMs: 1000,
 };
-const KEY: Gesture = { events: ["keydown", "keypress", "keyup"], endsOn: "keyup", timeoutMs: 1000 };
-// A wheel "gesture" is a burst of events with no end event.
-const WHEEL: Gesture = { events: ["wheel"], endsOn: null, timeoutMs: 300 };
+const KEY: Gesture = { events: ["keydown", "keypress", "keyup"], releasedBy: ["keyup"], timeoutMs: 1000 };
+// A wheel "gesture" is a burst of events with no release.
+const WHEEL: Gesture = { events: ["wheel"], releasedBy: [], timeoutMs: 300 };
 
 function gestureFor(type: string): Gesture {
   if (type === "keydown") return KEY;
@@ -50,7 +57,7 @@ export function consumeFirstInput(target: EventTarget, onDismiss: () => void): (
   const swallow = (gesture: Gesture) => {
     const handler = (event: Event) => {
       consume(event);
-      if (event.type === gesture.endsOn) stop();
+      if (gesture.releasedBy.includes(event.type)) setTimeout(stop, 0);
     };
     const stop = () => {
       clearTimeout(timer);
