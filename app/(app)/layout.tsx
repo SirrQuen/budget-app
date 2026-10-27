@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { getSessionId, requireUser } from "@/lib/auth/dal";
 import { recordLogin } from "@/lib/db/profile";
 import { listAccounts } from "@/lib/db/accounts";
@@ -8,8 +10,39 @@ import { AppShell } from "@/components/app-shell/AppShell";
 import { identityName } from "@/lib/displayName";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { TodayProvider } from "@/components/TodayProvider";
+import { WelcomeBloom } from "@/components/WelcomeBloom";
+import { SessionFlags } from "@/components/SessionFlags";
+import { SorrelLoader } from "@/components/SorrelLoader";
+import { SIGNED_IN_COOKIE } from "@/lib/auth/signedInFlag";
+import { WELCOME_COOKIE, parseWelcomeReason } from "@/lib/welcome";
 
+// The two one-shot sign-in cookies are read here, on the server, before any
+// of the app's data: the welcome overlay renders straight away -- in the
+// initial HTML of a full load, in the first commit of a client navigation
+// -- while the frame below streams in behind it. Nothing about the overlay
+// waits on hydration or on these reads. SessionFlags deletes both cookies
+// as the layout mounts.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const jar = await cookies();
+  const welcome = parseWelcomeReason(jar.get(WELCOME_COOKIE)?.value);
+  const signedIn = jar.get(SIGNED_IN_COOKIE)?.value === "1";
+
+  return (
+    <>
+      <SessionFlags signedIn={signedIn} welcoming={welcome !== null} />
+      <WelcomeBloom reason={welcome} />
+      {/* What the root app/loading.tsx used to show while this layout
+          awaited its reads. That boundary sat ABOVE this layout, so a slow
+          first render painted the loader before the overlay; it's gone,
+          and this one sits under the overlay instead. */}
+      <Suspense fallback={<SorrelLoader className="min-h-dvh flex-1" />}>
+        <AppFrame>{children}</AppFrame>
+      </Suspense>
+    </>
+  );
+}
+
+async function AppFrame({ children }: { children: React.ReactNode }) {
   const [user, loginResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme, timeZone, today, sessionId] =
     await Promise.all([
       requireUser(),

@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import { SIGNED_IN_COOKIE, SIGNED_IN_MAX_AGE_S } from "@/lib/auth/signedInFlag";
+import { welcomeDay } from "@/lib/welcome";
+import { sessionTimeZone, setWelcome } from "@/lib/auth/welcomeCookies";
 import { markSessionStart } from "@/lib/auth/firstSession";
 import { confirmFailure } from "@/lib/auth/errors";
 import { linkOutcomePath } from "@/lib/auth/linkOutcome";
@@ -116,9 +118,18 @@ export async function POST(request: NextRequest) {
   const isRecovery = isRecoveryLink(link.type, link.next);
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.verifyOtp({ type: link.type, token_hash: link.tokenHash });
+  const { data, error } = await supabase.auth.verifyOtp({ type: link.type, token_hash: link.tokenHash });
   if (!error) {
     await markSignedIn(supabase, isRecovery);
+    // Only here, after verifyOtp() succeeded, is the welcome queued
+    // (components/WelcomeBloom.tsx): "Sorrel is yours." on the page this
+    // lands on. Unconditional -- once ever, never suppressed by a date --
+    // and it marks the user's day, so the daily welcome doesn't follow.
+    // Every failure below goes to its honest outcome page without it.
+    if (!isRecovery && data.user) {
+      const day = welcomeDay(await sessionTimeZone(supabase), field("tz"), new Date());
+      setWelcome(await cookies(), "confirmed", data.user.id, day);
+    }
     return seeOther(link.next);
   }
 
@@ -130,7 +141,9 @@ export async function POST(request: NextRequest) {
 }
 
 // A confirmed signup is a brand-new user's first sight of the app, so the
-// dashboard mark plays its sign-in fold. A recovery link does not: someone
+// dashboard mark plays its sign-in fold -- superseded by the welcome bloom,
+// which this route always queues for a signup, so in practice the flag
+// here only says "signed in" to the layout (components/SessionFlags.tsx). A recovery link does not: someone
 // resetting a password is mid-task, and the flourish would be noise.
 //
 // This route opens a session without going through login(), so it
