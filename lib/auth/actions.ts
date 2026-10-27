@@ -51,8 +51,8 @@ export async function login(
   if (WELCOME_DAILY_ENABLED) {
     const tz = formData.get("tz");
     const day = welcomeDay(await sessionTimeZone(supabase), typeof tz === "string" ? tz : null, new Date());
-    if (shouldWelcomeToday(jar.get(WELCOMED_ON_COOKIE)?.value, data.user.id, day)) {
-      setWelcome(jar, "daily", data.user.id, day);
+    if (shouldWelcomeToday(jar.get(WELCOMED_ON_COOKIE)?.value, day)) {
+      setWelcome(jar, "daily", day);
     }
   }
 

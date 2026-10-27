@@ -106,7 +106,7 @@ Getting this backwards is the single most likely way this ships feeling slow, an
 
 The reason is specific to this codebase: `record_login()` writing on every page load is a bug you already found and removed, and it corrupted `profiles.updated_at` on the way. A "last welcomed" write is the same shape. Don't rebuild it.
 
-- **`login()` compares `sorrel_welcomed_on` (`<userid>:<day>`) to today in the user's timezone.** A different day sets the one-shot `sorrel_welcome=daily` and updates the date cookie -- at sign-in, before the bloom, so a refresh mid-bloom can't replay it.
+- **`login()` compares `sorrel_welcomed_on` (the date alone, kept a week) to today in the user's timezone.** A different day sets the one-shot `sorrel_welcome=daily` and updates the date cookie -- at sign-in, before the bloom, so a refresh mid-bloom can't replay it.
 - **The authenticated layout reads the one-shot on the server and renders the overlay in the first render** -- in the initial HTML of a full load, in the first commit of a client navigation -- ahead of the layout's own data, which streams in behind it. A client-side overlay can't exist before hydration; that put the loader in front of the bloom, serial again. This doesn't.
 - **The day is the user's calendar day.** Their stored zone; else the zone the browser sends with the form (`BrowserTimeZoneField` -- a new user has none stored); else UTC. Someone in Georgia signing in at 8pm must not get a second bloom at 8:01pm because UTC rolled over — migration 22's backfill bug came from exactly this.
 - **Reduced motion:** the server can't know it, so the overlay is in the HTML and CSS keeps it from painting (`.welcome-bloom--gate`).

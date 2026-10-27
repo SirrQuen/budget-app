@@ -30,12 +30,19 @@ export const WELCOME_COOKIE = "sorrel_welcome";
 export const WELCOME_MAX_AGE_S = 60;
 
 /**
- * `<userid>:<YYYY-MM-DD>` -- the user's calendar day this device last
- * welcomed them. Per user, so a shared browser welcomes each person. Read
- * only by the server.
+ * `YYYY-MM-DD` -- the calendar day this browser last showed the opening
+ * animation. The date and nothing else: no user id. The cookie is already
+ * per browser, so the date answers "today or not"; an id would only
+ * distinguish two people sharing a browser, where being wrong costs one
+ * missed animation -- not worth a persistent identifier. Read only by the
+ * server. Named in the privacy policy's cookie paragraph.
  */
 export const WELCOMED_ON_COOKIE = "sorrel_welcomed_on";
-export const WELCOMED_ON_MAX_AGE_S = 400 * 24 * 60 * 60;
+/**
+ * A week. It only has to tell today from not-today; anything older than
+ * yesterday says the same thing as no cookie at all.
+ */
+export const WELCOMED_ON_MAX_AGE_S = 7 * 24 * 60 * 60;
 
 /**
  * B only: how long the confirmation message stays before it dissolves on
@@ -55,17 +62,13 @@ export function parseWelcomeReason(value: string | undefined): WelcomeReason | n
   return value === "confirmed" || value === "daily" ? value : null;
 }
 
-export function welcomedOnValue(userId: string, day: string): string {
-  return `${userId}:${day}`;
-}
-
 /**
  * The daily welcome's decision, made in the sign-in action: welcome when
- * this device hasn't welcomed this user on this day of theirs. A confirmed
- * signup's mark counts, so the two never stack.
+ * this browser hasn't shown the animation on the user's current day. A
+ * confirmed signup's mark counts, so the two never stack.
  */
-export function shouldWelcomeToday(welcomedOn: string | undefined, userId: string, day: string): boolean {
-  return welcomedOn !== welcomedOnValue(userId, day);
+export function shouldWelcomeToday(welcomedOn: string | undefined, day: string): boolean {
+  return welcomedOn !== day;
 }
 
 /**

@@ -7,7 +7,6 @@ import {
   WELCOMED_ON_MAX_AGE_S,
   WELCOME_COOKIE,
   WELCOME_MAX_AGE_S,
-  welcomedOnValue,
   type WelcomeReason,
 } from "@/lib/welcome";
 
@@ -26,16 +25,16 @@ export async function sessionTimeZone(supabase: SupabaseClient<Database>): Promi
 
 /**
  * Queues the welcome for the next authenticated render and marks `day` as
- * welcomed on this device. Called only from an action that signed the user
- * in, never from a render.
+ * welcomed in this browser. Called only from an action that signed the
+ * user in, never from a render.
  */
-export function setWelcome(cookies: CookieStore, reason: WelcomeReason, userId: string, day: string) {
+export function setWelcome(cookies: CookieStore, reason: WelcomeReason, day: string) {
   cookies.set(WELCOME_COOKIE, reason, {
     maxAge: WELCOME_MAX_AGE_S,
     path: "/",
     sameSite: "lax",
   });
-  cookies.set(WELCOMED_ON_COOKIE, welcomedOnValue(userId, day), {
+  cookies.set(WELCOMED_ON_COOKIE, day, {
     maxAge: WELCOMED_ON_MAX_AGE_S,
     path: "/",
     sameSite: "lax",

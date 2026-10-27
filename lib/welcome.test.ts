@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  WELCOMED_ON_MAX_AGE_S,
   dailyGreeting,
   hourInZone,
   parseWelcomeReason,
   shouldWelcomeToday,
   welcomeDay,
-  welcomedOnValue,
 } from "./welcome";
 
 test("only a known reason is a welcome", () => {
@@ -16,8 +16,8 @@ test("only a known reason is a welcome", () => {
   assert.equal(parseWelcomeReason("anything-else"), null);
 });
 
-test("the welcomed-on value is per user", () => {
-  assert.equal(welcomedOnValue("u1", "2026-10-27"), "u1:2026-10-27");
+test("the welcomed-on cookie lives a week, not the browser's 400-day ceiling", () => {
+  assert.equal(WELCOMED_ON_MAX_AGE_S, 7 * 24 * 60 * 60);
 });
 
 test("welcomeDay is the user's calendar day, never UTC's", () => {
@@ -43,38 +43,39 @@ test("a junk form zone is ignored: UTC, the documented fallback", () => {
 });
 
 // The daily decision as the sign-in action runs it: each sign-in reads the
-// cookie the previous one left.
-function signIns(userId: string, instants: string[]): boolean[] {
+// cookie the previous one left -- the date alone.
+function signIns(instants: string[]): boolean[] {
   let cookie: string | undefined;
   return instants.map((iso) => {
     const day = welcomeDay("America/New_York", null, new Date(iso));
-    const play = shouldWelcomeToday(cookie, userId, day);
-    if (play) cookie = welcomedOnValue(userId, day);
+    const play = shouldWelcomeToday(cookie, day);
+    if (play) cookie = day;
     return play;
   });
 }
 
 test("daily: twice the same day blooms once; the next day blooms again", () => {
-  assert.deepEqual(
-    signIns("u", ["2026-10-27T13:00:00Z", "2026-10-27T18:00:00Z", "2026-10-28T13:00:00Z"]),
-    [true, false, true],
-  );
+  assert.deepEqual(signIns(["2026-10-27T13:00:00Z", "2026-10-27T18:00:00Z", "2026-10-28T13:00:00Z"]), [
+    true,
+    false,
+    true,
+  ]);
 });
 
 test("daily: 11:55pm then 12:05am local is two blooms", () => {
-  assert.deepEqual(signIns("u", ["2026-10-28T03:55:00Z", "2026-10-28T04:05:00Z"]), [true, true]);
+  assert.deepEqual(signIns(["2026-10-28T03:55:00Z", "2026-10-28T04:05:00Z"]), [true, true]);
 });
 
 test("daily: 7:55pm then 8:05pm EDT is one bloom -- UTC's midnight isn't the user's", () => {
-  assert.deepEqual(signIns("u", ["2026-10-27T23:55:00Z", "2026-10-28T00:05:00Z"]), [true, false]);
+  assert.deepEqual(signIns(["2026-10-27T23:55:00Z", "2026-10-28T00:05:00Z"]), [true, false]);
 });
 
 test("daily: a confirmed signup's mark suppresses the daily welcome that day", () => {
-  assert.equal(shouldWelcomeToday(welcomedOnValue("u", "2026-10-27"), "u", "2026-10-27"), false);
+  assert.equal(shouldWelcomeToday("2026-10-27", "2026-10-27"), false);
 });
 
-test("daily: another person's mark on a shared browser doesn't count", () => {
-  assert.equal(shouldWelcomeToday(welcomedOnValue("someone-else", "2026-10-27"), "u", "2026-10-27"), true);
+test("daily: no cookie (first visit, cleared, or expired after a week) welcomes", () => {
+  assert.equal(shouldWelcomeToday(undefined, "2026-10-27"), true);
 });
 
 test("greeting: by local hour, with the name or no name -- never 'there'", () => {
