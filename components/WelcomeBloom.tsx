@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SorrelFlower } from "@/components/SorrelFlower";
 import {
   CONFIRMED_HOLD_MS,
@@ -15,6 +15,19 @@ import { consumeFirstInput } from "@/lib/consumeFirstInput";
 // bloom: the flower assembling. waiting (daily only): the bloom is done
 // but the page behind isn't, so the same flower sways until it is.
 type Phase = "bloom" | "waiting" | "dissolving" | "done";
+
+// How long the overlay has already been on screen. It is in the server's
+// HTML, so it paints -- and the bloom starts -- before React hydrates; a
+// timer started at hydration would add that whole gap to every hold (seen
+// on dev: 2.6s became 2.9-3.3s). The bloom's own animation started at the
+// first paint, so the timeline knows. 0 with no animation (reduced
+// motion) -- then there's nothing to measure, and nothing animating.
+function onScreenMs(overlay: HTMLElement | null): number {
+  const anim = overlay?.querySelector(".sorrel-flower__leaf")?.getAnimations()[0];
+  const now = document.timeline.currentTime;
+  if (!anim || anim.startTime === null || typeof now !== "number" || typeof anim.startTime !== "number") return 0;
+  return Math.max(0, now - anim.startTime);
+}
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -59,6 +72,7 @@ export function WelcomeBloom({
   const [greeting] = useState(initialGreeting);
   const [phase, setPhase] = useState<Phase>(initialReason ? "bloom" : "done");
   const [ready, setReady] = useState(false);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   // Before the page behind reports ready (a passive effect, so always
   // after this). Reduced motion ends the daily gate here; CSS already kept
@@ -78,9 +92,10 @@ export function WelcomeBloom({
   // is ready -- whichever is later. Confirmed: after a reading hold.
   useEffect(() => {
     if (phase === "bloom") {
+      const hold = reason === "daily" ? WELCOME_BLOOM_MS : CONFIRMED_HOLD_MS;
       const timer = setTimeout(
         () => setPhase(reason === "daily" ? "waiting" : "dissolving"),
-        reason === "daily" ? WELCOME_BLOOM_MS : CONFIRMED_HOLD_MS,
+        Math.max(0, hold - onScreenMs(overlayRef.current)),
       );
       return () => clearTimeout(timer);
     }
@@ -115,6 +130,7 @@ export function WelcomeBloom({
 
   return (
     <div
+      ref={overlayRef}
       role="status"
       className={`welcome-bloom fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-page px-4 text-center ${
         reason === "daily" ? "welcome-bloom--gate" : ""

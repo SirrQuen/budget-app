@@ -43,9 +43,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <>
       <SessionFlags signedIn={signedIn} welcoming={welcome !== null} />
       <WelcomeBloom reason={welcome} greeting={greeting} />
-      {/* What the root loading.tsx used to show while this layout awaited
-          its reads -- now inside the layout, so it no longer holds back
-          the overlay above. */}
+      {/* What the root app/loading.tsx used to show while this layout
+          awaited its reads. That boundary sat ABOVE this layout, so a slow
+          first render painted the loader before the overlay; it's gone,
+          and this one sits under the overlay instead. */}
       <Suspense fallback={<SorrelLoader className="min-h-dvh flex-1" />}>
         <AppFrame>{children}</AppFrame>
       </Suspense>
