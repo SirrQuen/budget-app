@@ -35,6 +35,13 @@ production needs the link changed first, and that is my call, not yours.
 Never relink on your own, and never add `supabase db push` to a permission
 allowlist -- I run it myself, every time, for dev and production.
 
+**A held branch's migration must never be pushed to the shared dev
+database.** Test it on its own throwaway project, or rebuild dev from main
+immediately afterwards. A held migration left on dev silently shapes every
+migration written after it: linked-goals' 52 sat on sorrel-dev and
+migration 53 was written around it -- against a schema production never
+had.
+
 ### Before every `supabase db push`
 
 Run `supabase projects list` and state which project is linked, by ref, in
