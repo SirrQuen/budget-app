@@ -90,14 +90,20 @@ export function GoalRow({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string>();
   const [isDeleting, startDelete] = useTransition();
+  // Set once the delete succeeds: this row and its Delete button are about
+  // to go, so focus moves to the page heading, which every state of the
+  // page keeps (the last goal leaves the empty state behind it).
+  const deleted = useRef(false);
 
   function handleDelete() {
     startDelete(async () => {
       const result = await callAction(() => deleteGoalAction(goal.goal_id ?? ""));
-      setConfirmingDelete(false);
       if (result?.error) {
         setDeleteError(result.error);
+      } else {
+        deleted.current = true;
       }
+      setConfirmingDelete(false);
     });
   }
 
@@ -140,7 +146,12 @@ export function GoalRow({
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-4">
-          <button type="button" onClick={() => setContributing((v) => !v)} className={TEXT_BUTTON}>
+          <button
+            type="button"
+            id={`add-contribution-${goal.goal_id}`}
+            onClick={() => setContributing((v) => !v)}
+            className={TEXT_BUTTON}
+          >
             {contributing ? "Cancel" : "Add contribution"}
           </button>
           <button
@@ -254,6 +265,8 @@ export function GoalRow({
         confirmIcon={<TrashIcon className="h-4 w-4" />}
         cancelLabel="Cancel"
         tone="critical"
+        busy={isDeleting}
+        returnFocus={() => (deleted.current ? document.getElementById("page-title") : null)}
         onConfirm={handleDelete}
         onCancel={() => setConfirmingDelete(false)}
       />
