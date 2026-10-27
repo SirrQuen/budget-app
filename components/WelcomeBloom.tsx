@@ -1,11 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SorrelFlower } from "@/components/SorrelFlower";
 import { CONFIRMED_HOLD_MS, WELCOME_DISSOLVE_MS, type WelcomeReason } from "@/lib/welcome";
 import { consumeFirstInput } from "@/lib/consumeFirstInput";
 
 type Phase = "bloom" | "dissolving" | "done";
+
+// How long the overlay has already been on screen. It is in the server's
+// HTML, so it paints -- and the bloom starts -- before React hydrates; a
+// timer started at hydration would add that whole gap to every hold (seen
+// on dev: 2.6s became 2.9-3.3s). The bloom's own animation started at the
+// first paint, so the timeline knows. 0 with no animation (reduced
+// motion) -- then there's nothing to measure, and nothing animating.
+function onScreenMs(overlay: HTMLElement | null): number {
+  const anim = overlay?.querySelector(".sorrel-flower__leaf")?.getAnimations()[0];
+  const now = document.timeline.currentTime;
+  if (!anim || anim.startTime === null || typeof now !== "number" || typeof anim.startTime !== "number") return 0;
+  return Math.max(0, now - anim.startTime);
+}
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -31,11 +44,15 @@ function prefersReducedMotion(): boolean {
 export function WelcomeBloom({ reason }: { reason: WelcomeReason | null }) {
   const [shown] = useState(reason);
   const [phase, setPhase] = useState<Phase>(reason ? "bloom" : "done");
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   // It dissolves on its own.
   useEffect(() => {
     if (phase === "bloom") {
-      const timer = setTimeout(() => setPhase("dissolving"), CONFIRMED_HOLD_MS);
+      const timer = setTimeout(
+        () => setPhase("dissolving"),
+        Math.max(0, CONFIRMED_HOLD_MS - onScreenMs(overlayRef.current)),
+      );
       return () => clearTimeout(timer);
     }
     if (phase === "dissolving") {
@@ -56,6 +73,7 @@ export function WelcomeBloom({ reason }: { reason: WelcomeReason | null }) {
 
   return (
     <div
+      ref={overlayRef}
       role="status"
       className={`welcome-bloom fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-page px-4 text-center ${
         phase === "dissolving" ? "welcome-bloom--out" : ""
