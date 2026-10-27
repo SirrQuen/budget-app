@@ -42,6 +42,15 @@ your reply, before running the push. Every single time, including when you
 ran it ten minutes ago. The CLI's link is one global setting that persists
 between sessions — the link from last week is the link today.
 
+Before any `db push` to production, run BOTH:
+
+    git branch --show-current
+    supabase projects list
+
+and state both in your reply. The project check says which database;
+the branch check says which migrations. A held feature branch can carry a
+migration that must not ship.
+
 ### Never run these
 
 - `supabase db reset --linked` — destroys the remote database.
