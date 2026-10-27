@@ -152,6 +152,10 @@ both agree with the TS side on every account type and pair read from
 account types.
 Checking→savings is NOT money leaving. Card purchases are NOT counted here;
 the card payment obligation already captures them.
+Its mirror, `isSafeToSpendIncome` (same file, same set), makes a transfer
+INTO the set (Investment→Checking) projection income. A crossing transfer
+takes the rules of the side it acts as -- income's late edge and drop-out,
+or an obligation's early edge -- never a transfer rule of its own.
 
 **Never discourage the user about spending.**
 Forecast copy states facts, names days, names causes. No alarm language.

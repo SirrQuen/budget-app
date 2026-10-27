@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { addDaysISO } from "./date";
 import { projectSafeToSpend, type ProjectionSchedule } from "./safeToSpendProjection";
+import { buildConfirmationQueue } from "./confirmationQueue";
 
 const TODAY = "2026-10-01";
 const day = (n: number) => addDaysISO(TODAY, n);
@@ -582,4 +583,137 @@ test("variable-amount income -> the LOW end of the estimate and the LATE end of 
   assert.equal(result.trough.date, day(7));
   assert.deepEqual(result.shortfall, { amount: 800, date: day(7) });
   assert.equal(result.safeToSpend, 0);
+});
+
+// Transfers across the spendable set. Each takes the rules of the side it
+// acts as: into the set is income (late edge, drops out past it), out of
+// the set is an obligation (early edge, counted while overdue).
+
+const delta = (withIt: ProjectionSchedule[], without: ProjectionSchedule[]) =>
+  run(withIt, 5000, 0).safeToSpend - run(without, 5000, 0).safeToSpend;
+
+test("hero: a Checking -> Savings transfer changes nothing", () => {
+  const sweep = schedule({
+    kind: "Transfer",
+    name: "Sweep",
+    amount: 750,
+    toAccountType: "Savings",
+    toAccountId: "savings",
+    nextDueDate: day(3),
+  });
+  assert.equal(delta([latePay, rent, sweep], [latePay, rent]), 0);
+  const result = run([latePay, rent, sweep], 5000, 0);
+  assert.ok(!result.obligations.some((o) => o.name === "Sweep"));
+  assert.ok(!result.incomes.some((i) => i.name === "Sweep"));
+});
+
+test("hero: a fixed Checking -> Credit Card payment lowers it by exactly its amount, once", () => {
+  // Netflix is charged to the same card; it must not come out of cash too.
+  const payment = schedule({
+    kind: "Transfer",
+    name: "Card payment",
+    amount: 300,
+    toAccountType: "Credit Card",
+    toAccountId: CARD,
+    nextDueDate: day(3),
+    occurrencesRemaining: 1,
+  });
+  assert.equal(delta([latePay, payment, netflix], [latePay, netflix]), -300);
+  assert.equal(delta([latePay, netflix], [latePay]), 0);
+});
+
+test("hero: a variable card payment takes what's owed plus scheduled charges once -- no second route via the balance", () => {
+  // cardPayment.balanceOwed (v_upcoming_recurring.card_balance_owed) only
+  // prices this schedule's occurrences; nothing else reads it. Over the
+  // horizon cash falls by the $900 owed + one $20 Netflix cycle = $920.
+  const result = run([latePay, cardPayment({}), netflix], 5000, 0);
+  const paid = result.obligations.reduce((sum, o) => sum + o.amount, 0);
+  assert.equal(paid, 920);
+  assert.equal(result.obligations.length, 2);
+  assert.equal(delta([latePay, cardPayment({}), netflix], [latePay, netflix]), -900);
+});
+
+test("hero: an Investment -> Checking transfer is income, on its late edge, at its amount", () => {
+  const fromBrokerage = schedule({
+    kind: "Transfer",
+    name: "From brokerage",
+    amount: 1000,
+    accountId: "brokerage",
+    fromAccountType: "Investment",
+    toAccountType: "Checking",
+    toAccountId: "checking",
+    nextDueDate: day(3),
+    dateToleranceDays: 2,
+    occurrencesRemaining: 1,
+  });
+  // Rent on day 7 is the trough without it ($200); with it the trough is
+  // today's $1,000 cash.
+  const without = run([paycheck, rent], 1000, 0);
+  const result = run([paycheck, rent, fromBrokerage], 1000, 0);
+  assert.equal(without.safeToSpend, 700);
+  assert.equal(result.safeToSpend, 1000);
+  assert.deepEqual(
+    result.incomes.filter((i) => i.name === "From brokerage").map((i) => [i.date, i.amount]),
+    [[day(5), 1000]],
+  );
+  assert.ok(!result.obligations.some((o) => o.name === "From brokerage"));
+});
+
+test("an Investment -> Checking transfer past its late edge drops out of the maths but stays in the queue", () => {
+  const fromBrokerage = schedule({
+    kind: "Transfer",
+    name: "From brokerage",
+    amount: 1000,
+    accountId: "brokerage",
+    fromAccountType: "Investment",
+    toAccountType: "Checking",
+    toAccountId: "checking",
+    nextDueDate: day(-5),
+    dateToleranceDays: 2,
+    occurrencesRemaining: 1,
+  });
+  const result = run([paycheck, rent, fromBrokerage]);
+  assert.equal(result.safeToSpend, run([paycheck, rent]).safeToSpend);
+  assert.ok(!result.incomes.some((i) => i.name === "From brokerage"));
+  assert.deepEqual(
+    result.unconfirmedIncome.map((u) => [u.name, u.dueDate]),
+    [["From brokerage", day(-5)]],
+  );
+  assert.deepEqual(
+    buildConfirmationQueue([paycheck, rent, fromBrokerage], TODAY, NO_HOLIDAYS).map((q) => q.name),
+    ["From brokerage"],
+  );
+});
+
+test("a Checking -> Investment transfer is an obligation on its early edge, and stays counted overdue", () => {
+  const toBrokerage = schedule({
+    kind: "Transfer",
+    name: "To brokerage",
+    amount: 400,
+    toAccountType: "Investment",
+    toAccountId: "brokerage",
+    nextDueDate: day(-2),
+    dateToleranceDays: 3,
+    occurrencesRemaining: 1,
+  });
+  const result = run([paycheck, toBrokerage]);
+  assert.deepEqual(
+    result.obligations.map((o) => [o.name, o.date, o.amount]),
+    [["To brokerage", TODAY, 400]],
+  );
+  assert.deepEqual(result.overdueObligations.map((o) => o.name), ["To brokerage"]);
+});
+
+test("an Investment -> Loan transfer touches nothing", () => {
+  const between = schedule({
+    kind: "Transfer",
+    name: "Between",
+    amount: 600,
+    accountId: "brokerage",
+    fromAccountType: "Investment",
+    toAccountType: "Loan",
+    toAccountId: "loan",
+    nextDueDate: day(3),
+  });
+  assert.equal(delta([latePay, rent, between], [latePay, rent]), 0);
 });

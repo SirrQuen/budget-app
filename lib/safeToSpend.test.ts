@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isSafeToSpendCommitment, isSpendableAccountType } from "./safeToSpend";
+import { isSafeToSpendCommitment, isSafeToSpendIncome, isSpendableAccountType } from "./safeToSpend";
 
 test("isSpendableAccountType: only Checking and Savings", () => {
   assert.equal(isSpendableAccountType("Checking"), true);
@@ -102,4 +102,34 @@ test("Transfer Savings -> Checking (both spendable, reverse direction) -- do not
     }),
     false,
   );
+});
+
+// isSafeToSpendIncome -- the mirror rule: cash arriving in the set.
+
+test("income: Income into Checking or Savings counts; into anything else does not", () => {
+  assert.equal(isSafeToSpendIncome({ transactionType: "Income", fromAccountType: "Checking", toAccountType: null }), true);
+  assert.equal(isSafeToSpendIncome({ transactionType: "Income", fromAccountType: "Savings", toAccountType: null }), true);
+  assert.equal(isSafeToSpendIncome({ transactionType: "Income", fromAccountType: "Investment", toAccountType: null }), false);
+  assert.equal(isSafeToSpendIncome({ transactionType: "Income", fromAccountType: "Cash", toAccountType: null }), false);
+});
+
+test("income: a Transfer counts only when it crosses into the set", () => {
+  const transfer = (from: string, to: string) =>
+    isSafeToSpendIncome({ transactionType: "Transfer", fromAccountType: from, toAccountType: to });
+  assert.equal(transfer("Investment", "Checking"), true);
+  assert.equal(transfer("Loan", "Savings"), true);
+  assert.equal(transfer("Checking", "Savings"), false);
+  assert.equal(transfer("Savings", "Checking"), false);
+  assert.equal(transfer("Checking", "Credit Card"), false);
+  assert.equal(transfer("Investment", "Cash"), false);
+});
+
+test("a Transfer is never both income and a commitment", () => {
+  for (const from of ["Checking", "Savings", "Credit Card", "Loan", "Investment", "Cash"]) {
+    for (const to of ["Checking", "Savings", "Credit Card", "Loan", "Investment", "Cash"]) {
+      const income = isSafeToSpendIncome({ transactionType: "Transfer", fromAccountType: from, toAccountType: to });
+      const commitment = isSafeToSpendCommitment({ transactionType: "Transfer", fromAccountType: from, toAccountType: to });
+      assert.ok(!(income && commitment), `${from} -> ${to}`);
+    }
+  }
 });

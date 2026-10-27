@@ -50,3 +50,31 @@ export function isSafeToSpendCommitment(row: SafeToSpendCandidate): boolean {
   }
   return true;
 }
+
+export type SafeToSpendIncomeCandidate = {
+  transactionType: "Income" | "Transfer";
+  /**
+   * accountid's type: where an Income schedule lands, or a Transfer's
+   * source.
+   */
+  fromAccountType: string;
+  /** A Transfer's destination type; null for an Income schedule. */
+  toAccountType: string | null;
+};
+
+// Whether an upcoming recurring row is safe-to-spend income: cash arriving
+// in the spendable set from outside it. The mirror of
+// isSafeToSpendCommitment, built on the same set.
+//
+//   Income -> lands in accountid; income only if that account is spendable.
+//   Transfer, non-spendable source, spendable destination (e.g. Investment
+//     -> Checking) -> income. The money wasn't spendable and now is.
+//   Transfer, spendable source -> never income. Spendable -> spendable
+//     changes nothing; spendable -> non-spendable is a commitment.
+//   Transfer, non-spendable on both ends -> never income.
+export function isSafeToSpendIncome(row: SafeToSpendIncomeCandidate): boolean {
+  if (row.transactionType === "Income") {
+    return isSpendableAccountType(row.fromAccountType);
+  }
+  return !isSpendableAccountType(row.fromAccountType) && isSpendableAccountType(row.toAccountType ?? "");
+}

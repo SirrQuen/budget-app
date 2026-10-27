@@ -21,8 +21,9 @@
 //     repeating the next payment's figure (see cardPaymentCents).
 //
 // Which rows are income and which are obligations is not decided here --
-// isSpendableAccountType / isSafeToSpendCommitment (lib/safeToSpend.ts)
-// are reused unchanged, including the Checking -> Savings exclusion.
+// isSafeToSpendIncome / isSafeToSpendCommitment (lib/safeToSpend.ts)
+// are reused unchanged, including the Checking -> Savings exclusion. A
+// transfer crossing the set takes the rules of the side it acts as.
 //
 // With no usable income schedule there's no payday to project to, so the
 // caller's window (next payday / end of month / 30 days, from settings)
@@ -35,7 +36,7 @@ import { addDaysISO, daysBetweenInclusive } from "@/lib/date";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
 import { nextOccurrenceISO } from "@/lib/recurringCadence";
 import { expenseCommitmentDate, paydayWindowEnd, statementDateForCycle } from "@/lib/recurringSchedule";
-import { isSafeToSpendCommitment, isSpendableAccountType } from "@/lib/safeToSpend";
+import { isSafeToSpendCommitment, isSafeToSpendIncome } from "@/lib/safeToSpend";
 
 /** Minimum projection length, in days past today. */
 export const MIN_HORIZON_DAYS = 35;
@@ -317,8 +318,20 @@ function cardPaymentCents(
   });
 }
 
+// A Transfer into the spendable set (Investment -> Checking, say) is income
+// here and takes income's rules: late edge, dropped once that has passed
+// unconfirmed. Fixed amount only -- a variable transfer is a card payment,
+// whose amount is priced from the destination card's balance and means
+// nothing for a transfer into Checking.
 function isIncomeSchedule(s: ProjectionSchedule): boolean {
-  return s.kind === "Income" && isSpendableAccountType(s.fromAccountType);
+  if (s.kind === "Expense" || (s.kind === "Transfer" && s.cardPayment !== null)) {
+    return false;
+  }
+  return isSafeToSpendIncome({
+    transactionType: s.kind,
+    fromAccountType: s.fromAccountType,
+    toAccountType: s.toAccountType,
+  });
 }
 
 function isObligationSchedule(s: ProjectionSchedule): boolean {
