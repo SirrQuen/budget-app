@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseWelcomeReason, welcomeDay, welcomedOnValue } from "./welcome";
+import { WELCOMED_ON_MAX_AGE_S, parseWelcomeReason, welcomeDay } from "./welcome";
 
 test("only a known reason is a welcome", () => {
   assert.equal(parseWelcomeReason("confirmed"), "confirmed");
@@ -8,8 +8,8 @@ test("only a known reason is a welcome", () => {
   assert.equal(parseWelcomeReason("anything-else"), null);
 });
 
-test("the welcomed-on value is per user", () => {
-  assert.equal(welcomedOnValue("u1", "2026-10-27"), "u1:2026-10-27");
+test("the welcomed-on cookie lives a week, not the browser's 400-day ceiling", () => {
+  assert.equal(WELCOMED_ON_MAX_AGE_S, 7 * 24 * 60 * 60);
 });
 
 test("welcomeDay is the user's calendar day, never UTC's", () => {

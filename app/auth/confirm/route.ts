@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
     // Every failure below goes to its honest outcome page without it.
     if (!isRecovery && data.user) {
       const day = welcomeDay(await sessionTimeZone(supabase), field("tz"), new Date());
-      setWelcome(await cookies(), "confirmed", data.user.id, day);
+      setWelcome(await cookies(), "confirmed", day);
     }
     return seeOther(link.next);
   }

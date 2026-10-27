@@ -507,6 +507,26 @@ Source: `docs/legal/privacy-and-terms.md` (rendered by `lib/legal.ts`).
   other than the operator's own test accounts existed. No notification
   obligation triggered. No new processor: the list lives in the same
   Supabase database.
+- **Privacy policy, revised 2026-10-27:** the cookie paragraph now also
+  names a first-party preference cookie, `sorrel_welcomed_on`, which
+  remembers the date this browser last showed the opening animation (the
+  daily welcome bloom). It holds a date and nothing else -- the user id
+  was deliberately left out -- and expires after seven days. Two one-shot
+  cookies set at sign-in (`sorrel_welcome`, `sorrel_signed_in`) live 60
+  seconds and fall under the existing "support the sign-in process".
+  **Not a material change; no tester notification sent.** Reasoning, so
+  the judgment can be reviewed: the policy's notification obligation
+  covers exactly three kinds of change -- a new processor, a bank
+  connection, changed deletion behaviour -- and this is none of them. The
+  cookie is first-party, never leaves the user's browser except back to
+  mysorrel.com, carries no identifier, is not used for tracking or
+  analytics, and doesn't change what data Sorrel holds about anyone. It
+  also contradicts nothing a tester agreed to beyond the one sentence now
+  updated. Spending the email channel on it would teach testers to skim
+  the next policy email, which may be one that matters. (Wording note:
+  the theme preference is not a cookie -- it's local storage, as the
+  policy's next sentence already says -- so the cookie sentence doesn't
+  claim it.)
 - **Terms of service:** published 2026-10-12, unchanged since.
 - **Operator:** MW Cyber Architects LLC. **Contact:** hello@mysorrel.com.
 
