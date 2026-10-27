@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { SorrelFlower } from "@/components/SorrelFlower";
-import { SIGNED_IN_COOKIE } from "@/lib/auth/signedInFlag";
-import { isBloomClaimed } from "@/lib/welcomeSignals";
+import { takeSignInFold } from "@/lib/welcomeSignals";
 
 type MarkState = "open" | "folded";
 
@@ -31,14 +30,6 @@ function msUntilNextBoundary(now: Date): number {
     next.setHours(DAY_START);
   }
   return next.getTime() - now.getTime();
-}
-
-function consumeSignedInFlag(): boolean {
-  const present = document.cookie
-    .split("; ")
-    .some((c) => c === `${SIGNED_IN_COOKIE}=1`);
-  if (present) document.cookie = `${SIGNED_IN_COOKIE}=; Max-Age=0; path=/`;
-  return present;
 }
 
 // Fold runs --flower-fold-duration (820ms) plus two --flower-petal-stagger
@@ -85,9 +76,8 @@ export function DayNightMark({ size = 56 }: { size?: number }) {
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     // Under reduced motion the sign-in sequence is skipped rather than
-    // played instantly -- an instant fold/reopen is just a blink. The flag
-    // is consumed either way, so it can't play on a later load.
-    const signedIn = consumeSignedInFlag() && !reduceMotion;
+    // played instantly -- an instant fold/reopen is just a blink.
+    const path = window.location.pathname;
 
     // Every state update waits for a frame. For the sign-in sequence that's
     // load-bearing: the open state has to paint before the fold class
@@ -95,10 +85,13 @@ export function DayNightMark({ size = 56 }: { size?: number }) {
     const frames: number[] = [];
     frames.push(
       requestAnimationFrame(() => {
-        // The welcome bloom supersedes the fold: they never play together.
-        // Read here, a frame after mount, so the overlay (a layout effect in
-        // the authenticated layout) has always decided by now.
-        const playSignIn = signedIn && !isBloomClaimed();
+        // The sign-in flag is consumed by the layout (components/
+        // SessionFlags.tsx), which offers the fold only when no welcome
+        // bloom plays -- the bloom supersedes it. Taken here, a frame after
+        // mount, so the layout's layout effect has always run by now; taken
+        // even under reduced motion, so it can't play later.
+        const offered = takeSignInFold(path);
+        const playSignIn = offered && !reduceMotion;
         if (!playSignIn) {
           settle();
           return;
