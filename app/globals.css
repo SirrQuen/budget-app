@@ -979,13 +979,45 @@ body {
   .sorrel-flower--sway .sorrel-flower__sway {
     animation: sorrel-flower-sway 3200ms linear infinite;
   }
-  /* A bloom that resolves into the sway (the welcome overlay waiting on a
-     slow page) is at rest, 0deg, when the sway is added -- but the sway
-     starts at -2.5deg, a visible snap. So it joins the cycle where the
-     swing crosses 0deg: 542ms into the -2.5 -> 2.5 half (where
-     --icon-anim-ease reaches 0.5, solved numerically; 0.3391 x 1600ms). */
-  .sorrel-flower--bloom.sorrel-flower--sway .sorrel-flower__sway {
-    animation-delay: -542ms;
+  /* The daily welcome's flower (components/WelcomeBloom.tsx) sways from the
+     moment its bloom ends, in CSS alone. The overlay is in the server's
+     HTML and paints before React hydrates; on a slow connection the bloom
+     can finish long before any script runs, and a sway that waited for JS
+     left the flower standing still in that gap. This needs no JS: it
+     starts at the end of the bloom (the delay) and runs until the overlay
+     dissolves, so nothing changes on hydration either.
+
+     The flower is at rest, 0deg, when the bloom ends, and the standard
+     sway starts at -2.5deg -- a visible snap -- and a positive delay can't
+     start a loop mid-cycle. So the gate has its own keyframes: the same
+     sway, phase-shifted to begin where the swing crosses 0deg, 542.57ms
+     into the -2.5 -> 2.5 half (where --icon-anim-ease reaches 0.5).
+     Starting there splits that interval of the curve in two; a split
+     cubic bezier is exactly two cubic beziers, so the outer intervals use
+     those halves, normalised -- the same curve, not a new one.
+     postcss/inline-keyframe-easing.test.ts recomputes the split from the
+     token and checks these values. The percentages: +2.5 at
+     (1600 - 542.57) / 3200 = 33.045%, -2.5 at (3200 - 542.57) / 3200 =
+     83.045%. Change the token or the sway and re-derive all of it. */
+  .welcome-bloom--gate .sorrel-flower__sway {
+    animation: sorrel-flower-gate-sway 3200ms linear var(--flower-bloom-duration) infinite;
+  }
+  @keyframes sorrel-flower-gate-sway {
+    0% {
+      transform: rotate(0deg);
+      animation-timing-function: cubic-bezier(0.1703, 0.5001, 0.4192, 1);
+    }
+    33.045% {
+      transform: rotate(2.5deg);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    83.045% {
+      transform: rotate(-2.5deg);
+      animation-timing-function: cubic-bezier(0.4963, 0.0198, 0.6746, 0.5099);
+    }
+    100% {
+      transform: rotate(0deg);
+    }
   }
   @keyframes sorrel-flower-sway {
     0%,

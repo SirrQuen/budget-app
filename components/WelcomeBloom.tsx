@@ -13,7 +13,8 @@ import { onPageReady, resetPageReady } from "@/lib/welcomeSignals";
 import { consumeFirstInput } from "@/lib/consumeFirstInput";
 
 // bloom: the flower assembling. waiting (daily only): the bloom is done
-// but the page behind isn't, so the same flower sways until it is.
+// but the page behind isn't; the flower is already swaying (CSS) and the
+// gate holds until it is.
 type Phase = "bloom" | "waiting" | "dissolving" | "done";
 
 // How long the overlay has already been on screen. It is in the server's
@@ -45,8 +46,9 @@ function prefersReducedMotion(): boolean {
  * "daily" (A): the first sign-in of the user's day (login() queued it). A
  * gate: it plays to completion and no input dismisses it. The page streams
  * in behind it the whole time, so it costs max(bloom, load), never bloom +
- * load. If the page isn't ready when the bloom ends, the same flower sways
- * until it is (components/WelcomeReady.tsx says so), then dissolves.
+ * load. The flower sways from the end of the bloom in CSS alone, so it
+ * keeps moving before hydration too; the gate holds until the page is
+ * ready (components/WelcomeReady.tsx says so), then dissolves.
  * Reduced motion skips it entirely -- hidden by CSS from the first paint
  * (.welcome-bloom--gate), gone at mount.
  *
@@ -136,9 +138,10 @@ export function WelcomeBloom({
         reason === "daily" ? "welcome-bloom--gate" : ""
       } ${phase === "dissolving" ? "welcome-bloom--out" : ""}`}
     >
-      {/* One element throughout: the bloom's class stays on, and the sway
-          is added beside it, so there's no flash of another component. */}
-      <SorrelFlower size={120} state="bloom" swaying={phase === "waiting"} />
+      {/* One element throughout. The daily gate's sway is CSS alone
+          (.welcome-bloom--gate in globals.css): it starts as the bloom
+          ends, before hydration if need be, and nothing here changes it. */}
+      <SorrelFlower size={120} state="bloom" />
       <div className="flex flex-col gap-2">
         <h2 className="text-3xl font-bold text-ink">
           {reason === "confirmed" ? "Sorrel is yours." : greeting}
