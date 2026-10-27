@@ -2,7 +2,10 @@
 
 import { useId, useState } from "react";
 
-type FlowerState = "open" | "folded";
+// "bloom" is the open flower assembling itself from nothing, once, on mount.
+// It is not the fold: it rests open whatever the hour, because it's a
+// greeting, never a report of the time of day.
+type FlowerState = "open" | "folded" | "bloom";
 
 type SorrelFlowerProps = {
   size?: number;
@@ -30,21 +33,26 @@ const STEM = "M 50 50 Q 50 33 53 24";
  * Open is the brand mark's silhouette, stem hidden beneath leaflet 1. Folded,
  * the leaflets hang from the junction around the revealed stem -- taller than
  * wide, where open is wider than tall. All motion is CSS (.sorrel-flower in
- * app/globals.css); changing `state` is the whole fold. Decorative.
+ * app/globals.css); changing `state` is the whole fold. `state="bloom"`
+ * assembles the open flower once on mount (docs/Goal-Completion.md).
+ * Decorative.
  *
  * Not the brand mark. /login, the nav, OG images and favicons use
  * SorrelMark, which has no stem and is never edited for this component.
  */
 export function SorrelFlower({ size = 56, state = "open", swaying = false }: SorrelFlowerProps) {
+  // The pose the flower rests in. A bloom rests open.
+  const pose = state === "folded" ? "folded" : "open";
+
   // The fold plays only on a change, never on mount: a flower that mounts
   // folded at night must arrive folded, not fold in front of the user. The
-  // previous state is kept in state (React's "adjusting state on a prop
+  // previous pose is kept in state (React's "adjusting state on a prop
   // change" pattern), so no ref is read or written during render.
-  const [prev, setPrev] = useState(state);
+  const [prev, setPrev] = useState(pose);
   const [motion, setMotion] = useState<"fold" | "unfold" | null>(null);
-  if (state !== prev) {
-    setPrev(state);
-    setMotion(state === "folded" ? "fold" : "unfold");
+  if (pose !== prev) {
+    setPrev(pose);
+    setMotion(pose === "folded" ? "fold" : "unfold");
   }
 
   // useId's output contains characters url(#...) won't take.
@@ -52,8 +60,14 @@ export function SorrelFlower({ size = 56, state = "open", swaying = false }: Sor
 
   const classes = [
     "sorrel-flower",
-    `sorrel-flower--${state}`,
+    `sorrel-flower--${pose}`,
     motion && `sorrel-flower--${motion}`,
+    // A CSS animation that runs once with the class, so it plays on mount
+    // and never again for this element. Keep the class for as long as the
+    // flower stays mounted (adding swaying later doesn't disturb it), and
+    // never replay it with a key change -- an unmount mid-bloom is just an
+    // element leaving the DOM.
+    state === "bloom" && "sorrel-flower--bloom",
     swaying && "sorrel-flower--sway",
   ]
     .filter(Boolean)
