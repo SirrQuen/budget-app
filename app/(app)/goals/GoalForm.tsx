@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useActionForm } from "@/components/useActionForm";
-import { createGoalAction, type ActionState } from "@/lib/actions/goals";
+import { createGoalAction, updateGoalAction, type ActionState } from "@/lib/actions/goals";
 import { GOAL_TYPES } from "@/lib/goalOptions";
 import { FormField, useFieldId } from "@/components/ui/FormField";
 import { Input, FIELD_CLASS } from "@/components/ui/Input";
@@ -11,13 +11,32 @@ import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
 const fieldClassName = FIELD_CLASS;
 
-// Create-only -- there's no edit flow yet, unlike CategoryForm/AccountForm's
-// shared create+edit pattern. A goal set up wrong today can be deleted (via
-// GoalRow, once that exists) and re-created; editing is a natural follow-up,
-// not something this pass needs.
-export function GoalForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: () => void }) {
-  const [state, action, pending, submit] = useActionForm<ActionState>(createGoalAction, undefined);
-  // Create-only today, but fixed ids would collide with any second instance -- see useFieldId.
+/** The fields an edit pre-fills -- a v_goal_progress row carries all of them. */
+export type EditableGoal = {
+  goal_id: string;
+  goal_name: string;
+  goal_type: string;
+  target_amount: number;
+  target_date: string | null;
+  monthly_contribution: number | null;
+};
+
+// Create and edit share one form, like CategoryForm/AccountForm, so the two
+// can't accept different fields. With `goal` it edits that goal.
+export function GoalForm({
+  goal,
+  onSuccess,
+  onCancel,
+}: {
+  goal?: EditableGoal;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [state, action, pending, submit] = useActionForm<ActionState>(
+    goal ? updateGoalAction : createGoalAction,
+    undefined,
+  );
+  // One form per goal row in edit mode -- fixed ids would collide; see useFieldId.
   const fieldId = useFieldId();
   const wasPending = useRef(false);
 
@@ -34,8 +53,9 @@ export function GoalForm({ onSuccess, onCancel }: { onSuccess: () => void; onCan
       onSubmit={submit}
       className="flex flex-col gap-5 rounded-2xl border border-hairline bg-surface p-5"
     >
+      {goal ? <input type="hidden" name="id" value={goal.goal_id} /> : null}
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-ink">New goal</h2>
+        <h2 className="text-base font-semibold text-ink">{goal ? "Edit goal" : "New goal"}</h2>
         <button
           type="button"
           onClick={onCancel}
@@ -46,11 +66,24 @@ export function GoalForm({ onSuccess, onCancel }: { onSuccess: () => void; onCan
       </div>
 
       <FormField label="Name" htmlFor={fieldId("goal_name")} required>
-        <Input id={fieldId("goal_name")} name="goal_name" required maxLength={60} placeholder="e.g. Japan trip" />
+        <Input
+          id={fieldId("goal_name")}
+          name="goal_name"
+          required
+          maxLength={60}
+          placeholder="e.g. Japan trip"
+          defaultValue={goal?.goal_name}
+        />
       </FormField>
 
       <FormField label="Type" htmlFor={fieldId("goal_type")} required>
-        <select id={fieldId("goal_type")} name="goal_type" required defaultValue="" className={fieldClassName}>
+        <select
+          id={fieldId("goal_type")}
+          name="goal_type"
+          required
+          defaultValue={goal?.goal_type ?? ""}
+          className={fieldClassName}
+        >
           <option value="" disabled>
             Select a type
           </option>
@@ -73,11 +106,18 @@ export function GoalForm({ onSuccess, onCancel }: { onSuccess: () => void; onCan
             step="0.01"
             placeholder="0.00"
             required
+            defaultValue={goal?.target_amount}
           />
         </FormField>
 
         <FormField label="Target date" htmlFor={fieldId("target_date")} hint="Optional">
-          <input id={fieldId("target_date")} name="target_date" type="date" className={fieldClassName} />
+          <input
+            id={fieldId("target_date")}
+            name="target_date"
+            type="date"
+            defaultValue={goal?.target_date ?? undefined}
+            className={fieldClassName}
+          />
         </FormField>
       </div>
 
@@ -94,13 +134,14 @@ export function GoalForm({ onSuccess, onCancel }: { onSuccess: () => void; onCan
           min="0"
           step="0.01"
           placeholder="0.00"
+          defaultValue={goal?.monthly_contribution ?? undefined}
         />
       </FormField>
 
       {state?.error ? <ErrorMessage message={state.error} /> : null}
 
       <Button type="submit" disabled={pending} className="self-start">
-        {pending ? "Saving…" : "Add goal"}
+        {pending ? "Saving…" : goal ? "Save changes" : "Add goal"}
       </Button>
     </form>
   );

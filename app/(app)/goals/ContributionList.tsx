@@ -68,6 +68,11 @@ function ContributionItem({
   const amountText = formatCurrency(contribution.amount);
   const dateText = formatDate(contribution.date);
 
+  // Set once the delete succeeds: this item and its Delete button are about
+  // to go (and the whole history with the last one), so focus moves to the
+  // goal's "Add contribution", which stays.
+  const deleted = useRef(false);
+
   function handleDelete() {
     startDelete(async () => {
       const result = await callAction(() => deleteContributionAction(contribution.id));
@@ -76,6 +81,7 @@ function ContributionItem({
         setConfirming(false);
         return;
       }
+      deleted.current = true;
       setConfirming(false);
     });
   }
@@ -154,6 +160,10 @@ function ContributionItem({
         confirmIcon={<TrashIcon className="h-4 w-4" />}
         cancelLabel="Cancel"
         tone="critical"
+        busy={isDeleting}
+        returnFocus={() =>
+          deleted.current ? document.getElementById(`add-contribution-${contribution.goalid}`) : null
+        }
         onConfirm={handleDelete}
         onCancel={() => setConfirming(false)}
       />

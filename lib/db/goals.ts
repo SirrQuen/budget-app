@@ -6,6 +6,7 @@ import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/e
 
 type GoalRow = Database["public"]["Tables"]["goals"]["Row"];
 type GoalInsert = Database["public"]["Tables"]["goals"]["Insert"];
+type GoalUpdate = Database["public"]["Tables"]["goals"]["Update"];
 type GoalContributionRow = Database["public"]["Tables"]["goal_contributions"]["Row"];
 
 export type DbResult<T> = { data: T; error: null } | { data: null; error: string };
@@ -37,6 +38,55 @@ export async function createGoal(input: CreateGoalInput): Promise<DbResult<GoalR
   };
 
   const { data, error } = await supabase.from("goals").insert(insert).select().single();
+
+  if (error) {
+    return { data: null, error: describeWriteError(error, "goal") };
+  }
+
+  return { data, error: null };
+}
+
+export type UpdateGoalInput = CreateGoalInput;
+
+// Changing the type clears any link to an account: a Debt Payoff goal
+// switched to Vacation has no business still pointing at a credit card.
+// The current type is read first so an edit that keeps the type leaves
+// the link alone.
+export async function updateGoal(id: string, input: UpdateGoalInput): Promise<DbResult<GoalRow>> {
+  const supabase = await createClient();
+
+  const { data: current, error: readError } = await supabase
+    .from("goals")
+    .select("goal_type")
+    .eq("id", id)
+    .single();
+
+  if (readError) {
+    return { data: null, error: describeReadError(readError, "goal") };
+  }
+
+  const update: GoalUpdate =
+    current.goal_type === input.goal_type
+      ? { ...input }
+      : { ...input, accountid: null, tracking_method: "Manual" };
+
+  const { data, error } = await supabase.from("goals").update(update).eq("id", id).select().single();
+
+  if (error) {
+    return { data: null, error: describeWriteError(error, "goal") };
+  }
+
+  return { data, error: null };
+}
+
+// A real DELETE. goal_contributions.goalid is ON DELETE CASCADE, so the
+// goal's contributions go with it, and v_goals_summary re-sums what's left
+// on the next read -- there's no stored total to correct.
+// transactions.goalid is ON DELETE SET NULL: no transaction goes with it.
+export async function deleteGoal(id: string): Promise<DbResult<{ id: string }>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.from("goals").delete().eq("id", id).select("id").single();
 
   if (error) {
     return { data: null, error: describeWriteError(error, "goal") };
