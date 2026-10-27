@@ -1,24 +1,39 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useActionForm } from "@/components/useActionForm";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { callAction, useActionForm } from "@/components/useActionForm";
 import { useToday } from "@/components/TodayProvider";
-import { contributeToGoalAction, type ContributeActionState } from "@/lib/actions/goals";
+import { contributeToGoalAction, deleteGoalAction, type ContributeActionState } from "@/lib/actions/goals";
 import { GoalMeter } from "@/components/ui/GoalMeter";
 import { Celebration } from "@/components/ui/Celebration";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Input, FIELD_EDGE } from "@/components/ui/Input";
 import { FormField } from "@/components/ui/FormField";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
-import { ChevronDownIcon, TargetIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, TargetIcon, TrashIcon } from "@/components/ui/icons";
 import { formatCurrency } from "@/lib/format";
 import type { Database } from "@/lib/database.types";
 import type { GoalContribution } from "@/lib/db/goals";
 import { ContributionList } from "./ContributionList";
+import { GoalForm } from "./GoalForm";
 
 type GoalProgressRow = Database["public"]["Views"]["v_goal_progress"]["Row"];
 
 const fieldClassName = `w-full ${FIELD_EDGE} bg-surface px-3 py-2 text-sm text-ink`;
+
+const TEXT_BUTTON_BASE =
+  "-mx-2 inline-flex min-h-11 shrink-0 items-center self-start rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface sm:mx-0 sm:self-auto sm:px-0";
+const TEXT_BUTTON = `${TEXT_BUTTON_BASE} hover:text-ink`;
+
+// What the delete confirmation says goes with the goal -- the part people
+// don't expect.
+function deleteTitle(goalName: string, contributionCount: number): string {
+  if (contributionCount === 0) return `Delete ${goalName}?`;
+  return contributionCount === 1
+    ? `Delete ${goalName} and its 1 contribution?`
+    : `Delete ${goalName} and its ${contributionCount} contributions?`;
+}
 
 export function GoalRow({
   goal,
@@ -70,10 +85,46 @@ export function GoalRow({
     milestoneTimeout.current = setTimeout(() => setMilestoneCelebrate(false), 1800);
   }
 
+  const [editing, setEditing] = useState(false);
+  const closeEdit = useCallback(() => setEditing(false), []);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string>();
+  const [isDeleting, startDelete] = useTransition();
+
+  function handleDelete() {
+    startDelete(async () => {
+      const result = await callAction(() => deleteGoalAction(goal.goal_id ?? ""));
+      setConfirmingDelete(false);
+      if (result?.error) {
+        setDeleteError(result.error);
+      }
+    });
+  }
+
   const target = goal.target_amount ?? 0;
   const contributed = goal.contributed_amount ?? 0;
   const remaining = goal.remaining_amount ?? 0;
   const pct = goal.pct_complete ?? 0;
+  const goalName = goal.goal_name ?? "this goal";
+
+  if (editing) {
+    return (
+      <li className="px-4 py-4">
+        <GoalForm
+          goal={{
+            goal_id: goal.goal_id ?? "",
+            goal_name: goal.goal_name ?? "",
+            goal_type: goal.goal_type ?? "",
+            target_amount: target,
+            target_date: goal.target_date,
+            monthly_contribution: goal.monthly_contribution,
+          }}
+          onSuccess={closeEdit}
+          onCancel={closeEdit}
+        />
+      </li>
+    );
+  }
 
   return (
     <li className="flex flex-col gap-3 px-4 py-4 transition-colors duration-150 hover:bg-surface-raised">
@@ -88,14 +139,32 @@ export function GoalRow({
             {goal.goal_type}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={() => setContributing((v) => !v)}
-          className="-mx-2 inline-flex min-h-11 shrink-0 items-center self-start rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface sm:mx-0 sm:self-auto sm:px-0"
-        >
-          {contributing ? "Cancel" : "Add contribution"}
-        </button>
+        <div className="flex shrink-0 items-center gap-4">
+          <button type="button" onClick={() => setContributing((v) => !v)} className={TEXT_BUTTON}>
+            {contributing ? "Cancel" : "Add contribution"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className={TEXT_BUTTON}
+            aria-label={`Edit ${goalName}`}
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setDeleteError(undefined);
+              setConfirmingDelete(true);
+            }}
+            className={`${TEXT_BUTTON_BASE} hover:text-critical`}
+            aria-label={`Delete ${goalName}`}
+          >
+            Delete
+          </button>
+        </div>
       </div>
+      {deleteError ? <ErrorMessage message={deleteError} /> : null}
 
       <GoalMeter
         goalId={goal.goal_id ?? ""}
@@ -172,6 +241,22 @@ export function GoalRow({
           {state?.error ? <ErrorMessage message={state.error} /> : null}
         </form>
       ) : null}
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={deleteTitle(goalName, contributions.length)}
+        description={
+          contributions.length > 0
+            ? `This can't be undone -- the goal and its ${formatCurrency(contributed)} of contributions will be permanently removed.`
+            : "This can't be undone -- the goal will be permanently removed."
+        }
+        confirmLabel={isDeleting ? "Deleting…" : "Delete"}
+        confirmIcon={<TrashIcon className="h-4 w-4" />}
+        cancelLabel="Cancel"
+        tone="critical"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmingDelete(false)}
+      />
 
       <Celebration show={celebrate} message={celebrateMessage} icon="✦" />
       <Celebration show={milestoneCelebrate} message={milestoneMessage} icon="✦" />

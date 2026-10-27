@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import {
   createGoal,
   contributeToGoal,
+  deleteGoal,
   deleteGoalContribution,
+  updateGoal,
   updateGoalContribution,
 } from "@/lib/db/goals";
 import { getGoalProgress } from "@/lib/db/dashboard";
@@ -70,6 +72,46 @@ export async function createGoalAction(
   }
 
   revalidatePath("/goals");
+}
+
+export async function updateGoalAction(
+  _prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const id = String(formData.get("id") ?? "");
+  if (!id) {
+    return { error: "Missing goal id." };
+  }
+  const parsed = parseGoalFields(formData);
+  if ("error" in parsed) {
+    return parsed;
+  }
+
+  const { error } = await updateGoal(id, parsed);
+
+  if (error) {
+    return { error };
+  }
+
+  revalidatePath("/goals");
+  revalidatePath("/dashboard");
+}
+
+export async function deleteGoalAction(id: string): Promise<ActionState> {
+  if (!id) {
+    return { error: "Missing goal id." };
+  }
+
+  const { error } = await deleteGoal(id);
+
+  if (error) {
+    return { error };
+  }
+
+  // "Saved toward your goals" and the dashboard meters re-read the views,
+  // which no longer see the goal or its contributions.
+  revalidatePath("/goals");
+  revalidatePath("/dashboard");
 }
 
 // Shared by logging a contribution and editing one, so the two can't
