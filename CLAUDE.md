@@ -25,9 +25,12 @@ dashboard; refs cannot. Always report the ref.
 | | Name | Ref | Used by |
 |---|---|---|---|
 | Production | `sorrel-prod` | `ybdwqyihvbokowocvlgq` | mysorrel.com. Real user data. |
-| Development | `sorrel-dev` | `jmuqtjbntiqmjmpenywl` | localhost (created 2026-10-15) |
+| Development | `sorrel-dev` | `tztbebdzlezlhvsbylsf` | localhost (rebuilt from main 2026-10-27) |
 
-Production was `evernestdb` until 2026-10-16. Go by the ref.
+Production was `evernestdb` until 2026-10-16. Go by the ref. The previous
+sorrel-dev (`jmuqtjbntiqmjmpenywl`, created 2026-10-15) was deleted on
+2026-10-27 because a held migration had been left on it (see below); a
+command that names that ref is stale.
 
 **The CLI's resting state is sorrel-dev. After any deliberate push to
 production, relink to dev before ending the session.** A command meant for
@@ -74,7 +77,7 @@ one, never read one into context.
 
 ### .env.local
 
-It points at `sorrel-dev` (`jmuqtjbntiqmjmpenywl`), as it must. Finding it
+It points at `sorrel-dev` (`tztbebdzlezlhvsbylsf`), as it must. Finding it
 on production is a stop condition — tell me, don't work around it.
 
 ### Secrets

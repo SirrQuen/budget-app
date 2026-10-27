@@ -1,6 +1,6 @@
 -- =====================================================================
 -- Dev seed: a month of realistic activity for ONE test user. sorrel-dev
--- (jmuqtjbntiqmjmpenywl) ONLY -- never production. Check the link first:
+-- (tztbebdzlezlhvsbylsf) ONLY -- never production. Check the link first:
 --
 --   npx supabase@latest projects list          # sorrel-dev must say linked
 --   npx supabase@latest db query --linked -f docs/dev-seed.sql
