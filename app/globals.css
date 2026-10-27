@@ -1006,6 +1006,21 @@ body {
   }
 }
 
+/* The welcome overlay's dissolve (components/WelcomeBloom.tsx). Opacity
+   only, on the one curve; 200ms is WELCOME_DISSOLVE_MS in lib/welcome.ts.
+   No transition under reduced motion: it simply goes. */
+.welcome-bloom {
+  transition: opacity 200ms var(--icon-anim-ease);
+}
+.welcome-bloom--out {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .welcome-bloom {
+    transition: none;
+  }
+}
+
 /* =====================================================================
    NAV ICON VERBS
    =====================================================================

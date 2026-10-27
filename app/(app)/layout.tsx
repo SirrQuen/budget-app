@@ -8,6 +8,7 @@ import { AppShell } from "@/components/app-shell/AppShell";
 import { identityName } from "@/lib/displayName";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { TodayProvider } from "@/components/TodayProvider";
+import { WelcomeBloom } from "@/components/WelcomeBloom";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const [user, loginResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme, timeZone, today, sessionId] =
@@ -56,6 +57,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <ThemeProvider stored={theme}>
       <TodayProvider today={today} timeZone={timeZone}>
+        {/* Above every page's loading state, so the page streams in behind
+            it. Before AppShell, so it has decided before anything inside a
+            page (DayNightMark) asks whether it played. */}
+        <WelcomeBloom userId={user.id} timeZone={timeZone} />
         <AppShell accountName={accountName} quickAdd={quickAdd} sessionId={sessionId}>
           {children}
         </AppShell>

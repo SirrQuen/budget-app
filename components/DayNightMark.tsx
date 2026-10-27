@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { SorrelFlower } from "@/components/SorrelFlower";
 import { SIGNED_IN_COOKIE } from "@/lib/auth/signedInFlag";
+import { isBloomClaimed } from "@/lib/welcomeSignals";
 
 type MarkState = "open" | "folded";
 
@@ -49,7 +50,9 @@ const HOLD_MS = 400;
  * The dashboard's Sorrel flower: open 7:00am-6:59pm, folded 7:00pm-6:59am,
  * flipping live when the clock crosses either boundary. Straight after
  * sign-in it plays fold -> hold -> reopen, then settles into the hour's
- * state. Ambient only -- decorative to assistive tech.
+ * state -- unless the welcome bloom (components/WelcomeBloom.tsx) played
+ * on this load, which supersedes it. Ambient only -- decorative to
+ * assistive tech.
  */
 export function DayNightMark({ size = 56 }: { size?: number }) {
   // null until mounted: the server can't know the viewer's local hour, and
@@ -82,8 +85,9 @@ export function DayNightMark({ size = 56 }: { size?: number }) {
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     // Under reduced motion the sign-in sequence is skipped rather than
-    // played instantly -- an instant fold/reopen is just a blink.
-    const playSignIn = consumeSignedInFlag() && !reduceMotion;
+    // played instantly -- an instant fold/reopen is just a blink. The flag
+    // is consumed either way, so it can't play on a later load.
+    const signedIn = consumeSignedInFlag() && !reduceMotion;
 
     // Every state update waits for a frame. For the sign-in sequence that's
     // load-bearing: the open state has to paint before the fold class
@@ -91,6 +95,10 @@ export function DayNightMark({ size = 56 }: { size?: number }) {
     const frames: number[] = [];
     frames.push(
       requestAnimationFrame(() => {
+        // The welcome bloom supersedes the fold: they never play together.
+        // Read here, a frame after mount, so the overlay (a layout effect in
+        // the authenticated layout) has always decided by now.
+        const playSignIn = signedIn && !isBloomClaimed();
         if (!playSignIn) {
           settle();
           return;
