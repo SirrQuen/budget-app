@@ -282,8 +282,8 @@ export type Database = {
       goals: {
         Row: {
           accountid: string | null
-          created_at: string
           completed_at: string | null
+          created_at: string
           goal_name: string
           goal_type: string
           id: string
@@ -298,8 +298,8 @@ export type Database = {
         }
         Insert: {
           accountid?: string | null
-          created_at?: string
           completed_at?: string | null
+          created_at?: string
           goal_name: string
           goal_type: string
           id?: string
@@ -314,8 +314,8 @@ export type Database = {
         }
         Update: {
           accountid?: string | null
-          created_at?: string
           completed_at?: string | null
+          created_at?: string
           goal_name?: string
           goal_type?: string
           id?: string
@@ -1337,6 +1337,10 @@ export type Database = {
       estimate_income_amount_low: {
         Args: { p_fallback_amount: number; p_recurring_id: string }
         Returns: number
+      }
+      goal_completed_at: {
+        Args: { p_current: string; p_goal_id: string; p_target: number }
+        Returns: string
       }
       is_business_day: { Args: { d: string }; Returns: boolean }
       is_spendable_account_type: { Args: { p_type: string }; Returns: boolean }
