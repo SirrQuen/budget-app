@@ -43,9 +43,9 @@ test("app/globals.css: no unresolved var() easing survives inside @keyframes", (
   });
 });
 
-// One motion signature. The flower's fold and sway are slower than the
-// nav verbs, not different: every interval eases with --icon-anim-ease.
-test("app/globals.css: the flower's fold and sway use --icon-anim-ease", () => {
+// One motion signature. The flower's fold, bloom and sway are slower than
+// the nav verbs, not different: every interval eases with --icon-anim-ease.
+test("app/globals.css: the flower's fold, bloom and sway use --icon-anim-ease", () => {
   const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
   const out = postcss([inlineKeyframeEasing()]).process(css, { from: undefined });
   const norm = (v: string) => v.replace(/\s+/g, "");
@@ -65,5 +65,5 @@ test("app/globals.css: the flower's fold and sway use --icon-anim-ease", () => {
       assert.equal(norm(decl.value), token, `@keyframes ${atRule.params} eases with ${decl.value}`);
     });
   });
-  assert.equal(flowerFrames, 11, "expected fold x5, unfold x5 and sway keyframes");
+  assert.equal(flowerFrames, 14, "expected fold x5, unfold x5, bloom x3 and sway keyframes");
 });

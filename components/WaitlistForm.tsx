@@ -8,6 +8,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { SorrelFlower } from "@/components/SorrelFlower";
 import { normaliseWaitlistEmail, WAITLIST_EMAIL_MAX } from "@/lib/waitlistValidation";
 import { PRIVACY_PATH } from "@/lib/legal";
 
@@ -30,7 +31,7 @@ export function WaitlistForm() {
   // The server result the visitor has since edited away.
   const [dismissed, setDismissed] = useState<WaitlistActionState>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
-  const successRef = useRef<HTMLParagraphElement>(null);
+  const successRef = useRef<HTMLDivElement>(null);
 
   // The form (and the button that had focus) is gone; put focus on the
   // line that replaced it, so it's read out and keyboard focus isn't lost.
@@ -38,17 +39,24 @@ export function WaitlistForm() {
     if (state?.joined) successRef.current?.focus();
   }, [state]);
 
+  // The flower blooms once, as the block mounts, and stays at rest beside
+  // the message. It is decoration: the message is announced and focused
+  // the moment it appears, never after the animation, and under reduced
+  // motion the flower simply arrives open.
   if (state?.joined) {
     return (
-      <p
+      <div
         ref={successRef}
         tabIndex={-1}
         role="status"
-        className="rounded text-base text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        className="flex items-center gap-4 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
       >
-        You&rsquo;re on the list. Sorrel will send an email to{" "}
-        <span className="font-semibold break-all">{state.joined}</span> once it launches.
-      </p>
+        <SorrelFlower size={48} state="bloom" />
+        <p className="min-w-0 text-base text-ink">
+          You&rsquo;re on the list. Sorrel will send an email to{" "}
+          <span className="font-semibold break-all">{state.joined}</span> once it launches.
+        </p>
+      </div>
     );
   }
 
