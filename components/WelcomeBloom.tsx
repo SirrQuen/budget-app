@@ -18,14 +18,13 @@ import {
   type WelcomeReason,
 } from "@/lib/welcome";
 import { onPageReady, resetPageReady, setBloomClaimed } from "@/lib/welcomeSignals";
+import { consumeFirstInput } from "@/lib/consumeFirstInput";
 
 // bloom: the flower assembling. waiting (daily only): the bloom is done
 // but the page behind isn't, so the same flower sways until it is.
 type Phase = "bloom" | "waiting" | "dissolving" | "done";
 
 type Decision = { reason: WelcomeReason; greeting: string } | null;
-
-const INPUT_EVENTS = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
 
 // The daily welcome is the dashboard's: the page that reports ready. Any
 // other landing page skips it, without marking the day.
@@ -81,8 +80,8 @@ function decide(userId: string, timeZone: string | null, name: string | null): D
  * "confirmed" (B): a successful email confirmation, signalled by
  * /auth/confirm's redirect (?welcome=confirmed). Once ever, so it bypasses
  * the day check, but it marks the day as welcomed. Any input dismisses it
- * at once, and it never takes the click: the overlay lets pointer events
- * through. Under reduced motion the flower arrives open and the message
+ * at once, and that input is consumed: the click or key that dismisses
+ * it does nothing else. Under reduced motion the flower arrives open and the message
  * appears unchanged -- here the message is the point, not decoration.
  *
  * On a load where either plays, the dashboard mark's sign-in fold doesn't.
@@ -164,15 +163,12 @@ export function WelcomeBloom({
   }, [reason]);
 
   // Confirmed only -- the daily welcome is a gate. Any input dismisses it
-  // instantly. On window, passive, never preventing the default: the click
-  // or key still does its job.
+  // instantly -- and is consumed, not passed through: a click on a dimmed
+  // overlay can't see what it would hit. First input dismisses, second
+  // acts (lib/consumeFirstInput.ts).
   useEffect(() => {
     if (reason !== "confirmed" || phase === "done") return;
-    const dismiss = () => setPhase("done");
-    for (const type of INPUT_EVENTS) window.addEventListener(type, dismiss, { passive: true });
-    return () => {
-      for (const type of INPUT_EVENTS) window.removeEventListener(type, dismiss);
-    };
+    return consumeFirstInput(window, () => setPhase("done"));
   }, [reason, phase]);
 
   if (phase === "done" || decided === null) return null;
@@ -181,8 +177,8 @@ export function WelcomeBloom({
     <div
       role="status"
       className={`welcome-bloom fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-page px-4 text-center ${
-        reason === "confirmed" ? "pointer-events-none" : ""
-      } ${phase === "dissolving" ? "welcome-bloom--out" : ""}`}
+        phase === "dissolving" ? "welcome-bloom--out" : ""
+      }`}
     >
       {/* One element throughout: the bloom's class stays on, and the sway
           is added beside it, so there's no flash of another component. */}
