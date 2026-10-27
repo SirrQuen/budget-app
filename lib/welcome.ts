@@ -21,12 +21,19 @@ export const WELCOME_COOKIE = "sorrel_welcome";
 export const WELCOME_MAX_AGE_S = 60;
 
 /**
- * `<userid>:<YYYY-MM-DD>` -- the user's calendar day this device last
- * welcomed them. Per user, so a shared browser welcomes each person. Read
- * only by the server.
+ * `YYYY-MM-DD` -- the calendar day this browser last showed the opening
+ * animation. The date and nothing else: no user id. The cookie is already
+ * per browser, so the date answers "today or not"; an id would only
+ * distinguish two people sharing a browser, where being wrong costs one
+ * missed animation -- not worth a persistent identifier. Read only by the
+ * server. Named in the privacy policy's cookie paragraph.
  */
 export const WELCOMED_ON_COOKIE = "sorrel_welcomed_on";
-export const WELCOMED_ON_MAX_AGE_S = 400 * 24 * 60 * 60;
+/**
+ * A week. It only has to tell today from not-today; anything older than
+ * yesterday says the same thing as no cookie at all.
+ */
+export const WELCOMED_ON_MAX_AGE_S = 7 * 24 * 60 * 60;
 
 /** The bloom, then the ~200ms dissolve. */
 export const WELCOME_BLOOM_MS = BLOOM_MS;
@@ -36,10 +43,6 @@ export const CONFIRMED_HOLD_MS = 2400;
 
 export function parseWelcomeReason(value: string | undefined): WelcomeReason | null {
   return value === "confirmed" ? value : null;
-}
-
-export function welcomedOnValue(userId: string, day: string): string {
-  return `${userId}:${day}`;
 }
 
 /**
