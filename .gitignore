@@ -46,3 +46,6 @@ supabase/.temp/
 
 # claude code -- local-only overrides, not shared config
 .claude/settings.local.json
+
+# Dev-only test login for local browser checks (sorrel-dev). Never commit.
+/.dev-test-user

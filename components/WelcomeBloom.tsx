@@ -12,10 +12,9 @@ import {
   type WelcomeReason,
 } from "@/lib/welcome";
 import { setBloomClaimed } from "@/lib/welcomeSignals";
+import { consumeFirstInput } from "@/lib/consumeFirstInput";
 
 type Phase = "bloom" | "dissolving" | "done";
-
-const INPUT_EVENTS = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -46,8 +45,8 @@ function decide(userId: string, timeZone: string | null): WelcomeReason | null {
  * "confirmed": a successful email confirmation, signalled by
  * /auth/confirm's redirect (?welcome=confirmed). Once ever, so it bypasses
  * the day check, but it marks the day as welcomed. Any input dismisses it
- * at once, and it never takes the click: the overlay lets pointer events
- * through. Under reduced motion the flower arrives open and the message
+ * at once, and that input is consumed: the click or key that dismisses
+ * it does nothing else. Under reduced motion the flower arrives open and the message
  * appears unchanged -- here the message is the point, not decoration.
  *
  * On a load where it plays, the dashboard mark's sign-in fold doesn't.
@@ -100,15 +99,12 @@ export function WelcomeBloom({
     }
   }, [phase]);
 
-  // Any input dismisses it instantly. Listening on window, passive, and
-  // never preventing the default: the click or key still does its job.
+  // Any input dismisses it instantly -- and is consumed, not passed
+  // through: a click on a dimmed overlay can't see what it would hit.
+  // First input dismisses, second acts (lib/consumeFirstInput.ts).
   useEffect(() => {
     if (phase === "done") return;
-    const dismiss = () => setPhase("done");
-    for (const type of INPUT_EVENTS) window.addEventListener(type, dismiss, { passive: true });
-    return () => {
-      for (const type of INPUT_EVENTS) window.removeEventListener(type, dismiss);
-    };
+    return consumeFirstInput(window, () => setPhase("done"));
   }, [phase]);
 
   if (phase === "done" || reason === null) return null;
@@ -116,7 +112,7 @@ export function WelcomeBloom({
   return (
     <div
       role="status"
-      className={`welcome-bloom pointer-events-none fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-page px-4 text-center ${
+      className={`welcome-bloom fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-page px-4 text-center ${
         phase === "dissolving" ? "welcome-bloom--out" : ""
       }`}
     >
