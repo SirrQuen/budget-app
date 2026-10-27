@@ -4,6 +4,7 @@ import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { isRecoveryLink, readOtpLink } from "@/lib/auth/confirmLink";
 import { LINK_ERRORS, linkErrorMessage } from "@/lib/auth/linkOutcome";
 import { ResendConfirmationForm } from "./resend-form";
+import { BrowserTimeZoneField } from "@/components/BrowserTimeZoneField";
 
 const TEXT_LINK =
   "rounded text-ink underline underline-offset-2 transition-colors duration-150 hover:text-action focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
@@ -36,6 +37,8 @@ export default async function ConfirmEmailPage({ searchParams }: PageProps<"/con
           <input type="hidden" name="token_hash" value={link.tokenHash} />
           <input type="hidden" name="type" value={link.type} />
           <input type="hidden" name="next" value={link.next} />
+          {/* The user's day for the welcome, before their settings have a zone. */}
+          <BrowserTimeZoneField />
           <p className="text-sm text-ink-secondary">
             {recovery
               ? "Continue to choose a new password."

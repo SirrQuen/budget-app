@@ -43,7 +43,7 @@ So the confirmation bloom plays, and the welcome bloom doesn't. Goal completion 
 
 > **The bloom supersedes the sign-in fold.** On a load where a bloom plays, the dashboard flower's sign-in fold (fold → hold → reopen, `DayNightMark`) does not. They never play together. Every other sign-in that day keeps the existing fold sequence unchanged.
 
-"One bloom per session" didn't cover the fold, because the fold isn't a bloom — it's the other sign-in animation, and without this rule a confirmed signup would get both. Mechanism: the overlay decides in a layout effect and records it (`lib/welcomeSignals.ts`); `DayNightMark` reads that a frame after it mounts, and still consumes its cookie either way.
+"One bloom per session" didn't cover the fold, because the fold isn't a bloom — it's the other sign-in animation, and without this rule a confirmed signup would get both. Mechanism: the authenticated layout reads both one-shot cookies (`sorrel_welcome`, `sorrel_signed_in`) on the server, and `components/SessionFlags.tsx` deletes them as the layout mounts -- on every app page, so an empty-state dashboard can't leave the sign-in flag behind. It offers the fold to `DayNightMark` only when no bloom plays, and only on the landing page.
 
 ---
 
@@ -102,13 +102,14 @@ Getting this backwards is the single most likely way this ships feeling slow, an
 
 ## Knowing it's the first sign-in today
 
-**Use `localStorage`, keyed to the date in the user's own timezone.** Not a database column.
+**Decided in the sign-in action, carried in cookies.** Not a database column, and not localStorage (the first build used localStorage; it was replaced, so there is one mechanism, not two).
 
 The reason is specific to this codebase: `record_login()` writing on every page load is a bug you already found and removed, and it corrupted `profiles.updated_at` on the way. A "last welcomed" write is the same shape. Don't rebuild it.
 
-- **The day is the user's calendar day.** Use the existing `useToday()` / timezone machinery, not UTC. Someone in Georgia signing in at 8pm must not get a second bloom at 8:01pm because UTC rolled over — migration 22's backfill bug came from exactly this.
-- **Failure default is "don't play."** If `localStorage` throws — private window, blocked site data — skip it. A missed flourish is nothing; one on every single login is the thing people uninstall over.
-- Wrap every read and write in try/catch.
+- **`login()` compares `sorrel_welcomed_on` (`<userid>:<day>`) to today in the user's timezone.** A different day sets the one-shot `sorrel_welcome=daily` and updates the date cookie -- at sign-in, before the bloom, so a refresh mid-bloom can't replay it.
+- **The authenticated layout reads the one-shot on the server and renders the overlay in the first render** -- in the initial HTML of a full load, in the first commit of a client navigation -- ahead of the layout's own data, which streams in behind it. A client-side overlay can't exist before hydration; that put the loader in front of the bloom, serial again. This doesn't.
+- **The day is the user's calendar day.** Their stored zone; else the zone the browser sends with the form (`BrowserTimeZoneField` -- a new user has none stored); else UTC. Someone in Georgia signing in at 8pm must not get a second bloom at 8:01pm because UTC rolled over — migration 22's backfill bug came from exactly this.
+- **Reduced motion:** the server can't know it, so the overlay is in the HTML and CSS keeps it from painting (`.welcome-bloom--gate`).
 
 The cost of this choice is that someone using a laptop and a phone on the same day sees it twice. That's an acceptable trade for not touching the write path.
 
@@ -142,7 +143,7 @@ The interstitial you just built: a GET renders the page, the button's POST calls
 
 On success, the bloom plays and the page says the account is live, then moves to the dashboard. It marks the day as welcomed, so placement A doesn't also fire.
 
-**It is the dashboard overlay — the same component as A, its copy chosen by reason.** The success redirect carries `?welcome=confirmed`; the overlay strips it from the URL as it starts, so a refresh never replays it. That flag is a **force**: it bypasses the date check entirely. B is once-ever and must never be suppressed by a date key — a user who happened to be welcomed earlier the same day (another account, a shared browser) still gets it.
+**It is the dashboard overlay — the same component as A, its copy chosen by reason.** The successful `verifyOtp` POST sets `sorrel_welcome=confirmed` unconditionally (and marks the day), and the layout renders it like A's. It is a **force**: it bypasses the date check entirely. B is once-ever and must never be suppressed by a date key — a user who happened to be welcomed earlier the same day (another account, a shared browser) still gets it.
 
 > ## Sorrel is yours.
 > You're signed in and ready to go.

@@ -1013,6 +1013,12 @@ body {
   .welcome-bloom {
     transition: none;
   }
+  /* The daily welcome is skipped entirely under reduced motion (WCAG).
+     The server can't know the preference, so the overlay is in the HTML;
+     this keeps it from ever painting, before any script runs. */
+  .welcome-bloom--gate {
+    display: none;
+  }
 }
 
 /* =====================================================================

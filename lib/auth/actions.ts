@@ -8,6 +8,8 @@ import { authErrorMessage } from "@/lib/auth/errors";
 import { SIGNED_IN_COOKIE, SIGNED_IN_MAX_AGE_S } from "@/lib/auth/signedInFlag";
 import { markSessionStart, clearSessionStart } from "@/lib/auth/firstSession";
 import { createAccount, type SignupActionState } from "@/lib/auth/signup";
+import { sessionTimeZone, setWelcome } from "@/lib/auth/welcomeCookies";
+import { WELCOMED_ON_COOKIE, WELCOME_DAILY_ENABLED, shouldWelcomeToday, welcomeDay } from "@/lib/welcome";
 
 export type ActionState = { error?: string; success?: string } | undefined;
 
@@ -23,7 +25,7 @@ export async function login(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
     return { error: authErrorMessage(error) };
@@ -32,12 +34,27 @@ export async function login(
   // Before the redirect: the dashboard load that follows stamps lastlogin.
   await markSessionStart(supabase);
 
-  // The dashboard's mark plays its sign-in fold once, on this flag.
-  (await cookies()).set(SIGNED_IN_COOKIE, "1", {
+  const jar = await cookies();
+
+  // The dashboard's mark plays its sign-in fold once, on this flag --
+  // unless a welcome bloom plays, which supersedes it (SessionFlags).
+  jar.set(SIGNED_IN_COOKIE, "1", {
     maxAge: SIGNED_IN_MAX_AGE_S,
     path: "/",
     sameSite: "lax",
   });
+
+  // The daily welcome (placement A): the first sign-in of the user's day
+  // on this device. Decided here, in the action, against the user's own
+  // calendar day -- never UTC, never a database column. The layout renders
+  // it from the one-shot cookie.
+  if (WELCOME_DAILY_ENABLED) {
+    const tz = formData.get("tz");
+    const day = welcomeDay(await sessionTimeZone(supabase), typeof tz === "string" ? tz : null, new Date());
+    if (shouldWelcomeToday(jar.get(WELCOMED_ON_COOKIE)?.value, data.user.id, day)) {
+      setWelcome(jar, "daily", data.user.id, day);
+    }
+  }
 
   revalidatePath("/", "layout");
   redirect("/dashboard");

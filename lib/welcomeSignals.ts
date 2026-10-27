@@ -1,22 +1,36 @@
-// Page-lifetime signals between the welcome overlay (mounted by the
-// authenticated layout) and the pages under it. Module state, not React
-// context: DayNightMark and the dashboard's ready marker sit inside
-// streamed page content, the overlay outside it.
+// Page-lifetime signals from the authenticated layout to the pages under
+// it. Module state, not React context: the layout's consumer
+// (components/SessionFlags.tsx) mounts outside the streamed page content
+// that DayNightMark lives in.
 
-let bloomClaimed = false;
+let signInFold = false;
+let landingPath: string | null = null;
 
 /**
- * Set by the welcome overlay when it decides, on its mount, whether it
- * plays. The bloom supersedes the sign-in fold: on a load where it plays,
- * DayNightMark settles without the fold. Reset on every overlay mount, so
- * a later sign-in the same day gets its fold back.
+ * Set once per layout mount from the server's read of the sign-in cookie:
+ * the fold plays on this landing only if the user just signed in AND no
+ * welcome bloom is playing -- the bloom supersedes it, they never play
+ * together.
  */
-export function setBloomClaimed(claimed: boolean) {
-  bloomClaimed = claimed;
+export function offerSignInFold(play: boolean, path: string) {
+  signInFold = play;
+  landingPath = path;
 }
 
-export function isBloomClaimed(): boolean {
-  return bloomClaimed;
+/** Leaving the landing page drops an unclaimed fold: it never plays later. */
+export function dropSignInFold() {
+  signInFold = false;
+}
+
+/**
+ * DayNightMark's one read: true at most once, and only on the page the
+ * user landed on. An empty-state dashboard that never mounts the mark
+ * leaves nothing behind for a later dashboard.
+ */
+export function takeSignInFold(path: string): boolean {
+  const play = signInFold && path === landingPath;
+  signInFold = false;
+  return play;
 }
 
 // The page behind the daily welcome reports when its data has landed

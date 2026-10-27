@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { takeSignupEmail } from "@/lib/auth/signupEmailHandoff";
+import { BrowserTimeZoneField } from "@/components/BrowserTimeZoneField";
 
 export function LoginForm({ initialError }: { initialError?: string }) {
   const [state, action, pending, submit] = useActionForm<ActionState>(
@@ -32,6 +33,8 @@ export function LoginForm({ initialError }: { initialError?: string }) {
 
   return (
     <form action={action} onSubmit={submit} className="flex flex-col gap-4">
+      {/* The user's day for the daily welcome, before their settings have a zone. */}
+      <BrowserTimeZoneField />
       <FormField label="Email" htmlFor="email" required>
         <Input
           ref={emailRef}
