@@ -37,7 +37,11 @@ function prefersReducedMotion(): boolean {
 
 // Highest milestone newly crossed between two readings -- a jump from 10%
 // to 80% in one contribution names 75, not 25, and a drop never fires one.
+// A complete goal fires none: the completion panel owns that moment, and
+// without this a goal last seen at 0% announced "three-quarters there" at
+// 100% (seen on reload after completing one).
 function crossedMilestone(from: number, to: number): Milestone | null {
+  if (to >= 100) return null;
   let hit: Milestone | null = null;
   for (const m of MILESTONES) {
     if (from < m && to >= m) hit = m;
