@@ -19,8 +19,15 @@ import { thrownErrorMessage } from "@/lib/thrownError";
 //    So a returned "That name is taken" would also blank the name. `submit`
 //    takes the submission over in onSubmit and dispatches it itself, which
 //    React leaves alone: it sees defaultPrevented plus a transition and only
-//    tracks pending state (useFormStatus still works). `action` stays on the
-//    form so a submit before hydration still posts natively.
+//    tracks pending state (useFormStatus still works).
+//
+// These forms need JavaScript to submit -- before hydration, too. Because
+// the action is wrapped (guardAction), React can't render it as a native
+// form submission and puts a javascript: placeholder in the form's
+// `action` instead: an Enter press before hydration does nothing. Keeping
+// `action` on the form doesn't change that. A known limitation, deferred
+// past the beta (docs/phase-7-findings.md, "Known limitation: forms
+// require JavaScript").
 //
 // Nothing here resets the form on success. Forms that stay open after a
 // save reset themselves (AddTransactionForm, GoalRow, QuickAddBar); the rest

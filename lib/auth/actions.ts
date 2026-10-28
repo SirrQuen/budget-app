@@ -8,8 +8,16 @@ import { authErrorMessage } from "@/lib/auth/errors";
 import { SIGNED_IN_COOKIE, SIGNED_IN_MAX_AGE_S } from "@/lib/auth/signedInFlag";
 import { markSessionStart, clearSessionStart } from "@/lib/auth/firstSession";
 import { createAccount, type SignupActionState } from "@/lib/auth/signup";
-import { sessionTimeZone, setWelcome } from "@/lib/auth/welcomeCookies";
-import { WELCOMED_ON_COOKIE, WELCOME_DAILY_ENABLED, shouldWelcomeToday, welcomeDay } from "@/lib/welcome";
+import { sessionGreetingName, sessionTimeZone, setDailyWelcome } from "@/lib/auth/welcomeCookies";
+import {
+  WELCOMED_ON_COOKIE,
+  WELCOME_DAILY_ENABLED,
+  dailyGreeting,
+  hourInZone,
+  shouldWelcomeToday,
+  welcomeDay,
+  welcomeZone,
+} from "@/lib/welcome";
 
 export type ActionState = { error?: string; success?: string } | undefined;
 
@@ -45,17 +53,28 @@ export async function login(
   });
 
   // The daily welcome (placement A): the first sign-in of the user's day
-  // on this device. Decided here, in the action, against the user's own
-  // calendar day -- never UTC, never a database column. The layout renders
-  // it from the one-shot cookie.
+  // in this browser, decided here against the user's own calendar day --
+  // never UTC, never a database column -- and marked now, before anything
+  // plays. The greeting rides back in a one-shot cookie on this response;
+  // the welcome host picks it up as the headers arrive, so the bloom
+  // starts before the redirect's page does (lib/welcome.ts).
   if (WELCOME_DAILY_ENABLED) {
     const tz = formData.get("tz");
-    const day = welcomeDay(await sessionTimeZone(supabase), typeof tz === "string" ? tz : null, new Date());
+    const formZone = typeof tz === "string" ? tz : null;
+    // Both reads at once: the name is only used on a new day, but reading
+    // it in series added a round trip to the welcome's sign-in response
+    // (~300ms on dev, measured), delaying the redirect's page behind it.
+    const [storedZone, name] = await Promise.all([sessionTimeZone(supabase), sessionGreetingName(supabase)]);
+    const now = new Date();
+    const day = welcomeDay(storedZone, formZone, now);
     if (shouldWelcomeToday(jar.get(WELCOMED_ON_COOKIE)?.value, day)) {
-      setWelcome(jar, "daily", day);
+      setDailyWelcome(jar, dailyGreeting(hourInZone(welcomeZone(storedZone, formZone), now), name), day);
     }
   }
 
+  // A server redirect: the dashboard comes back in this same response.
+  // Returning a value and navigating from the client cost every sign-in a
+  // second round trip (+0.9s on Slow 4G, measured), bloom or not.
   revalidatePath("/", "layout");
   redirect("/dashboard");
 }

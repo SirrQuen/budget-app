@@ -1,52 +1,34 @@
 import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { getSessionId, requireUser } from "@/lib/auth/dal";
-import { getProfile, recordLogin } from "@/lib/db/profile";
+import { recordLogin } from "@/lib/db/profile";
 import { listAccounts } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { getMostRecentTransactionAccountId } from "@/lib/db/transactions";
 import { getTheme, getTimeZone, getToday } from "@/lib/db/settings";
 import { AppShell } from "@/components/app-shell/AppShell";
-import { greetingName, identityName } from "@/lib/displayName";
+import { identityName } from "@/lib/displayName";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { TodayProvider } from "@/components/TodayProvider";
-import { WelcomeBloom } from "@/components/WelcomeBloom";
 import { SessionFlags } from "@/components/SessionFlags";
 import { SorrelLoader } from "@/components/SorrelLoader";
 import { SIGNED_IN_COOKIE } from "@/lib/auth/signedInFlag";
-import { WELCOME_COOKIE, dailyGreeting, hourInZone, parseWelcomeReason } from "@/lib/welcome";
 
-// The two one-shot sign-in cookies are read here, on the server, before any
-// of the app's data: the welcome overlay renders straight away -- in the
-// initial HTML of a full load, in the first commit of a client navigation
-// -- while the frame below streams in behind it. Nothing about the overlay
-// waits on hydration or on the frame's reads. SessionFlags deletes both
-// cookies as the layout mounts.
+// The welcome overlay is NOT here: it has one host, in the root layout
+// (components/WelcomeBloom). This layout only consumes the sign-in flag,
+// read on the server before any of the app's data, so the frame below
+// streams in behind whatever is showing.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const jar = await cookies();
-  const welcome = parseWelcomeReason(jar.get(WELCOME_COOKIE)?.value);
   const signedIn = jar.get(SIGNED_IN_COOKIE)?.value === "1";
-
-  // The daily greeting needs a name and the user's hour: two small reads,
-  // only on the one load a day that shows it. Read-only -- getProfile, not
-  // recordLogin. No name means no name in the greeting, never "there".
-  let greeting: string | null = null;
-  if (welcome === "daily") {
-    const [profile, timeZone] = await Promise.all([getProfile(), getTimeZone()]);
-    const name = profile.data
-      ? greetingName({ firstName: profile.data.first_name, preferredName: profile.data.preferred_name })
-      : null;
-    greeting = dailyGreeting(hourInZone(timeZone, new Date()), name);
-  }
 
   return (
     <>
-      <SessionFlags signedIn={signedIn} welcoming={welcome !== null} />
-      <WelcomeBloom reason={welcome} greeting={greeting} />
+      <SessionFlags signedIn={signedIn} />
       {/* What the root app/loading.tsx used to show while this layout
           awaited its reads. That boundary sat ABOVE this layout, so a slow
           first render painted the loader before the overlay; it's gone,
-          and this one sits under the overlay instead. */}
+          and this one sits under the root layout's overlay instead. */}
       <Suspense fallback={<SorrelLoader className="min-h-dvh flex-1" />}>
         <AppFrame>{children}</AppFrame>
       </Suspense>

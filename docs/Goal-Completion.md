@@ -43,7 +43,7 @@ So the confirmation bloom plays, and the welcome bloom doesn't. Goal completion 
 
 > **The bloom supersedes the sign-in fold.** On a load where a bloom plays, the dashboard flower's sign-in fold (fold → hold → reopen, `DayNightMark`) does not. They never play together. Every other sign-in that day keeps the existing fold sequence unchanged.
 
-"One bloom per session" didn't cover the fold, because the fold isn't a bloom — it's the other sign-in animation, and without this rule a confirmed signup would get both. Mechanism: the authenticated layout reads both one-shot cookies (`sorrel_welcome`, `sorrel_signed_in`) on the server, and `components/SessionFlags.tsx` deletes them as the layout mounts -- on every app page, so an empty-state dashboard can't leave the sign-in flag behind. It offers the fold to `DayNightMark` only when no bloom plays, and only on the landing page.
+"One bloom per session" didn't cover the fold, because the fold isn't a bloom — it's the other sign-in animation, and without this rule a confirmed signup would get both. Mechanism: the welcome host (root layout) records that a bloom is playing (`lib/welcomeSignals.ts`) -- for B as it hydrates, ahead of the page content; for A the moment the sign-in response lands, before the app renders. The authenticated layout reads `sorrel_signed_in` on the server, and `components/SessionFlags.tsx` deletes it as the layout mounts -- on every app page, so an empty-state dashboard can't leave it behind -- and offers the fold to `DayNightMark` only when no bloom is playing, and only on the landing page.
 
 ---
 
@@ -102,12 +102,13 @@ Getting this backwards is the single most likely way this ships feeling slow, an
 
 ## Knowing it's the first sign-in today
 
-**Decided in the sign-in action, carried in cookies.** Not a database column, and not localStorage (the first build used localStorage; it was replaced, so there is one mechanism, not two).
+**Decided in the sign-in action, carried in cookies, shown by one host.** Not a database column, and not localStorage (the first build used localStorage; it was replaced, so there is one mechanism, not two).
 
 The reason is specific to this codebase: `record_login()` writing on every page load is a bug you already found and removed, and it corrupted `profiles.updated_at` on the way. A "last welcomed" write is the same shape. Don't rebuild it.
 
-- **`login()` compares `sorrel_welcomed_on` (the date alone, kept a week) to today in the user's timezone.** A different day sets the one-shot `sorrel_welcome=daily` and updates the date cookie -- at sign-in, before the bloom, so a refresh mid-bloom can't replay it.
-- **The authenticated layout reads the one-shot on the server and renders the overlay in the first render** -- in the initial HTML of a full load, in the first commit of a client navigation -- ahead of the layout's own data, which streams in behind it. A client-side overlay can't exist before hydration; that put the loader in front of the bloom, serial again. This doesn't.
+- **`login()` compares `sorrel_welcomed_on` (the date alone, kept a week) to today in the user's timezone.** A different day updates the date cookie -- at sign-in, before the bloom, so a refresh mid-bloom can't replay it -- and sets the one-shot `sorrel_welcome=daily:<greeting>` (the user's name, for at most 60 seconds). Then it **redirects**: the dashboard comes back in the same response, one round trip.
+- **One host, in the root layout only** (`components/WelcomeBloom.tsx`). The login form tells it a sign-in is in flight; the host watches for the cookie, which lands with the response's headers, and starts the bloom then -- before the redirect's page or the app's scripts arrive. Measured on Slow 4G (production build): the bloom starts ~65ms after the sign-in response's first byte and finishes before the dashboard content arrives; its whole cost is the dissolve, ~0.35s.
+- **Two designs were measured and rejected.** The overlay rendered by the authenticated layout waited on that layout's scripts on the sign-in path, so it ran after the load: +0.8s. `login()` returning the greeting and the form navigating made the bloom concurrent, but cost every sign-in a second round trip, +0.9s, bloom or not -- and people sign in many times a day (15-minute idle timeout) and bloom once.
 - **The day is the user's calendar day.** Their stored zone; else the zone the browser sends with the form (`BrowserTimeZoneField` -- a new user has none stored); else UTC. Someone in Georgia signing in at 8pm must not get a second bloom at 8:01pm because UTC rolled over — migration 22's backfill bug came from exactly this.
 - **Reduced motion:** the server can't know it, so the overlay is in the HTML and CSS keeps it from painting (`.welcome-bloom--gate`).
 
@@ -143,7 +144,7 @@ The interstitial you just built: a GET renders the page, the button's POST calls
 
 On success, the bloom plays and the page says the account is live, then moves to the dashboard. It marks the day as welcomed, so placement A doesn't also fire.
 
-**It is the dashboard overlay — the same component as A, its copy chosen by reason.** The successful `verifyOtp` POST sets `sorrel_welcome=confirmed` unconditionally (and marks the day), and the layout renders it like A's. It is a **force**: it bypasses the date check entirely. B is once-ever and must never be suppressed by a date key — a user who happened to be welcomed earlier the same day (another account, a shared browser) still gets it.
+**It is the same host as A, its copy chosen by reason.** The successful `verifyOtp` POST sets `sorrel_welcome=confirmed` unconditionally (and marks the day). The root layout stays static -- the server never reads the cookie -- so the host's markup is always in the HTML, hidden by the `hidden` attribute, and an inline script (`WELCOME_SCRIPT`, `THEME_SCRIPT`'s pattern) reveals it before first paint. It fails closed: if that script doesn't run or throws, nothing shows. It is a **force**: it bypasses the date check entirely. B is once-ever and must never be suppressed by a date key — a user who happened to be welcomed earlier the same day (another account, a shared browser) still gets it.
 
 > ## Sorrel is yours.
 > You're signed in and ready to go.

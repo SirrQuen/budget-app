@@ -5,12 +5,27 @@ import { isValidTimeZone, todayInZone } from "@/lib/date";
 // the app on the first sign-in of the day (placement A) and on a
 // successful email confirmation (B). See docs/Goal-Completion.md.
 //
-// The reason rides in a one-shot cookie, set by the action that signed the
-// user in and read by the authenticated layout on the server -- so the
-// overlay is in the first render of the app, never waiting on hydration.
-// components/SessionFlags.tsx deletes the cookie as the layout mounts.
-// Cookies, not localStorage and never a database column: per device, no
-// write on any page load (record_login() is the shape this avoids).
+// One host, one component: the overlay lives in the ROOT layout only
+// (components/WelcomeBloom.tsx), so it is on every page and survives the
+// move from /login into the app. Both inputs arrive in one one-shot
+// cookie, sorrel_welcome:
+//
+//   A  "daily:<greeting>", set by login() when it's the user's first
+//      sign-in of the day (decided against the date cookie). login() still
+//      ends in a server redirect -- the dashboard comes back in the same
+//      response, one round trip. The cookie arrives with that response's
+//      headers, before the app's scripts; the host, told by the login form
+//      that a sign-in is in flight, watches for it and starts the bloom
+//      the moment it lands. (A returned value instead cost every sign-in a
+//      second round trip: +0.9s on Slow 4G, bloom or not.)
+//   B  "confirmed", set by /auth/confirm. The root layout is static, so
+//      the server can't read it; the overlay is always in the HTML,
+//      hidden, and WELCOME_SCRIPT reveals it before first paint --
+//      THEME_SCRIPT's pattern.
+//
+// The host clears the cookie either way. Cookies, never localStorage or a
+// database column: per device, no write on any page load (record_login()
+// is the shape this avoids).
 
 /**
  * Placement A, the daily welcome, in one line. Ask two testers in week two
@@ -24,10 +39,66 @@ export const WELCOME_DISSOLVE_MS = 200;
 
 export type WelcomeReason = "confirmed" | "daily";
 
-/** One-shot: why to welcome on the next authenticated render. */
+/**
+ * One-shot: "confirmed" (B) or "daily:<greeting>" (A). Readable by the page
+ * (not httpOnly). The daily value carries display text -- the user's
+ * greeting name -- for at most WELCOME_MAX_AGE_S, and the host clears it
+ * on arrival. Named in the privacy policy's cookie paragraph.
+ */
 export const WELCOME_COOKIE = "sorrel_welcome";
-/** Short: an unconsumed welcome must not surface on some later visit. */
+const DAILY_PREFIX = "daily:";
+
+/** The cookie's value for A. */
+export function dailyWelcomeValue(greeting: string): string {
+  return DAILY_PREFIX + greeting;
+}
+
+export type WelcomeCookie = { reason: "confirmed" } | { reason: "daily"; greeting: string };
+
+/**
+ * Reads sorrel_welcome out of document.cookie. Next writes the value
+ * URI-encoded. Anything unrecognised -- or undecodable -- is no welcome.
+ */
+export function parseWelcomeCookie(cookieHeader: string): WelcomeCookie | null {
+  const raw = cookieHeader
+    .split(";")
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(`${WELCOME_COOKIE}=`))
+    ?.slice(WELCOME_COOKIE.length + 1);
+  if (raw === undefined) return null;
+  let value: string;
+  try {
+    value = decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
+  if (value === "confirmed") return { reason: "confirmed" };
+  if (value.startsWith(DAILY_PREFIX) && value.length > DAILY_PREFIX.length) {
+    return { reason: "daily", greeting: value.slice(DAILY_PREFIX.length) };
+  }
+  return null;
+}
+/**
+ * It only has to survive one navigation. The host clears it on hydration;
+ * if hydration never happens, this keeps it from firing on some later load.
+ */
 export const WELCOME_MAX_AGE_S = 60;
+
+/** The host's element: the one the pre-paint script reveals. */
+export const WELCOME_OVERLAY_ID = "welcome-bloom";
+
+/**
+ * Runs inline, right after the host's markup and before first paint, on
+ * every full page load. Reveals the overlay only for an exact
+ * sorrel_welcome=confirmed. Fails CLOSED: anything that throws leaves it
+ * hidden -- a missed animation costs nothing; a spurious welcome on a
+ * public page is a bug people screenshot. It reveals regardless of the
+ * motion preference: B shows under reduced motion (flower at rest); CSS
+ * gates only the animation.
+ */
+export const WELCOME_SCRIPT = `(function(){try{if(/(?:^|;\\s*)${WELCOME_COOKIE}=confirmed(?:;|$)/.test(document.cookie)){var e=document.getElementById(${JSON.stringify(
+  WELCOME_OVERLAY_ID,
+)});if(e){e.removeAttribute("hidden")}}}catch(e){}})();`;
 
 /**
  * `YYYY-MM-DD` -- the calendar day this browser last showed the opening
@@ -58,10 +129,6 @@ export const CONFIRMED_HOLD_MS = 2400;
  */
 export const DAILY_READY_TIMEOUT_MS = 8000;
 
-export function parseWelcomeReason(value: string | undefined): WelcomeReason | null {
-  return value === "confirmed" || value === "daily" ? value : null;
-}
-
 /**
  * The daily welcome's decision, made in the sign-in action: welcome when
  * this browser hasn't shown the animation on the user's current day. A
@@ -72,13 +139,17 @@ export function shouldWelcomeToday(welcomedOn: string | undefined, day: string):
 }
 
 /**
- * The day a welcome is keyed to: the user's stored zone, else the zone the
+ * The zone a welcome is keyed to: the user's stored zone, else the zone the
  * browser sent with the form (a brand-new user has no stored zone until
- * TodayProvider reports one), else UTC. Never the server's clock zone.
+ * TodayProvider reports one), else null -- UTC. Never the server's clock.
  */
+export function welcomeZone(storedZone: string | null, browserZone: string | null): string | null {
+  return storedZone ?? (browserZone && isValidTimeZone(browserZone) ? browserZone : null);
+}
+
+/** The user's calendar day in that zone. */
 export function welcomeDay(storedZone: string | null, browserZone: string | null, now: Date): string {
-  const formZone = browserZone && isValidTimeZone(browserZone) ? browserZone : null;
-  return todayInZone(storedZone ?? formZone, now);
+  return todayInZone(welcomeZone(storedZone, browserZone), now);
 }
 
 /** Deletes a one-shot cookie from the browser. */

@@ -3,8 +3,8 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { SIGNED_IN_COOKIE } from "@/lib/auth/signedInFlag";
-import { WELCOME_COOKIE, clearCookieScript } from "@/lib/welcome";
-import { dropSignInFold, offerSignInFold } from "@/lib/welcomeSignals";
+import { clearCookieScript } from "@/lib/welcome";
+import { dropSignInFold, isWelcomeActive, offerSignInFold } from "@/lib/welcomeSignals";
 
 /**
  * Consumes the two one-shot sign-in cookies, in one place: the
@@ -18,7 +18,7 @@ import { dropSignInFold, offerSignInFold } from "@/lib/welcomeSignals";
  * DayNightMark only when no welcome bloom plays: the bloom supersedes it.
  * Renders nothing.
  */
-export function SessionFlags({ signedIn, welcoming }: { signedIn: boolean; welcoming: boolean }) {
+export function SessionFlags({ signedIn }: { signedIn: boolean }) {
   const pathname = usePathname();
   const landing = useRef<string | null>(null);
 
@@ -27,9 +27,11 @@ export function SessionFlags({ signedIn, welcoming }: { signedIn: boolean; welco
   useLayoutEffect(() => {
     if (landing.current !== null) return;
     landing.current = pathname;
-    offerSignInFold(signedIn && !welcoming, pathname);
+    // The welcome host (root layout) has decided by now: it renders before
+    // the page content, and for A it was told before the login form
+    // navigated.
+    offerSignInFold(signedIn && !isWelcomeActive(), pathname);
     if (signedIn) document.cookie = clearCookieScript(SIGNED_IN_COOKIE);
-    if (welcoming) document.cookie = clearCookieScript(WELCOME_COOKIE);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on the landing render
   }, []);
 

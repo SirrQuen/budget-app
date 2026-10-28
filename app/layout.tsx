@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { THEME_SCRIPT } from "@/lib/theme";
+import { WELCOME_SCRIPT } from "@/lib/welcome";
+import { WelcomeBloom } from "@/components/WelcomeBloom";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -63,6 +65,21 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           caller to inject.
         */}
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        {/*
+          The welcome (docs/Goal-Completion.md): one host, here only, on
+          every page -- hidden by its `hidden` attribute until something
+          shows it. Before the page content, so its layout effect runs
+          before the authenticated layout's SessionFlags.
+
+          WELCOME_SCRIPT follows it directly, so the element is parsed when
+          the script runs: it reveals the host before first paint when the
+          one-shot sorrel_welcome=confirmed cookie is present (B). The root
+          layout stays static -- the server never reads the cookie -- the
+          same way THEME_SCRIPT handles the theme. A module constant, so
+          nothing here for a caller to inject.
+        */}
+        <WelcomeBloom />
+        <script dangerouslySetInnerHTML={{ __html: WELCOME_SCRIPT }} />
         {children}
       </body>
     </html>
