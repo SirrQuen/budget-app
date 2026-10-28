@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import { SIGNED_IN_COOKIE, SIGNED_IN_MAX_AGE_S } from "@/lib/auth/signedInFlag";
 import { welcomeDay } from "@/lib/welcome";
-import { sessionTimeZone, setWelcome } from "@/lib/auth/welcomeCookies";
+import { sessionTimeZone, setConfirmedWelcome } from "@/lib/auth/welcomeCookies";
 import { markSessionStart } from "@/lib/auth/firstSession";
 import { confirmFailure } from "@/lib/auth/errors";
 import { linkOutcomePath } from "@/lib/auth/linkOutcome";
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
     // Every failure below goes to its honest outcome page without it.
     if (!isRecovery && data.user) {
       const day = welcomeDay(await sessionTimeZone(supabase), field("tz"), new Date());
-      setWelcome(await cookies(), "confirmed", day);
+      setConfirmedWelcome(await cookies(), day);
     }
     return seeOther(link.next);
   }

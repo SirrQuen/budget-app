@@ -282,10 +282,12 @@ export type Database = {
       goals: {
         Row: {
           accountid: string | null
+          completed_at: string | null
           created_at: string
           goal_name: string
           goal_type: string
           id: string
+          is_active: boolean
           monthly_contribution: number | null
           status: string
           target_amount: number
@@ -296,10 +298,12 @@ export type Database = {
         }
         Insert: {
           accountid?: string | null
+          completed_at?: string | null
           created_at?: string
           goal_name: string
           goal_type: string
           id?: string
+          is_active?: boolean
           monthly_contribution?: number | null
           status?: string
           target_amount: number
@@ -310,10 +314,12 @@ export type Database = {
         }
         Update: {
           accountid?: string | null
+          completed_at?: string | null
           created_at?: string
           goal_name?: string
           goal_type?: string
           id?: string
+          is_active?: boolean
           monthly_contribution?: number | null
           status?: string
           target_amount?: number
@@ -983,11 +989,13 @@ export type Database = {
       v_goal_progress: {
         Row: {
           accountid: string | null
+          completed_at: string | null
           contributed_amount: number | null
           contribution_count: number | null
           goal_id: string | null
           goal_name: string | null
           goal_type: string | null
+          is_active: boolean | null
           is_on_track: boolean | null
           last_contribution_date: string | null
           monthly_contribution: number | null
@@ -1329,6 +1337,10 @@ export type Database = {
       estimate_income_amount_low: {
         Args: { p_fallback_amount: number; p_recurring_id: string }
         Returns: number
+      }
+      goal_completed_at: {
+        Args: { p_current: string; p_goal_id: string; p_target: number }
+        Returns: string
       }
       is_business_day: { Args: { d: string }; Returns: boolean }
       is_spendable_account_type: { Args: { p_type: string }; Returns: boolean }

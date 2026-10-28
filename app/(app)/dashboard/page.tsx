@@ -39,6 +39,7 @@ import { SectionError } from "./SectionError";
 import { LoadError } from "@/components/ui/LoadError";
 import { NoAccountsView, NoTransactionsView } from "./DashboardOnboarding";
 import { DayNightMark } from "@/components/DayNightMark";
+import { WelcomeReady } from "@/components/WelcomeReady";
 
 // Auth is already enforced by app/(app)/layout.tsx's requireUser() before
 // this page renders.
@@ -109,18 +110,26 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     : "full";
 
   if (stage === "no-accounts") {
-    return <NoAccountsView welcome={welcome} />;
+    return (
+      <>
+        <WelcomeReady />
+        <NoAccountsView welcome={welcome} />
+      </>
+    );
   }
 
   if (stage === "no-transactions") {
     return (
-      <NoTransactionsView
-        welcome={welcome}
-        accounts={balancesResult.data ?? []}
-        accountsError={balancesResult.error}
-        netWorth={netWorthResult.data?.net_worth ?? null}
-        netWorthError={netWorthResult.error}
-      />
+      <>
+        <WelcomeReady />
+        <NoTransactionsView
+          welcome={welcome}
+          accounts={balancesResult.data ?? []}
+          accountsError={balancesResult.error}
+          netWorth={netWorthResult.data?.net_worth ?? null}
+          netWorthError={netWorthResult.error}
+        />
+      </>
     );
   }
 
@@ -255,6 +264,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
 
   return (
     <div className="flex flex-col gap-10">
+      {/* The data has landed: the daily welcome can dissolve onto this. */}
+      <WelcomeReady />
       {/* ── Right now: as-of-today and forward-looking; not scoped by the filter ── */}
       <section className="flex flex-col gap-6" aria-labelledby="dash-right-now">
         <PageHeader title="Dashboard" description={welcome} />

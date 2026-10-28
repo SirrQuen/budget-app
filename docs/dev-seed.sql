@@ -22,7 +22,7 @@
 
 do $$
 declare
-  u        constant uuid := '0bc925a0-3fcc-4d14-8355-b97f0cc8525a';
+  u        constant uuid := '7e9a84e3-90b3-4cca-b6d1-d640128a77d8';
   chk      uuid := gen_random_uuid();
   sav      uuid := gen_random_uuid();
   card     uuid := gen_random_uuid();
@@ -117,7 +117,7 @@ begin
 end
 $$;
 
-select (select count(*) from public.accounts where userid = '0bc925a0-3fcc-4d14-8355-b97f0cc8525a') as accounts,
-       (select count(*) from public.transactions where userid = '0bc925a0-3fcc-4d14-8355-b97f0cc8525a') as transactions,
-       (select count(*) from public.recurring_transactions where userid = '0bc925a0-3fcc-4d14-8355-b97f0cc8525a') as schedules,
-       (select count(*) from public.goals where userid = '0bc925a0-3fcc-4d14-8355-b97f0cc8525a') as goals;
+select (select count(*) from public.accounts where userid = '7e9a84e3-90b3-4cca-b6d1-d640128a77d8') as accounts,
+       (select count(*) from public.transactions where userid = '7e9a84e3-90b3-4cca-b6d1-d640128a77d8') as transactions,
+       (select count(*) from public.recurring_transactions where userid = '7e9a84e3-90b3-4cca-b6d1-d640128a77d8') as schedules,
+       (select count(*) from public.goals where userid = '7e9a84e3-90b3-4cca-b6d1-d640128a77d8') as goals;

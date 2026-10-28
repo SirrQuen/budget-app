@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useActionForm } from "@/components/useActionForm";
 import { createGoalAction, updateGoalAction, type ActionState } from "@/lib/actions/goals";
+import type { GoalCompletion } from "@/lib/goalCompletion";
 import { GOAL_TYPES } from "@/lib/goalOptions";
 import { FormField, useFieldId } from "@/components/ui/FormField";
 import { Input, FIELD_CLASS } from "@/components/ui/Input";
@@ -27,10 +28,13 @@ export function GoalForm({
   goal,
   onSuccess,
   onCancel,
+  onCompleted,
 }: {
   goal?: EditableGoal;
   onSuccess: () => void;
   onCancel: () => void;
+  /** The save completed the goal (a lowered target): show the panel. */
+  onCompleted?: (completion: GoalCompletion) => void;
 }) {
   const [state, action, pending, submit] = useActionForm<ActionState>(
     goal ? updateGoalAction : createGoalAction,
@@ -42,10 +46,11 @@ export function GoalForm({
 
   useEffect(() => {
     if (wasPending.current && !pending && !state?.error) {
+      if (state?.completed) onCompleted?.(state.completed);
       onSuccess();
     }
     wasPending.current = pending;
-  }, [pending, state, onSuccess]);
+  }, [pending, state, onSuccess, onCompleted]);
 
   return (
     <form

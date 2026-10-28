@@ -527,6 +527,25 @@ Source: `docs/legal/privacy-and-terms.md` (rendered by `lib/legal.ts`).
   the theme preference is not a cookie -- it's local storage, as the
   policy's next sentence already says -- so the cookie sentence doesn't
   claim it.)
+- **Privacy policy, revised again 2026-10-27:** the cookie paragraph now
+  also says a cookie may, "for up to a minute as you sign in, carry the
+  name that animation greets you by". This revision added a **transient
+  first-party cookie carrying a display name for up to 60 seconds**:
+  `sorrel_welcome=daily:<greeting>` -- e.g. "Good evening, Matt." -- set
+  by login() on the first sign-in of the day, read by the page as the
+  sign-in response arrives so the opening animation can start before the
+  app loads, and cleared the moment it's read (60-second max-age as a
+  backstop). "Last updated" stays October 27, 2026: same day as the
+  previous revision. **Not a material change; no tester notification
+  sent.** Reasoning, so the judgment can be reviewed: it is none of the
+  three triggers (a new processor, a bank connection, changed deletion
+  behaviour). The name is the user's own preferred or first name, shown
+  back to that same user on their own device; it is first-party, travels
+  only between their browser and mysorrel.com, is not used for tracking
+  or analytics, and changes nothing about what Sorrel holds -- the name
+  is already in their profile. What made the user id wrong in
+  `sorrel_welcomed_on` was 400-day persistence, not that it was personal;
+  display text that exists for under a minute is a different thing.
 - **Terms of service:** published 2026-10-12, unchanged since.
 - **Operator:** MW Cyber Architects LLC. **Contact:** hello@mysorrel.com.
 
@@ -540,6 +559,28 @@ material change takes effect. Each of these triggers it:
 Bump the policy's "Last updated" date with any revision. The obligation
 starts when the first tester account exists. As of 2026-10-20 nobody has
 signed up, so nothing is owed yet.
+
+## Known limitation: forms require JavaScript (2026-10-27)
+
+**Sign-in and every `useActionForm` form need JavaScript to submit.**
+`useActionForm` wraps each server action in `guardAction` (a client
+function) so a thrown action stays an inline error. React can only render
+a form as a native, no-JS submission when its `action` is the server action
+reference itself; a client wrapper isn't one, so the server-rendered form
+carries React's placeholder, `action="javascript:throw new Error('React form
+unexpectedly submitted.')"`. Found while verifying sign-in on 2026-10-27,
+with scripts disabled in headless Chrome: Enter did nothing.
+
+- **Practical effect:** a press of Enter (or the submit button) before the
+  page hydrates does nothing -- no request, no error. With JS running, as
+  the app already requires, every form works. Sign-in has always been
+  this way; the 2026-10-27 welcome work didn't change it.
+- **Not a lockout risk once JS runs:** if sign-in succeeds but the redirect
+  never lands, the login form offers a plain "Continue to Sorrel" link.
+- **Deferred until after the beta:** fixing it touches every form (pass
+  the bare server action for progressive enhancement and keep the
+  error-capture some other way). `useActionForm`'s comment, which used to
+  say "a submit before hydration still posts natively", now says this.
 
 ## Phase 8 policy item: auth audit log retained after deletion (2026-10-06)
 

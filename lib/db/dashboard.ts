@@ -368,15 +368,26 @@ export async function getGroupMovement(
   return { data: { groups: groupMovements, topMover, prevLabel: range.prevLabel }, error: null };
 }
 
+// A goal as the goals page and dashboard show it. v_goal_progress carries
+// completed_at and is_active since migration 53.
+export type GoalProgress = GoalProgressRow;
+
 // target_date/last_contribution_date describe each goal, not a bucketed
 // series -- there's no meaningful range filter here, unlike the cashflow
 // views above.
-export async function getGoalProgress(): Promise<DbResult<GoalProgressRow[]>> {
+//
+// Archived goals (is_active = false) are left out, everywhere this is
+// read: the goals list, the dashboard, and the goal-completion copy. The
+// view shows every goal; the filter is here, in the query, as
+// listAccounts filters v_account_balances. (v_goals_summary, which sums
+// money, skips archived goals itself.)
+export async function getGoalProgress(): Promise<DbResult<GoalProgress[]>> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("v_goal_progress")
     .select("*")
+    .eq("is_active", true)
     .order("target_date", { ascending: true, nullsFirst: false });
 
   if (error) {

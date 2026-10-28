@@ -2,20 +2,73 @@
 
 import { revalidatePath } from "next/cache";
 import {
+  archiveGoal,
   createGoal,
   contributeToGoal,
   deleteGoal,
   deleteGoalContribution,
+  getContributionGoalId,
+  getFirstContributionDate,
+  getGoalCompletedAt,
   updateGoal,
   updateGoalContribution,
 } from "@/lib/db/goals";
 import { getGoalProgress } from "@/lib/db/dashboard";
+import { getToday } from "@/lib/db/settings";
 import { GOAL_TYPES, type GoalType } from "@/lib/goalOptions";
+import { completionCopy, type GoalCompletion } from "@/lib/goalCompletion";
 import { formatCurrency } from "@/lib/format";
 
 const VALID_TYPES = new Set<GoalType>(GOAL_TYPES);
 
-export type ActionState = { error?: string } | undefined;
+// `completed` is set only by the action whose write completed the goal,
+// and only in that response: the panel shows in that interaction and
+// nothing is stored to show it later. Reloading, or another device,
+// shows nothing.
+export type ActionState = { error?: string; completed?: GoalCompletion } | undefined;
+
+// completed_at before this action's write. undefined when it can't be
+// read -- then there's no celebration rather than a wrong one.
+async function completedAtBefore(goalid: string): Promise<string | null | undefined> {
+  const result = await getGoalCompletedAt(goalid);
+  return result.error === null ? result.data : undefined;
+}
+
+// Completion is detected HERE, in the server action that wrote the change,
+// after the write, never during a render (docs/Goal-Completion.md, D). The
+// database re-derives completed_at on every write (migration 53); a
+// change from null to set across this action's write is a completion.
+// Reversal is the same column going back to null -- silently: nothing is
+// returned for it.
+async function detectCompletion(
+  goalid: string,
+  before: string | null | undefined,
+): Promise<GoalCompletion | undefined> {
+  if (before !== null) return undefined;
+  const after = await getGoalCompletedAt(goalid);
+  if (after.error !== null || after.data === null) return undefined;
+
+  const [progressResult, firstResult, today] = await Promise.all([
+    getGoalProgress(),
+    getFirstContributionDate(goalid),
+    getToday(),
+  ]);
+  const goal = progressResult.data?.find((row) => row.goal_id === goalid);
+  if (!goal || !goal.goal_name || !goal.goal_type || goal.contributed_amount === null || goal.target_amount === null) {
+    return undefined;
+  }
+
+  return completionCopy({
+    goalId: goalid,
+    goalName: goal.goal_name,
+    goalType: goal.goal_type,
+    contributed: goal.contributed_amount,
+    targetAmount: goal.target_amount,
+    targetDate: goal.target_date,
+    firstContributionDate: firstResult.data ?? null,
+    completedOn: today,
+  });
+}
 
 function parseGoalFields(formData: FormData) {
   const goal_name = String(formData.get("goal_name") ?? "").trim();
@@ -87,7 +140,29 @@ export async function updateGoalAction(
     return parsed;
   }
 
+  // A lowered target can complete the goal; a raised one un-completes it.
+  const before = await completedAtBefore(id);
   const { error } = await updateGoal(id, parsed);
+
+  if (error) {
+    return { error };
+  }
+
+  revalidatePath("/goals");
+  revalidatePath("/dashboard");
+
+  const completed = await detectCompletion(id, before);
+  return completed ? { completed } : undefined;
+}
+
+// Archive, not delete: the goal leaves the goals list, the dashboard and
+// "Saved toward your goals"; its contributions stay.
+export async function archiveGoalAction(id: string): Promise<ActionState> {
+  if (!id) {
+    return { error: "Missing goal id." };
+  }
+
+  const { error } = await archiveGoal(id);
 
   if (error) {
     return { error };
@@ -130,7 +205,7 @@ function parseContributionFields(formData: FormData) {
 }
 
 export type ContributeActionState =
-  | { error?: string; milestone?: { message: string } }
+  | { error?: string; milestone?: { message: string }; completed?: GoalCompletion }
   | undefined;
 
 export async function contributeToGoalAction(
@@ -146,6 +221,7 @@ export async function contributeToGoalAction(
     return parsed;
   }
 
+  const before = await completedAtBefore(goalid);
   const { error } = await contributeToGoal(goalid, parsed);
 
   if (error) {
@@ -153,6 +229,13 @@ export async function contributeToGoalAction(
   }
 
   revalidatePath("/goals");
+
+  // The contribution that completes the goal gets the completion panel
+  // instead of the running-total line -- one celebration, not two.
+  const completed = await detectCompletion(goalid, before);
+  if (completed) {
+    return { completed };
+  }
 
   // The celebration names the goal and the running total -- "$240 toward
   // Japan" -- so it reads from the same view the page does, not the raw
@@ -183,6 +266,9 @@ export async function updateContributionAction(
     return parsed;
   }
 
+  // Raising a contribution can complete its goal.
+  const goal = await getContributionGoalId(id);
+  const before = goal.error === null ? await completedAtBefore(goal.data) : undefined;
   const { error } = await updateGoalContribution(id, parsed);
 
   if (error) {
@@ -192,6 +278,10 @@ export async function updateContributionAction(
   // The page re-reads v_goal_progress, which re-sums the table: the edited
   // amount is the goal's total and percentage from here on.
   revalidatePath("/goals");
+
+  if (goal.error !== null) return undefined;
+  const completed = await detectCompletion(goal.data, before);
+  return completed ? { completed } : undefined;
 }
 
 export async function deleteContributionAction(id: string): Promise<ActionState> {
@@ -199,6 +289,9 @@ export async function deleteContributionAction(id: string): Promise<ActionState>
     return { error: "Missing contribution id." };
   }
 
+  // Deleting the contribution that completed a goal un-completes it: the
+  // database clears completed_at (migration 53). Silently -- nothing is
+  // returned, nothing is shown.
   const { error } = await deleteGoalContribution(id);
 
   if (error) {
