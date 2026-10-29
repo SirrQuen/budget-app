@@ -31,8 +31,8 @@ export function SafeToSpendCushionForm({
   );
 
   const hint = isDefault
-    ? `Using the suggestion: ${formatCurrency(suggested)}, about a week of everyday spending from checking and savings.`
-    : `Suggested: ${formatCurrency(suggested)}, about a week of everyday spending from checking and savings.`;
+    ? `Using the suggestion: ${formatCurrency(suggested)}, about a week of everyday spending from checking and cash.`
+    : `Suggested: ${formatCurrency(suggested)}, about a week of everyday spending from checking and cash.`;
 
   return (
     <form action={action} onSubmit={submit} className="mt-4 flex flex-col gap-3">

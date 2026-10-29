@@ -142,7 +142,7 @@ export default async function SettingsPage() {
           // getSoonestIncomeOccurrence() doesn't count.
           <p className="mt-2 max-w-prose text-sm text-ink-secondary">
             Your income goes to an account safe to spend doesn&apos;t track, so Sorrel can&apos;t
-            project forward from it. Point a paycheck at a checking or savings account in{" "}
+            project forward from it. Point a paycheck at a checking or cash account in{" "}
             <Link href="/recurring" className={INLINE_LINK}>
               Recurring
             </Link>{" "}

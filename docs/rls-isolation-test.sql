@@ -940,6 +940,10 @@ $$;
 -- the owner's sum for that user alone. By this point the write sections
 -- have moved A's balance (it can be negative), so the guard against a
 -- vacuous pass is non-zero, not positive.
+--
+-- The spendable set (Checking, Cash -- migration 54) is restated here on
+-- purpose, not read from is_spendable_account_type(): this is an
+-- independent oracle, so a change to the set has to change it too.
 -- ---------------------------------------------------------------------
 do $$
 declare
@@ -952,7 +956,7 @@ begin
     uid := pg_temp.fx(u);
     v_truth := pg_temp.count_as(null, format(
       'select (coalesce(sum(balance), 0) * 100)::bigint from public.v_account_balances
-        where userid = %L and is_active and account_type in (''Checking'', ''Savings'')', uid));
+        where userid = %L and is_active and account_type in (''Checking'', ''Cash'')', uid));
     v_actual := pg_temp.count_as(uid,
       'select (public.spendable_cash_balance() * 100)::bigint');
     perform pg_temp.rec('2c money functions', 'spendable_cash_balance()',

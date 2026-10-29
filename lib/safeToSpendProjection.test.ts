@@ -95,21 +95,21 @@ test("obligation before payday larger than cash -> $0, with the shortfall amount
   );
 });
 
-test("Checking -> Savings transfer inside the horizon -> trough unchanged", () => {
-  const toSavings = schedule({
+test("Checking -> Cash transfer inside the horizon -> trough unchanged", () => {
+  const toCash = schedule({
     kind: "Transfer",
-    name: "Save",
+    name: "ATM",
     amount: 500,
     fromAccountType: "Checking",
-    toAccountType: "Savings",
+    toAccountType: "Cash",
     nextDueDate: day(6),
   });
-  const result = run([paycheck, rent, toSavings]);
+  const result = run([paycheck, rent, toCash]);
 
   assert.equal(result.trough.amount, 1700);
   assert.equal(result.trough.date, day(7));
   assert.equal(result.safeToSpend, 1400);
-  assert.ok(!result.obligations.some((o) => o.name === "Save"));
+  assert.ok(!result.obligations.some((o) => o.name === "ATM"));
 });
 
 test("weekly income with a monthly bill on day 30 -> horizon extends to 35 days and the bill is included", () => {
@@ -592,19 +592,89 @@ test("variable-amount income -> the LOW end of the estimate and the LATE end of 
 const delta = (withIt: ProjectionSchedule[], without: ProjectionSchedule[]) =>
   run(withIt, 5000, 0).safeToSpend - run(without, 5000, 0).safeToSpend;
 
-test("hero: a Checking -> Savings transfer changes nothing", () => {
+test("hero: a Checking -> Cash transfer changes nothing", () => {
+  const atm = schedule({
+    kind: "Transfer",
+    name: "ATM",
+    amount: 100,
+    toAccountType: "Cash",
+    toAccountId: "wallet",
+    nextDueDate: day(3),
+  });
+  assert.equal(delta([latePay, rent, atm], [latePay, rent]), 0);
+  const result = run([latePay, rent, atm], 5000, 0);
+  assert.ok(!result.obligations.some((o) => o.name === "ATM"));
+  assert.ok(!result.incomes.some((i) => i.name === "ATM"));
+});
+
+test("hero: a Checking -> Savings transfer lowers it by exactly its amount, once, on its early edge", () => {
   const sweep = schedule({
     kind: "Transfer",
     name: "Sweep",
     amount: 750,
     toAccountType: "Savings",
     toAccountId: "savings",
-    nextDueDate: day(3),
+    nextDueDate: day(5),
+    dateToleranceDays: 2,
+    occurrencesRemaining: 1,
   });
-  assert.equal(delta([latePay, rent, sweep], [latePay, rent]), 0);
+  assert.equal(delta([latePay, rent, sweep], [latePay, rent]), -750);
   const result = run([latePay, rent, sweep], 5000, 0);
-  assert.ok(!result.obligations.some((o) => o.name === "Sweep"));
+  assert.deepEqual(
+    result.obligations.filter((o) => o.name === "Sweep").map((o) => [o.date, o.amount]),
+    [[day(3), 750]],
+  );
   assert.ok(!result.incomes.some((i) => i.name === "Sweep"));
+});
+
+test("hero: a Savings -> Checking transfer is income, on its late edge, at its amount", () => {
+  const fromSavings = schedule({
+    kind: "Transfer",
+    name: "From savings",
+    amount: 1000,
+    accountId: "savings",
+    fromAccountType: "Savings",
+    toAccountType: "Checking",
+    toAccountId: "checking",
+    nextDueDate: day(3),
+    dateToleranceDays: 2,
+    occurrencesRemaining: 1,
+  });
+  const without = run([paycheck, rent], 1000, 0);
+  const result = run([paycheck, rent, fromSavings], 1000, 0);
+  assert.equal(without.safeToSpend, 700);
+  assert.equal(result.safeToSpend, 1000);
+  assert.deepEqual(
+    result.incomes.filter((i) => i.name === "From savings").map((i) => [i.date, i.amount]),
+    [[day(5), 1000]],
+  );
+  assert.ok(!result.obligations.some((o) => o.name === "From savings"));
+});
+
+test("a Savings -> Checking transfer past its late edge drops out of the maths but stays in the queue", () => {
+  const fromSavings = schedule({
+    kind: "Transfer",
+    name: "From savings",
+    amount: 1000,
+    accountId: "savings",
+    fromAccountType: "Savings",
+    toAccountType: "Checking",
+    toAccountId: "checking",
+    nextDueDate: day(-5),
+    dateToleranceDays: 2,
+    occurrencesRemaining: 1,
+  });
+  const result = run([paycheck, rent, fromSavings]);
+  assert.equal(result.safeToSpend, run([paycheck, rent]).safeToSpend);
+  assert.ok(!result.incomes.some((i) => i.name === "From savings"));
+  assert.deepEqual(
+    result.unconfirmedIncome.map((u) => [u.name, u.dueDate]),
+    [["From savings", day(-5)]],
+  );
+  assert.deepEqual(
+    buildConfirmationQueue([paycheck, rent, fromSavings], TODAY, NO_HOLIDAYS).map((q) => q.name),
+    ["From savings"],
+  );
 });
 
 test("hero: a fixed Checking -> Credit Card payment lowers it by exactly its amount, once", () => {

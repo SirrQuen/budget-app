@@ -54,6 +54,8 @@ function safeToSpend(schedules: ProjectionSchedule[], cash: number, cushion: num
     windowReason: projection.mode === "projection" ? null : "end_of_month",
     cushionIsDefault: false,
     nextIncome: null,
+    drawnFrom: [],
+    notCounted: [],
   };
 }
 
@@ -184,4 +186,39 @@ test("cushion = 0 with a dip below zero: breakdown renders a $0 cushion line", a
   const container = await renderOpen(data);
   assert.equal(looseZeros(container), 0);
   assert.equal(cushionValue(container), "$0.00");
+});
+
+test("breakdown names the accounts cash on hand is drawn from, and the ones it leaves out", async () => {
+  const data = {
+    ...safeToSpend([once("Income", "Paycheck", 1000, 9), once("Income", "Paycheck 2", 1000, 23)], 1540, 0),
+    drawnFrom: [
+      { id: "chk", name: "Everyday Checking", balance: 1500 },
+      { id: "wallet", name: "Wallet", balance: 40 },
+    ],
+    notCounted: [
+      { id: "sav", name: "Rainy Day Savings" },
+      { id: "inv", name: "Brokerage" },
+    ],
+  };
+  const container = await renderOpen(data);
+  const rows = [...container.querySelectorAll("dl > div")].map((d) => [
+    d.querySelector("dt")?.textContent,
+    d.querySelector("dd")?.textContent,
+  ]);
+  assert.deepEqual(rows.slice(0, 4), [
+    ["Cash on hand", "$1,540.00"],
+    ["Everyday Checking", "$1,500.00"],
+    ["Wallet", "$40.00"],
+    ["Not counted", "Rainy Day Savings, Brokerage"],
+  ]);
+});
+
+test("no Not counted row when every asset account is in the set", async () => {
+  const data = {
+    ...safeToSpend([once("Income", "Paycheck", 1000, 9), once("Income", "Paycheck 2", 1000, 23)], 1500, 0),
+    drawnFrom: [{ id: "chk", name: "Everyday Checking", balance: 1500 }],
+  };
+  const container = await renderOpen(data);
+  const labels = [...container.querySelectorAll("dl dt")].map((dt) => dt.textContent);
+  assert.ok(!labels.includes("Not counted"), labels.join(" | "));
 });

@@ -781,6 +781,60 @@ on 2026-10-06, untracked, after being recorded as deleted on 2026-10-04.
 It was gitignored briefly, then deleted on 2026-10-06 and the ignore entry
 removed. It was never committed.
 
+## Spendable set: Checking + Cash (2026-10-29)
+
+**Status: migration 54 pushed to sorrel-dev 2026-10-29 (branch
+`feat/spendable-checking-cash`); not yet on production.** After the push:
+`npm run test:parity` 99/99, `rls-isolation-test.sql` 273/273,
+`database.types.ts` regenerated with no change.
+
+The spendable set -- what Spendable Cash, the projection and the cushion
+suggestion count -- changes from Checking + Savings to **Checking + Cash**.
+Savings stays the user's money (net worth, the accounts list, the
+per-type subtotals of migration 49, goals) but isn't spendable.
+
+History:
+
+- 3e712a9 (2026-09-16) removed Cash from the set. The commit records
+  that it did, not why; no reason was written down anywhere. This notes
+  the absence, not a reason.
+- Re-added 2026-10-29 because, with Cash excluded, a Checking -> Cash
+  transfer was counted as spending: withdrawing $100 at an ATM lowered
+  safe to spend by $100 nobody had spent. The counter-argument -- a Cash
+  balance goes stale, because nothing updates it automatically -- is
+  acknowledged. It's answered by prompting people to update it, not by
+  excluding the account type.
+
+The change is the two lists and nothing else: `SPENDABLE_ACCOUNT_TYPES`
+(`lib/safeToSpend.ts`) and `is_spendable_account_type()` (migration 54).
+Consolidation held -- no third copy needed editing. Transfers reclassify
+through the shared classifier, each taking the rules of the side it lands
+on:
+
+| Transfer | Treated as |
+|---|---|
+| Checking/Cash -> Savings | upcoming expense (early edge, counted overdue) |
+| Savings -> Checking/Cash | upcoming income (late edge, drops out past it, stays in the queue) |
+| Checking <-> Cash | ignored -- both in the set |
+
+Also changed with it: the settings copy naming the set, the function
+comments, and `docs/rls-isolation-test.sql` section 2c, whose oracle
+restates the set independently on purpose.
+
+Verified 2026-10-29 against sorrel-dev (`tztbebdzlezlhvsbylsf`), with the
+migration applied inside rolled-back transactions: `npm test` 299/299;
+`npm run test:parity` 99/99 with the migration, and 26 failures with the
+TS change alone (the drift it exists to catch); `rls-isolation-test.sql`
+273/273. The seeded user's hero goes from $14,364.61 to $6,064.61 -- the
+$8,300 Savings balance, no more; net worth unchanged at $15,566.99.
+
+**A paycheck that lands in Savings is no longer income** for safe to
+spend. With no other income into Checking/Cash, the hero falls back to
+window mode (next payday -> end of month), says "no paycheck scheduled"
+and offers "Add a paycheck", although the user has one. Settings already
+says the right thing ("Your income goes to an account safe to spend
+doesn't track"). Open: whether the hero should say that too.
+
 ## Error handling audit (2026-10-07)
 
 **Status: fix pass done in the repo 2026-10-09 (`81a5ae9`..`6d84f27`);

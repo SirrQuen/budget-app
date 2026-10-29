@@ -218,6 +218,23 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
               <dt className="text-ink-secondary">Cash on hand</dt>
               <dd className="font-medium tabular-nums text-ink">{formatCurrency(data.cashOnHand)}</dd>
             </div>
+            {/* Where cash on hand comes from, and what it leaves out -- a
+                figure that excludes someone's savings has to say so, or it
+                reads as wrong. Facts only, in ink. */}
+            {data.drawnFrom.map((a) => (
+              <div key={a.id} className="flex items-baseline justify-between gap-4 pl-4 text-xs">
+                <dt className="min-w-0 break-words text-ink-secondary sm:truncate">{a.name}</dt>
+                <dd className="shrink-0 font-medium tabular-nums text-ink">{formatCurrency(a.balance)}</dd>
+              </div>
+            ))}
+            {data.notCounted.length > 0 ? (
+              <div className="flex items-baseline justify-between gap-4 pl-4 text-xs">
+                <dt className="shrink-0 text-ink-muted">Not counted</dt>
+                <dd className="min-w-0 break-words text-right text-ink-muted">
+                  {data.notCounted.map((a) => a.name).join(", ")}
+                </dd>
+              </div>
+            ) : null}
 
             {projection ? (
               <>

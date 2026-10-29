@@ -5,7 +5,7 @@
 //
 // Project forward, take the minimum:
 //
-//   1. Start from today's cash -- active Checking + Savings balances.
+//   1. Start from today's cash -- active Checking + Cash balances.
 //   2. Walk day by day to the horizon: max(35 days out, the payday after
 //      next). On each day, obligations leave first, then income lands, so
 //      a same-day bill and paycheck never let the paycheck hide the bill.
@@ -22,8 +22,9 @@
 //
 // Which rows are income and which are obligations is not decided here --
 // isSafeToSpendIncome / isSafeToSpendCommitment (lib/safeToSpend.ts)
-// are reused unchanged, including the Checking -> Savings exclusion. A
-// transfer crossing the set takes the rules of the side it acts as.
+// are reused unchanged, including the Checking <-> Cash exclusion. A
+// transfer crossing the set (Checking -> Savings out, Savings -> Checking
+// in) takes the rules of the side it acts as.
 //
 // With no usable income schedule there's no payday to project to, so the
 // caller's window (next payday / end of month / 30 days, from settings)
@@ -149,7 +150,7 @@ export type HorizonReason =
 
 export type SafeToSpendProjectionInput = {
   today: string;
-  /** Active Checking + Savings balances, dollars. */
+  /** Active Checking + Cash balances (spendable_cash_balance()), dollars. */
   cash: number;
   /** Dollars, >= 0. */
   cushion: number;
