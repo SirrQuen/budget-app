@@ -54,6 +54,7 @@ function safeToSpend(schedules: ProjectionSchedule[], cash: number, cushion: num
     windowReason: projection.mode === "projection" ? null : "end_of_month",
     cushionIsDefault: false,
     nextIncome: null,
+    paycheck: "none",
     drawnFrom: [],
     notCounted: [],
   };
@@ -221,4 +222,40 @@ test("no Not counted row when every asset account is in the set", async () => {
   const container = await renderOpen(data);
   const labels = [...container.querySelectorAll("dl dt")].map((dt) => dt.textContent);
   assert.ok(!labels.includes("Not counted"), labels.join(" | "));
+});
+
+// Window mode: no paycheck the projection can use. Rendered closed -- the
+// title and the prompt are what's visible without opening the breakdown.
+async function renderClosed(data: SafeToSpend): Promise<HTMLElement> {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  roots.push(root);
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  await act(async () =>
+    root.render(
+      <TodayProvider today={TODAY} timeZone={zone}>
+        <SafeToSpendHero data={data} />
+      </TodayProvider>,
+    ),
+  );
+  return container;
+}
+
+test("no paycheck at all: says none is scheduled and offers to add one", async () => {
+  const data = safeToSpend([once("Expense", "Rent", 800, 2)], 1500, 0);
+  assert.equal(data.mode, "window");
+  const text = (await renderClosed(data)).textContent ?? "";
+  assert.ok(text.includes("no paycheck scheduled"), text);
+  assert.ok(text.includes("Add a paycheck to see further ahead"), text);
+});
+
+test("a paycheck into Savings: never says there's no paycheck; asks to point it at checking or cash", async () => {
+  const data = { ...safeToSpend([once("Expense", "Rent", 800, 2)], 1500, 0), paycheck: "untracked" as const };
+  assert.equal(data.mode, "window");
+  const text = (await renderClosed(data)).textContent ?? "";
+  assert.ok(text.includes("your paycheck lands outside checking and cash"), text);
+  assert.ok(text.includes("Point your paycheck at checking or cash to see further ahead"), text);
+  assert.ok(!text.includes("no paycheck"), text);
+  assert.ok(!text.includes("Add a paycheck"), text);
 });

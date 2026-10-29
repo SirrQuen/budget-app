@@ -4,7 +4,7 @@ import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { getAccountDeletionSummary, getProfile } from "@/lib/db/profile";
 import { requireUser } from "@/lib/auth/dal";
 import { getSafeToSpendWindowPref, getSafeToSpendCushion } from "@/lib/db/settings";
-import { getIncomeSchedules } from "@/lib/db/dashboard";
+import { getIncomeSchedules, paycheckState } from "@/lib/db/dashboard";
 import { DeleteAccountSection } from "./DeleteAccountSection";
 import { SafeToSpendWindowToggle } from "./SafeToSpendWindowToggle";
 import { SafeToSpendCushionForm } from "./SafeToSpendCushionForm";
@@ -44,13 +44,7 @@ export default async function SettingsPage() {
   // Why the fallback is or isn't in use. A failed read (already logged by
   // describeReadError) is none of these -- the toggle stays live with no
   // line, making no claim either way.
-  const paycheck = !income.data
-    ? null
-    : income.data.soonest
-      ? "tracked"
-      : income.data.anyIncome
-        ? "untracked"
-        : "none";
+  const paycheck = income.data ? paycheckState(income.data) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -139,7 +133,7 @@ export default async function SettingsPage() {
           </p>
         ) : paycheck === "untracked" ? (
           // Not "add a paycheck" -- they have one; it just lands somewhere
-          // getSoonestIncomeOccurrence() doesn't count.
+          // getIncomeSchedules() doesn't count as a payday.
           <p className="mt-2 max-w-prose text-sm text-ink-secondary">
             Your income goes to an account safe to spend doesn&apos;t track, so Sorrel can&apos;t
             project forward from it. Point a paycheck at a checking or cash account in{" "}

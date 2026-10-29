@@ -573,6 +573,12 @@ export type SafeToSpend = SafeToSpendProjection & {
    */
   nextIncome: SafeToSpendIncome | null;
   /**
+   * Which no-paycheck case applies when nextIncome is null: none at all,
+   * or one that pays only outside the set (into Savings, say). The hero
+   * and settings word the two differently.
+   */
+  paycheck: PaycheckState;
+  /**
    * The active accounts cash on hand is drawn from -- the spendable set,
    * the same rows spendable_cash_balance() sums. Listed so the figure says
    * where it comes from; the total stays the SQL sum.
@@ -682,18 +688,18 @@ export const getIncomeSchedules = cache(async (): Promise<DbResult<IncomeSchedul
   };
 });
 
-// Shared by getSafeToSpend (the context line beneath the total) and the
-// settings page (to pre-select the fallback window toggle when the stored
-// preference is unset -- see lib/safeToSpendWindow.ts). A view over
-// getIncomeSchedules(), so the two share one cache()'d query per request.
-export const getSoonestIncomeOccurrence = cache(
-  async (): Promise<DbResult<SafeToSpendIncome | null>> => {
-    const result = await getIncomeSchedules();
-    return result.error !== null
-      ? { data: null, error: result.error }
-      : { data: result.data.soonest, error: null };
-  },
-);
+/**
+ * tracked: a paycheck pays into the spendable set. untracked: paychecks
+ * exist but all pay elsewhere (Savings, Investment), so safe to spend
+ * can't project from them. none: no Income schedule at all.
+ */
+export type PaycheckState = "tracked" | "untracked" | "none";
+
+// The one place the three cases are told apart -- the hero and the
+// settings page both read it.
+export function paycheckState(income: IncomeSchedules): PaycheckState {
+  return income.soonest ? "tracked" : income.anyIncome ? "untracked" : "none";
+}
 
 function toProjectionSchedule(row: UpcomingProjectionRow): ProjectionSchedule | null {
   const kind =
@@ -795,7 +801,7 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   const [cashRes, recurringRes, incomeRes, cushionRes, holidaysRes, windowPref, accountsRes] = await Promise.all([
     supabase.rpc("spendable_cash_balance"),
     getProjectionSchedules(),
-    getSoonestIncomeOccurrence(),
+    getIncomeSchedules(),
     getSafeToSpendCushion(),
     getBankHolidays(),
     getSafeToSpendWindowPref(),
@@ -811,7 +817,7 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   if (recurringRes.error !== null) {
     return { data: null, error: recurringRes.error };
   }
-  if (incomeRes.error) {
+  if (incomeRes.error !== null) {
     return { data: null, error: incomeRes.error };
   }
   if (cushionRes.error !== null) {
@@ -824,8 +830,9 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   const effectivePref = windowPref ?? "next_payday";
   let fallbackWindowEnd: string;
   let fallbackReason: SafeToSpendWindowReason;
-  if (effectivePref === "next_payday" && incomeRes.data) {
-    fallbackWindowEnd = paydayWindowEnd(incomeRes.data.date, incomeRes.data.dateToleranceDays);
+  const nextIncome = incomeRes.data.soonest;
+  if (effectivePref === "next_payday" && nextIncome) {
+    fallbackWindowEnd = paydayWindowEnd(nextIncome.date, nextIncome.dateToleranceDays);
     fallbackReason = "next_payday";
   } else if (effectivePref === "next_30_days") {
     fallbackWindowEnd = addDaysISO(today, 30);
@@ -855,7 +862,8 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
       ...projection,
       windowReason: projection.mode === "window" ? fallbackReason : null,
       cushionIsDefault: cushionRes.data.isDefault,
-      nextIncome: incomeRes.data,
+      nextIncome,
+      paycheck: paycheckState(incomeRes.data),
       ...splitBySpendable(accountsRes.data),
     },
     error: null,

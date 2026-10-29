@@ -32,7 +32,9 @@ function title(data: SafeToSpend): string {
   const suffix =
     data.mode === "projection"
       ? PROJECTION_SUFFIX[data.horizonReason]
-      : WINDOW_SUFFIX[data.windowReason ?? "end_of_month"];
+      : (data.paycheck === "untracked" ? WINDOW_SUFFIX_UNTRACKED : WINDOW_SUFFIX)[
+          data.windowReason ?? "end_of_month"
+        ];
   return `Safe to spend through ${through} — ${suffix}`;
 }
 
@@ -48,6 +50,14 @@ const WINDOW_SUFFIX: Record<SafeToSpendWindowReason, string> = {
   next_payday: "no paycheck scheduled",
   end_of_month: "no paycheck scheduled",
   next_30_days: "the next 30 days, no paycheck scheduled",
+};
+
+// A paycheck exists but pays outside the spendable set (into Savings,
+// say). Saying "no paycheck" would be false; this names where it goes.
+const WINDOW_SUFFIX_UNTRACKED: Record<SafeToSpendWindowReason, string> = {
+  next_payday: "your paycheck lands outside checking and cash",
+  end_of_month: "your paycheck lands outside checking and cash",
+  next_30_days: "the next 30 days, your paycheck lands outside checking and cash",
 };
 
 function subline(data: SafeToSpend): string {
@@ -183,15 +193,22 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
         />
       </button>
 
-      {/* No usable paycheck: the one prompt to add one, visible without
-          opening the breakdown. */}
+      {/* No usable paycheck: the one prompt to fix that, visible without
+          opening the breakdown. A paycheck paying outside the set needs
+          pointing at checking or cash, not adding. */}
       {!projection && !data.nextIncome ? (
         <Link
           href="/recurring"
           className="mx-5 mb-4 flex w-fit items-center gap-1.5 rounded text-xs text-ink-muted transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
-          <PlusIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
-          Add a paycheck to see further ahead
+          {data.paycheck === "untracked" ? (
+            "Point your paycheck at checking or cash to see further ahead"
+          ) : (
+            <>
+              <PlusIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
+              Add a paycheck to see further ahead
+            </>
+          )}
         </Link>
       ) : null}
 

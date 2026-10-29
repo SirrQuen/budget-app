@@ -830,10 +830,14 @@ $8,300 Savings balance, no more; net worth unchanged at $15,566.99.
 
 **A paycheck that lands in Savings is no longer income** for safe to
 spend. With no other income into Checking/Cash, the hero falls back to
-window mode (next payday -> end of month), says "no paycheck scheduled"
-and offers "Add a paycheck", although the user has one. Settings already
-says the right thing ("Your income goes to an account safe to spend
-doesn't track"). Open: whether the hero should say that too.
+window mode (next payday -> end of month). It used to say "no paycheck
+scheduled" and offer "Add a paycheck", although the user has one. Fixed
+2026-10-29: the hero now says "your paycheck lands outside checking and
+cash" and offers "Point your paycheck at checking or cash to see further
+ahead". It and settings read one classifier, `paycheckState()`
+(`lib/db/dashboard.ts`: tracked / untracked / none). Window mode near
+month-end can still leave out a bill due on the 1st -- that's the window,
+not this change.
 
 ## Error handling audit (2026-10-07)
 
