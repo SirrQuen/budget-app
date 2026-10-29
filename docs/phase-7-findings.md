@@ -783,10 +783,19 @@ removed. It was never committed.
 
 ## Spendable set: Checking + Cash (2026-10-29)
 
-**Status: migration 54 pushed to sorrel-dev 2026-10-29 (branch
-`feat/spendable-checking-cash`); not yet on production.** After the push:
-`npm run test:parity` 99/99, `rls-isolation-test.sql` 273/273,
-`database.types.ts` regenerated with no change.
+**Status: done. Migration 54 on sorrel-dev and production
+(`ybdwqyihvbokowocvlgq`) 2026-10-29; merged to main (`1d3e135`) and
+deployed straight after the production push.** Against production after
+the push: `npm run test:parity` 99/99, `rls-isolation-test.sql` 273/273,
+cleanup 0 (RLS and parity throwaway users, RLS waitlist rows).
+`database.types.ts` regenerated from sorrel-dev with no change.
+
+Rollback: `docs/rollback/20261029000055_55_revert_spendable_checking_cash.sql`
+restores migration 47's set and the four comments 54 replaced. It lives
+outside `supabase/migrations/` so a push never applies it by accident;
+to use it, move it in and revert `1d3e135` in the same deploy. Checked
+on sorrel-dev (54 applied, rolled back): pre-54 set and comments
+restored exactly, and pre-merge TS + 55 passes parity 99/99.
 
 The spendable set -- what Spendable Cash, the projection and the cushion
 suggestion count -- changes from Checking + Savings to **Checking + Cash**.
