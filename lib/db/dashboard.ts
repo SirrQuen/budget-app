@@ -16,6 +16,8 @@ import {
   type SafeToSpendProjection,
 } from "@/lib/safeToSpendProjection";
 import { isSpendableAccountType } from "@/lib/safeToSpend";
+import { isLiabilityAccountType } from "@/lib/accountOptions";
+import { listAccountBalances } from "@/lib/db/accounts";
 import { buildConfirmationQueue, type ConfirmationItem } from "@/lib/confirmationQueue";
 import { getNotYetKeys } from "@/lib/confirmationLater";
 import { deriveLoggingStreak, type LoggingStreakSummary } from "@/lib/streak";
@@ -564,13 +566,33 @@ export type SafeToSpend = SafeToSpendProjection & {
   /** True when the cushion is the suggestion rather than a stored choice. */
   cushionIsDefault: boolean;
   /**
-   * The soonest upcoming Income schedule landing in a Checking or Savings
-   * account -- a context line beneath the total, outside the breakdown's
-   * arithmetic. null when there isn't one, which the UI reads as "show a
-   * prompt to add a paycheck."
+   * The soonest upcoming Income schedule landing in a spendable (Checking
+   * or Cash) account -- a context line beneath the total, outside the
+   * breakdown's arithmetic. null when there isn't one, which the UI reads
+   * as "show a prompt to add a paycheck."
    */
   nextIncome: SafeToSpendIncome | null;
+  /**
+   * Which no-paycheck case applies when nextIncome is null: none at all,
+   * or one that pays only outside the set (into Savings, say). The hero
+   * and settings word the two differently.
+   */
+  paycheck: PaycheckState;
+  /**
+   * The active accounts cash on hand is drawn from -- the spendable set,
+   * the same rows spendable_cash_balance() sums. Listed so the figure says
+   * where it comes from; the total stays the SQL sum.
+   */
+  drawnFrom: SpendableAccount[];
+  /**
+   * Active asset accounts outside the set (Savings, Investment), named so a
+   * figure that leaves someone's savings out says so. Liabilities aren't
+   * listed: a card reaches the figure through its payment schedule.
+   */
+  notCounted: { id: string; name: string }[];
 };
+
+export type SpendableAccount = { id: string; name: string; balance: number };
 
 type UpcomingProjectionRow = {
   recurring_id: string;
@@ -614,7 +636,7 @@ type UpcomingIncomeRow = {
 };
 
 export type IncomeSchedules = {
-  /** The soonest Income schedule paying into Checking or Savings. */
+  /** The soonest Income schedule paying into a spendable account (Checking or Cash). */
   soonest: SafeToSpendIncome | null;
   /**
    * Any active Income schedule exists, whatever account it pays into. With
@@ -625,7 +647,7 @@ export type IncomeSchedules = {
 };
 
 // One read, both facts. Every Income schedule comes back (a handful of
-// rows) rather than only Checking/Savings ones, so the settings page can
+// rows) rather than only spendable-account ones, so the settings page can
 // tell the two idle cases apart without a second round trip. account_type
 // comes from v_upcoming_recurring's own join to accounts -- an Income
 // category schedule's accountid is where the money lands, same as any
@@ -666,18 +688,18 @@ export const getIncomeSchedules = cache(async (): Promise<DbResult<IncomeSchedul
   };
 });
 
-// Shared by getSafeToSpend (the context line beneath the total) and the
-// settings page (to pre-select the fallback window toggle when the stored
-// preference is unset -- see lib/safeToSpendWindow.ts). A view over
-// getIncomeSchedules(), so the two share one cache()'d query per request.
-export const getSoonestIncomeOccurrence = cache(
-  async (): Promise<DbResult<SafeToSpendIncome | null>> => {
-    const result = await getIncomeSchedules();
-    return result.error !== null
-      ? { data: null, error: result.error }
-      : { data: result.data.soonest, error: null };
-  },
-);
+/**
+ * tracked: a paycheck pays into the spendable set. untracked: paychecks
+ * exist but all pay elsewhere (Savings, Investment), so safe to spend
+ * can't project from them. none: no Income schedule at all.
+ */
+export type PaycheckState = "tracked" | "untracked" | "none";
+
+// The one place the three cases are told apart -- the hero and the
+// settings page both read it.
+export function paycheckState(income: IncomeSchedules): PaycheckState {
+  return income.soonest ? "tracked" : income.anyIncome ? "untracked" : "none";
+}
 
 function toProjectionSchedule(row: UpcomingProjectionRow): ProjectionSchedule | null {
   const kind =
@@ -754,9 +776,12 @@ const getProjectionSchedules = cache(async (): Promise<DbResult<ProjectionSchedu
 // day-by-day walk -- lives in lib/safeToSpendProjection.ts, pure and
 // unit tested. This function only gathers its inputs:
 //
-//   cash       spendable_cash_balance(): active Checking + Savings
-//              balances, summed in SQL. Investment, Cash, Credit Card and
-//              Loan never contribute.
+//   cash       spendable_cash_balance(): active Checking + Cash
+//              balances, summed in SQL. Savings, Investment, Credit Card
+//              and Loan never contribute.
+//   accounts   active balances, split by the same classifier into the
+//              accounts cash is drawn from and the assets it leaves out --
+//              for the breakdown's labels only, never summed here.
 //   schedules  every row of v_upcoming_recurring, which already applies
 //              is_active, the end-date guard and the occurrence_limit
 //              guard. The projection steps each one forward past its next
@@ -773,22 +798,26 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
 
   const today = await getToday();
 
-  const [cashRes, recurringRes, incomeRes, cushionRes, holidaysRes, windowPref] = await Promise.all([
+  const [cashRes, recurringRes, incomeRes, cushionRes, holidaysRes, windowPref, accountsRes] = await Promise.all([
     supabase.rpc("spendable_cash_balance"),
     getProjectionSchedules(),
-    getSoonestIncomeOccurrence(),
+    getIncomeSchedules(),
     getSafeToSpendCushion(),
     getBankHolidays(),
     getSafeToSpendWindowPref(),
+    listAccountBalances({ is_active: true }),
   ]);
 
   if (cashRes.error) {
     return { data: null, error: describeReadError(cashRes.error, "dashboard") };
   }
+  if (accountsRes.error !== null) {
+    return { data: null, error: accountsRes.error };
+  }
   if (recurringRes.error !== null) {
     return { data: null, error: recurringRes.error };
   }
-  if (incomeRes.error) {
+  if (incomeRes.error !== null) {
     return { data: null, error: incomeRes.error };
   }
   if (cushionRes.error !== null) {
@@ -801,8 +830,9 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   const effectivePref = windowPref ?? "next_payday";
   let fallbackWindowEnd: string;
   let fallbackReason: SafeToSpendWindowReason;
-  if (effectivePref === "next_payday" && incomeRes.data) {
-    fallbackWindowEnd = paydayWindowEnd(incomeRes.data.date, incomeRes.data.dateToleranceDays);
+  const nextIncome = incomeRes.data.soonest;
+  if (effectivePref === "next_payday" && nextIncome) {
+    fallbackWindowEnd = paydayWindowEnd(nextIncome.date, nextIncome.dateToleranceDays);
     fallbackReason = "next_payday";
   } else if (effectivePref === "next_30_days") {
     fallbackWindowEnd = addDaysISO(today, 30);
@@ -832,10 +862,30 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
       ...projection,
       windowReason: projection.mode === "window" ? fallbackReason : null,
       cushionIsDefault: cushionRes.data.isDefault,
-      nextIncome: incomeRes.data,
+      nextIncome,
+      paycheck: paycheckState(incomeRes.data),
+      ...splitBySpendable(accountsRes.data),
     },
     error: null,
   };
+}
+
+type AccountBalanceRow = Database["public"]["Views"]["v_account_balances"]["Row"];
+
+function splitBySpendable(rows: AccountBalanceRow[]): Pick<SafeToSpend, "drawnFrom" | "notCounted"> {
+  const drawnFrom: SpendableAccount[] = [];
+  const notCounted: { id: string; name: string }[] = [];
+  for (const r of rows) {
+    if (r.account_id === null || r.account_name === null || r.account_type === null) {
+      continue;
+    }
+    if (isSpendableAccountType(r.account_type)) {
+      drawnFrom.push({ id: r.account_id, name: r.account_name, balance: r.balance ?? 0 });
+    } else if (!isLiabilityAccountType(r.account_type)) {
+      notCounted.push({ id: r.account_id, name: r.account_name });
+    }
+  }
+  return { drawnFrom, notCounted };
 }
 
 /** A queue item plus the account details its confirm sheet shows. */

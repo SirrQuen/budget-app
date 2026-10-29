@@ -169,7 +169,9 @@ the rule inline in SQL; call those functions. `npm run test:parity` checks
 both agree with the TS side on every account type and pair read from
 `accounts_account_type_check`. Run it after changing either side or the
 account types.
-Checking→savings is NOT money leaving. Card purchases are NOT counted here;
+The set is Checking + Cash (migration 54). Checking→cash is NOT money
+leaving; checking→savings IS (savings is net worth, not spending money).
+Card purchases are NOT counted here;
 the card payment obligation already captures them.
 Its mirror, `isSafeToSpendIncome` (same file, same set), makes a transfer
 INTO the set (Investment→Checking) projection income. A crossing transfer

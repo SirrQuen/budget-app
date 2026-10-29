@@ -4,10 +4,12 @@
 // function hangs on; every case is spelled out here once rather than
 // re-derived at each call site.
 //
-// Safe-to-spend cash lives in Checking/Savings only (CLAUDE.md "Liability
-// accounts" + the safe-to-spend rule this implements) -- Investment, Cash,
-// Credit Card and Loan are never spendable balance.
-export const SPENDABLE_ACCOUNT_TYPES: ReadonlySet<string> = new Set(["Checking", "Savings"]);
+// Safe-to-spend cash lives in Checking and Cash only: money you can spend
+// today. Savings and Investment are still the user's money (net worth
+// counts them) but not everyday spending; Credit Card and Loan are never
+// spendable balance. Its SQL twin is is_spendable_account_type()
+// (migration 54); `npm run test:parity` checks the two agree.
+export const SPENDABLE_ACCOUNT_TYPES: ReadonlySet<string> = new Set(["Checking", "Cash"]);
 
 export function isSpendableAccountType(accountType: string): boolean {
   return SPENDABLE_ACCOUNT_TYPES.has(accountType);
@@ -27,20 +29,21 @@ export type SafeToSpendCandidate = {
 };
 
 // Whether an upcoming recurring row is a safe-to-spend commitment: cash
-// leaving the spendable set (Checking/Savings) without landing back inside
+// leaving the spendable set (Checking/Cash) without landing back inside
 // it before the window closes.
 //
 //   source not spendable  -> never a commitment, regardless of type. This
 //     covers an Expense charged to a Credit Card (no cash moves until the
 //     card is paid -- the card's own payment schedule is the commitment
-//     that covers that) and anything drawn from Cash, Investment or Loan.
+//     that covers that) and anything drawn from Savings, Investment or Loan.
 //   Expense, spendable source -> always a commitment (cash leaves for a
 //     merchant, full stop).
 //   Transfer, spendable source, spendable destination (e.g. Checking ->
-//     Savings) -> NOT a commitment. The money is still spendable, just in
-//     a different account.
+//     Cash, an ATM withdrawal) -> NOT a commitment. The money is still
+//     spendable, just in a different account.
 //   Transfer, spendable source, non-spendable destination (e.g. Checking ->
-//     Investment, or a card payment from Checking) -> a commitment.
+//     Savings, Checking -> Investment, or a card payment from Checking) ->
+//     a commitment.
 export function isSafeToSpendCommitment(row: SafeToSpendCandidate): boolean {
   if (!isSpendableAccountType(row.fromAccountType)) {
     return false;
@@ -67,8 +70,9 @@ export type SafeToSpendIncomeCandidate = {
 // isSafeToSpendCommitment, built on the same set.
 //
 //   Income -> lands in accountid; income only if that account is spendable.
-//   Transfer, non-spendable source, spendable destination (e.g. Investment
-//     -> Checking) -> income. The money wasn't spendable and now is.
+//   Transfer, non-spendable source, spendable destination (e.g. Savings ->
+//     Checking, Investment -> Checking) -> income. The money wasn't
+//     spendable and now is.
 //   Transfer, spendable source -> never income. Spendable -> spendable
 //     changes nothing; spendable -> non-spendable is a commitment.
 //   Transfer, non-spendable on both ends -> never income.

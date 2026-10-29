@@ -54,6 +54,9 @@ function safeToSpend(schedules: ProjectionSchedule[], cash: number, cushion: num
     windowReason: projection.mode === "projection" ? null : "end_of_month",
     cushionIsDefault: false,
     nextIncome: null,
+    paycheck: "none",
+    drawnFrom: [],
+    notCounted: [],
   };
 }
 
@@ -184,4 +187,75 @@ test("cushion = 0 with a dip below zero: breakdown renders a $0 cushion line", a
   const container = await renderOpen(data);
   assert.equal(looseZeros(container), 0);
   assert.equal(cushionValue(container), "$0.00");
+});
+
+test("breakdown names the accounts cash on hand is drawn from, and the ones it leaves out", async () => {
+  const data = {
+    ...safeToSpend([once("Income", "Paycheck", 1000, 9), once("Income", "Paycheck 2", 1000, 23)], 1540, 0),
+    drawnFrom: [
+      { id: "chk", name: "Everyday Checking", balance: 1500 },
+      { id: "wallet", name: "Wallet", balance: 40 },
+    ],
+    notCounted: [
+      { id: "sav", name: "Rainy Day Savings" },
+      { id: "inv", name: "Brokerage" },
+    ],
+  };
+  const container = await renderOpen(data);
+  const rows = [...container.querySelectorAll("dl > div")].map((d) => [
+    d.querySelector("dt")?.textContent,
+    d.querySelector("dd")?.textContent,
+  ]);
+  assert.deepEqual(rows.slice(0, 4), [
+    ["Cash on hand", "$1,540.00"],
+    ["Everyday Checking", "$1,500.00"],
+    ["Wallet", "$40.00"],
+    ["Not counted", "Rainy Day Savings, Brokerage"],
+  ]);
+});
+
+test("no Not counted row when every asset account is in the set", async () => {
+  const data = {
+    ...safeToSpend([once("Income", "Paycheck", 1000, 9), once("Income", "Paycheck 2", 1000, 23)], 1500, 0),
+    drawnFrom: [{ id: "chk", name: "Everyday Checking", balance: 1500 }],
+  };
+  const container = await renderOpen(data);
+  const labels = [...container.querySelectorAll("dl dt")].map((dt) => dt.textContent);
+  assert.ok(!labels.includes("Not counted"), labels.join(" | "));
+});
+
+// Window mode: no paycheck the projection can use. Rendered closed -- the
+// title and the prompt are what's visible without opening the breakdown.
+async function renderClosed(data: SafeToSpend): Promise<HTMLElement> {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  roots.push(root);
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  await act(async () =>
+    root.render(
+      <TodayProvider today={TODAY} timeZone={zone}>
+        <SafeToSpendHero data={data} />
+      </TodayProvider>,
+    ),
+  );
+  return container;
+}
+
+test("no paycheck at all: says none is scheduled and offers to add one", async () => {
+  const data = safeToSpend([once("Expense", "Rent", 800, 2)], 1500, 0);
+  assert.equal(data.mode, "window");
+  const text = (await renderClosed(data)).textContent ?? "";
+  assert.ok(text.includes("no paycheck scheduled"), text);
+  assert.ok(text.includes("Add a paycheck to see further ahead"), text);
+});
+
+test("a paycheck into Savings: never says there's no paycheck; asks to point it at checking or cash", async () => {
+  const data = { ...safeToSpend([once("Expense", "Rent", 800, 2)], 1500, 0), paycheck: "untracked" as const };
+  assert.equal(data.mode, "window");
+  const text = (await renderClosed(data)).textContent ?? "";
+  assert.ok(text.includes("your paycheck lands outside checking and cash"), text);
+  assert.ok(text.includes("Point your paycheck at checking or cash to see further ahead"), text);
+  assert.ok(!text.includes("no paycheck"), text);
+  assert.ok(!text.includes("Add a paycheck"), text);
 });
