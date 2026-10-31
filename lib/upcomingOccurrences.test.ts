@@ -39,6 +39,7 @@ function upcoming(schedules: ProjectionSchedule[]) {
     today: TODAY,
     cash: 2000,
     cushion: 0,
+    goalHolds: [],
     schedules,
     holidays: new Set(),
     fallbackWindowEnd: "2026-10-31",

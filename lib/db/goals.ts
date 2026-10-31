@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import type { GoalType } from "@/lib/goalOptions";
 import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/errors";
+import { isSafeToSpendCommitment } from "@/lib/safeToSpend";
 
 type GoalRow = Database["public"]["Tables"]["goals"]["Row"];
 type GoalInsert = Database["public"]["Tables"]["goals"]["Insert"];
@@ -20,7 +21,88 @@ export type CreateGoalInput = {
   target_amount: number;
   target_date?: string | null;
   monthly_contribution?: number | null;
+  /** The recurring transfer that funds it automatically (migration 57). */
+  funding_recurringid?: string | null;
 };
+
+/** A recurring transfer a goal can name as its funding (GoalForm's picker). */
+export type FundingTransfer = {
+  id: string;
+  description: string;
+  amount: number;
+  frequency: string;
+  toAccountName: string;
+};
+
+// The transfers safe to spend counts as money leaving the spendable set --
+// the same classifier the projection uses (isSafeToSpendCommitment), so a
+// transfer that wouldn't be deducted (Checking -> Cash, or from Savings) is
+// never offered as a goal's funding. v_upcoming_recurring already drops
+// paused and ended schedules.
+export async function listFundingTransfers(): Promise<DbResult<FundingTransfer[]>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("v_upcoming_recurring")
+    .select("recurring_id, description, amount, frequency, account_type, to_accountid, to_account_type, to_account_name")
+    .not("to_accountid", "is", null)
+    .order("description");
+  if (error) {
+    return { data: null, error: describeReadError(error, "recurring") };
+  }
+  return {
+    data: data.flatMap((r) =>
+      r.recurring_id !== null &&
+      r.account_type !== null &&
+      isSafeToSpendCommitment({
+        transactionType: "Transfer",
+        fromAccountType: r.account_type,
+        toAccountType: r.to_account_type,
+      })
+        ? [
+            {
+              id: r.recurring_id,
+              description: r.description ?? "",
+              amount: Number(r.amount ?? 0),
+              frequency: r.frequency ?? "",
+              toAccountName: r.to_account_name ?? "",
+            },
+          ]
+        : [],
+    ),
+    error: null,
+  };
+}
+
+// Each goal's funding link, for pre-filling the edit form -- v_goal_progress
+// doesn't carry it.
+export async function listGoalFundingLinks(): Promise<DbResult<Map<string, string>>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("goals")
+    .select("id, funding_recurringid")
+    .not("funding_recurringid", "is", null);
+  if (error) {
+    return { data: null, error: describeReadError(error, "goal") };
+  }
+  return { data: new Map(data.map((g) => [g.id, g.funding_recurringid as string])), error: null };
+}
+
+// Whether id names a recurring TRANSFER this user owns (RLS answers
+// "owns"). The picker only offers counted ones; this is the server's
+// guard against anything else arriving in the form.
+export async function isRecurringTransfer(id: string): Promise<DbResult<boolean>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("recurring_transactions")
+    .select("id")
+    .eq("id", id)
+    .not("to_accountid", "is", null)
+    .maybeSingle();
+  if (error) {
+    return { data: null, error: describeReadError(error, "recurring") };
+  }
+  return { data: data !== null, error: null };
+}
 
 export async function createGoal(input: CreateGoalInput): Promise<DbResult<GoalRow>> {
   const supabase = await createClient();

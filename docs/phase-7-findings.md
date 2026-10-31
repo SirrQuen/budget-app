@@ -582,6 +582,64 @@ with scripts disabled in headless Chrome: Enter did nothing.
   error-capture some other way). `useActionForm`'s comment, which used to
   say "a submit before hydration still posts natively", now says this.
 
+## Goal money in safe to spend (2026-10-31) -- HELD
+
+**Status: built on `feat/goal-contributions-in-safe-to-spend`, unmerged,
+held about a week.** It would be the third change to the hero number in
+a week; testers need a stable number to give usable feedback. Migration
+57 has not been pushed anywhere.
+
+Safe to spend sets aside each goal's `max(0, monthly target - contributed
+this month)`, per goal (one over-funded goal never covers another), flat
+after the cushion and never pro-rated. It's derived in
+`v_goal_monthly_holds`, never written. Archived, completed, no-target and
+zero-target goals hold nothing. The breakdown names it beside the cushion
+("Goals this month", then each goal). It comes off the headline only: the
+running-low line stays the cushion alone. A cushion is money not to touch;
+goal money can be deferred, and skipping a contribution when short is the
+right call.
+
+A goal can name the recurring transfer that funds it
+(`goals.funding_recurringid`, composite FK, ON DELETE SET NULL of the link
+only). While the projection counts that transfer (in
+`v_upcoming_recurring` and `leaves_spendable_set`), the transfer is the
+commitment and the target holds nothing, so the money never comes off
+twice. A paused, ended or Checking -> Cash transfer isn't counted, so the
+target holds again rather than the goal holding nothing. GoalForm asks
+"Do you move this money automatically?" as soon as a monthly target is
+typed, from the transfers the projection counts.
+
+Named `funding_recurringid`, not `funding_schedule_id`: the FK convention
+(no underscore before `id`, like `to_accountid`).
+
+Before merging:
+
+1. Push 57 to a **throwaway project**, never sorrel-dev while held.
+2. There: `docs/goal-monthly-holds-test.sql` (new, 8 sections),
+   `docs/rls-isolation-test.sql` (extended: the view in section 2, the FK
+   in section 8 both ways), `docs/cross-user-references-audit.sql` (reads
+   FKs from `pg_constraint`, so it already covers the new one),
+   `npm run test:parity`.
+3. Regenerate `lib/database.types.ts` from that project. The 57 entries
+   were hand-written to match `gen types` and should come out identical
+   apart from ordering (`v_goal_monthly_holds` sorts before
+   `v_goal_progress`).
+
+Known gaps:
+
+- **A transfer created after the goal isn't linked by itself.** The
+  question is asked when the target is set; set up the transfer later and
+  the user has to come back to the goal. Until then both come off. With
+  no transfers yet, the form says to link one here once it exists. A
+  prompt from the recurring side ("Is this for a goal?") would close it.
+- **Linked goals** (`feat/linked-goals`, held) measure progress from an
+  account balance, so "contributed this month" means something else for
+  them. Decide when that branch lands.
+- **`v_goals_summary` still filters on `status = 'Active'`**, which
+  CLAUDE.md says isn't used for archive or completion. Nothing visible
+  reads the affected fields (`planned_monthly_contribution`), and the new
+  view doesn't use it. Separate fix.
+
 ## Recurring dates: what each one means (2026-10-31)
 
 A recurring schedule has one user-entered date, `next_run_date` (the form

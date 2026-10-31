@@ -291,6 +291,32 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
               <dd className="shrink-0 font-medium tabular-nums text-ink">{formatCurrency(data.cushion)}</dd>
             </div>
 
+            {/* Named beside the cushion: both come off flat. Goals a recurring
+                transfer funds don't appear -- that transfer is already a
+                commitment above. */}
+            {data.goalHolds.length > 0 ? (
+              <>
+                <div className="flex items-baseline justify-between gap-4">
+                  <dt className="text-ink-secondary">
+                    Goals this month{" "}
+                    <Link
+                      href="/goals"
+                      className="rounded text-xs text-ink-muted underline-offset-2 hover:text-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action"
+                    >
+                      change
+                    </Link>
+                  </dt>
+                  <dd className="shrink-0 font-medium tabular-nums text-ink">{formatCurrency(data.goalHold)}</dd>
+                </div>
+                {data.goalHolds.map((g) => (
+                  <div key={g.goalId} className="flex items-baseline justify-between gap-4 pl-4 text-xs">
+                    <dt className="min-w-0 break-words text-ink-muted">Still to set aside for {g.name}</dt>
+                    <dd className="shrink-0 tabular-nums text-ink-secondary">{formatCurrency(g.amount)}</dd>
+                  </div>
+                ))}
+              </>
+            ) : null}
+
             <div className="mt-1 flex items-baseline justify-between gap-4 border-t border-hairline pt-2">
               <dt className="font-medium text-ink">Safe to spend</dt>
               <dd className="font-semibold tabular-nums text-ink">{formatCurrency(data.safeToSpend)}</dd>

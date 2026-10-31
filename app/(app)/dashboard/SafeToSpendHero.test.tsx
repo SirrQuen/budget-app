@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as nodeModule from "node:module";
 import { JSDOM } from "jsdom";
 import { addDaysISO } from "@/lib/date";
-import { projectSafeToSpend, type ProjectionSchedule } from "@/lib/safeToSpendProjection";
+import { projectSafeToSpend, type GoalHold, type ProjectionSchedule } from "@/lib/safeToSpendProjection";
 import type { SafeToSpend } from "@/lib/db/dashboard";
 
 // A cushion of zero is a legitimate setting (Settings allows editing it down
@@ -40,11 +40,17 @@ function once(kind: "Income" | "Expense", name: string, amount: number, n: numbe
   };
 }
 
-function safeToSpend(schedules: ProjectionSchedule[], cash: number, cushion: number): SafeToSpend {
+function safeToSpend(
+  schedules: ProjectionSchedule[],
+  cash: number,
+  cushion: number,
+  goalHolds: GoalHold[] = [],
+): SafeToSpend {
   const projection = projectSafeToSpend({
     today: TODAY,
     cash,
     cushion,
+    goalHolds,
     schedules,
     holidays: new Set(),
     fallbackWindowEnd: "2026-10-31",
@@ -258,4 +264,25 @@ test("a paycheck into Savings: never says there's no paycheck; asks to point it 
   assert.ok(text.includes("Point your paycheck at checking or cash to see further ahead"), text);
   assert.ok(!text.includes("no paycheck"), text);
   assert.ok(!text.includes("Add a paycheck"), text);
+});
+
+// Goal money is named beside the cushion, each goal on its own line, and
+// the row is absent when no goal is holding anything.
+test("breakdown names this month's goal money beside the cushion, goal by goal", async () => {
+  const data = safeToSpend([], 2000, 300, [
+    { goalId: "japan", name: "Japan", amount: 200 },
+    { goalId: "car", name: "Car", amount: 50 },
+  ]);
+  const container = await renderOpen(data);
+  const row = [...container.querySelectorAll("dt")].find((dt) => dt.textContent?.startsWith("Goals this month"));
+  assert.equal(row?.nextElementSibling?.textContent, "$250.00");
+  const text = container.textContent ?? "";
+  assert.ok(text.includes("Still to set aside for Japan"), text);
+  assert.ok(text.includes("Still to set aside for Car"), text);
+  assert.equal(data.safeToSpend, 2000 - 300 - 250);
+});
+
+test("no goal money: no Goals this month row", async () => {
+  const container = await renderOpen(safeToSpend([], 2000, 300));
+  assert.ok(!(container.textContent ?? "").includes("Goals this month"));
 });

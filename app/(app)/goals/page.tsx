@@ -1,5 +1,10 @@
 import { getGoalProgress, getGoalsSummary } from "@/lib/db/dashboard";
-import { getGoalContributions, type GoalContribution } from "@/lib/db/goals";
+import {
+  getGoalContributions,
+  listFundingTransfers,
+  listGoalFundingLinks,
+  type GoalContribution,
+} from "@/lib/db/goals";
 import { getTimeZone } from "@/lib/db/settings";
 import { todayInZone } from "@/lib/date";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -11,17 +16,21 @@ import { CreateGoalForm } from "./CreateGoalForm";
 import { GoalRow } from "./GoalRow";
 
 export default async function GoalsPage() {
-  const [progressResult, summaryResult, contributionsResult, timeZone] = await Promise.all([
+  const [progressResult, summaryResult, contributionsResult, timeZone, transfersResult, linksResult] = await Promise.all([
     getGoalProgress(),
     getGoalsSummary(),
     getGoalContributions(),
     getTimeZone(),
+    listFundingTransfers(),
+    listGoalFundingLinks(),
   ]);
 
   if (
     progressResult.error !== null ||
     summaryResult.error !== null ||
-    contributionsResult.error !== null
+    contributionsResult.error !== null ||
+    transfersResult.error !== null ||
+    linksResult.error !== null
   ) {
     return (
       <div className="flex flex-col gap-6">
@@ -34,6 +43,8 @@ export default async function GoalsPage() {
             progressResult.error ??
             summaryResult.error ??
             contributionsResult.error ??
+            transfersResult.error ??
+            linksResult.error ??
             "We couldn't load your goals. Refresh the page to try again."
           }
         />
@@ -64,7 +75,7 @@ export default async function GoalsPage() {
           icon={<TargetIcon className="h-10 w-10" />}
           heading="Give your savings a destination"
           message="A trip, a down payment, a cushion for emergencies -- name it, set a target, and every contribution counts toward it."
-          action={<CreateGoalForm label="Set your first goal" />}
+          action={<CreateGoalForm label="Set your first goal" fundingTransfers={transfersResult.data} />}
         />
       </div>
     );
@@ -87,7 +98,7 @@ export default async function GoalsPage() {
         />
       ) : null}
 
-      <CreateGoalForm />
+      <CreateGoalForm fundingTransfers={transfersResult.data} />
 
       <ul className="divide-y divide-hairline rounded-2xl border border-hairline bg-surface">
         {goals.map((goal) => (
@@ -95,6 +106,8 @@ export default async function GoalsPage() {
             key={goal.goal_id}
             goal={goal}
             contributions={contributionsByGoal.get(goal.goal_id ?? "") ?? []}
+            fundingRecurringId={linksResult.data.get(goal.goal_id ?? "") ?? null}
+            fundingTransfers={transfersResult.data}
             // completed_at is an instant; the day it names is the user's.
             completedOn={goal.completed_at ? todayInZone(timeZone, new Date(goal.completed_at)) : null}
           />

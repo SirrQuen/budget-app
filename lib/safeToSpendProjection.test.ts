@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { addDaysISO } from "./date";
-import { projectSafeToSpend, type ProjectionSchedule } from "./safeToSpendProjection";
+import { projectSafeToSpend, type GoalHold, type ProjectionSchedule } from "./safeToSpendProjection";
 import { buildConfirmationQueue } from "./confirmationQueue";
 
 const TODAY = "2026-10-01";
@@ -38,11 +38,12 @@ function schedule(overrides: Partial<ProjectionSchedule> & Pick<ProjectionSchedu
 const paycheck = schedule({ kind: "Income", name: "Paycheck", amount: 1500, nextDueDate: day(5) });
 const rent = schedule({ kind: "Expense", name: "Rent", amount: 1800, nextDueDate: day(7) });
 
-function run(schedules: ProjectionSchedule[], cash = 2000, cushion = 300) {
+function run(schedules: ProjectionSchedule[], cash = 2000, cushion = 300, goalHolds: GoalHold[] = []) {
   return projectSafeToSpend({
     today: TODAY,
     cash,
     cushion,
+    goalHolds,
     schedules,
     holidays: NO_HOLIDAYS,
     fallbackWindowEnd: "2026-10-31",
@@ -786,4 +787,57 @@ test("an Investment -> Loan transfer touches nothing", () => {
     nextDueDate: day(3),
   });
   assert.equal(delta([latePay, rent, between], [latePay, rent]), 0);
+});
+
+// Goal money: this month's still-to-set-aside per goal (v_goal_monthly_holds
+// has already taken contributions and funding transfers out). Flat after
+// the cushion; off the headline only, never the running-low line.
+const japan: GoalHold = { goalId: "japan", name: "Japan", amount: 200 };
+
+test("goal money comes off flat after the cushion: the worked case's $1,400 becomes $1,200", () => {
+  const result = run([paycheck, rent], 2000, 300, [japan]);
+
+  assert.equal(result.trough.amount, 1700);
+  assert.equal(result.cushion, 300);
+  assert.equal(result.goalHold, 200);
+  assert.deepEqual(result.goalHolds, [japan]);
+  assert.equal(result.safeToSpend, 1200);
+});
+
+test("goal money is the same amount whatever the horizon -- never pro-rated", () => {
+  const projection = run([paycheck, rent], 2000, 300, [japan]);
+  const window = run([], 2000, 300, [japan]);
+
+  assert.equal(projection.mode, "projection");
+  assert.equal(window.mode, "window");
+  assert.equal(projection.goalHold, 200);
+  assert.equal(window.goalHold, 200);
+  assert.equal(window.safeToSpend, 2000 - 300 - 200);
+});
+
+test("a goal already funded this month holds nothing and isn't listed", () => {
+  const funded: GoalHold = { goalId: "car", name: "Car", amount: 0 };
+  const result = run([paycheck, rent], 2000, 300, [funded, japan]);
+
+  assert.deepEqual(result.goalHolds, [japan]);
+  assert.equal(result.goalHold, 200);
+  assert.equal(result.safeToSpend, 1200);
+});
+
+test("goal holds per goal add up exactly, in cents", () => {
+  const result = run([], 1000, 0, [
+    { goalId: "a", name: "A", amount: 0.1 },
+    { goalId: "b", name: "B", amount: 0.2 },
+  ]);
+  assert.equal(result.goalHold, 0.3);
+  assert.equal(result.safeToSpend, 999.7);
+});
+
+test("goal money floors safe to spend at zero and never raises the running-low line", () => {
+  // Cash sits above the cushion the whole way, below cushion + goal money.
+  const result = run([], 400, 300, [japan]);
+
+  assert.equal(result.safeToSpend, 0);
+  assert.equal(result.shortfall, null);
+  assert.deepEqual(result.episodes, []);
 });
