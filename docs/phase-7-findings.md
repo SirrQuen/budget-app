@@ -582,6 +582,30 @@ with scripts disabled in headless Chrome: Enter did nothing.
   error-capture some other way). `useActionForm`'s comment, which used to
   say "a submit before hydration still posts natively", now says this.
 
+## Held branches that touch goals (2026-10-31)
+
+Pointer only. The full records live on the branches, unmerged.
+
+| Branch | Migration | Hold |
+|---|---|---|
+| `feat/goal-contributions-in-safe-to-spend` | 57: safe to spend sets aside this month's goal money | **Until the week of 9 November 2026.** Reason: three changes to the hero number inside a week leaves testers unable to give interpretable feedback about it. |
+| `feat/linked-goals` | 52: a goal's progress read from a linked account | Until that branch merges (its own commits say what it needs). |
+
+**Whichever merges second must be RE-DERIVED on top of the first**, not
+just given a fresh timestamp. 53 was written against a dev that had 52
+applied and had to be re-derived; the same trap is now set twice. Where
+they meet: 52 refuses contributions to a linked goal, and 57 measures
+"contributed this month" from contributions, so on top of 52 a linked
+goal would hold its full monthly target every month. 52 also replaces
+`v_goal_progress` from its pre-53 definition, both add columns to
+`goals`, and 52's timestamp (2026-10-26) is already older than 53, 54,
+56 and 57.
+
+57 was verified on a throwaway project (`sorrel-scratch-57`, deleted
+2026-10-31), never sorrel-dev. Neither migration is on sorrel-dev or
+production. Detail: that branch's `docs/phase-7-findings.md`, "Goal money
+in safe to spend".
+
 ## Recurring dates: what each one means (2026-10-31)
 
 A recurring schedule has one user-entered date, `next_run_date` (the form
