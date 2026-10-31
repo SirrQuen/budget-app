@@ -210,14 +210,16 @@ test("bulk confirm reports a failure and still confirms the rest; already-answer
   assert.deepEqual(result.errors, ["Rent already has a transaction on that date."]);
 });
 
-// CardPaymentNote's switch: a transfer into a Credit Card, and nothing else
-// -- not a transfer elsewhere, not an expense charged to the card.
-test("paysCreditCard marks transfers into a credit card only", () => {
+// PaymentNote's switch: a transfer paying money owed to a third party (a
+// card, a loan), and nothing else -- not a move between the user's own
+// accounts, not an expense charged to the card.
+test("payee marks transfers into a card or loan only", () => {
   const items = queue([
     schedule({ recurringId: "card", kind: "Transfer", amount: 300, toAccountId: "visa", toAccountType: "Credit Card", nextDueDate: TODAY }),
+    schedule({ recurringId: "loan", kind: "Transfer", amount: 250, toAccountId: "car", toAccountType: "Loan", nextDueDate: TODAY }),
     schedule({ recurringId: "savings", kind: "Transfer", amount: 100, toAccountId: "sav", toAccountType: "Savings", nextDueDate: TODAY }),
     schedule({ recurringId: "rent", kind: "Expense", amount: 1400, nextDueDate: TODAY }),
   ]);
-  const marked = Object.fromEntries(items.map((i) => [i.recurringId, i.paysCreditCard]));
-  assert.deepEqual(marked, { card: true, savings: false, rent: false });
+  const marked = Object.fromEntries(items.map((i) => [i.recurringId, i.payee]));
+  assert.deepEqual(marked, { card: "card", loan: "loan", savings: null, rent: null });
 });

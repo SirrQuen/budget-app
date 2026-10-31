@@ -23,7 +23,8 @@ import { FormField, useFieldId } from "@/components/ui/FormField";
 import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
-import { CardPaymentNote } from "@/components/CardPaymentNote";
+import { PaymentNote } from "@/components/PaymentNote";
+import { paymentPayee } from "@/lib/accountOptions";
 import { Celebration } from "@/components/ui/Celebration";
 import { useConfirmPulse } from "@/components/ui/ConfirmPulse";
 import { BalanceDateNote } from "@/components/BalanceDateNote";
@@ -625,8 +626,10 @@ export function AddTransactionForm({
 
         {clientError || state?.error ? <ErrorMessage message={clientError ?? state!.error!} /> : null}
 
-        {type === "Transfer" && accounts.find((a) => a.id === toAccountId)?.account_type === "Credit Card" ? (
-          <CardPaymentNote />
+        {type === "Transfer" ? (
+          <PaymentNote
+            payees={[paymentPayee(accounts.find((a) => a.id === toAccountId)?.account_type)].flatMap((p) => (p ? [p] : []))}
+          />
         ) : null}
 
         <Button type="submit" disabled={pending} className="self-start">

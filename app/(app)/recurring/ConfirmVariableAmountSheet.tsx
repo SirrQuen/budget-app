@@ -9,6 +9,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { PaymentNote } from "@/components/PaymentNote";
 
 // The cycle's dueDate (next_due_date) is the one shown; cursorDate only
 // feeds the statement walk-back. See StatementCycle.
@@ -105,6 +106,11 @@ export function ConfirmVariableAmountSheet({
             </FormField>
 
             {state?.error ? <ErrorMessage message={state.error} /> : null}
+
+            {/* Only card payments reach this sheet. It records the bill, not a
+                payment, but someone not reading carefully meets whichever
+                surface comes first -- the line can't depend on the route. */}
+            <PaymentNote payees={["card"]} />
 
             <Button type="submit" disabled={pending} className="self-start">
               {pending ? "Saving…" : "Confirm amount"}

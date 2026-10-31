@@ -15,7 +15,7 @@ import { Amount } from "@/components/ui/Amount";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { formatDateWithWeekday } from "@/lib/format";
 import { ConfirmOccurrenceSheet } from "./ConfirmOccurrenceSheet";
-import { CardPaymentNote } from "@/components/CardPaymentNote";
+import { PaymentNote } from "@/components/PaymentNote";
 
 // The confirmation queue: the only way a recurring schedule becomes a
 // transaction (CLAUDE.md "Confirmation creates every recurring
@@ -71,8 +71,10 @@ export function ConfirmationQueue({ items }: { items: ConfirmationQueueItem[] })
         ) : null}
       </div>
 
-      {/* Confirm all records every card payment in the list too. */}
-      {items.length > 1 && items.some((i) => i.paysCreditCard) ? <CardPaymentNote className="mb-2" /> : null}
+      {/* Confirm all records every card and loan payment in the list too. */}
+      {items.length > 1 ? (
+        <PaymentNote payees={items.flatMap((i) => (i.payee ? [i.payee] : []))} className="mb-2" />
+      ) : null}
 
       {bulkError ? <ErrorMessage message={bulkError} /> : null}
 
@@ -149,7 +151,7 @@ function QueueRow({ item, disabled }: { item: ConfirmationQueueItem; disabled: b
         </button>
       </div>
 
-      {item.paysCreditCard ? <CardPaymentNote /> : null}
+      {item.payee ? <PaymentNote payees={[item.payee]} /> : null}
 
       {error ? <ErrorMessage message={error} /> : null}
     </li>

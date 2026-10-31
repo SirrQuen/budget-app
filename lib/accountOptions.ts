@@ -35,6 +35,19 @@ export function isLiabilityAccountType(type: string): boolean {
   return type === "Credit Card" || type === "Loan";
 }
 
+export type PaymentPayee = "card" | "loan";
+
+// Whether recording money into this account is paying someone else --
+// the boundary for PaymentNote's "it doesn't move any money" line. Money
+// owed to a third party gets it (a card, a loan); a move between the
+// user's own accounts doesn't, or the line dilutes until nobody reads it.
+// The one place this is decided.
+export function paymentPayee(accountType: string | null | undefined): PaymentPayee | null {
+  if (accountType === "Credit Card") return "card";
+  if (accountType === "Loan") return "loan";
+  return null;
+}
+
 // A variable-amount recurring schedule's live estimate, when there's no
 // confirmed next_amount yet -- the card's current balance, negated (owed
 // amounts are negative per accounts_liability_sign) and floored at zero so
