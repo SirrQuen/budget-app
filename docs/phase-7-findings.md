@@ -637,6 +637,35 @@ Before merging:
    apart from ordering (`v_goal_monthly_holds` sorts before
    `v_goal_progress`).
 
+**Done 2026-10-31 on `sorrel-scratch-57` (`aqyccrjydauiriulljnu`)**, the
+full chain pushed from zero (baseline through 57):
+
+- **The chain builds from zero.** All 13 applied, remote history equal
+  to local. Nothing had exercised that since sorrel-dev was rebuilt on
+  2026-10-27.
+- `goal-monthly-holds-test.sql` 19/19. `rls-isolation-test.sql` 279/279
+  (273 before, plus the view's three checks, the FK both ways, and
+  coverage). Cleanup 0 for both test users, the RLS waitlist rows, and
+  every goal and schedule. `npm run test:parity` 99/99: it runs
+  `db query --linked`, so it follows the CLI link, never `.env.local`.
+  `cross-user-references-audit.sql` 0 on all 14 references, the new FK
+  among them -- vacuous on an empty database: it shows the FK is
+  audited, not that real rows are clean.
+- **The hand-written types were wrong, not just reordered.** Every
+  hand-written line is in the generated file, but `gen types` added two
+  relationship entries the hand-written file lacked: `goal_contributions_goalid_fkey` and
+  `transactions_goalid_fkey` each also reference `v_goal_monthly_holds`
+  (`userid, goalid`), because the view exposes `goals(userid, id)` as
+  `goalid`. Two orderings moved as well: the view, as predicted, and the
+  two `goals_funding_recurringid_fkey` entries, which sort after the
+  existing `goals` relationships, not before. `set_goal_funding` and the
+  `goals` columns matched exactly. The generated file replaced the
+  hand-written one. Against `main` it is 54 lines, all additions, all
+  57's, so the chain from zero produces exactly `main`'s types for
+  everything before it. Lesson: a view over a table with composite FKs
+  gains relationship entries on every table that references that table.
+  Generate types; don't hand-write them.
+
 Known gaps:
 
 - **Closed 2026-10-31: a transfer created after the goal wasn't
