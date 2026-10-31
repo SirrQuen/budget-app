@@ -18,6 +18,8 @@ export type VariableAmountTarget = {
   statementDay: number;
   /** next_run_date -- shown for context, not editable here. */
   dueDate: string;
+  /** start_date ?? next_run_date -- the schedule's own due day, for statementDateForCycle. */
+  anchorDate: string;
 };
 
 // A single-field sheet, reachable from three places (the upcoming
@@ -55,7 +57,7 @@ export function ConfirmVariableAmountSheet({
     wasPending.current = pending;
   }, [pending, state]);
 
-  const statementDateISO = statementDateForCycle(target.dueDate, target.statementDay);
+  const statementDateISO = statementDateForCycle(target.dueDate, target.statementDay, target.anchorDate);
 
   return (
     <>

@@ -70,7 +70,7 @@ test("statementDayIsDueDay refuses the due date's own day and nothing else", () 
 });
 
 test("a statement day after the due day is the normal cross-month cycle, not a collision", () => {
-  assert.equal(statementDateForCycle("2026-10-15", 20), "2026-09-20");
+  assert.equal(statementDateForCycle("2026-10-15", 20, "2026-10-15"), "2026-09-20");
   assert.equal(statementDayIsDueDay(20, 15), false);
   assert.equal(statementDayIsDueDay(28, 22), false);
 });
@@ -79,6 +79,58 @@ test("a statement day after the due day is the normal cross-month cycle, not a c
 // clamp to the 28th, so that month's window is the due date alone.
 test("a month-end short gap is allowed; in February its statement lands on the due date", () => {
   assert.equal(statementDayIsDueDay(29, 30), false);
-  assert.equal(statementDateForCycle("2027-01-30", 29), "2027-01-29");
-  assert.equal(statementDateForCycle("2027-02-28", 29), "2027-02-28");
+  assert.equal(statementDateForCycle("2027-01-30", 29, "2026-10-30"), "2027-01-29");
+  assert.equal(statementDateForCycle("2027-02-28", 29, "2026-10-30"), "2027-02-28");
+});
+
+// The bug the anchor fixes: comparing clamped days put a cross-month cycle's
+// statement on its due date whenever a short month clamped the statement
+// day down to the due day.
+test("a cross-month cycle keeps the previous month's statement when a short month clamps", () => {
+  // Statement 31 / due 28: February.
+  assert.equal(statementDateForCycle("2027-02-28", 31, "2026-10-28"), "2027-01-31");
+  assert.equal(statementDateForCycle("2027-03-28", 31, "2026-10-28"), "2027-02-28");
+  // Statement 30 / due 29: a short February clamps the cursor too; a leap one doesn't.
+  assert.equal(statementDateForCycle("2027-02-28", 30, "2026-10-29"), "2027-01-30");
+  assert.equal(statementDateForCycle("2028-02-29", 30, "2026-10-29"), "2028-01-30");
+  // Statement 31 / due 30: every 30-day month, starting November 2026.
+  assert.equal(statementDateForCycle("2026-11-30", 31, "2026-10-30"), "2026-10-31");
+  assert.equal(statementDateForCycle("2027-02-28", 31, "2026-10-30"), "2027-01-31");
+});
+
+// The defining property, every pair, every month from 2026 to 2028 (two
+// short Februaries and a leap one): a statement day on or before the due
+// day closes in the due date's month, a later one in the month before, and
+// either way each cycle gets its own statement (strictly after the last
+// one), no earlier than the previous due date and no later than this one.
+// It can equal the previous due date: statement 29 / due 28 closes on
+// Feb 28, the day February's payment is due.
+test("statementDateForCycle: same month when statement <= due day, previous month when later, inside its own cycle", () => {
+  const iso = (y: number, m: number, d: number) =>
+    `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const last = (y: number, m: number) => new Date(y, m, 0).getDate();
+  for (let statementDay = 1; statementDay <= 31; statementDay++) {
+    for (let dueDay = 1; dueDay <= 31; dueDay++) {
+      const anchor = iso(2025, 12, dueDay);
+      let prevDue = iso(2025, 12, dueDay);
+      let prevStatement = "";
+      for (let i = 0; i < 36; i++) {
+        const y = 2026 + Math.floor(i / 12);
+        const m = (i % 12) + 1;
+        const due = iso(y, m, Math.min(dueDay, last(y, m)));
+        const statement = statementDateForCycle(due, statementDay, anchor);
+        const [sy, sm] = statement.split("-").map(Number);
+        const label = `statement ${statementDay}, due ${due}: ${statement}`;
+        if (statementDay <= dueDay) {
+          assert.ok(sy === y && sm === m, label);
+        } else {
+          assert.ok(sm === (m === 1 ? 12 : m - 1), label);
+        }
+        assert.ok(prevDue <= statement && statement <= due, label);
+        assert.ok(statement > prevStatement, label);
+        prevDue = due;
+        prevStatement = statement;
+      }
+    }
+  }
 });
