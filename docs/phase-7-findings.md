@@ -584,10 +584,22 @@ with scripts disabled in headless Chrome: Enter did nothing.
 
 ## Goal money in safe to spend (2026-10-31) -- HELD
 
-**Status: built on `feat/goal-contributions-in-safe-to-spend`, unmerged,
-held about a week.** It would be the third change to the hero number in
-a week; testers need a stable number to give usable feedback. Migration
-57 has not been pushed anywhere.
+**Status: built on `feat/goal-contributions-in-safe-to-spend`, unmerged.
+Hold until the week of 9 November 2026. Reason: three changes to the
+hero number inside a week leaves testers unable to give interpretable
+feedback about it.** Migration 57 has been on a throwaway project only
+(below), never sorrel-dev or production.
+
+**Two held branches now carry migrations that touch goals:**
+`feat/linked-goals` (52) and this one (57). Whichever merges second must
+be RE-DERIVED on top of the first, not just given a fresh timestamp. 53
+was written against a dev that had 52 applied and had to be re-derived;
+the same trap is now set twice. Where they meet: 52 refuses
+contributions to a linked goal, and 57 measures "contributed this month"
+from contributions, so on top of 52 a linked goal would hold its full
+monthly target every month. 52 also replaces `v_goal_progress` from its
+pre-53 definition, and both add columns to `goals`. 52's timestamp
+(2026-10-26) is already older than 53, 54, 56 and 57.
 
 Safe to spend sets aside each goal's `max(0, monthly target - contributed
 this month)`, per goal (one over-funded goal never covers another), flat
