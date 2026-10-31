@@ -209,3 +209,15 @@ test("bulk confirm reports a failure and still confirms the rest; already-answer
   assert.equal(result.confirmed, 2);
   assert.deepEqual(result.errors, ["Rent already has a transaction on that date."]);
 });
+
+// CardPaymentNote's switch: a transfer into a Credit Card, and nothing else
+// -- not a transfer elsewhere, not an expense charged to the card.
+test("paysCreditCard marks transfers into a credit card only", () => {
+  const items = queue([
+    schedule({ recurringId: "card", kind: "Transfer", amount: 300, toAccountId: "visa", toAccountType: "Credit Card", nextDueDate: TODAY }),
+    schedule({ recurringId: "savings", kind: "Transfer", amount: 100, toAccountId: "sav", toAccountType: "Savings", nextDueDate: TODAY }),
+    schedule({ recurringId: "rent", kind: "Expense", amount: 1400, nextDueDate: TODAY }),
+  ]);
+  const marked = Object.fromEntries(items.map((i) => [i.recurringId, i.paysCreditCard]));
+  assert.deepEqual(marked, { card: true, savings: false, rent: false });
+});

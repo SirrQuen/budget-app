@@ -138,7 +138,7 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
       const statementDayInput = String(formData.get("statement_day") ?? "").trim();
       statement_day = Math.trunc(Number(statementDayInput));
       if (!Number.isFinite(statement_day) || statement_day < 1 || statement_day > 31) {
-        return { error: "Enter a statement day between 1 and 31." };
+        return { error: "Choose the day the statement closes." };
       }
       // Checked against next_run_date below, once it's parsed.
     }

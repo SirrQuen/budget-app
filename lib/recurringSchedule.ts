@@ -20,7 +20,7 @@ const weekdayFormatter = new Intl.DateTimeFormat("en-US", {
   weekday: "long",
 });
 
-function ordinal(n: number): string {
+export function ordinal(n: number): string {
   const rem100 = n % 100;
   if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
   switch (n % 10) {

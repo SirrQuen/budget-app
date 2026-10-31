@@ -12,12 +12,21 @@ import type { TransactionAccountOption } from "../transactions/AddTransactionFor
 import { useToday } from "@/components/TodayProvider";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
 import { formatDateWithWeekday } from "@/lib/format";
+import { ordinal } from "@/lib/recurringSchedule";
 import { FormField, useFieldId } from "@/components/ui/FormField";
 import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
 const fieldClassName = FIELD_CLASS;
+
+// 1st through 31st. The last three don't occur every month; in a shorter
+// one the statement closes on the month's last day (statementDateForCycle
+// clamps).
+const STATEMENT_DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => {
+  const day = i + 1;
+  return { value: String(day), label: day >= 29 ? `${ordinal(day)} (not every month)` : ordinal(day) };
+});
 
 // Expense/Income pick a category (filtered by this same value, same trick
 // AddTransactionForm uses); Transfer swaps Category+Account for From/To
@@ -310,6 +319,21 @@ export function RecurringForm({
   const [amountIsVariable, setAmountIsVariable] = useState(recurring?.amount_is_variable ?? false);
   const showCardVariableToggle = kind === "Transfer" && toAccountIsCreditCard;
   const showCardVariableFields = showCardVariableToggle && amountIsVariable;
+  // Amount and Statement day share one slot. Whenever it swaps -- the
+  // checkbox, the kind, or the destination account -- both are cleared, so
+  // a $15 payment can't become statement day 15, chosen by nobody.
+  // Adjusted during render, not in an effect, so no frame shows the stale
+  // value.
+  const [amountValue, setAmountValue] = useState(seed?.amount !== undefined ? String(seed.amount) : "");
+  const [statementDayValue, setStatementDayValue] = useState(
+    recurring?.statement_day != null ? String(recurring.statement_day) : "",
+  );
+  const [shownCardVariableFields, setShownCardVariableFields] = useState(showCardVariableFields);
+  if (shownCardVariableFields !== showCardVariableFields) {
+    setShownCardVariableFields(showCardVariableFields);
+    setAmountValue("");
+    setStatementDayValue("");
+  }
   // "Amount changes each time" -- Income and Expense (a card-payment
   // transfer keeps its own toggle above). amountIsVariable is shared with
   // the card checkbox -- kind alone decides which one renders, so only one
@@ -405,21 +429,30 @@ export function RecurringForm({
 
         {showCardVariableFields ? (
           <FormField
-            label="Statement day"
+            label="What day does this card's statement close?"
             htmlFor={fieldId("statement_day")}
             required
-            hint="Sorrel asks for the amount once the statement posts on this day each month, and estimates from the card's current balance until then. It can be before or after the payment's day of the month (a statement on the 20th for a payment on the 15th is normal), just not the same day."
+            hint="Sorrel asks for the amount once the statement closes on this day each month, and estimates from the card's current balance until then. It can be before or after the payment's day of the month (a statement on the 20th for a payment on the 15th is normal), just not the same day."
           >
-            <Input
+            {/* A list, not a number box: nothing out of range can be typed,
+                and no dollar amount can survive the swap from Amount. */}
+            <select
               id={fieldId("statement_day")}
               name="statement_day"
-              type="number"
-              inputMode="numeric"
-              min="1"
-              max="31"
               required
-              defaultValue={recurring?.statement_day ?? undefined}
-            />
+              value={statementDayValue}
+              onChange={(e) => setStatementDayValue(e.target.value)}
+              className={fieldClassName}
+            >
+              <option value="" disabled>
+                Choose a day
+              </option>
+              {STATEMENT_DAY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </FormField>
         ) : (
           <FormField label="Amount" htmlFor={fieldId("amount")} required>
@@ -432,7 +465,8 @@ export function RecurringForm({
               step="0.01"
               placeholder="0.00"
               required
-              defaultValue={seed?.amount}
+              value={amountValue}
+              onChange={(e) => setAmountValue(e.target.value)}
             />
           </FormField>
         )}

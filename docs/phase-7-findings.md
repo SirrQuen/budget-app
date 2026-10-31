@@ -712,8 +712,16 @@ window is currently one day (the 29th to the 30th; in February, the due
 date alone).
 
 Not a constraint problem: the save rule allows it, as agreed. The row is
-left as it is. Matt is asking the tester what they meant. Their answer
-decides whether the "Statement day" copy needs rewriting.
+left as it is. Matt is asking the tester what they meant.
+
+The field was rewritten without waiting for that answer (2026-10-31): it
+names the event ("What day does this card's statement close?") and is a
+list of 1st to 31st, the last three marked "not every month". Separately,
+the old form carried a typed value across the Amount / Statement day swap
+(React reused the one number input): a $15 payment became statement day
+15. Both fields now clear on every swap, pinned by
+`app/(app)/recurring/RecurringForm.test.tsx`. Whether the tester's 29 was
+that carry-over, an autopay date, or real is still their answer to give.
 
 ## Phase 8 policy item: auth audit log retained after deletion (2026-10-06)
 
