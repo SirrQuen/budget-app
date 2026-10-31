@@ -18,6 +18,7 @@ import { confirmationKey } from "@/lib/confirmationQueue";
 import { statementDayIsDueDay } from "@/lib/recurringSchedule";
 import { addNotYetKey } from "@/lib/confirmationLater";
 import { getToday } from "@/lib/db/settings";
+import { setGoalFunding } from "@/lib/db/goals";
 
 export type ActionState = { error?: string } | undefined;
 
@@ -269,6 +270,16 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
   };
 }
 
+// "Is this for a goal?" -- answered only when the form asked it (a counted
+// transfer, with a single goal link to show; RecurringForm). Absent, the
+// link is left exactly as it is, so an edit that never showed the question
+// can't drop a link made from the goal side.
+function goalLinkAnswer(formData: FormData): { goalId: string | null } | null {
+  if (formData.get("kind") !== "Transfer" || formData.get("funding_goal_asked") !== "1") return null;
+  const goalId = String(formData.get("funding_goalid") ?? "").trim();
+  return { goalId: goalId || null };
+}
+
 export async function createRecurringAction(
   _prevState: ActionState,
   formData: FormData,
@@ -278,7 +289,9 @@ export async function createRecurringAction(
     return parsed;
   }
 
-  const { error } = await createRecurring({
+  const goalLink = goalLinkAnswer(formData);
+
+  const created = await createRecurring({
     description: parsed.description,
     amount: parsed.amount,
     categoryid: parsed.categoryid,
@@ -300,11 +313,22 @@ export async function createRecurringAction(
     non_business_day_rule: parsed.non_business_day_rule,
   });
 
-  if (error) {
-    return { error };
+  if (created.error !== null) {
+    return { error: created.error };
   }
 
   revalidatePath("/recurring");
+
+  if (goalLink?.goalId) {
+    const linked = await setGoalFunding(created.data.id, goalLink.goalId);
+    revalidatePath("/goals");
+    revalidatePath("/dashboard");
+    // The schedule is saved; saving again would make a second one. Say so,
+    // and where to finish the link.
+    if (linked.error !== null) {
+      return { error: "Your transfer is saved, but linking it to the goal didn't work. Open the goal and choose this transfer there." };
+    }
+  }
 }
 
 export async function updateRecurringAction(
@@ -371,6 +395,16 @@ export async function updateRecurringAction(
 
   if (error) {
     return { error };
+  }
+
+  const goalLink = goalLinkAnswer(formData);
+  if (goalLink) {
+    const linked = await setGoalFunding(id, goalLink.goalId);
+    revalidatePath("/goals");
+    if (linked.error !== null) {
+      revalidatePath("/recurring");
+      return { error: "Your changes are saved, but the goal link didn't update. Try again, or set it from the goal." };
+    }
   }
 
   revalidatePath("/recurring");

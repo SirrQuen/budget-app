@@ -31,6 +31,10 @@
 --   7  The composite FK: a goal can't name another user's schedule, even
 --      written with RLS bypassed (23503).
 --   8  RLS: another user sees none of these rows.
+--   9  set_goal_funding (the recurring form's side): links one goal and
+--      unlinks the rest atomically; omitted goal = "No"; refuses a
+--      schedule that isn't a transfer, and another user's goal or
+--      schedule (P0002 -- RLS hides them).
 -- =====================================================================
 
 begin;
@@ -103,6 +107,9 @@ declare
   n           bigint;
   state       text;
   link_user   uuid;
+  rent_cat    uuid;
+  rent_s      constant uuid := 'dddddddd-0000-4000-8000-000000000014';
+  linked      text;
 begin
   perform pg_temp.become(u);
   month_start := date_trunc('month', current_date::timestamptz)::date;
@@ -194,6 +201,52 @@ begin
   select count(*) into n from public.v_goal_monthly_holds where userid = u;
   perform pg_temp.rec('8 another user sees none of the holds', '0', n::text);
   perform pg_temp.unbecome();
+
+  -- 9 ------------------------------------------------------------------
+  select id into rent_cat from public.categories where userid = u and category_name = 'Rent';
+  perform pg_temp.become(u);
+  insert into public.recurring_transactions
+    (id, userid, accountid, categoryid, description, amount, frequency,
+     next_run_date, start_date, next_due_date)
+  values (rent_s, u, chk, rent_cat, 'Rent', 900, 'Monthly', current_date + 5, current_date + 5, current_date + 5);
+
+  -- to_cash funds g_cash (fixture); pointing it at g_plain moves the link.
+  perform public.set_goal_funding(to_cash, g_plain);
+  select string_agg(goal_name, ', ' order by goal_name) into linked from public.goals where funding_recurringid = to_cash;
+  perform pg_temp.rec('9 linking a schedule to a goal moves it there, off the other', 'Plain', linked);
+
+  perform public.set_goal_funding(to_cash);
+  select count(*) into n from public.goals where funding_recurringid = to_cash;
+  perform pg_temp.rec('9 no goal = "No": the schedule funds nothing', '0', n::text);
+
+  begin
+    perform public.set_goal_funding(rent_s, g_plain);
+    state := 'accepted';
+  exception when others then
+    state := sqlstate;
+  end;
+  perform pg_temp.rec('9 an expense schedule can''t fund a goal', 'P0002', state);
+
+  begin
+    perform public.set_goal_funding(o_sched, g_plain);
+    state := 'accepted';
+  exception when others then
+    state := sqlstate;
+  end;
+  perform pg_temp.rec('9 another user''s schedule is refused', 'P0002', state);
+  perform pg_temp.unbecome();
+
+  perform pg_temp.become(other);
+  begin
+    perform public.set_goal_funding(o_sched, g_plain);
+    state := 'accepted';
+  exception when others then
+    state := sqlstate;
+  end;
+  perform pg_temp.rec('9 another user''s goal is refused', 'P0002', state);
+  perform pg_temp.unbecome();
+  select coalesce(funding_recurringid::text, '<null>') into hold from public.goals where id = g_plain;
+  perform pg_temp.rec('9 ... and left it unlinked', '<null>', hold);
 end
 $$;
 

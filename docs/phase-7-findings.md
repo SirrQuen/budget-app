@@ -609,13 +609,25 @@ target holds again rather than the goal holding nothing. GoalForm asks
 "Do you move this money automatically?" as soon as a monthly target is
 typed, from the transfers the projection counts.
 
+The link is asked from both ends, because the feature is only correct
+when it exists. A goal set first and automated later is the same silent
+failure with the steps reversed: nothing links it, and both the target
+and the transfer come off safe to spend. So the recurring transfer form
+asks "Is this for a goal?" at create, at edit, and from "Make recurring"
+on a transfer row, whenever the transfer is one the projection counts.
+Its answer goes through `set_goal_funding()` (migration 57), which links
+one goal and unlinks any other in one call. When a transfer already
+funds several goals (linked from the goal side), the form says so and
+leaves them alone: one answer there would unlink the rest. The link is
+written only when the form asked, so an edit elsewhere never drops it.
+
 Named `funding_recurringid`, not `funding_schedule_id`: the FK convention
 (no underscore before `id`, like `to_accountid`).
 
 Before merging:
 
 1. Push 57 to a **throwaway project**, never sorrel-dev while held.
-2. There: `docs/goal-monthly-holds-test.sql` (new, 8 sections),
+2. There: `docs/goal-monthly-holds-test.sql` (new, 9 sections),
    `docs/rls-isolation-test.sql` (extended: the view in section 2, the FK
    in section 8 both ways), `docs/cross-user-references-audit.sql` (reads
    FKs from `pg_constraint`, so it already covers the new one),
@@ -627,11 +639,14 @@ Before merging:
 
 Known gaps:
 
-- **A transfer created after the goal isn't linked by itself.** The
-  question is asked when the target is set; set up the transfer later and
-  the user has to come back to the goal. Until then both come off. With
-  no transfers yet, the form says to link one here once it exists. A
-  prompt from the recurring side ("Is this for a goal?") would close it.
+- **Closed 2026-10-31: a transfer created after the goal wasn't
+  linked.** The first build asked only on the goal side. The recurring
+  side (above) closes it, before merge.
+- **A new transfer whose goal link fails** is still saved, and the form
+  says so ("Your transfer is saved, but linking it to the goal didn't
+  work..."), since saving again would make a second schedule. The two
+  writes aren't one transaction: the schedule's business-day dates are
+  computed in TypeScript.
 - **Linked goals** (`feat/linked-goals`, held) measure progress from an
   account balance, so "contributed this month" means something else for
   them. Decide when that branch lands.
@@ -639,6 +654,17 @@ Known gaps:
   CLAUDE.md says isn't used for archive or completion. Nothing visible
   reads the affected fields (`planned_monthly_contribution`), and the new
   view doesn't use it. Separate fix.
+
+### The held-migration rule was load-bearing here (2026-10-31)
+
+CLAUDE.md's "a held branch's migration must never be pushed to the shared
+dev database" caught 57 before it cost anything. Every earlier mention of
+the rule was retrospective: linked-goals' 52 sat on sorrel-dev and
+migration 53 was written around it, which is why dev was rebuilt on
+2026-10-27. This is the first time it shaped what happened instead of
+explaining what went wrong. 57 goes to a throwaway project
+(`sorrel-scratch-57`), named so it can't be mistaken for sorrel-dev,
+and is deleted the same day.
 
 ## Recurring dates: what each one means (2026-10-31)
 

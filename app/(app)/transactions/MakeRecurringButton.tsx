@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { RecurringForm, type RecurringPrefill } from "../recurring/RecurringForm";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { TransactionAccountOption } from "./AddTransactionForm";
+import type { GoalOption } from "@/lib/db/goals";
 
 // "Make this recurring" on an existing transaction (or transfer) row --
 // most people's actual first recurring schedule: they've logged rent twice
@@ -20,11 +21,13 @@ export function MakeRecurringButton({
   incomeCategories,
   expenseCategories,
   accounts,
+  goals,
 }: {
   prefill: RecurringPrefill;
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
   accounts: TransactionAccountOption[];
+  goals: GoalOption[];
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDialogElement>(null);
@@ -65,6 +68,7 @@ export function MakeRecurringButton({
             incomeCategories={incomeCategories}
             expenseCategories={expenseCategories}
             accounts={accounts}
+            goals={goals}
             onSuccess={() => setOpen(false)}
             onCancel={() => setOpen(false)}
           />

@@ -6,6 +6,7 @@ import {
 } from "@/lib/db/transactions";
 import { listCategories, listCategoriesForType } from "@/lib/db/categories";
 import { listAccounts } from "@/lib/db/accounts";
+import { listGoalOptions } from "@/lib/db/goals";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadError } from "@/components/ui/LoadError";
 import { InfoIcon } from "@/components/ui/icons";
@@ -41,6 +42,7 @@ export default async function TransactionsPage({
     accountsResult,
     incomeCategoriesResult,
     expenseCategoriesResult,
+    goalsResult,
   ] = await Promise.all([
     listTransactions({
       ...(dateFrom ? { dateFrom } : {}),
@@ -54,6 +56,7 @@ export default async function TransactionsPage({
     listAccounts(),
     listCategoriesForType("Income"),
     listCategoriesForType("Expense"),
+    listGoalOptions(),
   ]);
 
   if (
@@ -61,7 +64,8 @@ export default async function TransactionsPage({
     categoriesResult.error !== null ||
     accountsResult.error !== null ||
     incomeCategoriesResult.error !== null ||
-    expenseCategoriesResult.error !== null
+    expenseCategoriesResult.error !== null ||
+    goalsResult.error !== null
   ) {
     return (
       <div className="flex flex-col gap-6">
@@ -73,6 +77,7 @@ export default async function TransactionsPage({
             accountsResult.error ??
             incomeCategoriesResult.error ??
             expenseCategoriesResult.error ??
+            goalsResult.error ??
             "We couldn't load your transactions. Refresh the page to try again."
           }
         />
@@ -255,6 +260,7 @@ export default async function TransactionsPage({
         accounts={activeAccounts}
         incomeCategories={incomeCategoriesResult.data}
         expenseCategories={expenseCategoriesResult.data}
+        goals={goalsResult.data}
       />
     </div>
   );

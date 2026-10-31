@@ -2,6 +2,7 @@ import { listRecurring, estimateIncomeAmount, estimateExpenseAmount } from "@/li
 import { listAccounts, listAccountBalances } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { getBankHolidays } from "@/lib/db/holidays";
+import { listGoalOptions } from "@/lib/db/goals";
 import { estimateCardPaymentDue } from "@/lib/accountOptions";
 import { getToday } from "@/lib/db/settings";
 import { getConfirmationQueue } from "@/lib/db/dashboard";
@@ -46,6 +47,7 @@ export default async function RecurringPage() {
     expenseCategoriesResult,
     holidaysResult,
     confirmationResult,
+    goalsResult,
   ] = await Promise.all([
     listRecurring(),
     listAccounts({ is_active: true }),
@@ -54,6 +56,7 @@ export default async function RecurringPage() {
     listCategoriesForType("Expense"),
     getBankHolidays(),
     getConfirmationQueue(),
+    listGoalOptions(),
   ]);
 
   // RecurringForm's live timing preview degrades to "weekend-aware only"
@@ -74,7 +77,8 @@ export default async function RecurringPage() {
     balancesResult.error !== null ||
     incomeCategoriesResult.error !== null ||
     expenseCategoriesResult.error !== null ||
-    confirmationResult.error !== null
+    confirmationResult.error !== null ||
+    goalsResult.error !== null
   ) {
     return (
       <RecurringLoadError
@@ -85,6 +89,7 @@ export default async function RecurringPage() {
           incomeCategoriesResult.error ??
           expenseCategoriesResult.error ??
           confirmationResult.error ??
+          goalsResult.error ??
           "We couldn't load your recurring transactions. Refresh the page to try again."
         }
       />
@@ -161,6 +166,7 @@ export default async function RecurringPage() {
                 incomeCategories={incomeCategories}
                 expenseCategories={expenseCategories}
                 accounts={accounts}
+                goals={goalsResult.data}
                 holidays={holidays}
                 label="Add your first schedule"
               />
@@ -182,6 +188,7 @@ export default async function RecurringPage() {
         incomeCategories={incomeCategories}
         expenseCategories={expenseCategories}
         accounts={accounts}
+        goals={goalsResult.data}
         holidays={holidays}
       />
 
@@ -213,6 +220,7 @@ export default async function RecurringPage() {
               incomeCategories={incomeCategories}
               expenseCategories={expenseCategories}
               accounts={accounts}
+              goals={goalsResult.data}
               holidays={holidays}
               estimatedAmount={estimatedAmount}
               today={today}

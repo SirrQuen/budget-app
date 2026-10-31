@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import * as nodeModule from "node:module";
 import { JSDOM } from "jsdom";
 import type { TransactionAccountOption } from "../transactions/AddTransactionForm";
+import type { GoalOption } from "@/lib/db/goals";
+import type { EditableRecurring } from "./RecurringForm";
 
 // Amount and "What day does this card's statement close?" share one slot.
 // The dangerous stale value isn't an out-of-range day; it's a $15 payment
@@ -41,7 +43,11 @@ const ACCOUNTS: TransactionAccountOption[] = [
   { id: "checking", account_name: "Checking", is_active: true, opening_date: "2026-01-01", account_type: "Checking" },
   { id: "card", account_name: "Visa", is_active: true, opening_date: "2026-01-01", account_type: "Credit Card" },
   { id: "savings", account_name: "Savings", is_active: true, opening_date: "2026-01-01", account_type: "Savings" },
+  { id: "cash", account_name: "Wallet", is_active: true, opening_date: "2026-01-01", account_type: "Cash" },
 ];
+
+const JAPAN: GoalOption = { id: "japan", name: "Japan", monthlyContribution: 200, fundingRecurringId: null };
+const CAR: GoalOption = { id: "car", name: "Car", monthlyContribution: null, fundingRecurringId: null };
 
 before(async () => {
   dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
@@ -69,7 +75,9 @@ after(async () => {
   dom.window.close();
 });
 
-async function render(): Promise<HTMLElement> {
+async function render(
+  props: { goals?: GoalOption[]; recurring?: EditableRecurring } = {},
+): Promise<HTMLElement> {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -82,6 +90,8 @@ async function render(): Promise<HTMLElement> {
           incomeCategories={[]}
           expenseCategories={[]}
           accounts={ACCOUNTS}
+          goals={props.goals ?? []}
+          recurring={props.recurring}
           onSuccess={() => {}}
           onCancel={() => {}}
         />
@@ -163,4 +173,86 @@ test("the statement day list runs 1st to 31st, the last three marked as not ever
     ["29th (not every month)", "30th (not every month)", "31st (not every month)"],
   );
   assert.ok(c.textContent?.includes("What day does this card's statement close?"));
+});
+
+// "Is this for a goal?" -- the recurring side of goals.funding_recurringid.
+// Without it, a goal set first and automated later is never linked, and
+// both its target and the transfer come off safe to spend.
+async function transfer(c: HTMLElement, from: string, to: string) {
+  await click(q<HTMLInputElement>(c, 'input[name="kind"][value="Transfer"]')!);
+  await setValue(q<HTMLSelectElement>(c, 'select[name="accountid"]')!, from);
+  await setValue(q<HTMLSelectElement>(c, 'select[name="to_accountid"]')!, to);
+}
+
+const goalPicker = (c: HTMLElement) => q<HTMLSelectElement>(c, 'select[name="funding_goalid"]');
+const asked = (c: HTMLElement) => q<HTMLInputElement>(c, 'input[name="funding_goal_asked"]');
+
+test("a counted transfer asks whether it's for a goal, at create", async () => {
+  const c = await render({ goals: [CAR, JAPAN] });
+  await transfer(c, "checking", "savings");
+
+  const select = goalPicker(c);
+  assert.ok(select, "the question appears");
+  assert.equal(asked(c)?.value, "1");
+  assert.deepEqual(
+    [...select.options].map((o) => [o.value, o.textContent]),
+    [
+      ["", "No"],
+      ["car", "Car"],
+      ["japan", "Japan · $200.00 a month"],
+    ],
+  );
+  assert.equal(select.value, "");
+});
+
+test("a transfer safe to spend doesn't count (Checking -> Cash) isn't asked", async () => {
+  const c = await render({ goals: [JAPAN] });
+  await transfer(c, "checking", "cash");
+  assert.equal(goalPicker(c), null);
+  assert.equal(asked(c), null);
+});
+
+test("no goals, no question", async () => {
+  const c = await render({ goals: [] });
+  await transfer(c, "checking", "savings");
+  assert.equal(goalPicker(c), null);
+});
+
+const EDITING: EditableRecurring = {
+  id: "to-savings",
+  description: "To savings",
+  amount: 200,
+  kind: "Transfer",
+  categoryid: null,
+  accountid: "checking",
+  to_accountid: "savings",
+  frequency: "Monthly",
+  interval_count: 1,
+  next_run_date: "2026-11-01",
+  occurrence_limit: null,
+  end_date: null,
+  amount_is_variable: false,
+  statement_day: null,
+  date_tolerance_days: 0,
+  business_day_offset: 0,
+  non_business_day_rule: "none",
+};
+
+test("at edit, the goal this transfer funds is already chosen", async () => {
+  const c = await render({ recurring: EDITING, goals: [CAR, { ...JAPAN, fundingRecurringId: "to-savings" }] });
+  assert.equal(goalPicker(c)?.value, "japan");
+  assert.equal(asked(c)?.value, "1");
+});
+
+test("funding two goals: no picker -- one answer would unlink the other -- and nothing is posted", async () => {
+  const c = await render({
+    recurring: EDITING,
+    goals: [
+      { ...CAR, fundingRecurringId: "to-savings" },
+      { ...JAPAN, fundingRecurringId: "to-savings" },
+    ],
+  });
+  assert.equal(goalPicker(c), null);
+  assert.equal(asked(c), null);
+  assert.ok((c.textContent ?? "").includes("This transfer funds Car, Japan. Change that from each goal."));
 });

@@ -87,6 +87,54 @@ export async function listGoalFundingLinks(): Promise<DbResult<Map<string, strin
   return { data: new Map(data.map((g) => [g.id, g.funding_recurringid as string])), error: null };
 }
 
+/** A goal the recurring transfer form can link to ("Is this for a goal?"). */
+export type GoalOption = {
+  id: string;
+  name: string;
+  monthlyContribution: number | null;
+  fundingRecurringId: string | null;
+};
+
+// Active, uncompleted goals -- the ones a transfer can still be for. Each
+// carries its current link, so the form can show which goal a schedule
+// already funds.
+export async function listGoalOptions(): Promise<DbResult<GoalOption[]>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("goals")
+    .select("id, goal_name, monthly_contribution, funding_recurringid")
+    .eq("is_active", true)
+    .is("completed_at", null)
+    .order("goal_name");
+  if (error) {
+    return { data: null, error: describeReadError(error, "goal") };
+  }
+  return {
+    data: data.map((g) => ({
+      id: g.id,
+      name: g.goal_name,
+      monthlyContribution: g.monthly_contribution === null ? null : Number(g.monthly_contribution),
+      fundingRecurringId: g.funding_recurringid,
+    })),
+    error: null,
+  };
+}
+
+// The recurring form's side of the link: this schedule funds goalId, or no
+// goal (null). set_goal_funding (migration 57) moves it in one call --
+// every other goal this schedule funded is unlinked.
+export async function setGoalFunding(recurringId: string, goalId: string | null): Promise<DbResult<null>> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc(
+    "set_goal_funding",
+    goalId === null ? { p_recurringid: recurringId } : { p_recurringid: recurringId, p_goalid: goalId },
+  );
+  if (error) {
+    return { data: null, error: describeWriteError(error, "goal") };
+  }
+  return { data: null, error: null };
+}
+
 // Whether id names a recurring TRANSFER this user owns (RLS answers
 // "owns"). The picker only offers counted ones; this is the server's
 // guard against anything else arriving in the form.

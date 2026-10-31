@@ -1402,6 +1402,10 @@ export type Database = {
         Args: { p_userid: string }
         Returns: undefined
       }
+      set_goal_funding: {
+        Args: { p_goalid?: string; p_recurringid: string }
+        Returns: undefined
+      }
       signed_amount: {
         Args: { p_amount: number; p_type: string }
         Returns: number
