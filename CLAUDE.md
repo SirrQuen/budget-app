@@ -645,10 +645,16 @@ When something asks the user, and what each ask can write.
   early). It stays until answered; there is no closing date. Writes a
   transaction only on "landed".
 - **Statement amount** -- variable card payments only. From the
-  statement date (`statementDateForCycle`) through the payment's due date
-  (`isAwaitingStatementAmount`). Revises the expectation (`next_amount`),
-  which the projection and the queue's "landed as expected" then use. Never
-  writes a transaction.
+  statement date (`statementDateForCycle`) through the payment's adjusted
+  due date (`isAwaitingStatementAmount`). Revises the expectation
+  (`next_amount`), which the projection and the queue's "landed as
+  expected" then use. Never writes a transaction.
+- **Raw vs adjusted date.** `next_run_date` is an internal cursor and
+  never reaches the user -- not displayed, not deciding copy, not called a
+  due date. `next_due_date` (after business-day timing) is what's shown
+  and what the forecast counts. The statement walk-back reads the cursor;
+  pass both through `StatementCycle` (`lib/recurringSchedule.ts`), never
+  as positional strings.
 - **Fixed vs approximate** is `date_tolerance_days` on the schedule (0 =
   fixed), available on every type including transfers (migration 50). One
   concept, three readers: the queue opens on the early edge; the projection

@@ -183,11 +183,11 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
     return { error: "Choose how often this repeats." };
   }
   if (!next_run_date) {
-    return { error: "Choose the next due date." };
+    return { error: "Choose the next date." };
   }
   if (statement_day !== null && statementDayIsDueDay(statement_day, Number(next_run_date.split("-")[2]))) {
     return {
-      error: "The statement day can't be the same as the due date's day. Cards usually post the statement 3 to 4 weeks before it's due.",
+      error: "The statement day can't be the payment's day of the month. Cards usually post the statement 3 to 4 weeks before it's due.",
     };
   }
 
@@ -221,7 +221,7 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
       return { error: "Choose an end date." };
     }
     if (end_date < next_run_date) {
-      return { error: "The end date can't be before the next due date." };
+      return { error: "The end date can't be before the next date." };
     }
   }
 

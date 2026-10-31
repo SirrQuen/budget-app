@@ -18,6 +18,7 @@ import { getBudgetProgress } from "@/lib/db/budgets";
 import { listAccountBalances } from "@/lib/db/accounts";
 import { getReturnSummaryFacts } from "@/lib/actions/activity";
 import { isAwaitingStatementAmount } from "@/lib/recurringSchedule";
+import type { VariableAmountTarget } from "../recurring/ConfirmVariableAmountSheet";
 import { resolveDashboardRange } from "@/lib/dashboardRange";
 import { getTimeZone, getToday } from "@/lib/db/settings";
 import { sinceLabel } from "@/lib/sinceLabel";
@@ -177,7 +178,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
                   cardName: r.to_account_name ?? "the card",
                   estimatedAmount: r.amount ?? 0,
                   statementDay: r.statement_day ?? 1,
-                  dueDate: r.next_run_date ?? "",
+                  cursorDate: r.next_run_date ?? "",
+                  dueDate: r.next_due_date,
                   anchorDate: r.start_date ?? r.next_run_date ?? "",
                 },
               }
@@ -190,27 +192,31 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   // empty, but never silently: the Upcoming section reports the failure.
   //
   // The nudge to enter a card's statement amount runs from the statement
-  // date through the due date (see CLAUDE.md "Prompt timing"). It revises
-  // the expected payment; the payment itself goes through the queue -- scanned
-  // over the FULL upcoming list, not just the 5-item slice above, so a
-  // variable schedule further out still gets its prompt.
-  const variableAmountPrompts = (recurringResult.data ?? [])
-    .filter(
-      (r) =>
-        r.amount_is_variable === true &&
-        r.next_amount_confirmed_at === null &&
-        r.statement_day != null &&
-        r.next_run_date != null &&
-        isAwaitingStatementAmount(today, r.next_run_date, r.statement_day, r.start_date ?? r.next_run_date),
+  // date through the adjusted due date (see CLAUDE.md "Prompt timing"). It
+  // revises the expected payment; the payment itself goes through the queue
+  // -- scanned over the FULL upcoming list, not just the 5-item slice above,
+  // so a variable schedule further out still gets its prompt.
+  const variableAmountPrompts: VariableAmountTarget[] = (recurringResult.data ?? [])
+    .flatMap((r) =>
+      r.amount_is_variable === true &&
+      r.next_amount_confirmed_at === null &&
+      r.statement_day != null &&
+      r.next_run_date != null &&
+      r.next_due_date != null
+        ? [
+            {
+              id: r.recurring_id ?? "",
+              cardName: r.to_account_name ?? "the card",
+              estimatedAmount: r.amount ?? 0,
+              statementDay: r.statement_day,
+              cursorDate: r.next_run_date,
+              dueDate: r.next_due_date,
+              anchorDate: r.start_date ?? r.next_run_date,
+            },
+          ]
+        : [],
     )
-    .map((r) => ({
-      id: r.recurring_id ?? "",
-      cardName: r.to_account_name ?? "the card",
-      estimatedAmount: r.amount ?? 0,
-      statementDay: r.statement_day!,
-      dueDate: r.next_run_date!,
-      anchorDate: r.start_date ?? r.next_run_date!,
-    }));
+    .filter((target) => isAwaitingStatementAmount(today, target));
 
   const upcomingError = recurringResult.error ?? safeToSpendResult.error;
 

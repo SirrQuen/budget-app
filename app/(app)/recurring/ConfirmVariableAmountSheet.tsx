@@ -3,23 +3,20 @@
 import { useEffect, useRef, useState } from "react";
 import { useActionForm } from "@/components/useActionForm";
 import { confirmVariableAmountAction, type ActionState } from "@/lib/actions/recurring";
-import { statementDateForCycle } from "@/lib/recurringSchedule";
+import { statementDateOf, type StatementCycle } from "@/lib/recurringSchedule";
 import { formatDate } from "@/lib/format";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 
-export type VariableAmountTarget = {
+// The cycle's dueDate (next_due_date) is the one shown; cursorDate only
+// feeds the statement walk-back. See StatementCycle.
+export type VariableAmountTarget = StatementCycle & {
   id: string;
   cardName: string;
   /** Prefill -- the live estimate off the card's current balance (see estimateCardPaymentDue). */
   estimatedAmount: number;
-  statementDay: number;
-  /** next_run_date -- shown for context, not editable here. */
-  dueDate: string;
-  /** start_date ?? next_run_date -- the schedule's own due day, for statementDateForCycle. */
-  anchorDate: string;
 };
 
 // A single-field sheet, reachable from three places (the upcoming
@@ -57,7 +54,7 @@ export function ConfirmVariableAmountSheet({
     wasPending.current = pending;
   }, [pending, state]);
 
-  const statementDateISO = statementDateForCycle(target.dueDate, target.statementDay, target.anchorDate);
+  const statementDateISO = statementDateOf(target);
 
   return (
     <>
