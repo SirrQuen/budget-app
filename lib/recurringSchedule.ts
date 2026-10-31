@@ -115,6 +115,19 @@ export function statementDateForCycle(dueDateISO: string, statementDay: number):
   return `${prevYear}-${String(prevMonth).padStart(2, "0")}-${String(prevMonthDay).padStart(2, "0")}`;
 }
 
+// The statement day refused on a variable card payment: the due date's own
+// day, which makes the "enter the amount" window the due date alone.
+// Raw day numbers, deliberately -- short gaps are allowed, and so is the
+// month-end case that only collides in February (29 and 30 both clamp to
+// the 28th). A statement day later than the due day is the usual
+// cross-month card cycle. Checked by parseRecurringFields
+// (lib/actions/recurring.ts), never a CHECK -- the cursor advances onto
+// clamped days, so a constraint on next_run_date would reject a
+// confirmation rather than a bad schedule.
+export function statementDayIsDueDay(statementDay: number, dueDay: number): boolean {
+  return statementDay === dueDay;
+}
+
 // Whether today falls inside the "enter the statement amount" window for a
 // variable card payment -- from the statement date (inclusive) through the
 // due date (inclusive). That only revises the expectation (next_amount); it

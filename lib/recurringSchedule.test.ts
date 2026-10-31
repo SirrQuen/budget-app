@@ -4,6 +4,8 @@ import {
   confirmationOpensOn,
   paydayWindowEnd,
   expenseCommitmentDate,
+  statementDayIsDueDay,
+  statementDateForCycle,
 } from "./recurringSchedule";
 
 test("confirmationOpensOn rounds EARLY (anchor minus tolerance)", () => {
@@ -56,4 +58,27 @@ test("an income schedule and an expense schedule with identical anchors/toleranc
   }
   // Tolerance 0 has no real asymmetry to pin -- both reduce to the anchor.
   assert.equal(paydayWindowEnd(anchor, 0), expenseCommitmentDate(anchor, 0));
+});
+
+// Reject equal only: raw day numbers, never what they clamp to.
+test("statementDayIsDueDay refuses the due date's own day and nothing else", () => {
+  for (let statementDay = 1; statementDay <= 31; statementDay++) {
+    for (let dueDay = 1; dueDay <= 31; dueDay++) {
+      assert.equal(statementDayIsDueDay(statementDay, dueDay), statementDay === dueDay, `statement ${statementDay}, due ${dueDay}`);
+    }
+  }
+});
+
+test("a statement day after the due day is the normal cross-month cycle, not a collision", () => {
+  assert.equal(statementDateForCycle("2026-10-15", 20), "2026-09-20");
+  assert.equal(statementDayIsDueDay(20, 15), false);
+  assert.equal(statementDayIsDueDay(28, 22), false);
+});
+
+// Short gaps stand, including the one only February closes: 29 and 30 both
+// clamp to the 28th, so that month's window is the due date alone.
+test("a month-end short gap is allowed; in February its statement lands on the due date", () => {
+  assert.equal(statementDayIsDueDay(29, 30), false);
+  assert.equal(statementDateForCycle("2027-01-30", 29), "2027-01-29");
+  assert.equal(statementDateForCycle("2027-02-28", 29), "2027-02-28");
 });
