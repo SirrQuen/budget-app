@@ -5,6 +5,8 @@ import {
   paydayWindowEnd,
   expenseCommitmentDate,
   statementDayIsDueDay,
+  isAwaitingStatementAmount,
+  statementDateOf,
   statementDateForCycle,
 } from "./recurringSchedule";
 
@@ -133,4 +135,33 @@ test("statementDateForCycle: same month when statement <= due day, previous mont
       }
     }
   }
+});
+
+// The raw cursor never reaches the user: the statement walks back from it,
+// the window closes on the adjusted due date (once the money has moved, an
+// amount is moot).
+test("the statement-amount window closes on the adjusted due date, not the cursor", () => {
+  // "A few business days after": the cursor's 15th pays on the 17th.
+  const cycle = { cursorDate: "2026-11-15", dueDate: "2026-11-17", statementDay: 20, anchorDate: "2026-10-15" };
+  assert.equal(statementDateOf(cycle), "2026-10-20");
+  assert.equal(isAwaitingStatementAmount("2026-10-19", cycle), false);
+  assert.equal(isAwaitingStatementAmount("2026-10-20", cycle), true);
+  assert.equal(isAwaitingStatementAmount("2026-11-16", cycle), true);
+  assert.equal(isAwaitingStatementAmount("2026-11-17", cycle), true);
+  assert.equal(isAwaitingStatementAmount("2026-11-18", cycle), false);
+});
+
+test("a due date shifted earlier than the statement leaves no window that cycle", () => {
+  // Nearest weekday, earlier: the 30th pays on the 27th, before a statement on the 29th.
+  const cycle = { cursorDate: "2026-11-30", dueDate: "2026-11-27", statementDay: 29, anchorDate: "2026-10-30" };
+  for (const today of ["2026-11-27", "2026-11-28", "2026-11-29", "2026-11-30"]) {
+    assert.equal(isAwaitingStatementAmount(today, cycle), false, today);
+  }
+});
+
+test("the statement walks back from the cursor even when the adjusted due date crosses a month", () => {
+  // Cursor Nov 30 pays Dec 1. From the cursor, statement 31 is Oct 31; from
+  // the due date it would wrongly be Nov 30.
+  const cycle = { cursorDate: "2026-11-30", dueDate: "2026-12-01", statementDay: 31, anchorDate: "2026-10-30" };
+  assert.equal(statementDateOf(cycle), "2026-10-31");
 });

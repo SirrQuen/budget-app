@@ -605,10 +605,23 @@ Two gaps, both deferred:
   This is the unfixed half of the original card-payment report: the
   confirmation queue (migration 50) solved auto-posting; the static
   statement date was not addressed. **Deferred until a tester hits it.**
-- **"Due" means two dates. Code, not copy -- next batch. Ruled
-  2026-10-31: the raw date (`next_run_date`) is an internal cursor and
-  never reaches the user. The adjusted date (`next_due_date`) is what's
-  displayed and what the forecast counts.** So the sheet's "due {date}"
+- **"Due" means two dates. Fixed 2026-10-31. Ruled 2026-10-31: the raw
+  date (`next_run_date`) is an internal cursor and never reaches the
+  user. The adjusted date (`next_due_date`) is what's displayed and what
+  the forecast counts.**
+
+  Built: the sheet's target is a `StatementCycle` (`lib/recurringSchedule.ts`)
+  with named `cursorDate` (raw, walk-back only) and `dueDate` (adjusted,
+  shown), so the two can't be swapped by position. All three callers fill
+  both. `isAwaitingStatementAmount` takes the same cycle and closes on
+  `dueDate`. A statement after an early-shifted due date leaves no window
+  that cycle. RecurringRow's "enter the statement amount if you have it"
+  switches on the adjusted date too. Form: the input is "Next date"
+  (hint "Repeats on this day..."), the resolved line under it is
+  "Due {date}" (matching the row's "Due {date}"), and the server errors
+  and statement-day copy no longer call the raw date a due date.
+
+  As ruled: the sheet's "due {date}"
   shows the adjusted date, and the statement-amount window closes on the
   adjusted date (the money has moved by then, so an amount entered
   afterwards is moot). The Nov 15 / Nov 17 split then disappears rather

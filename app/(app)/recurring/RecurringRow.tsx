@@ -82,7 +82,7 @@ export function RecurringRow({
   // else.
   const needsConfirmation =
     isTransfer && recurring.amount_is_variable && recurring.next_amount_confirmed_at === null;
-  const isOverdueNeedsAmount = needsConfirmation && recurring.next_run_date <= today;
+  const isOverdueNeedsAmount = needsConfirmation && recurring.next_due_date <= today;
   const displayAmount = !recurring.amount_is_variable
     ? Number(recurring.amount)
     : recurring.next_amount_confirmed_at !== null
@@ -249,7 +249,8 @@ export function RecurringRow({
               cardName: recurring.to_account_name ?? "the card",
               estimatedAmount,
               statementDay: recurring.statement_day ?? 1,
-              dueDate: recurring.next_run_date,
+              cursorDate: recurring.next_run_date,
+              dueDate: recurring.next_due_date,
               anchorDate: recurring.start_date ?? recurring.next_run_date,
             }}
             trigger={(open) => (

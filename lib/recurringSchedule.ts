@@ -149,18 +149,31 @@ export function statementDayIsDueDay(statementDay: number, dueDay: number): bool
   return statementDay === dueDay;
 }
 
+// A card payment's cycle, named so the two dates can't be swapped:
+// cursorDate (next_run_date) is the internal cursor the statement walks
+// back from and never reaches the user; dueDate (next_due_date, after
+// business-day timing) is what's displayed and what the forecast counts.
+export type StatementCycle = {
+  cursorDate: string;
+  dueDate: string;
+  statementDay: number;
+  /** start_date ?? next_run_date -- the schedule's own due day. */
+  anchorDate: string;
+};
+
+export function statementDateOf(cycle: StatementCycle): string {
+  return statementDateForCycle(cycle.cursorDate, cycle.statementDay, cycle.anchorDate);
+}
+
 // Whether today falls inside the "enter the statement amount" window for a
 // variable card payment -- from the statement date (inclusive) through the
-// due date (inclusive). That only revises the expectation (next_amount); it
-// never writes a transaction. See CLAUDE.md "Prompt timing".
-export function isAwaitingStatementAmount(
-  todayISO: string,
-  dueDateISO: string,
-  statementDay: number,
-  anchorDateISO: string,
-): boolean {
-  const statementDateISO = statementDateForCycle(dueDateISO, statementDay, anchorDateISO);
-  return statementDateISO <= todayISO && todayISO <= dueDateISO;
+// adjusted due date (inclusive): once the money has moved, an amount is
+// moot. A statement posting after an early-shifted due date leaves no
+// window that cycle, for the same reason. That only revises the
+// expectation (next_amount); it never writes a transaction. See CLAUDE.md
+// "Prompt timing".
+export function isAwaitingStatementAmount(todayISO: string, cycle: StatementCycle): boolean {
+  return statementDateOf(cycle) <= todayISO && todayISO <= cycle.dueDate;
 }
 
 // date_tolerance_days' readers, every one deliberate (CLAUDE.md "Prompt

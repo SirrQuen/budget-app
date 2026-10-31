@@ -363,7 +363,7 @@ export function RecurringForm({
 
   const scheduleHint =
     repeats === "Monthly"
-      ? "Posts on this day each month -- on the last day instead when a month is shorter (day 31 becomes Feb 28)."
+      ? "Repeats on this day each month -- on the last day instead when a month is shorter (day 31 becomes Feb 28)."
       : repeats === "Weekly"
         ? "Sets which weekday it repeats on."
         : "Sets the month and day it repeats on.";
@@ -408,7 +408,7 @@ export function RecurringForm({
             label="Statement day"
             htmlFor={fieldId("statement_day")}
             required
-            hint="Sorrel asks for the amount once the statement posts on this day each month, and estimates from the card's current balance until then. It can be before or after the due date's day (a statement on the 20th for a payment due the 15th is normal), just not the same day."
+            hint="Sorrel asks for the amount once the statement posts on this day each month, and estimates from the card's current balance until then. It can be before or after the payment's day of the month (a statement on the 20th for a payment on the 15th is normal), just not the same day."
           >
             <Input
               id={fieldId("statement_day")}
@@ -601,7 +601,10 @@ export function RecurringForm({
           ) : null}
         </div>
 
-        <FormField label="Next due date" htmlFor={fieldId("next_run_date")} required hint={scheduleHint}>
+        {/* The cadence day the user sets (next_run_date). Not called a due
+            date: the due date is the resolved one below, which is what
+            every other screen shows and the forecast counts. */}
+        <FormField label="Next date" htmlFor={fieldId("next_run_date")} required hint={scheduleHint}>
           <input
             id={fieldId("next_run_date")}
             name="next_run_date"
@@ -618,7 +621,7 @@ export function RecurringForm({
             they change the timing below. */}
         {resolvedNextDate ? (
           <p className="text-sm text-ink-secondary">
-            Next: <span className="font-medium text-ink">{formatDateWithWeekday(resolvedNextDate)}</span>
+            Due <span className="font-medium text-ink">{formatDateWithWeekday(resolvedNextDate)}</span>
           </p>
         ) : null}
 
