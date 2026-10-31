@@ -297,7 +297,7 @@ function cardPaymentCents(
 ): number[] {
   const card = s.cardPayment!;
   const statementDay = s.statementDay!;
-  const statements = occurrences.map((o) => statementDateForCycle(o.cursor, statementDay));
+  const statements = occurrences.map((o) => statementDateForCycle(o.cursor, statementDay, s.anchorDate));
   const chargesThrough = (from: string | null, to: string) =>
     cardCharges
       .filter((c) => (from === null || c.due > from) && c.due <= to)

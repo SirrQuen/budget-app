@@ -178,6 +178,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
                   estimatedAmount: r.amount ?? 0,
                   statementDay: r.statement_day ?? 1,
                   dueDate: r.next_run_date ?? "",
+                  anchorDate: r.start_date ?? r.next_run_date ?? "",
                 },
               }
             : null,
@@ -200,7 +201,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         r.next_amount_confirmed_at === null &&
         r.statement_day != null &&
         r.next_run_date != null &&
-        isAwaitingStatementAmount(today, r.next_run_date, r.statement_day),
+        isAwaitingStatementAmount(today, r.next_run_date, r.statement_day, r.start_date ?? r.next_run_date),
     )
     .map((r) => ({
       id: r.recurring_id ?? "",
@@ -208,6 +209,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       estimatedAmount: r.amount ?? 0,
       statementDay: r.statement_day!,
       dueDate: r.next_run_date!,
+      anchorDate: r.start_date ?? r.next_run_date!,
     }));
 
   const upcomingError = recurringResult.error ?? safeToSpendResult.error;

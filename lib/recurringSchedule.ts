@@ -89,6 +89,16 @@ function lastDayOfMonth(year: number, month1based: number): number {
   return new Date(year, month1based, 0).getDate();
 }
 
+// The due day a cursor stands for: its own day, unless it sits on its
+// month's last day with the anchor's day later -- then addMonthsClampedISO
+// clamped it, and the anchor's day is the schedule's. Holds for every
+// frequency: a weekly cursor that isn't clamped keeps its own day.
+function rawDueDay(cursorISO: string, anchorDateISO: string): number {
+  const [year, month, day] = cursorISO.split("-").map(Number);
+  const anchorDay = dayOfMonth(anchorDateISO);
+  return day === lastDayOfMonth(year, month) && anchorDay > day ? anchorDay : day;
+}
+
 // The card's statement date for the cycle that ends in dueDateISO
 // (next_run_date) -- a variable schedule only stores the day-of-month a
 // statement posts on, not a full date, since that day is stable cycle to
@@ -100,12 +110,23 @@ function lastDayOfMonth(year: number, month1based: number): number {
 // actually follows. Clamped the same way a monthly cadence clamps (day 31
 // in a 30-day month lands on the 30th) so this never produces an invalid
 // date.
-export function statementDateForCycle(dueDateISO: string, statementDay: number): string {
+//
+// The comparison uses RAW days, never clamped ones. Comparing clamped days
+// collapsed a cross-month cycle onto the due date whenever a short month
+// clamped the statement day down to the due day: statement 31 / due 30 in
+// every 30-day month, statement 31 / due 28 in February. So the due day is
+// the schedule's own (rawDueDay), which needs anchorDateISO -- the cursor
+// alone has lost it once clamped (Feb 28 for a 30th).
+export function statementDateForCycle(
+  dueDateISO: string,
+  statementDay: number,
+  anchorDateISO: string,
+): string {
   const [year, month] = dueDateISO.split("-").map(Number);
-  const dueDay = dayOfMonth(dueDateISO);
+  const dueDay = rawDueDay(dueDateISO, anchorDateISO);
 
   const sameMonthDay = Math.min(statementDay, lastDayOfMonth(year, month));
-  if (sameMonthDay <= dueDay) {
+  if (statementDay <= dueDay) {
     return `${year}-${String(month).padStart(2, "0")}-${String(sameMonthDay).padStart(2, "0")}`;
   }
 
@@ -136,8 +157,9 @@ export function isAwaitingStatementAmount(
   todayISO: string,
   dueDateISO: string,
   statementDay: number,
+  anchorDateISO: string,
 ): boolean {
-  const statementDateISO = statementDateForCycle(dueDateISO, statementDay);
+  const statementDateISO = statementDateForCycle(dueDateISO, statementDay, anchorDateISO);
   return statementDateISO <= todayISO && todayISO <= dueDateISO;
 }
 

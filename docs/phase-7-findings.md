@@ -646,22 +646,32 @@ Two gaps, both deferred:
   field from all three callers, and deciding which date closes the
   window. That second part is behaviour.
 
-- **February walks back to the wrong statement. Must be fixed before
-  February 2027.** It can't be observed before then: statement 31 / due
-  28 resolves correctly in every other month. No production schedule has
-  this configuration today (1 of 7 variable card schedules has both days
-  >= 28, and it is 29/30, which degrades to a one-day window rather than
-  breaking).
-  `statementDateForCycle` compares the *clamped* statement day with the
-  *clamped* due day. When the statement day is later than the due day and
-  both are 28 or more, February collapses a normal cross-month cycle onto
-  the due date. Statement 31 / due 28: Dec 31 -> Jan 28, then Feb 28 ->
-  Feb 28 (should be Jan 31), then Feb 28 -> Mar 28. Statement 30 / due 29
-  does the same in a short February. That month's "enter the amount"
-  window is one day instead of about four weeks, and the projection prices
-  the payment from the wrong cycle (`safeToSpendProjection.ts:300`). The
-  fix needs the schedule's anchor day, not the clamped cursor: the
-  function only sees `next_run_date`, which has already lost it.
+- **Short months walked back to the wrong statement. Fixed
+  2026-10-31, before its February 2027 deadline.** `statementDateForCycle`
+  compared the *clamped* statement day with the *clamped* due day, so a
+  cross-month cycle collapsed onto the due date whenever a short month
+  clamped the statement day down to the due day. Statement 31 / due 28:
+  Dec 31 -> Jan 28, then Feb 28 -> Feb 28 (should be Jan 31). Statement
+  30 / due 29 did the same in a short February. That month's "enter the
+  amount" window was one day instead of about four weeks, and the
+  projection priced the payment from the wrong cycle
+  (`safeToSpendProjection.ts:300`).
+
+  **The deadline was wrong: it wasn't February-only.** Statement 31 / due
+  30 broke in every 30-day month, the first being November 2026. The
+  condition was "statement day later than the due day, and the month too
+  short for the statement day": any due day of 28 or later. No production
+  schedule had it (the one with both days >= 28 is 29/30, same month,
+  unaffected by the fix).
+
+  The fix compares raw days. The function now takes the schedule's anchor
+  (`start_date ?? next_run_date`, as `nextOccurrenceISO` uses), because a
+  clamped cursor (Feb 28 for a 30th) has lost the due day. All four
+  callers pass it: the projection, the dashboard prompt window, and the
+  sheet from the dashboard and the recurring row.
+  `lib/recurringSchedule.test.ts` pins the property for every pair across
+  2026-2028: same month when statement <= due day, the month before when
+  later, one statement per cycle.
 
 The statement day is validated against the due date (2026-10-31,
 `statementDayIsDueDay` in `lib/recurringSchedule.ts`). Only the due

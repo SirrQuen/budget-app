@@ -250,6 +250,7 @@ export function RecurringRow({
               estimatedAmount,
               statementDay: recurring.statement_day ?? 1,
               dueDate: recurring.next_run_date,
+              anchorDate: recurring.start_date ?? recurring.next_run_date,
             }}
             trigger={(open) => (
               <button
