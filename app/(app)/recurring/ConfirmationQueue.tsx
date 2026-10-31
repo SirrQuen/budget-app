@@ -15,6 +15,7 @@ import { Amount } from "@/components/ui/Amount";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { formatDateWithWeekday } from "@/lib/format";
 import { ConfirmOccurrenceSheet } from "./ConfirmOccurrenceSheet";
+import { CardPaymentNote } from "@/components/CardPaymentNote";
 
 // The confirmation queue: the only way a recurring schedule becomes a
 // transaction (CLAUDE.md "Confirmation creates every recurring
@@ -69,6 +70,9 @@ export function ConfirmationQueue({ items }: { items: ConfirmationQueueItem[] })
           </button>
         ) : null}
       </div>
+
+      {/* Confirm all records every card payment in the list too. */}
+      {items.length > 1 && items.some((i) => i.paysCreditCard) ? <CardPaymentNote className="mb-2" /> : null}
 
       {bulkError ? <ErrorMessage message={bulkError} /> : null}
 
@@ -144,6 +148,8 @@ function QueueRow({ item, disabled }: { item: ConfirmationQueueItem; disabled: b
           Not happening this time
         </button>
       </div>
+
+      {item.paysCreditCard ? <CardPaymentNote /> : null}
 
       {error ? <ErrorMessage message={error} /> : null}
     </li>

@@ -38,6 +38,8 @@ export type ConfirmationItem = {
   accountId: string;
   /** Destination for a Transfer; null otherwise. */
   toAccountId: string | null;
+  /** A transfer into a Credit Card -- the UI says confirming it moves no money (CardPaymentNote). */
+  paysCreditCard: boolean;
   /** The predicted amount, dollars -- what "landed as expected" writes. */
   amount: number;
   isEstimate: boolean;
@@ -87,6 +89,7 @@ export function buildConfirmationQueue(
       kind: s.kind,
       accountId: s.accountId,
       toAccountId: s.toAccountId,
+      paysCreditCard: s.kind === "Transfer" && s.toAccountType === "Credit Card",
       amount: s.amount,
       isEstimate: s.isEstimate,
       dueDate,

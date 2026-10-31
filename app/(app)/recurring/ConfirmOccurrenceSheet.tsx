@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { BalanceDateNote } from "@/components/BalanceDateNote";
+import { CardPaymentNote } from "@/components/CardPaymentNote";
 
 // "Landed differently": the amount and the date, both pre-filled with the
 // prediction and both editable, whatever else changed -- the date matters
@@ -153,6 +154,8 @@ export function ConfirmOccurrenceSheet({
               ))}
 
             {state?.error ? <ErrorMessage message={state.error} /> : null}
+
+            {item.paysCreditCard ? <CardPaymentNote /> : null}
 
             <Button type="submit" disabled={pending} className="self-start">
               {pending ? "Saving…" : "Save"}
