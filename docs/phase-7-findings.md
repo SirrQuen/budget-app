@@ -582,6 +582,116 @@ with scripts disabled in headless Chrome: Enter did nothing.
   error-capture some other way). `useActionForm`'s comment, which used to
   say "a submit before hydration still posts natively", now says this.
 
+## Recurring dates: what each one means (2026-10-31)
+
+A recurring schedule has one user-entered date, `next_run_date` (the form
+calls it "Next due date"), and `next_due_date`, the same date after
+business-day timing. For a transfer to a credit card it's the payment
+due date. A variable card payment also stores `statement_day`, a day of
+the month that `statementDateForCycle` walks back to from the due date
+(the previous month when the statement day is later than the due day,
+which is the usual card layout: statement on the 28th, due on the 22nd).
+`date_tolerance_days` widens `next_due_date`. Outflows read only its early
+edge; income reads both. Migration 56 records all four meanings as column
+comments. Migration 50's header used to say tolerance was added to
+transfers because "a statement doesn't land on a fixed day". It never
+touched the statement date, and the header now says so.
+
+Two gaps, both deferred:
+
+- **The statement date has no tolerance.** For a variable card payment
+  the "enter the amount" window (`isAwaitingStatementAmount`) opens on
+  `statement_day` every month, wherever the statement actually posted.
+  This is the unfixed half of the original card-payment report: the
+  confirmation queue (migration 50) solved auto-posting; the static
+  statement date was not addressed. **Deferred until a tester hits it.**
+- **"Due" means two dates. Code, not copy -- next batch. Ruled
+  2026-10-31: the raw date (`next_run_date`) is an internal cursor and
+  never reaches the user. The adjusted date (`next_due_date`) is what's
+  displayed and what the forecast counts.** So the sheet's "due {date}"
+  shows the adjusted date, and the statement-amount window closes on the
+  adjusted date (the money has moved by then, so an amount entered
+  afterwards is moot). The Nov 15 / Nov 17 split then disappears rather
+  than needing reconciling. The form's "Next due date" / "Next: ..." pair
+  is fixed in the same change: the date input is the cadence day the user
+  sets, so it stops being called a due date, and the adjusted "Next:"
+  line is the due date. The walk-back keeps reading the raw cursor
+  internally. Detail of the split as found:
+
+  The statement
+  side is keyed on the raw `next_run_date`; the payment side on the
+  business-day-resolved `next_due_date`. `statementDateForCycle` takes
+  the raw cursor (`o.cursor`, `lib/safeToSpendProjection.ts:300`) while
+  the payment is counted on `due` (`:442`). That part is probably
+  harmless (the statement comes before the due date either way) but
+  nobody chose it. The visible part is the word "due":
+  - The confirm sheet says "due {target.dueDate}"
+    (`ConfirmVariableAmountSheet.tsx:92`), and all three callers pass raw
+    `next_run_date`. On the dashboard, the same object matches its row by
+    `next_due_date` and hands the sheet `next_run_date`
+    (`app/(app)/dashboard/page.tsx:174` vs `:180`).
+  - The forecast counts the payment on the resolved date, and the
+    Upcoming row beside the sheet shows the counted date (the early edge
+    when there's a tolerance). One row can show three dates: "Nov 14" on
+    the row, "due Nov 15" in the sheet, Nov 17 in the forecast.
+  - The schedule form labels the raw date "Next due date" and shows the
+    resolved one under it as "Next: ...".
+  - The statement-amount window closes on the raw date
+    (`dashboard/page.tsx:203`), so with "a few business days after" it
+    closes before the payment is counted.
+
+  Why it's not copy: the sheet uses one `dueDate` for two jobs, the
+  walk-back (must stay raw, or the statement cycle moves) and the
+  display. Fixing it means giving the sheet the resolved date as a second
+  field from all three callers, and deciding which date closes the
+  window. That second part is behaviour.
+
+- **February walks back to the wrong statement. Must be fixed before
+  February 2027.** It can't be observed before then: statement 31 / due
+  28 resolves correctly in every other month. No production schedule has
+  this configuration today (1 of 7 variable card schedules has both days
+  >= 28, and it is 29/30, which degrades to a one-day window rather than
+  breaking).
+  `statementDateForCycle` compares the *clamped* statement day with the
+  *clamped* due day. When the statement day is later than the due day and
+  both are 28 or more, February collapses a normal cross-month cycle onto
+  the due date. Statement 31 / due 28: Dec 31 -> Jan 28, then Feb 28 ->
+  Feb 28 (should be Jan 31), then Feb 28 -> Mar 28. Statement 30 / due 29
+  does the same in a short February. That month's "enter the amount"
+  window is one day instead of about four weeks, and the projection prices
+  the payment from the wrong cycle (`safeToSpendProjection.ts:300`). The
+  fix needs the schedule's anchor day, not the clamped cursor: the
+  function only sees `next_run_date`, which has already lost it.
+
+The statement day is validated against the due date (2026-10-31,
+`statementDayIsDueDay` in `lib/recurringSchedule.ts`). Only the due
+date's own day is refused, compared as raw day numbers. Short gaps are
+allowed, including 29 / 30, which only meets in February (both clamp to
+the 28th, so that month's window is the due date alone). A statement day
+after the due day is the normal cross-month cycle and is allowed. The
+first version also refused any pair on the 28th or later. That was
+broader than the agreed rule, matched a production row, and was narrowed
+before shipping. The check is in `parseRecurringFields`, not a CHECK
+constraint, because `advanceOneCycle` writes clamped cursors into
+`next_run_date`, so a constraint would reject confirmations. It compares
+against the date in the form. Editing a schedule whose cursor is clamped
+(Feb 28 for a 30th) compares the 28th. Rows saved before the check stay
+as they are until someone edits them.
+
+### Statement day: the field's copy missed for one in seven (2026-10-31)
+
+On production, 1 of 7 variable card schedules has a statement day one day
+before its due day (29 and 30). Real cards give about three weeks between
+statement and due date, so this is most likely an autopay or due date
+typed into "Statement day". The field's hint didn't land for one in seven
+uses, and it decides when Sorrel asks for the amount: that schedule's
+window is currently one day (the 29th to the 30th; in February, the due
+date alone).
+
+Not a constraint problem: the save rule allows it, as agreed. The row is
+left as it is. Matt is asking the tester what they meant. Their answer
+decides whether the "Statement day" copy needs rewriting.
+
 ## Phase 8 policy item: auth audit log retained after deletion (2026-10-06)
 
 **Decision: deliberate retention, not an oversight.** It must match the

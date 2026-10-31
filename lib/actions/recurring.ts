@@ -15,6 +15,7 @@ import {
   confirmOccurrencesAsExpected,
 } from "@/lib/db/recurring";
 import { confirmationKey } from "@/lib/confirmationQueue";
+import { statementDayIsDueDay } from "@/lib/recurringSchedule";
 import { addNotYetKey } from "@/lib/confirmationLater";
 import { getToday } from "@/lib/db/settings";
 
@@ -139,6 +140,7 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
       if (!Number.isFinite(statement_day) || statement_day < 1 || statement_day > 31) {
         return { error: "Enter a statement day between 1 and 31." };
       }
+      // Checked against next_run_date below, once it's parsed.
     }
   } else {
     categoryid = String(formData.get("categoryid") ?? "");
@@ -182,6 +184,11 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
   }
   if (!next_run_date) {
     return { error: "Choose the next due date." };
+  }
+  if (statement_day !== null && statementDayIsDueDay(statement_day, Number(next_run_date.split("-")[2]))) {
+    return {
+      error: "The statement day can't be the same as the due date's day. Cards usually post the statement 3 to 4 weeks before it's due.",
+    };
   }
 
   // Only Weekly asks for it -- Monthly/Yearly always step by one month/year,

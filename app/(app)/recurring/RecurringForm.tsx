@@ -408,7 +408,7 @@ export function RecurringForm({
             label="Statement day"
             htmlFor={fieldId("statement_day")}
             required
-            hint="Sorrel asks for the amount once the statement posts on this day each month, and estimates from the card's current balance until then."
+            hint="Sorrel asks for the amount once the statement posts on this day each month, and estimates from the card's current balance until then. It can be before or after the due date's day (a statement on the 20th for a payment due the 15th is normal), just not the same day."
           >
             <Input
               id={fieldId("statement_day")}
@@ -546,7 +546,18 @@ export function RecurringForm({
         </label>
 
         {dateVaries ? (
-          <FormField label="Give or take how many days?" htmlFor={fieldId("date_tolerance_days")}>
+          <FormField
+            // Income reads both edges (the queue opens early, the projection
+            // counts late); an outflow reads only the early one. See
+            // lib/recurringSchedule.ts's date_tolerance_days readers.
+            label={kind === "Income" ? "Give or take how many days?" : "Up to how many days early?"}
+            htmlFor={fieldId("date_tolerance_days")}
+            hint={
+              kind === "Income"
+                ? "You can confirm it from this many days early. Your forecast counts it this many days late."
+                : "Your forecast counts it this many days early, and you can confirm it from then too."
+            }
+          >
             <Input
               id={fieldId("date_tolerance_days")}
               name="date_tolerance_days"

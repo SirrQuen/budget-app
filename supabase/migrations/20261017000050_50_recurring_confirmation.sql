@@ -6,12 +6,18 @@
 -- time catch-up is gone; see docs/Recurring-Confirmation.md). Two schema
 -- consequences, nothing else:
 --
--- 1. date_tolerance_days ("Date varies") is allowed on a transfer. A
---    card payment is the case that needed it most: a statement doesn't
---    land on a fixed day. Tolerance keeps its existing projection meaning
---    (an outflow counts on its early edge) and also opens the
---    confirmation queue on that edge. Category schedules still need an
---    Income or Expense category, as before.
+-- 1. date_tolerance_days ("Date varies") is allowed on a transfer. It
+--    widens the payment's DUE date (next_run_date, after business-day
+--    timing), early side only: the projection counts the outflow up to N
+--    days early, and the confirmation queue opens on that same edge.
+--    Category schedules still need an Income or Expense category, as
+--    before.
+--
+--    It does NOT touch the statement date. statement_day is a fixed
+--    day-of-month with no tolerance, so a card statement that posts on a
+--    different day is unhandled: the "enter the amount" window opens on
+--    statement_day regardless. Recorded in docs/phase-7-findings.md,
+--    "Recurring dates: what each one means".
 --
 -- 2. transactions.is_estimated is deprecated. Only the removed catch-up
 --    ever set it true. The column stays (no unrelated schema churn while
