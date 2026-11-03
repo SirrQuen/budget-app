@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
+  getScheduleSummary,
   getTransaction,
-  getTransferAccounts,
+  getTransferForEdit,
   type TransactionType,
   type TransactionWithRelations,
 } from "@/lib/db/transactions";
@@ -12,7 +12,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadError } from "@/components/ui/LoadError";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { WalletIcon } from "@/components/ui/icons";
-import { AddTransactionForm } from "../../AddTransactionForm";
+import { AddTransactionForm, type TransactionAccountOption } from "../../AddTransactionForm";
+import { TransferEditForm } from "./TransferEditForm";
 import { DeleteTransactionButton } from "../../DeleteTransactionButton";
 
 // transactions_category_required (see 07_transfers.sql) guarantees categoryid
@@ -48,40 +49,38 @@ export default async function EditTransactionPage({
     notFound();
   }
 
-  // A transfer is two linked legs, not one transaction -- editing one side
-  // on its own would put the pair out of sync, so there's no per-leg edit
-  // flow. Explain that, and offer a paired delete (both legs, one
-  // confirmation) as the way to change it.
+  // A transfer is ONE THING WITH TWO LEGS: opening either leg opens the
+  // transfer editor, never a transaction editor -- a leg is not editable
+  // on its own (docs/Recurring-Amounts-and-Transfer-Editing.md, 4). Saving
+  // writes both legs through update_transfer().
   if (!isNonTransfer(tx)) {
     // isNonTransfer keyed on transfer_group_id === null, so this branch has a
     // group id -- TS just can't narrow a non-union field through the negation.
     const transferGroupId = tx.transfer_group_id as string;
-    const transferAccountsResult = await getTransferAccounts(transferGroupId);
-    const transferAccounts =
-      transferAccountsResult.error === null &&
-      transferAccountsResult.data.fromAccountName &&
-      transferAccountsResult.data.toAccountName
-        ? {
-            from: transferAccountsResult.data.fromAccountName,
-            to: transferAccountsResult.data.toAccountName,
-          }
-        : undefined;
-
-    return (
-      <div className="flex flex-col gap-6">
-        <PageHeader title="Edit transaction" />
-        <EmptyState
-          icon={<WalletIcon className="h-10 w-10" />}
-          heading="Transfers are edited as a pair"
-          message="Moving money between accounts creates two linked entries, so editing one on its own would put them out of sync. Delete the transfer and re-enter it to change it."
-          action={
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <Link
-                href="/transactions"
-                className="rounded text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-              >
-                Back to transactions
-              </Link>
+    const [transferResult, transferAccountsResult] = await Promise.all([
+      getTransferForEdit(transferGroupId),
+      listAccounts({ is_active: true }),
+    ]);
+    if (transferResult.error !== null || transferAccountsResult.error !== null) {
+      return (
+        <div className="flex flex-col gap-6">
+          <PageHeader title="Edit transfer" />
+          <LoadError message={transferResult.error ?? transferAccountsResult.error ?? "We couldn't load this transfer."} />
+        </div>
+      );
+    }
+    const transfer = transferResult.data;
+    if (transfer === null) {
+      // Not a whole pair -- nothing a person can edit as a transfer. The
+      // integrity view reports it; deleting the group is still offered.
+      return (
+        <div className="flex flex-col gap-6">
+          <PageHeader title="Edit transfer" />
+          <EmptyState
+            icon={<WalletIcon className="h-10 w-10" />}
+            heading="This transfer is missing a side"
+            message="One of its two entries isn't there, so it can't be edited as a transfer. You can delete what's left and enter it again."
+            action={
               <DeleteTransactionButton
                 id={tx.id}
                 description={tx.description}
@@ -89,27 +88,63 @@ export default async function EditTransactionPage({
                 transactionType={tx.transaction_type as TransactionType}
                 transactionDate={tx.transaction_date}
                 transferGroupId={transferGroupId}
-                transferAccounts={transferAccounts}
                 redirectToList={true}
                 label="Delete this transfer"
               />
-            </div>
-          }
+            }
+          />
+        </div>
+      );
+    }
+
+    // Archived accounts don't appear in the active list; a leg on one is
+    // spliced back in so the picker shows it rather than silently moving it.
+    let transferAccounts: TransactionAccountOption[] = transferAccountsResult.data;
+    for (const accountId of [transfer.fromLeg.accountId, transfer.toLeg.accountId]) {
+      if (!transferAccounts.some((a) => a.id === accountId)) {
+        const accountResult = await getAccount(accountId);
+        if (accountResult.error === null) transferAccounts = [...transferAccounts, accountResult.data];
+      }
+    }
+    const fromName = transferAccounts.find((a) => a.id === transfer.fromLeg.accountId)?.account_name;
+    const toName = transferAccounts.find((a) => a.id === transfer.toLeg.accountId)?.account_name;
+
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader
+          title="Edit transfer"
+          description="A transfer moves money between two of your accounts. Both sides change together."
         />
+        <TransferEditForm transfer={transfer} accounts={transferAccounts} />
+        <div className="self-start">
+          <DeleteTransactionButton
+            id={tx.id}
+            description={tx.description}
+            amount={tx.amount}
+            transactionType={tx.transaction_type as TransactionType}
+            transactionDate={tx.transaction_date}
+            transferGroupId={transferGroupId}
+            transferAccounts={fromName && toName ? { from: fromName, to: toName } : undefined}
+            redirectToList={true}
+            label="Delete this transfer"
+          />
+        </div>
       </div>
     );
   }
 
-  const [incomeCategoriesResult, expenseCategoriesResult, accountsResult] = await Promise.all([
+  const [incomeCategoriesResult, expenseCategoriesResult, accountsResult, scheduleResult] = await Promise.all([
     listCategoriesForType("Income"),
     listCategoriesForType("Expense"),
     listAccounts({ is_active: true }),
+    getScheduleSummary(tx.recurringid),
   ]);
 
   if (
     incomeCategoriesResult.error !== null ||
     expenseCategoriesResult.error !== null ||
-    accountsResult.error !== null
+    accountsResult.error !== null ||
+    scheduleResult.error !== null
   ) {
     return (
       <div className="flex flex-col gap-6">
@@ -119,6 +154,7 @@ export default async function EditTransactionPage({
             incomeCategoriesResult.error ??
             expenseCategoriesResult.error ??
             accountsResult.error ??
+            scheduleResult.error ??
             "We couldn't load this transaction. Refresh the page to try again."
           }
         />
@@ -172,6 +208,9 @@ export default async function EditTransactionPage({
           notes: tx.notes,
           payment_method: tx.payment_method,
           counts_toward_balance: tx.counts_toward_balance,
+          schedule: scheduleResult.data
+            ? { description: scheduleResult.data.description, amountIsVariable: scheduleResult.data.amountIsVariable }
+            : null,
         }}
         incomeCategories={incomeCategories}
         expenseCategories={expenseCategories}

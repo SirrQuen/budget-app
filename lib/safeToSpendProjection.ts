@@ -33,6 +33,7 @@
 //
 // All money is integer cents internally; dollars only at the edges.
 
+import type { AmountBasis } from "@/lib/amountBasis";
 import { addDaysISO, daysBetweenInclusive } from "@/lib/date";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
 import { nextOccurrenceISO } from "@/lib/recurringCadence";
@@ -94,6 +95,10 @@ export type ProjectionSchedule = {
    * forecast counts this ("Uncertainty always pushes the forecast down").
    */
   amountHigh: number | null;
+  /** What `amount` rests on (v_recurring_amounts.amount_basis). */
+  amountBasis: AmountBasis;
+  /** What amountHigh/amountLow rests on; null when there's neither. */
+  forecastBasis: AmountBasis | null;
   isEstimate: boolean;
   /** Raw cadence cursor (next_run_date) -- stepped, never business-day shifted. */
   nextRunDate: string;
@@ -124,6 +129,8 @@ export type ProjectedObligation = {
    */
   dueDate: string;
   isEstimate: boolean;
+  /** What the counted amount rests on -- its label wherever it's shown. */
+  basis: AmountBasis;
 };
 
 export type ProjectedIncome = {
@@ -136,6 +143,8 @@ export type ProjectedIncome = {
   /** The occurrence's own due date -- with recurringId, the row's identity. */
   dueDate: string;
   isEstimate: boolean;
+  /** What the counted amount rests on. */
+  basis: AmountBasis;
 };
 
 /** One day of the walk, dollars. */
@@ -244,10 +253,22 @@ export type OverdueOccurrence = {
   /** The resolved due date that was missed. */
   dueDate: string;
   isEstimate: boolean;
+  /** What `amount` rests on. */
+  basis: AmountBasis;
 };
 
 const toCents = (dollars: number) => Math.round(dollars * 100);
 const toDollars = (cents: number) => cents / 100;
+
+/**
+ * What an obligation's counted amount rests on. A card payment's first
+ * occurrence is its statement amount or what the card owes; every later
+ * one is built from the card's own charges (cardPaymentCents).
+ */
+function obligationBasis(s: ProjectionSchedule, k: number): AmountBasis {
+  if (s.cardPayment && s.statementDay !== null && k > 0) return "card_charges";
+  return s.forecastBasis ?? s.amountBasis;
+}
 
 /** What the forecast counts per occurrence of an outflow: the high end. */
 function obligationAmount(s: ProjectionSchedule): number {
@@ -372,6 +393,7 @@ function overdue(s: ProjectionSchedule, dueDate: string): OverdueOccurrence {
     amount: s.amount,
     dueDate,
     isEstimate: s.isEstimate,
+    basis: s.amountBasis,
   };
 }
 
@@ -403,6 +425,7 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
         date,
         dueDate: due,
         isEstimate: s.isEstimate || (s.amountLow !== null && s.amountLow !== s.amount),
+        basis: s.forecastBasis ?? s.amountBasis,
       });
     }
   }
@@ -484,6 +507,7 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
           s.isEstimate ||
           (s.cardPayment !== null && k > 0) ||
           (s.amountHigh !== null && s.amountHigh !== s.amount),
+        basis: obligationBasis(s, k),
       });
     });
   }

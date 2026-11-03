@@ -553,64 +553,121 @@ export async function createTransfer(
   return { data, error: null };
 }
 
-export type UpdateTransferPatch = Pick<
-  TransactionUpdate,
-  "amount" | "transaction_date" | "description" | "notes"
->;
-
-// Both legs share everything but accountid/transaction_type, so the patch
-// applies identically to both -- never target a single leg.
-export async function updateTransfer(
-  groupId: string,
-  patch: UpdateTransferPatch,
-): Promise<DbResult<TransactionRow[]>> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("transactions")
-    .update(patch)
-    .eq("transfer_group_id", groupId)
-    .select();
-
-  if (error) {
-    return { data: null, error: describeWriteError(error, "transfer") };
-  }
-
-  return { data, error: null };
-}
-
-export type TransferAccountNames = {
-  fromAccountName: string | null;
-  toAccountName: string | null;
+export type UpdateTransferInput = {
+  transferGroupId: string;
+  fromAccountId: string;
+  toAccountId: string;
+  amount: number;
+  date: string;
+  description: string;
+  notes: string | null;
+  /** "This and future occurrences": also set the schedule's amount. */
+  updateSchedule: boolean;
 };
 
-// Both legs of a transfer share transfer_group_id: the Expense leg draws
-// from the "from" account, the Income leg lands in the "to" account. The
-// edit page uses this to name both accounts when it explains that a transfer
-// is a linked pair rather than a single editable row. Archived accounts
-// still resolve -- the join has no is_active filter.
-export async function getTransferAccounts(
-  groupId: string,
-): Promise<DbResult<TransferAccountNames>> {
+// The ONLY write path for an existing transfer: update_transfer()
+// (migration 59) writes both legs in one call, so they can't disagree --
+// two client updates could leave legs that don't net to zero. Any other
+// update of a leg is refused by trg_transactions_transfer_pair. Swapping
+// from and to swaps the direction.
+export async function updateTransfer(input: UpdateTransferInput): Promise<DbResult<null>> {
+  const supabase = await createClient();
+
+  const { error } = await supabase.rpc("update_transfer", {
+    p_transfer_group_id: input.transferGroupId,
+    p_from_accountid: input.fromAccountId,
+    p_to_accountid: input.toAccountId,
+    p_amount: input.amount,
+    p_transaction_date: input.date,
+    p_description: input.description,
+    p_notes: input.notes ?? undefined,
+    p_update_schedule: input.updateSchedule,
+  });
+
+  if (error) {
+    if (error.code === "P0002") {
+      return { data: null, error: "That transfer or one of its accounts isn't there anymore." };
+    }
+    return { data: null, error: describeWriteError(error, "transfer") };
+  }
+  return { data: null, error: null };
+}
+
+export type ScheduleSummary = { id: string; description: string; amountIsVariable: boolean };
+
+// The schedule a confirmed transaction came from, for the edit-scope
+// question (lib/recurringEditScope.ts). null when there's no recurringid or
+// the schedule has since been deleted (recurringid is ON DELETE SET NULL,
+// so normally the former).
+export async function getScheduleSummary(recurringid: string | null): Promise<DbResult<ScheduleSummary | null>> {
+  if (recurringid === null) return { data: null, error: null };
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("recurring_transactions")
+    .select("id, description, amount_is_variable")
+    .eq("id", recurringid)
+    .maybeSingle();
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "transaction") };
+  }
+  return {
+    data: data ? { id: data.id, description: data.description, amountIsVariable: data.amount_is_variable } : null,
+    error: null,
+  };
+}
+
+export type TransferForEdit = {
+  transferGroupId: string;
+  /** The Expense leg -- money leaves this account. */
+  fromLeg: { id: string; accountId: string };
+  /** The Income leg -- money lands here. */
+  toLeg: { id: string; accountId: string };
+  amount: number;
+  date: string;
+  description: string;
+  notes: string | null;
+  /** The schedule both legs were confirmed from, when it still exists. */
+  schedule: ScheduleSummary | null;
+};
+
+// Both legs as one transfer, for the transfer editor. null when the group
+// isn't the caller's or isn't a whole pair -- nothing to edit.
+export async function getTransferForEdit(groupId: string): Promise<DbResult<TransferForEdit | null>> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("transactions")
-    .select("transaction_type, account:accounts(account_name)")
-    .eq("transfer_group_id", groupId)
-    .returns<{ transaction_type: string; account: { account_name: string } | null }[]>();
+    .select("id, accountid, transaction_type, amount, transaction_date, description, notes, recurringid")
+    .eq("transfer_group_id", groupId);
 
   if (error) {
     return { data: null, error: describeReadError(error, "transfer") };
   }
 
-  const fromLeg = data.find((leg) => leg.transaction_type === "Expense");
-  const toLeg = data.find((leg) => leg.transaction_type === "Income");
+  const fromLeg = data.find((l) => l.transaction_type === "Expense");
+  const toLeg = data.find((l) => l.transaction_type === "Income");
+  if (data.length !== 2 || !fromLeg || !toLeg) {
+    return { data: null, error: null };
+  }
+
+  const scheduleResult = await getScheduleSummary(fromLeg.recurringid);
+  if (scheduleResult.error !== null) {
+    return { data: null, error: scheduleResult.error };
+  }
+  const schedule = scheduleResult.data;
 
   return {
     data: {
-      fromAccountName: fromLeg?.account?.account_name ?? null,
-      toAccountName: toLeg?.account?.account_name ?? null,
+      transferGroupId: groupId,
+      fromLeg: { id: fromLeg.id, accountId: fromLeg.accountid },
+      toLeg: { id: toLeg.id, accountId: toLeg.accountid },
+      amount: Number(fromLeg.amount),
+      date: fromLeg.transaction_date,
+      description: fromLeg.description,
+      notes: fromLeg.notes,
+      schedule,
     },
     error: null,
   };

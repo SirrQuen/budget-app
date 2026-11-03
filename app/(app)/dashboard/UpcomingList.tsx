@@ -14,6 +14,7 @@ import {
 } from "@/lib/upcomingOccurrences";
 import { ConfirmVariableAmountSheet, type VariableAmountTarget } from "../recurring/ConfirmVariableAmountSheet";
 import { INLINE_ACTION, UnconfirmedIncomeNote } from "./UnconfirmedIncomeNote";
+import { AmountBasisTag } from "@/components/AmountBasisTag";
 
 /** Per-schedule display details the projection doesn't carry. */
 export type UpcomingScheduleMeta = {
@@ -135,8 +136,8 @@ function OccurrenceRow({ item, meta }: { item: UpcomingOccurrence; meta: Upcomin
             cut the name to ~70px. */}
         <span className="min-w-0 flex-1 break-words text-ink sm:truncate">
           {item.name}
-          {/* Quiet on purpose: no colour, no icon. A known bill carries nothing. */}
-          {item.status === "expected" ? <span className="ml-1.5 text-xs text-ink-muted">expected</span> : null}
+          {/* Quiet on purpose: no colour, no icon -- what the amount rests on. */}
+          <AmountBasisTag basis={item.basis} className="ml-1.5" />
         </span>
         <span className="shrink-0 tabular-nums text-ink-secondary">{formatDateShort(item.date)}</span>
         <Amount

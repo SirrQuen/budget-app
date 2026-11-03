@@ -526,6 +526,18 @@ check anything taken from it against the migrations. The contract:
   `lib/db/transactions.ts`. Every income/expense/spending aggregate must
   exclude rows where `transfer_group_id is not null`, or a transfer inflates
   both sides. Recurring transfers exist too (`recurring_transactions.to_accountid`).
+- A transfer is ONE THING WITH TWO LEGS. An existing transfer is written
+  only by `update_transfer()` (migration 59) -- both legs in one call,
+  SECURITY DEFINER scoped to `auth.uid()` -- through `updateTransfer()` /
+  `updateTransferAction`. Opening either leg opens the transfer editor;
+  a leg is never edited alone. The database enforces it:
+  `trg_transactions_transfer_pair` refuses any other UPDATE of a leg, and
+  `updateTransactionAction` refuses a leg id. A one-off service-role fix
+  opens the gate with `set_config('sorrel.transfer_edit', 'on', true)`.
+  Swapping from and to swaps direction -- the Expense leg is always the
+  source. Anything that counts a schedule's occurrences counts
+  `distinct coalesce(transfer_group_id, id)`, never rows: a confirmed
+  transfer is two rows and one occurrence.
 - Accounts/categories are soft-deleted (`is_active`), never hard-deleted.
   Goals archive the same way (`goals.is_active`, migration 53); an
   archived goal's contributions are kept. `goals.status` is not used for
@@ -657,6 +669,15 @@ never red. Housekeeping, not failure. One item per schedule (one cursor,
 dashboard, its count and the recurring page all read it. Never re-derive
 "needs confirming" anywhere else.
 
+Every upcoming amount shown anywhere carries what it rests on: "$151
+(average of last 3)", "$1,850 (fixed)" (`AmountBasisTag`,
+`lib/amountBasis.ts`). The basis is decided in SQL beside the amount, in
+`v_recurring_amounts` (migration 59) -- every schedule, paused ones
+included; `v_upcoming_recurring` and the recurring page both read it.
+Never compute an upcoming amount, or its label, anywhere else. What the
+forecast counts is labelled by what it counts ("highest of last 3"), what
+the queue shows by what it shows ("average of last 3").
+
 The predicted amount (`v_upcoming_recurring.amount`): a fixed schedule's
 stated amount; a card payment's entered statement amount, else what the
 card owes; otherwise the MEAN of the last three amounts a person supplied
@@ -677,12 +698,15 @@ migration 48).
 - Those rows carry a small recurring icon in lists -- an icon, not a
   separate status or a different colour. They are normal transactions.
 - Editing or deleting one is unremarkable: no extra confirmation, no
-  warning, no special path.
-- When a user edits the AMOUNT on a recurring transaction, offer once to
-  update the schedule too ("Update the Rent schedule to $1,450?"). Declining
-  leaves the schedule alone and is never asked again for that edit. This is
-  what makes variable bills (utilities) workable. NOT BUILT YET: editing a
-  recurring transaction's amount doesn't offer this today.
+  warning, no special path -- except the scope question below.
+- Editing the AMOUNT of one asks the scope: **Just this one** / **This and
+  future occurrences** (`components/EditScopeChoice.tsx`,
+  `lib/recurringEditScope.ts`). Default: this and future for a fixed
+  schedule, just this one for a variable one. Shown whenever the amount
+  differs, whatever the default -- never propagated silently. "This and
+  future" sets the schedule's `amount` (a transfer's inside
+  `update_transfer()`); the server reads the stored amount and the
+  schedule itself, never the form's. Dates aren't asked about.
 - Deleting a schedule must NOT delete transactions already confirmed from
   it. `recurringid` is ON DELETE SET NULL; that history is real.
 - Transactions the old catch-up created before 2026-10-17 stay as they are.

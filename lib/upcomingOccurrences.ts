@@ -6,6 +6,7 @@
 // so nothing that explains the figure is silently missing.
 
 import { addDaysISO } from "@/lib/date";
+import type { AmountBasis } from "@/lib/amountBasis";
 import type { SafeToSpendProjection } from "@/lib/safeToSpendProjection";
 
 /** The list opens on this many days, today included; the rest sit behind an expander. */
@@ -33,6 +34,8 @@ export type UpcomingOccurrence = {
    * any bill whose amount is an estimate. "known": a bill at a known amount.
    */
   status: "missed" | "expected" | "known";
+  /** What amount rests on -- shown beside it. */
+  basis: AmountBasis;
 };
 
 export type UpcomingOccurrences = {
@@ -63,6 +66,7 @@ export function buildUpcomingOccurrences(
         date: u.dueDate,
         dueDate: u.dueDate,
         status: "missed",
+        basis: u.basis,
       }),
     ),
     ...projection.incomes.map(
@@ -75,6 +79,7 @@ export function buildUpcomingOccurrences(
         date: i.date,
         dueDate: i.dueDate,
         status: "expected",
+        basis: i.basis,
       }),
     ),
     ...projection.obligations.map(
@@ -87,6 +92,7 @@ export function buildUpcomingOccurrences(
         date: o.date,
         dueDate: o.dueDate,
         status: o.isEstimate ? "expected" : "known",
+        basis: o.basis,
       }),
     ),
   ];

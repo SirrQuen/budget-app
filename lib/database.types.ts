@@ -1186,6 +1186,19 @@ export type Database = {
           },
         ]
       }
+      v_recurring_amounts: {
+        Row: {
+          amount: number | null
+          amount_basis: string | null
+          amount_high: number | null
+          amount_low: number | null
+          card_balance_owed: number | null
+          forecast_basis: string | null
+          recurring_id: string | null
+          userid: string | null
+        }
+        Relationships: []
+      }
       v_upcoming_recurring: {
         Row: {
           account_color: string | null
@@ -1193,6 +1206,7 @@ export type Database = {
           account_type: string | null
           accountid: string | null
           amount: number | null
+          amount_basis: string | null
           amount_high: number | null
           amount_is_variable: boolean | null
           amount_low: number | null
@@ -1207,6 +1221,7 @@ export type Database = {
           days_until: number | null
           description: string | null
           end_date: string | null
+          forecast_basis: string | null
           frequency: string | null
           interval_count: number | null
           is_estimated_amount: boolean | null
@@ -1350,6 +1365,10 @@ export type Database = {
       is_business_day: { Args: { d: string }; Returns: boolean }
       is_spendable_account_type: { Args: { p_type: string }; Returns: boolean }
       join_waitlist: { Args: { p_email: string }; Returns: undefined }
+      has_three_supplied_amounts: {
+        Args: { p_recurring_id: string; p_type: string }
+        Returns: boolean
+      }
       leaves_spendable_set: {
         Args: { p_from_type: string; p_to_type: string }
         Returns: boolean
@@ -1377,6 +1396,19 @@ export type Database = {
       }
       spendable_cash_balance: { Args: never; Returns: number }
       suggested_safe_to_spend_cushion: { Args: never; Returns: number }
+      update_transfer: {
+        Args: {
+          p_amount: number
+          p_description: string
+          p_from_accountid: string
+          p_notes?: string
+          p_to_accountid: string
+          p_transaction_date: string
+          p_transfer_group_id: string
+          p_update_schedule?: boolean
+        }
+        Returns: undefined
+      }
       username_is_available: { Args: { p_username: string }; Returns: boolean }
     }
     Enums: {

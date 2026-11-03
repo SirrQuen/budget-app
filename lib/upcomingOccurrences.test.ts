@@ -20,6 +20,8 @@ function schedule(overrides: Partial<ProjectionSchedule> & Pick<ProjectionSchedu
     cardPayment: null,
     amountLow: null,
     amountHigh: null,
+    amountBasis: "fixed",
+    forecastBasis: null,
     isEstimate: false,
     nextRunDate: next,
     nextDueDate: next,

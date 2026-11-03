@@ -25,6 +25,7 @@
 // is open, the item says how many.
 
 import { addDaysISO } from "@/lib/date";
+import type { AmountBasis } from "@/lib/amountBasis";
 import { confirmationOpensOn } from "@/lib/recurringSchedule";
 import { paymentPayee, type PaymentPayee } from "@/lib/accountOptions";
 import { expandOccurrences, type ProjectionSchedule } from "@/lib/safeToSpendProjection";
@@ -44,6 +45,8 @@ export type ConfirmationItem = {
   /** The predicted amount, dollars -- what "landed as expected" writes. */
   amount: number;
   isEstimate: boolean;
+  /** What amount rests on -- shown beside it ("average of last 3"). */
+  basis: AmountBasis;
   /** The predicted (business-day-resolved) date -- next_due_date. */
   dueDate: string;
   /** date_tolerance_days > 0: the date is an estimate, so the UI leads with it. */
@@ -93,6 +96,7 @@ export function buildConfirmationQueue(
       payee: s.kind === "Transfer" ? paymentPayee(s.toAccountType) : null,
       amount: s.amount,
       isEstimate: s.isEstimate,
+      basis: s.amountBasis,
       dueDate,
       approximate: tolerance > 0,
       outstanding: open.length,

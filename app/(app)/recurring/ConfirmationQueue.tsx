@@ -16,6 +16,7 @@ import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { formatDateWithWeekday } from "@/lib/format";
 import { ConfirmOccurrenceSheet } from "./ConfirmOccurrenceSheet";
 import { PaymentNote } from "@/components/PaymentNote";
+import { AmountBasisTag } from "@/components/AmountBasisTag";
 
 // The confirmation queue: the only way a recurring schedule becomes a
 // transaction (CLAUDE.md "Confirmation creates every recurring
@@ -105,12 +106,14 @@ function QueueRow({ item, disabled }: { item: ConfirmationQueueItem; disabled: b
     <li className="flex flex-col gap-2 py-3 text-sm">
       <div className="flex items-baseline gap-3">
         <span className="min-w-0 flex-1 break-words text-ink sm:truncate">{item.name}</span>
-        <Amount amount={item.amount} type={item.kind === "Income" ? "Income" : "Expense"} column className="shrink-0" />
+        <span className="flex shrink-0 items-baseline gap-1.5">
+          <Amount amount={item.amount} type={item.kind === "Income" ? "Income" : "Expense"} column />
+          <AmountBasisTag basis={item.basis} />
+        </span>
       </div>
       <p className="text-xs text-ink-secondary">
         {item.approximate ? "Around " : "Expected "}
         {formatDateWithWeekday(item.dueDate)}
-        {item.isEstimate ? " · amount is an estimate" : ""}
         {item.outstanding > 1
           ? ` · ${item.outstanding - 1} more after this one`
           : ""}
