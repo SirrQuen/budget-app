@@ -44,6 +44,17 @@ language sql as $$
   values (p_check, p_expected, coalesce(p_actual, '<null>'), coalesce(p_expected = p_actual, false))
 $$;
 
+-- Money is compared as numeric, never as text: 190 = 190.00 is true,
+-- '190' = '190.00' isn't. A value's scale depends on where it came from
+-- (recurring_transactions.amount is unconstrained numeric, transactions
+-- .amount is numeric(12,2)), so a text comparison fails on formatting
+-- while the value is right. `actual` still shows the value as returned.
+create function pg_temp.rec_num(p_check text, p_expected numeric, p_actual numeric) returns void
+language sql as $$
+  insert into ee_results (check_, expected, actual, pass)
+  values (p_check, p_expected::text, coalesce(p_actual::text, '<null>'), coalesce(p_expected = p_actual, false))
+$$;
+
 create function pg_temp.become(p_user uuid) returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claims',
@@ -106,8 +117,8 @@ begin
          (u, chk, exp_cat, 190, 'Expense', current_date - 60, 'Electric', elec_s),
          (u, chk, exp_cat, 142, 'Expense', current_date - 30, 'Electric', elec_s);
   select amount, amount_high into v_amount, v_high from public.v_upcoming_recurring where recurring_id = elec_s;
-  perform pg_temp.rec('1 amount is the mean of the last three', '150.67', v_amount::text);
-  perform pg_temp.rec('1 amount_high is the max of the last three', '190', v_high::text);
+  perform pg_temp.rec_num('1 amount is the mean of the last three', 150.67, v_amount);
+  perform pg_temp.rec_num('1 amount_high is the max of the last three', 190, v_high);
 
   -- 2 -----------------------------------------------------------------
   insert into public.transactions (userid, accountid, categoryid, amount, transaction_type,
@@ -115,16 +126,16 @@ begin
   values (u, chk, exp_cat, 400, 'Expense', current_date - 1, 'Electric', elec_s, true)
   returning id into tx_id;
   select amount, amount_high into v_amount, v_high from public.v_upcoming_recurring where recurring_id = elec_s;
-  perform pg_temp.rec('2 an estimated row leaves the mean alone', '150.67', v_amount::text);
-  perform pg_temp.rec('2 an estimated row leaves the high alone', '190', v_high::text);
+  perform pg_temp.rec_num('2 an estimated row leaves the mean alone', 150.67, v_amount);
+  perform pg_temp.rec_num('2 an estimated row leaves the high alone', 190, v_high);
 
   -- 3 -----------------------------------------------------------------
   insert into public.transactions (userid, accountid, categoryid, amount, transaction_type,
                                    transaction_date, description, recurringid)
   values (u, chk, exp_cat, 75, 'Expense', current_date - 30, 'Water', water_s);
   select amount, amount_high into v_amount, v_high from public.v_upcoming_recurring where recurring_id = water_s;
-  perform pg_temp.rec('3 below three: amount is the schedule''s', '60', v_amount::text);
-  perform pg_temp.rec('3 below three: amount_high is the greater of schedule and supplied', '75', v_high::text);
+  perform pg_temp.rec_num('3 below three: amount is the schedule''s', 60, v_amount);
+  perform pg_temp.rec_num('3 below three: amount_high is the greater of schedule and supplied', 75, v_high);
 
   -- 4 -----------------------------------------------------------------
   insert into public.transactions (userid, accountid, categoryid, amount, transaction_type,
@@ -134,12 +145,12 @@ begin
          (u, chk, inc_cat, 1500, 'Income', current_date - 30, 'Pay', pay_s, false),
          (u, chk, inc_cat, 900,  'Income', current_date - 1,  'Pay', pay_s, true);
   select amount_low, amount_high into v_low, v_high from public.v_upcoming_recurring where recurring_id = pay_s;
-  perform pg_temp.rec('4 amount_low skips the estimated 900', '1400', v_low::text);
+  perform pg_temp.rec_num('4 amount_low skips the estimated 900', 1400, v_low);
   perform pg_temp.rec('4 income has no amount_high', '<null>', coalesce(v_high::text, '<null>'));
 
   -- 5 -----------------------------------------------------------------
   select amount, amount_high into v_amount, v_high from public.v_upcoming_recurring where recurring_id = rent_s;
-  perform pg_temp.rec('5 fixed schedule: amount is its own', '1850', v_amount::text);
+  perform pg_temp.rec_num('5 fixed schedule: amount is its own', 1850, v_amount);
   perform pg_temp.rec('5 fixed schedule: no amount_high', '<null>', coalesce(v_high::text, '<null>'));
 
   -- 6 -----------------------------------------------------------------
@@ -156,7 +167,7 @@ begin
   perform pg_temp.rec('6 changing the amount makes it a person''s figure', 'false', flag::text);
 
   select amount_high into v_high from public.v_upcoming_recurring where recurring_id = elec_s;
-  perform pg_temp.rec('6 ...which now counts: high of 190, 142, 212.40', '212.40', v_high::text);
+  perform pg_temp.rec_num('6 ...which now counts: high of 190, 142, 212.40', 212.40, v_high);
 
   perform pg_temp.unbecome();
 end
