@@ -38,6 +38,17 @@ production needs the link changed first, and that is my call, not yours.
 Never relink on your own, and never add `supabase db push` to a permission
 allowlist -- I run it myself, every time, for dev and production.
 
+**Link to production ONLY immediately before the push that needs it, and
+relink to dev immediately after.** Never link to production in advance of
+work that isn't ready. The window where the CLI points at production
+should be one command long. On 2026-11-03 production was linked ahead of a
+push that hadn't happened yet, and two other commands then ran against it;
+the confirmation prompt printed "sorrel-prod" and was answered Yes,
+because the three prompts before it had said dev. The prompt can't defend
+against that; a short window can. Scripts that only ever mean dev
+(`npm run types:dev`, `npm run test:parity`) name sorrel-dev by ref
+(`--remote=<ref>`), so the link can't redirect them.
+
 **A held branch's migration must never be pushed to the shared dev
 database.** Test it on its own throwaway project, or rebuild dev from main
 immediately afterwards. A held migration left on dev silently shapes every
