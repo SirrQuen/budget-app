@@ -8,7 +8,8 @@
 -- 1. v_recurring_amounts (new): the amounts and their provenance for EVERY
 --    schedule, paused ones included. The one place an upcoming amount and
 --    its label are decided. v_upcoming_recurring reads it (and keeps every
---    column it had, in order, appending two); the recurring page reads it
+--    column it had, in the same positions -- CREATE OR REPLACE VIEW refuses
+--    anything else -- appending two); the recurring page reads it
 --    directly, replacing a per-row .rpc() loop and a TypeScript copy of the
 --    card-balance rule.
 --
@@ -143,6 +144,7 @@ grant select on public.v_recurring_amounts to authenticated;
 create or replace view public.v_upcoming_recurring with (security_invoker = true) as
  select r.id as recurring_id,
     r.userid,
+    r.description,
     ra.amount,
     r.frequency,
     r.next_run_date,
