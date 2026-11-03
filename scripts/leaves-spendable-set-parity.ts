@@ -71,7 +71,9 @@ writeFileSync(sqlPath, sql);
 // writes then rolls back -- so stdin and stderr are the terminal's: you
 // see the Target line, check the ref, and answer. Only stdout (the JSON)
 // is captured. Never add --yes here.
-const run = spawnSync(`npx supabase db query --remote --output-format json -f "${sqlPath}"`, {
+// sorrel-dev by REF, never the link: the link can point at production.
+const DEV_REF = "tztbebdzlezlhvsbylsf";
+const run = spawnSync(`npx supabase db query --remote=${DEV_REF} --output-format json -f "${sqlPath}"`, {
   encoding: "utf8",
   shell: true,
   stdio: ["inherit", "pipe", "inherit"],

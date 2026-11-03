@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --import tsx --test \"lib/**/*.test.ts\" \"app/**/*.test.tsx\" \"components/**/*.test.tsx\" \"postcss/**/*.test.ts\"",
-    "test:parity": "tsx scripts/leaves-spendable-set-parity.ts"
+    "test:parity": "tsx scripts/leaves-spendable-set-parity.ts",
+    "types:dev": "tsx scripts/gen-types.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

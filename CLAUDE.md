@@ -59,7 +59,8 @@ project name AND ref. The link says which project is configured; the
 Target line says where this command is actually writing. Only the second
 one matters. `--dry-run` prints the Target line and the migrations it
 would apply without applying them. The same goes for `db query` and
-`gen types`: `--remote`, and read the Target line.
+`gen types` (through `npm run types:dev`): `--remote`, and read the
+Target line.
 
 A remote `db query` that isn't `--read-only` asks for confirmation, and
 in an agent run it refuses instead. That covers every `docs/*-test.sql`
@@ -526,10 +527,11 @@ check anything taken from it against the migrations. The contract:
 
 1. `npx supabase db push --remote` -- state the `Target:` line first
    (see "Before every `supabase db push`")
-2. `npx supabase gen types --remote --lang typescript --schema public > lib/database.types.ts`
-   -- from Git Bash. Windows PowerShell's `>` writes UTF-16, which git
-   stores as binary (it happened 2026-11-03). Before committing,
-   `file lib/database.types.ts` must say ASCII or UTF-8, not UTF-16.
+2. `npm run types:dev` -- regenerates `lib/database.types.ts` from
+   sorrel-dev by ref and writes it as UTF-8 (`scripts/gen-types.ts`).
+   Never `gen types ... > lib/database.types.ts`: Windows PowerShell 5.x's
+   `>` writes UTF-16LE, git stores the file as binary, and `git diff`
+   shows nothing (2026-11-03). Review the diff before committing.
 3. Commit both together
 
 **Never run `supabase config push`.** It overwrites remote auth settings not
