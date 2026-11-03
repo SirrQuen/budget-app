@@ -19,6 +19,7 @@ function schedule(overrides: Partial<ProjectionSchedule> & Pick<ProjectionSchedu
     statementDay: null,
     cardPayment: null,
     amountLow: null,
+    amountHigh: null,
     isEstimate: false,
     nextRunDate: next,
     nextDueDate: next,

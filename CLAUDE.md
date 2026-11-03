@@ -205,6 +205,11 @@ docs/Recurring-Confirmation.md.
 
 **Uncertainty always pushes the forecast down.**
 Income: low amount, late date. Obligations: high amount, early date.
+A variable schedule has two amounts (migration 58): `amount`, the mean --
+shown, and written by a one-tap confirm -- and the cautious one the
+projection counts: `amount_low` for income, `amount_high` for an expense.
+Never count `amount` for a variable schedule in the forecast, and never
+show or write the cautious one as the bill's amount.
 
 **One "leaves the set" classifier, three consumers.**
 Spendable Cash, the projection, and the cushion suggestion must all use the
@@ -594,9 +599,20 @@ recorded in docs/supabase-config.md.
   `record_login()` (every full page load and dashboard view). Recurring
   catch-up was the other; it was removed 2026-10-17. The streak rebuild
   nearly added a third. See `docs/phase-7-findings.md`.
-- `transactions.is_estimated` is deprecated (migration 50). Only the
-  removed catch-up set it; nothing writes it true. The column stays, and
-  an edit still clears it on legacy rows. Don't build on it.
+- `transactions.is_estimated` is TRUE when the amount was never supplied
+  by a person, FALSE when it was (migration 58; it was briefly deprecated
+  by migration 50). True: a one-tap "It landed" (or Confirm all) on a
+  variable schedule -- it confirms the event, not the amount -- and the
+  removed catch-up's pre-2026-10-17 rows. False: a fixed schedule's
+  one-tap (its stated amount), a card payment at an entered statement
+  amount, an amount the person changed in "It was different" (saved
+  unchanged, it stays true), anything entered by hand. Changing a row's
+  amount clears it, by trigger (`trg_transactions_amount_supplied`), on
+  every path; editing anything else doesn't. The rule lives in
+  `confirmedAmountIsEstimated()` (`lib/confirmationQueue.ts`). Every
+  recurring estimate skips true rows -- an estimate is never built from an
+  estimate -- so someone who only ever taps keeps the schedule's own
+  amount. The transaction list marks them "Approximate".
 - "First login" is decided when the session starts (`lib/auth/firstSession.ts`),
   never from `lastlogin`, which `record_login()` stamps on every request.
 - Tier is profiles.subscription_plan / subscription_status, via getPlan().
@@ -619,7 +635,8 @@ When an occurrence's date comes it enters the confirmation queue, and only
 the user's answer writes to the ledger. Four answers:
 
 - **Landed as expected** -- one tap. Writes the predicted amount on the
-  predicted date (or today, if it landed early inside its tolerance).
+  predicted date (or today, if it landed early inside its tolerance). For
+  a variable schedule the row is `is_estimated` (see Data layer rules).
 - **Landed differently** -- amount and date, both pre-filled, both
   editable, always. The confirmed date IS the transaction date; there is no
   second date column anywhere.
@@ -639,6 +656,16 @@ never red. Housekeeping, not failure. One item per schedule (one cursor,
 `lib/confirmationQueue.ts` is the single source of what's in it -- the
 dashboard, its count and the recurring page all read it. Never re-derive
 "needs confirming" anywhere else.
+
+The predicted amount (`v_upcoming_recurring.amount`): a fixed schedule's
+stated amount; a card payment's entered statement amount, else what the
+card owes; otherwise the MEAN of the last three amounts a person supplied
+for it (`is_estimated` false), or the schedule's own amount with fewer than
+three -- never "the last confirmed amount". The forecast counts the
+cautious twin instead: `amount_high`, the max of the same three, or
+`amount_low`, the min (below three, the more cautious of the schedule's
+amount and anything supplied). docs/Recurring-Amounts-and-Transfer-Editing.md assumed the next
+occurrence carries the last confirmed amount forward; it never did.
 
 A confirmation dated before an account's balance date is allowed; the
 confirm sheet shows the same "before your balance date" note as the

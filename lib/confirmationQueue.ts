@@ -104,6 +104,30 @@ export function buildConfirmationQueue(
   );
 }
 
+/**
+ * transactions.is_estimated for a confirmed occurrence: TRUE when the
+ * amount was never supplied by a person (CLAUDE.md "is_estimated").
+ *
+ * `predictedIsEstimate` is v_upcoming_recurring.is_estimated_amount -- a
+ * variable schedule with no statement amount entered. A one-tap "It
+ * landed" on one confirms the event, not the amount, so it's estimated. A
+ * fixed schedule's amount is the one the user stated, and a statement
+ * amount is one they typed, so those aren't.
+ *
+ * "It was different" pre-fills the predicted amount. Saving it unchanged
+ * is the same guess with a form around it, so it stays estimated; an
+ * amount the person changed is theirs. Compared in cents.
+ */
+export function confirmedAmountIsEstimated(
+  predictedIsEstimate: boolean,
+  predictedAmount: number,
+  enteredAmount?: number,
+): boolean {
+  if (!predictedIsEstimate) return false;
+  if (enteredAmount === undefined) return true;
+  return Math.round(enteredAmount * 100) === Math.round(predictedAmount * 100);
+}
+
 /** "4 to confirm" -- the queue's only headline. Never "overdue". */
 export function confirmationCountLabel(count: number): string {
   return `${count} to confirm`;

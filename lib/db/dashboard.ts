@@ -599,6 +599,7 @@ type UpcomingProjectionRow = {
   description: string;
   amount: number;
   amount_low: number | null;
+  amount_high: number | null;
   is_estimated_amount: boolean;
   // Null for a transfer template.
   category_type: string | null;
@@ -732,6 +733,7 @@ function toProjectionSchedule(row: UpcomingProjectionRow): ProjectionSchedule | 
         : null,
     amount: row.amount,
     amountLow: row.amount_low,
+    amountHigh: row.amount_high,
     isEstimate: row.is_estimated_amount,
     nextRunDate: row.next_run_date,
     nextDueDate: row.next_due_date,
@@ -756,7 +758,7 @@ const getProjectionSchedules = cache(async (): Promise<DbResult<ProjectionSchedu
   const { data, error } = await supabase
     .from("v_upcoming_recurring")
     .select(
-      "recurring_id, description, amount, amount_low, is_estimated_amount, category_type, accountid, account_type, to_accountid, to_account_type, card_balance_owed, next_run_date, next_due_date, start_date, end_date, frequency, interval_count, business_day_offset, non_business_day_rule, date_tolerance_days, occurrences_remaining, amount_is_variable, next_amount_confirmed_at, statement_day, to_account_name",
+      "recurring_id, description, amount, amount_low, amount_high, is_estimated_amount, category_type, accountid, account_type, to_accountid, to_account_type, card_balance_owed, next_run_date, next_due_date, start_date, end_date, frequency, interval_count, business_day_offset, non_business_day_rule, date_tolerance_days, occurrences_remaining, amount_is_variable, next_amount_confirmed_at, statement_day, to_account_name",
     )
     .returns<UpcomingProjectionRow[]>();
 

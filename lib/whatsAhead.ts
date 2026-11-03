@@ -104,3 +104,16 @@ export function whatsAhead(
     more: hidden > 0 ? `and ${hidden} more later in the forecast` : null,
   };
 }
+
+// How the forecast is cautious, said once for bills and pay together. The
+// queue and the upcoming list show each bill's usual amount; the figure
+// counts its recent high (and a paycheck's recent low), so the breakdown
+// names the difference rather than leaving two numbers to disagree.
+export function cautionLine(cautious: { billsAtHigh: boolean; payAtLow: boolean }): string | null {
+  if (cautious.billsAtHigh && cautious.payAtLow) {
+    return "Variable bills are counted at their recent high, and variable pay at its recent low.";
+  }
+  if (cautious.billsAtHigh) return "Variable bills are counted at their recent high.";
+  if (cautious.payAtLow) return "Variable pay is counted at its recent low.";
+  return null;
+}
