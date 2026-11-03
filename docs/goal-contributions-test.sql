@@ -1,7 +1,7 @@
 -- =====================================================================
 -- Goal contribution edit/delete test
 --
---   npx supabase@latest db query --linked -f docs/goal-contributions-test.sql
+--   npx supabase db query --remote -f docs/goal-contributions-test.sql
 --
 -- Returns one row per assertion; a run is clean only when every `pass`
 -- is true. Self-cleaning, same as docs/rls-isolation-test.sql: one

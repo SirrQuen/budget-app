@@ -1,9 +1,9 @@
 -- =====================================================================
 -- Dev seed: a month of realistic activity for ONE test user. sorrel-dev
--- (tztbebdzlezlhvsbylsf) ONLY -- never production. Check the link first:
+-- (tztbebdzlezlhvsbylsf) ONLY -- never production. The CLI prints a
+-- Target line and asks before running; it must name tztbebdzlezlhvsbylsf:
 --
---   npx supabase@latest projects list          # sorrel-dev must say linked
---   npx supabase@latest db query --linked -f docs/dev-seed.sql
+--   npx supabase db query --remote -f docs/dev-seed.sql
 --
 -- Set the user id below. Refuses to run if that user already has accounts,
 -- so it can't double a seed. Runs as postgres (RLS bypassed), so every row
