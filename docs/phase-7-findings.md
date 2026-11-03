@@ -773,11 +773,10 @@ matches. CLI 3.0's own confirmation for hosted writes doesn't close it
 either: it accepts `--yes`, and an allowlisted wildcard matches a command
 carrying `--yes`.
 
-Found 2026-11-03 while pinning the CLI. Nothing found suggests either
-entry was used to push, reset or change config: every push on record is
-Matt's, and `db push` errors out without Docker or `--remote` under 3.0.
-`settings.local.json` is gitignored, so when the entries were added
-can't be recovered.
+Found 2026-11-03 while pinning the CLI. Whether either entry was ever
+used to push, reset or change config wasn't checked and can't be told from
+the repo. `settings.local.json` is gitignored, so when the entries were
+added can't be recovered either.
 
 **Fixed:** both entries removed 2026-11-03. Every Supabase command now
 prompts.
