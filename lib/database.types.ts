@@ -836,6 +836,13 @@ export type Database = {
             foreignKeyName: "transactions_recurringid_fkey"
             columns: ["userid", "recurringid"]
             isOneToOne: false
+            referencedRelation: "v_recurring_amounts"
+            referencedColumns: ["userid", "recurring_id"]
+          },
+          {
+            foreignKeyName: "transactions_recurringid_fkey"
+            columns: ["userid", "recurringid"]
+            isOneToOne: false
             referencedRelation: "v_upcoming_recurring"
             referencedColumns: ["userid", "recurring_id"]
           },
@@ -1197,7 +1204,15 @@ export type Database = {
           recurring_id: string | null
           userid: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "recurring_transactions_userid_fkey"
+            columns: ["userid"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_upcoming_recurring: {
         Row: {
@@ -1362,13 +1377,13 @@ export type Database = {
         Args: { p_current: string; p_goal_id: string; p_target: number }
         Returns: string
       }
-      is_business_day: { Args: { d: string }; Returns: boolean }
-      is_spendable_account_type: { Args: { p_type: string }; Returns: boolean }
-      join_waitlist: { Args: { p_email: string }; Returns: undefined }
       has_three_supplied_amounts: {
         Args: { p_recurring_id: string; p_type: string }
         Returns: boolean
       }
+      is_business_day: { Args: { d: string }; Returns: boolean }
+      is_spendable_account_type: { Args: { p_type: string }; Returns: boolean }
+      join_waitlist: { Args: { p_email: string }; Returns: undefined }
       leaves_spendable_set: {
         Args: { p_from_type: string; p_to_type: string }
         Returns: boolean
