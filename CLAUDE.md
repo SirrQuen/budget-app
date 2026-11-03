@@ -79,6 +79,16 @@ The Target line can end in `· production` for sorrel-dev too -- that is
 the Supabase project's own main-branch label, not our production. Go by
 the ref.
 
+### Branch changes are announced
+
+When you create or switch branches, say so as the FIRST LINE of your
+reply, naming the branch -- and, if you moved more than once, the branch
+the working tree is left on. I run database commands against whatever the
+working tree is on, and a silent branch change means the migration I
+think I'm pushing isn't on disk. Two pushes failed on 2026-11-03 from this
+cause: three branches were created that day and the tree moved each time
+without a word.
+
 ### The CLI is pinned
 
 `supabase` is an exact devDependency in package.json; run it as
@@ -517,6 +527,9 @@ check anything taken from it against the migrations. The contract:
 1. `npx supabase db push --remote` -- state the `Target:` line first
    (see "Before every `supabase db push`")
 2. `npx supabase gen types --remote --lang typescript --schema public > lib/database.types.ts`
+   -- from Git Bash. Windows PowerShell's `>` writes UTF-16, which git
+   stores as binary (it happened 2026-11-03). Before committing,
+   `file lib/database.types.ts` must say ASCII or UTF-8, not UTF-16.
 3. Commit both together
 
 **Never run `supabase config push`.** It overwrites remote auth settings not
