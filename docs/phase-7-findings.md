@@ -747,6 +747,62 @@ the old form carried a typed value across the Amount / Statement day swap
 `app/(app)/recurring/RecurringForm.test.tsx`. Whether the tester's 29 was
 that carry-over, an autopay date, or real is still their answer to give.
 
+## The "I run every db push myself" rule was never enforced (2026-11-03)
+
+**It held by convention, not by configuration, from the day it was
+written.** CLAUDE.md has said since 2026-10-14 (`3a0c284`; the "never
+allowlist it" wording since `0eaaf87`, 2026-10-16) that `supabase db push`
+is run by Matt, every time, and never allowlisted, and it bans
+`supabase db reset --linked` and `supabase config push` outright. Meanwhile
+`.claude/settings.local.json` allowed two wildcards over the whole CLI:
+
+- `Bash(npx supabase@latest *)` -- every subcommand of whatever version
+  `@latest` resolved to that day.
+- `Bash(npx supabase *)` -- the same family through the local binary.
+  Pinning the CLI at 3.0.0 (`chore/pin-supabase-cli`) made this the exact
+  form every Supabase command now takes, so it would have become the
+  live hole the moment the first one was removed.
+
+Between them they matched `db push --remote`, `db reset --remote`/
+`--linked`, `config push`, `link` (relinking, which CLAUDE.md also
+reserves to Matt), `projects delete`, `secrets set` and `functions deploy`
+-- no permission prompt for any of them. A wildcard on a command family
+silently grants everything in the family; the entry's intent (probably
+the read-only `projects list` and `db query`) doesn't narrow what it
+matches. CLI 3.0's own confirmation for hosted writes doesn't close it
+either: it accepts `--yes`, and an allowlisted wildcard matches a command
+carrying `--yes`.
+
+Found 2026-11-03 while pinning the CLI. Whether either entry was ever
+used to push, reset or change config wasn't checked and can't be told from
+the repo. `settings.local.json` is gitignored, so when the entries were
+added can't be recovered either.
+
+**Fixed:** both entries removed 2026-11-03. Every Supabase command now
+prompts.
+
+**The same file, audited the same day** (what each entry matches, not
+what it was for):
+
+| Entry | Matches |
+|---|---|
+| `Bash(npx eslint *)` | Any eslint run, including `--fix` (rewrites source) and `-c <file>`/plugins (loads arbitrary JS). |
+| `Bash(npx tsc *)` | Any compile, including emitting JS anywhere `--outDir`/`--outFile` points. |
+| `Bash(git add *)` | Staging anything, including `git add -f` on ignored files -- `.env.local`. |
+| `Bash(git commit -m ' *)` | Any commit whose message starts with `'`, plus anything after it: `--amend`, `--no-verify` (skips hooks, which CLAUDE.md forbids). With `git add *`, an ignored secret can be committed without a prompt. No push. |
+| `Bash(npm run *)` | Every package.json script -- `test:parity` runs a remote query -- and any script added later. Package.json is editable, so this is arbitrary code behind one edit. |
+| `Bash(powershell -Command "Get-Content -Encoding Byte -TotalCount 20 lib/database.types.ts")` | That exact read only. Harmless. |
+| `Bash(python3 -c ' *)` | Arbitrary Python: a shell, `subprocess` included. On its own it matches every command every other rule here exists to gate, `db push` included. |
+
+Remaining entries were left in place for Matt to decide; the last row is
+the one that makes the others moot.
+
+**Not yet done: enforcement.** Removing allow rules restores the prompt;
+it doesn't make the ban configuration. Deny rules for the banned commands
+in the committed `.claude/settings.json` would (a deny beats an allow and
+isn't a per-machine file). Until then the rule is enforced by a prompt a
+person has to read.
+
 ## Phase 8 policy item: auth audit log retained after deletion (2026-10-06)
 
 **Decision: deliberate retention, not an oversight.** It must match the
