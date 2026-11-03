@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { addDaysISO } from "./date";
 import { projectSafeToSpend, type ProjectionSchedule } from "./safeToSpendProjection";
-import { whatsAhead, type WhatsAheadItem } from "./whatsAhead";
+import { cautionLine, whatsAhead, type WhatsAheadItem } from "./whatsAhead";
 
 const TODAY = "2026-10-01";
 const day = (n: number) => addDaysISO(TODAY, n);
@@ -22,6 +22,7 @@ function once(kind: "Income" | "Expense", name: string, amount: number, n: numbe
     cardPayment: null,
     amount,
     amountLow: null,
+    amountHigh: null,
     isEstimate: false,
     nextRunDate: day(n),
     nextDueDate: day(n),
@@ -282,4 +283,14 @@ test("no user-facing string uses alarm words or exclamation marks", () => {
         : [...view.items.flatMap((i) => [i.when, i.headline, i.cause, i.recovery]), view.more ?? ""];
     for (const s of strings) assert.ok(!banned.test(s), s);
   }
+});
+
+test("the caution line names bills, pay, or both -- and is absent when nothing was adjusted", () => {
+  assert.equal(cautionLine({ billsAtHigh: false, payAtLow: false }), null);
+  assert.equal(cautionLine({ billsAtHigh: true, payAtLow: false }), "Variable bills are counted at their recent high.");
+  assert.equal(cautionLine({ billsAtHigh: false, payAtLow: true }), "Variable pay is counted at its recent low.");
+  assert.equal(
+    cautionLine({ billsAtHigh: true, payAtLow: true }),
+    "Variable bills are counted at their recent high, and variable pay at its recent low.",
+  );
 });

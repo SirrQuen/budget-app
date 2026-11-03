@@ -12,7 +12,7 @@ import { UnconfirmedIncomeNote, UnconfirmedObligationNote } from "./UnconfirmedI
 import type { HorizonReason } from "@/lib/safeToSpendProjection";
 import { Amount } from "@/components/ui/Amount";
 import { useCountUp } from "@/components/ui/useCountUp";
-import { whatsAhead } from "@/lib/whatsAhead";
+import { cautionLine, whatsAhead } from "@/lib/whatsAhead";
 import {
   formatCurrency,
   formatDateShort,
@@ -296,6 +296,10 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
               <dd className="font-semibold tabular-nums text-ink">{formatCurrency(data.safeToSpend)}</dd>
             </div>
           </dl>
+
+          {cautionLine(data.cautious) ? (
+            <p className="mt-2 text-xs text-ink-muted">{cautionLine(data.cautious)}</p>
+          ) : null}
 
           <WhatsAheadBlock data={data} />
 

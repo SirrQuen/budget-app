@@ -6,7 +6,7 @@ import { getToday } from "@/lib/db/settings";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
 import { getBankHolidays } from "@/lib/db/holidays";
 import { nextOccurrenceISO } from "@/lib/recurringCadence";
-import { confirmEach, type BulkConfirmResult } from "@/lib/confirmationQueue";
+import { confirmEach, confirmedAmountIsEstimated, type BulkConfirmResult } from "@/lib/confirmationQueue";
 
 type RecurringRow = Database["public"]["Tables"]["recurring_transactions"]["Row"];
 type RecurringInsert = Database["public"]["Tables"]["recurring_transactions"]["Insert"];
@@ -376,7 +376,7 @@ export async function estimateExpenseAmount(
 // the income/expense estimate). A paused or finished schedule isn't in the
 // view, and has nothing to confirm.
 const CONFIRM_SELECT =
-  "recurring_id, description, amount, accountid, categoryid, to_accountid, category_type, next_run_date, next_due_date, start_date, frequency, interval_count, business_day_offset, non_business_day_rule, next_amount, next_amount_confirmed_at";
+  "recurring_id, description, amount, accountid, categoryid, to_accountid, category_type, next_run_date, next_due_date, start_date, frequency, interval_count, business_day_offset, non_business_day_rule, next_amount, next_amount_confirmed_at, is_estimated_amount";
 
 type ConfirmScheduleRow = {
   recurring_id: string;
@@ -396,6 +396,7 @@ type ConfirmScheduleRow = {
   non_business_day_rule: string;
   next_amount: number | null;
   next_amount_confirmed_at: string | null;
+  is_estimated_amount: boolean;
 };
 
 // The transaction row(s) one confirmed occurrence writes. A transfer
@@ -408,6 +409,7 @@ function occurrenceRows(
   userid: string,
   amount: number,
   date: string,
+  is_estimated: boolean,
 ): TransactionInsert[] {
   if (s.to_accountid !== null) {
     const leg = {
@@ -418,6 +420,7 @@ function occurrenceRows(
       description: s.description,
       recurringid: s.recurring_id,
       transfer_group_id: crypto.randomUUID(),
+      is_estimated,
     };
     return [
       { ...leg, accountid: s.accountid, transaction_type: "Expense" },
@@ -437,6 +440,7 @@ function occurrenceRows(
       transaction_date: date,
       description: s.description,
       recurringid: s.recurring_id,
+      is_estimated,
     },
   ];
 }
@@ -548,6 +552,10 @@ export async function confirmOccurrence(
 
   const today = await getToday();
   const amount = input.amount ?? Number(s.amount);
+  // True when no person supplied this amount -- a one-tap confirm of a
+  // variable schedule (CLAUDE.md "is_estimated"). The estimates skip
+  // these rows, so a guess never feeds the next guess.
+  const isEstimated = confirmedAmountIsEstimated(s.is_estimated_amount, Number(s.amount), input.amount);
   const date = input.date ?? (s.next_due_date <= today ? s.next_due_date : today);
 
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -563,7 +571,7 @@ export async function confirmOccurrence(
 
   const { error: insertError } = await supabase
     .from("transactions")
-    .insert(occurrenceRows(s, userid, amount, date));
+    .insert(occurrenceRows(s, userid, amount, date, isEstimated));
 
   if (insertError) {
     const { error: restoreError } = await supabase

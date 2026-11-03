@@ -87,6 +87,13 @@ export type ProjectionSchedule = {
   amount: number;
   /** Low estimate, dollars -- only read for Income. Null means "same as amount". */
   amountLow: number | null;
+  /**
+   * High estimate, dollars -- only read for an obligation (a variable
+   * Expense: v_upcoming_recurring.amount_high). Null means "same as amount".
+   * `amount` stays the mean, shown and written by a one-tap confirm; the
+   * forecast counts this ("Uncertainty always pushes the forecast down").
+   */
+  amountHigh: number | null;
   isEstimate: boolean;
   /** Raw cadence cursor (next_run_date) -- stepped, never business-day shifted. */
   nextRunDate: string;
@@ -197,6 +204,13 @@ export type SafeToSpendProjection = {
   episodes: SqueezeEpisode[];
   /** The day-by-day walk, today through horizonEnd. */
   daily: ProjectedDay[];
+  /**
+   * Where caution changed a counted figure: a variable bill counted at its
+   * recent high above its usual amount, a variable paycheck at its recent
+   * low below it. The breakdown says so in one sentence, so the forecast
+   * explains itself while the queue stays about the bill.
+   */
+  cautious: { billsAtHigh: boolean; payAtLow: boolean };
 };
 
 /**
@@ -234,6 +248,11 @@ export type OverdueOccurrence = {
 
 const toCents = (dollars: number) => Math.round(dollars * 100);
 const toDollars = (cents: number) => cents / 100;
+
+/** What the forecast counts per occurrence of an outflow: the high end. */
+function obligationAmount(s: ProjectionSchedule): number {
+  return s.amountHigh ?? s.amount;
+}
 
 export type Occurrence = {
   /** Raw cadence date -- what statementDateForCycle is keyed on. */
@@ -419,9 +438,21 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
   // stays counted until a confirmation turns it into a transaction).
   const obligations: ProjectedObligation[] = [];
   const overdueObligations: OverdueOccurrence[] = [];
+  // Schedules whose counted amount isn't their shown one.
+  const atHigh = new Set(
+    schedules.filter((s) => s.amountHigh !== null && toCents(s.amountHigh) !== toCents(s.amount)).map((s) => s.recurringId),
+  );
+  const atLow = new Set(
+    schedules.filter((s) => s.amountLow !== null && toCents(s.amountLow) !== toCents(s.amount)).map((s) => s.recurringId),
+  );
+  // A card payment built from a card's charges carries them at their high end too.
+  const paymentsCarryingHigh = new Set<string>();
   const obligationSearchEnd = addDaysISO(horizonEnd, MAX_DATE_TOLERANCE_DAYS);
   for (const s of schedules.filter(isObligationSchedule)) {
     const occurrences = expandOccurrences(s, obligationSearchEnd, holidays);
+    if (s.cardPayment && schedules.some((c) => c.kind === "Expense" && c.accountId === s.toAccountId && atHigh.has(c.recurringId))) {
+      paymentsCarryingHigh.add(s.recurringId);
+    }
     const amountsCents =
       s.cardPayment && s.statementDay !== null
         ? cardPaymentCents(
@@ -430,10 +461,10 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
             schedules
               .filter((c) => c.kind === "Expense" && c.accountId === s.toAccountId)
               .flatMap((c) =>
-                expandDueDates(c, obligationSearchEnd, holidays).map((due) => ({ due, cents: toCents(c.amount) })),
+                expandDueDates(c, obligationSearchEnd, holidays).map((due) => ({ due, cents: toCents(obligationAmount(c)) })),
               ),
           )
-        : occurrences.map(() => toCents(s.amount));
+        : occurrences.map(() => toCents(obligationAmount(s)));
 
     occurrences.forEach(({ due }, k) => {
       if (due < today && !overdueObligations.some((o) => o.recurringId === s.recurringId)) {
@@ -449,7 +480,10 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
         date,
         dueDate: due,
         // Past the next payment, a card payment is always built from estimates.
-        isEstimate: s.isEstimate || (s.cardPayment !== null && k > 0),
+        isEstimate:
+          s.isEstimate ||
+          (s.cardPayment !== null && k > 0) ||
+          (s.amountHigh !== null && s.amountHigh !== s.amount),
       });
     });
   }
@@ -509,6 +543,10 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
     unconfirmedIncome,
     overdueObligations,
     episodes: findSqueezeEpisodes(days, cushionCents, troughDate),
+    cautious: {
+      billsAtHigh: obligations.some((o) => atHigh.has(o.recurringId) || paymentsCarryingHigh.has(o.recurringId)),
+      payAtLow: incomes.some((i) => atLow.has(i.recurringId)),
+    },
     daily: days.map((d) => ({ date: d.date, low: toDollars(d.lowCents), end: toDollars(d.endCents) })),
   };
 }

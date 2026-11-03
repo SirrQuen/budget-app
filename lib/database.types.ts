@@ -1194,6 +1194,7 @@ export type Database = {
           accountid: string | null
           amount: number | null
           amount_is_variable: boolean | null
+          amount_high: number | null
           amount_low: number | null
           business_day_offset: number | null
           card_balance_owed: number | null
@@ -1327,6 +1328,10 @@ export type Database = {
       delete_own_account: { Args: never; Returns: undefined }
       email_for_username: { Args: { p_username: string }; Returns: string }
       estimate_expense_amount: {
+        Args: { p_fallback_amount: number; p_recurring_id: string }
+        Returns: number
+      }
+      estimate_expense_amount_high: {
         Args: { p_fallback_amount: number; p_recurring_id: string }
         Returns: number
       }

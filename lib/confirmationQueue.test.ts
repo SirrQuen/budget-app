@@ -8,6 +8,7 @@ import {
   confirmEach,
   confirmationCountLabel,
   confirmationKey,
+  confirmedAmountIsEstimated,
 } from "./confirmationQueue";
 
 const TODAY = "2026-10-15";
@@ -26,6 +27,7 @@ function schedule(overrides: Partial<ProjectionSchedule> & Pick<ProjectionSchedu
     statementDay: null,
     cardPayment: null,
     amountLow: null,
+    amountHigh: null,
     isEstimate: false,
     nextRunDate: next,
     nextDueDate: next,
@@ -222,4 +224,25 @@ test("payee marks transfers into a card or loan only", () => {
   ]);
   const marked = Object.fromEntries(items.map((i) => [i.recurringId, i.payee]));
   assert.deepEqual(marked, { card: "card", loan: "loan", savings: null, rent: null });
+});
+
+// is_estimated: TRUE when the amount was never supplied by a person.
+
+test("one-tap on a variable schedule is estimated; on a fixed one it isn't", () => {
+  assert.equal(confirmedAmountIsEstimated(true, 151), true);
+  assert.equal(confirmedAmountIsEstimated(false, 1850), false);
+});
+
+test("'It was different' with the amount changed is the person's figure", () => {
+  assert.equal(confirmedAmountIsEstimated(true, 151, 163.4), false);
+});
+
+test("'It was different' saved with the pre-filled amount untouched stays estimated", () => {
+  assert.equal(confirmedAmountIsEstimated(true, 151, 151), true);
+  // Compared in cents, so a float round-trip doesn't read as a change.
+  assert.equal(confirmedAmountIsEstimated(true, 0.1 + 0.2, 0.3), true);
+});
+
+test("a statement amount (not an estimate) stays a person's figure either way", () => {
+  assert.equal(confirmedAmountIsEstimated(false, 700, 700), false);
 });
