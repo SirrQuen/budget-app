@@ -1,7 +1,7 @@
 -- =====================================================================
 -- Cross-user reference audit
 --
---   npx supabase@latest db query --linked -f docs/cross-user-references-audit.sql
+--   npx supabase db query --remote -f docs/cross-user-references-audit.sql
 --
 -- For every foreign key from one user-owned table to another, counts the
 -- child rows whose owner differs from the owner of the row they point

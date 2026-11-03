@@ -66,15 +66,22 @@ const dir = mkdtempSync(join(tmpdir(), "parity-"));
 const sqlPath = join(dir, "parity.sql");
 writeFileSync(sqlPath, sql);
 
-// One command string: npx needs a shell on Windows.
-const run = spawnSync(`npx supabase@latest db query --linked -o json -f "${sqlPath}"`, {
+// One command string: npx needs a shell on Windows. The pinned CLI (3.x)
+// asks before any remote statement that isn't read-only, and this test
+// writes then rolls back -- so stdin and stderr are the terminal's: you
+// see the Target line, check the ref, and answer. Only stdout (the JSON)
+// is captured. Never add --yes here.
+// sorrel-dev by REF, never the link: the link can point at production.
+const DEV_REF = "tztbebdzlezlhvsbylsf";
+const run = spawnSync(`npx supabase db query --remote=${DEV_REF} --output-format json -f "${sqlPath}"`, {
   encoding: "utf8",
   shell: true,
+  stdio: ["inherit", "pipe", "inherit"],
 });
 rmSync(dir, { recursive: true, force: true });
 
 if (run.status !== 0) {
-  process.stderr.write(run.stderr || run.stdout);
+  process.stderr.write(run.stdout ?? "");
   process.exit(run.status ?? 1);
 }
 

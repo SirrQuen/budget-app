@@ -38,6 +38,17 @@ production needs the link changed first, and that is my call, not yours.
 Never relink on your own, and never add `supabase db push` to a permission
 allowlist -- I run it myself, every time, for dev and production.
 
+**Link to production ONLY immediately before the push that needs it, and
+relink to dev immediately after.** Never link to production in advance of
+work that isn't ready. The window where the CLI points at production
+should be one command long. On 2026-11-03 production was linked ahead of a
+push that hadn't happened yet, and two other commands then ran against it;
+the confirmation prompt printed "sorrel-prod" and was answered Yes,
+because the three prompts before it had said dev. The prompt can't defend
+against that; a short window can. Scripts that only ever mean dev
+(`npm run types:dev`, `npm run test:parity`) name sorrel-dev by ref
+(`--remote=<ref>`), so the link can't redirect them.
+
 **A held branch's migration must never be pushed to the shared dev
 database.** Test it on its own throwaway project, or rebuild dev from main
 immediately afterwards. A held migration left on dev silently shapes every
@@ -47,23 +58,61 @@ had.
 
 ### Before every `supabase db push`
 
-Run `supabase projects list` and state which project is linked, by ref, in
-your reply, before running the push. Every single time, including when you
-ran it ten minutes ago. The CLI's link is one global setting that persists
-between sessions — the link from last week is the link today.
+The link and the target are separate. Since CLI 3.0 every database command
+targets the LOCAL stack by default; `supabase projects list` says which
+project is linked, not where a command writes. A bare `db push` with Docker
+running applies migrations to a local stack and reports success while the
+remote gets nothing.
 
-Before any `db push` to production, run BOTH:
+Every `db push` carries `--remote` explicitly, and you READ THE `Target:`
+LINE the command prints and state it in your reply before confirming --
+project name AND ref. The link says which project is configured; the
+Target line says where this command is actually writing. Only the second
+one matters. `--dry-run` prints the Target line and the migrations it
+would apply without applying them. The same goes for `db query` and
+`gen types` (through `npm run types:dev`): `--remote`, and read the
+Target line.
+
+A remote `db query` that isn't `--read-only` asks for confirmation, and
+in an agent run it refuses instead. That covers every `docs/*-test.sql`
+script and `npm run test:parity` (they write, then roll back): I run
+those. Never pass `--yes` or `--agent no` to get past it. Read-only
+catalog and count queries go through with `--read-only`.
+
+Before any `db push` to production, also run:
 
     git branch --show-current
-    supabase projects list
 
-and state both in your reply. The project check says which database;
-the branch check says which migrations. A held feature branch can carry a
+and state it with the Target line. The Target line says which database;
+the branch says which migrations. A held feature branch can carry a
 migration that must not ship.
+
+The Target line can end in `· production` for sorrel-dev too -- that is
+the Supabase project's own main-branch label, not our production. Go by
+the ref.
+
+### Branch changes are announced
+
+When you create or switch branches, say so as the FIRST LINE of your
+reply, naming the branch -- and, if you moved more than once, the branch
+the working tree is left on. I run database commands against whatever the
+working tree is on, and a silent branch change means the migration I
+think I'm pushing isn't on disk. Two pushes failed on 2026-11-03 from this
+cause: three branches were created that day and the tree moved each time
+without a word.
+
+### The CLI is pinned
+
+`supabase` is an exact devDependency in package.json; run it as
+`npx supabase ...`, never `npx supabase@latest`. 3.0 changed the default
+write target between two runs of the same command, so it doesn't float.
+Upgrade deliberately: read the changelog for target, flag and default
+changes, bump the pin on its own branch, and update this file with it.
 
 ### Never run these
 
-- `supabase db reset --linked` — destroys the remote database.
+- `supabase db reset --remote` (or the deprecated `--linked`) — destroys
+  the remote database.
 - `supabase config push` — overwrites remote auth settings that are not
   represented locally.
 
@@ -492,8 +541,13 @@ check anything taken from it against the migrations. The contract:
 
 ## After any migration
 
-1. `npx supabase@latest db push`
-2. `npx supabase@latest gen types --linked --lang typescript --schema public > lib/database.types.ts`
+1. `npx supabase db push --remote` -- state the `Target:` line first
+   (see "Before every `supabase db push`")
+2. `npm run types:dev` -- regenerates `lib/database.types.ts` from
+   sorrel-dev by ref and writes it as UTF-8 (`scripts/gen-types.ts`).
+   Never `gen types ... > lib/database.types.ts`: Windows PowerShell 5.x's
+   `>` writes UTF-16LE, git stores the file as binary, and `git diff`
+   shows nothing (2026-11-03). Review the diff before committing.
 3. Commit both together
 
 **Never run `supabase config push`.** It overwrites remote auth settings not
