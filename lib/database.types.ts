@@ -1193,8 +1193,8 @@ export type Database = {
           account_type: string | null
           accountid: string | null
           amount: number | null
-          amount_is_variable: boolean | null
           amount_high: number | null
+          amount_is_variable: boolean | null
           amount_low: number | null
           business_day_offset: number | null
           card_balance_owed: number | null
