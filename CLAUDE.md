@@ -32,22 +32,25 @@ sorrel-dev (`jmuqtjbntiqmjmpenywl`, created 2026-10-15) was deleted on
 2026-10-27 because a held migration had been left on it (see below); a
 command that names that ref is stale.
 
-**The CLI's resting state is sorrel-dev. After any deliberate push to
-production, relink to dev before ending the session.** A command meant for
-production needs the link changed first, and that is my call, not yours.
-Never relink on your own, and never add `supabase db push` to a permission
+**The CLI stays linked to sorrel-dev. Never link to production.** Every
+command that touches a remote database names its project by ref --
+`--remote=<ref>` -- so the link never decides where anything goes. Never
+relink on your own, and never add `supabase db push` to a permission
 allowlist -- I run it myself, every time, for dev and production.
 
-**Link to production ONLY immediately before the push that needs it, and
-relink to dev immediately after.** Never link to production in advance of
-work that isn't ready. The window where the CLI points at production
-should be one command long. On 2026-11-03 production was linked ahead of a
-push that hadn't happened yet, and two other commands then ran against it;
-the confirmation prompt printed "sorrel-prod" and was answered Yes,
-because the three prompts before it had said dev. The prompt can't defend
-against that; a short window can. Scripts that only ever mean dev
-(`npm run types:dev`, `npm run test:parity`) name sorrel-dev by ref
-(`--remote=<ref>`), so the link can't redirect them.
+    npx supabase db push --remote=tztbebdzlezlhvsbylsf    # sorrel-dev
+    npx supabase db push --remote=ybdwqyihvbokowocvlgq    # production
+
+Why: the link is one global setting that persists between sessions, and
+any bare `--remote` follows it. On 2026-11-03 production was linked ahead
+of a push that hadn't happened yet, and two other commands then ran
+against it; the confirmation prompt printed "sorrel-prod" and was answered
+Yes, because the three prompts before it had said dev. The prompt can't
+defend against that. Naming the ref closes the window entirely -- the
+"link immediately before, relink immediately after" rule it replaces only
+shortened it. Migration 59 was the first production push made this way,
+with dev linked throughout. Scripts that only ever mean dev
+(`npm run types:dev`, `npm run test:parity`) name sorrel-dev by ref too.
 
 **A held branch's migration must never be pushed to the shared dev
 database.** Test it on its own throwaway project, or rebuild dev from main
@@ -64,14 +67,16 @@ project is linked, not where a command writes. A bare `db push` with Docker
 running applies migrations to a local stack and reports success while the
 remote gets nothing.
 
-Every `db push` carries `--remote` explicitly, and you READ THE `Target:`
-LINE the command prints and state it in your reply before confirming --
-project name AND ref. The link says which project is configured; the
-Target line says where this command is actually writing. Only the second
-one matters. `--dry-run` prints the Target line and the migrations it
-would apply without applying them. The same goes for `db query` and
-`gen types` (through `npm run types:dev`): `--remote`, and read the
-Target line.
+Every `db push` carries `--remote=<ref>` -- never a bare `--remote`,
+which follows the link -- and you READ THE `Target:` LINE the command
+prints and state it in your reply before confirming: project name AND
+ref. The ref in the command says where you meant to write; the Target
+line says where the command is actually writing. They must match.
+`--dry-run` prints the Target line and the migrations it would apply
+without applying them; run it first. The same goes for `db query` and
+`gen types` (through `npm run types:dev`): `--remote=<ref>`, and read the
+Target line. A push to production prints "(not the linked project)" --
+correct, since dev stays linked.
 
 A remote `db query` that isn't `--read-only` asks for confirmation, and
 in an agent run it refuses instead. That covers every `docs/*-test.sql`
@@ -553,8 +558,8 @@ check anything taken from it against the migrations. The contract:
 
 ## After any migration
 
-1. `npx supabase db push --remote` -- state the `Target:` line first
-   (see "Before every `supabase db push`")
+1. `npx supabase db push --remote=<ref>` -- dry run first, state the
+   `Target:` line (see "Before every `supabase db push`")
 2. `npm run types:dev` -- regenerates `lib/database.types.ts` from
    sorrel-dev by ref and writes it as UTF-8 (`scripts/gen-types.ts`).
    Never `gen types ... > lib/database.types.ts`: Windows PowerShell 5.x's

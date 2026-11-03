@@ -3,7 +3,7 @@
 -- (tztbebdzlezlhvsbylsf) ONLY -- never production. The CLI prints a
 -- Target line and asks before running; it must name tztbebdzlezlhvsbylsf:
 --
---   npx supabase db query --remote -f docs/dev-seed.sql
+--   npx supabase db query --remote=tztbebdzlezlhvsbylsf -f docs/dev-seed.sql
 --
 -- Set the user id below. Refuses to run if that user already has accounts,
 -- so it can't double a seed. Runs as postgres (RLS bypassed), so every row

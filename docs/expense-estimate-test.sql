@@ -2,7 +2,7 @@
 -- Expense estimate test (migration 58, docs/Recurring-Amounts-and-
 -- Transfer-Editing.md item 1b)
 --
---   npx supabase db query --remote -f docs/expense-estimate-test.sql
+--   npx supabase db query --remote=tztbebdzlezlhvsbylsf -f docs/expense-estimate-test.sql
 --
 -- Returns one row per assertion; a run is clean only when every `pass`
 -- is true. Self-cleaning, same as docs/recurring-confirmation-test.sql:
