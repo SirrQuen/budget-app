@@ -1,7 +1,7 @@
 -- =====================================================================
 -- Goal completion test (migration 53, docs/Goal-Completion.md, D)
 --
---   npx supabase@latest db query --linked -f docs/goal-completion-test.sql
+--   npx supabase db query --remote -f docs/goal-completion-test.sql
 --
 -- To check migration 53 before it's pushed, run it inside this file's
 -- transaction: put its statements right after BEGIN (everything still

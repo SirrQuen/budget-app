@@ -1,7 +1,7 @@
 -- =====================================================================
 -- Recurring confirmation test (migration 50, docs/Recurring-Confirmation.md)
 --
---   npx supabase@latest db query --linked -f docs/recurring-confirmation-test.sql
+--   npx supabase db query --remote -f docs/recurring-confirmation-test.sql
 --
 -- To check migration 50 before it's pushed, run it inside this file's
 -- transaction: put its statements right after BEGIN (everything still
