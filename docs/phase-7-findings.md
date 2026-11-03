@@ -606,6 +606,63 @@ goal would hold its full monthly target every month. 52 also replaces
 production. Detail: that branch's `docs/phase-7-findings.md`, "Goal money
 in safe to spend".
 
+## Schedule amounts are unconstrained `numeric` (2026-11-03)
+
+**`recurring_transactions.amount` and `next_amount` are plain `numeric`;
+`transactions.amount` is `numeric(12,2)`.** So money can be written to a
+schedule at any scale -- `1850`, `1850.00`, or `12.345` -- and nothing in
+the schema stops a third decimal place. CLAUDE.md's rule is exact dollars;
+for schedules it holds only because the forms send two decimals.
+
+Found 2026-11-03 when `docs/expense-estimate-test.sql` (migration 58)
+failed four checks on formatting: expected `190`, actual `190.00`, with
+the value right. The test compared as text; it now compares as numeric
+(`pg_temp.rec_num`).
+
+**Where the mixed scale comes from.** `v_upcoming_recurring.amount` is a
+`CASE` across sources of different types, so the column is plain `numeric`
+and each value keeps the scale of the branch that produced it:
+
+| Branch | Source | Renders |
+|---|---|---|
+| Fixed schedule | `r.amount` (unconstrained) | as written: `1850` |
+| Variable, below three supplied | `r.amount` (fallback) | as written: `60` |
+| Variable, mean of three | `round(avg(t.amount), 2)` | `150.67` |
+| Card payment, statement entered | `r.next_amount` (unconstrained) | as written |
+| Card payment, owed | `greatest(-balance, 0)` | balance's scale |
+| `amount_high` / `amount_low` | `max`/`min` of `transactions.amount` | `190.00` |
+
+**Production, read-only, 2026-11-03:** 69 schedules -- 35 store `amount`
+at scale 0, 30 at scale 2, none beyond 2 decimals (`amount` or
+`next_amount`). So nothing is wrong today; the constraint is missing.
+
+**What it affects.** Not the app: PostgREST sends numeric as a JSON
+number, so `1850` and `1850.00` parse alike, and the generated types say
+`number` either way. It does affect anything that treats money as text --
+`::text` comparisons (the test above), CSV export, string equality in SQL
+-- and it lets a schedule hold an amount `transactions` can't: a 12.345
+schedule would round on confirmation, so the ledger and the forecast
+would disagree by a fraction of a cent.
+
+**The fix (this branch, not yet written):** `alter column ... type
+numeric(12,2)` on `recurring_transactions.amount` and `next_amount`, so
+every money value in the view has scale 2 and the third decimal is
+refused. Postgres won't retype a column a view reads, so the migration
+drops and recreates `v_upcoming_recurring` around it -- re-deriving the
+view from wherever it stands then:
+
+- **after migration 58** (`fix/expense-estimate-high-end`), which appends
+  `amount_high`. Write this on top of 58, never from a main without it.
+- **with the occurrence-limit fix** (counting transfer occurrences, not
+  legs), if that has landed -- it replaces the same view.
+- **before or re-derived against held migration 57**
+  (`feat/goal-contributions-in-safe-to-spend`), whose
+  `v_goal_monthly_holds` reads `v_upcoming_recurring`: a drop cascades to
+  it, so whichever lands second re-creates the other's dependants.
+
+Check first that no row would change: with none beyond 2 decimals on
+production, the cast is lossless there; re-run the count on the day.
+
 ## Recurring dates: what each one means (2026-10-31)
 
 A recurring schedule has one user-entered date, `next_run_date` (the form
