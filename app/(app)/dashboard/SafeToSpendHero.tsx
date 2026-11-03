@@ -19,7 +19,8 @@ import {
   formatDateWithWeekday,
   formatDayMonth,
 } from "@/lib/format";
-import { ChevronDownIcon, InfoIcon, PlusIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, PlusIcon } from "@/components/ui/icons";
+import { AmountBasisTag } from "@/components/AmountBasisTag";
 
 // A projection or a real payday gets the weekday ("Friday 3 October" -- a
 // date worth checking against your own bank); the end-of-month fallback
@@ -76,21 +77,12 @@ function subline(data: SafeToSpend): string {
   )} sits inside your ${formatCurrency(data.cushion)} cushion.`;
 }
 
-function EstimateTag() {
-  return (
-    <span className="ml-1.5 inline-flex items-center gap-1 text-xs text-ink-muted">
-      <InfoIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
-      estimate
-    </span>
-  );
-}
-
 function ObligationRow({ c, indent = false }: { c: SafeToSpendCommitment; indent?: boolean }) {
   return (
     <div className={`flex items-baseline justify-between gap-4 ${indent ? "pl-4 text-xs" : ""}`}>
       <dt className="min-w-0 break-words text-ink-secondary sm:truncate">
-        {c.name} <span className="text-ink-muted">· {formatDateShort(c.date)}</span>
-        {c.isEstimate ? <EstimateTag /> : null}
+        {c.name} <span className="text-ink-muted">· {formatDateShort(c.date)}</span>{" "}
+        <AmountBasisTag basis={c.basis} />
       </dt>
       <dd className="shrink-0 font-medium tabular-nums text-ink">{formatCurrency(c.amount)}</dd>
     </div>
@@ -310,7 +302,7 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
           {data.nextIncome ? (
             <p className="mt-3 border-t border-hairline pt-3 text-xs text-ink-muted">
               Next paycheck: {formatCurrency(data.nextIncome.amount)}
-              {data.nextIncome.isEstimate ? " (estimate)" : ""} from {data.nextIncome.name} on{" "}
+              {" "}<AmountBasisTag basis={data.nextIncome.basis} /> from {data.nextIncome.name} on{" "}
               {formatDateShort(data.nextIncome.date)}
               {projection ? "." : " — not counted above."}
             </p>

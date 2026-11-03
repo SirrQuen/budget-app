@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import { describeReadError, describeWriteError, logDbError, sessionUserId } from "@/lib/db/errors";
 import { getToday } from "@/lib/db/settings";
+import { parseAmountBasis, type AmountBasis } from "@/lib/amountBasis";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
 import { getBankHolidays } from "@/lib/db/holidays";
 import { nextOccurrenceISO } from "@/lib/recurringCadence";
@@ -319,54 +320,53 @@ export async function confirmVariableAmount(
   return { data, error: null };
 }
 
-// Mean of the last three confirmed Income transactions linked by
-// recurringid, falling back to the schedule's own `amount` with fewer than
-// three -- the one canonical implementation (estimate_income_amount,
-// 29_recurring_income_confirmation.sql), called here via .rpc() for the
-// recurring list page, which reads the base recurring_transactions table
-// rather than v_upcoming_recurring (that view already calls the same
-// function for every other reader -- dashboard, safe-to-spend, the
-// upcoming list -- so a paused schedule, which the view's is_active filter
-// excludes, still gets an estimate here). CLAUDE.md: never aggregate money
-// in JavaScript -- this stays a single SQL round trip, never a client-side
-// average over fetched rows.
-export async function estimateIncomeAmount(
-  recurringId: string,
-  fallbackAmount: number,
-): Promise<DbResult<number>> {
+// "This and future occurrences" (lib/recurringEditScope.ts): the schedule
+// expects the edited amount from now on. Only the amount -- the cursor,
+// dates and any staged statement amount are untouched. A transfer's
+// schedule is updated inside update_transfer() instead, in the same call
+// as its legs.
+export async function setScheduleAmount(id: string, amount: number): Promise<DbResult<null>> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc("estimate_income_amount", {
-    p_recurring_id: recurringId,
-    p_fallback_amount: fallbackAmount,
-  });
+  const { data, error } = await supabase
+    .from("recurring_transactions")
+    .update({ amount })
+    .eq("id", id)
+    .select("id");
 
   if (error) {
-    return { data: null, error: describeReadError(error, "recurring transactions") };
+    return { data: null, error: describeWriteError(error, "recurring") };
   }
-
-  return { data: data ?? fallbackAmount, error: null };
+  if (data.length === 0) {
+    return { data: null, error: "That schedule isn't there anymore." };
+  }
+  return { data: null, error: null };
 }
 
-// Same as estimateIncomeAmount, but the Expense counterpart
-// (estimate_expense_amount, 31_recurring_expense_variability.sql), for the
-// recurring list page for the same reason.
-export async function estimateExpenseAmount(
-  recurringId: string,
-  fallbackAmount: number,
-): Promise<DbResult<number>> {
+export type RecurringAmount = { amount: number; basis: AmountBasis };
+
+// Every schedule's upcoming amount and what it rests on -- paused ones
+// included -- from v_recurring_amounts (migration 59), the same view
+// v_upcoming_recurring reads, so this page and the dashboard can't
+// disagree about a figure or its label. One query for the whole list.
+export async function listRecurringAmounts(): Promise<DbResult<Map<string, RecurringAmount>>> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc("estimate_expense_amount", {
-    p_recurring_id: recurringId,
-    p_fallback_amount: fallbackAmount,
-  });
+  const { data, error } = await supabase
+    .from("v_recurring_amounts")
+    .select("recurring_id, amount, amount_basis")
+    .returns<{ recurring_id: string; amount: number; amount_basis: string }[]>();
 
   if (error) {
     return { data: null, error: describeReadError(error, "recurring transactions") };
   }
 
-  return { data: data ?? fallbackAmount, error: null };
+  return {
+    data: new Map(
+      data.map((r) => [r.recurring_id, { amount: Number(r.amount), basis: parseAmountBasis(r.amount_basis)! }]),
+    ),
+    error: null,
+  };
 }
 
 // The schedule fields a confirmation needs. Read from v_upcoming_recurring,

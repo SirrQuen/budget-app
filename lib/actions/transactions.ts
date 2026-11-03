@@ -4,7 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   createTransaction,
+  getTransaction,
+  getTransferForEdit,
   updateTransaction,
+  updateTransfer,
   deleteTransaction,
   createTransfer,
   deleteTransfer,
@@ -17,6 +20,8 @@ import {
   type TransactionType,
   type MerchantCategorySuggestion,
 } from "@/lib/db/transactions";
+import { setScheduleAmount } from "@/lib/db/recurring";
+import { amountChanged, parseEditScope } from "@/lib/recurringEditScope";
 
 // "kind" is a plain string, not the icon itself -- Server Action results
 // cross the server/client boundary as serialized data, so the client picks
@@ -228,6 +233,23 @@ export async function updateTransactionAction(
     return { error: "Missing transaction id." };
   }
 
+  // Read first, server-side: whether this row is a transfer leg, and which
+  // schedule it came from, are the database's facts, never the form's.
+  const existing = await getTransaction(id);
+  if (existing.error !== null) {
+    return { error: existing.error };
+  }
+  if (existing.data === null) {
+    return { error: "That transaction isn't there anymore." };
+  }
+  // A transfer is one thing with two legs. Editing one leg alone would
+  // leave a pair that doesn't net to zero, so legs are only ever written
+  // through updateTransferAction -> update_transfer(). The database refuses
+  // it too (trg_transactions_transfer_pair, migration 59).
+  if (existing.data.transfer_group_id !== null) {
+    return { error: "This is part of a transfer. Edit the transfer instead." };
+  }
+
   const parsed = parseTransactionFields(formData);
   if ("error" in parsed) {
     return parsed;
@@ -244,10 +266,86 @@ export async function updateTransactionAction(
     return { error };
   }
 
+  // "This and future occurrences": asked only for a confirmed recurring
+  // transaction whose amount changed (lib/recurringEditScope.ts). Never
+  // silent -- the form always shows the choice.
+  const recurringid = existing.data.recurringid;
+  const before = Number(existing.data.amount);
+  const after = parsed.amount ?? before;
+  if (
+    recurringid !== null &&
+    amountChanged(before, after) &&
+    parseEditScope(formData.get("edit_scope")) === "future"
+  ) {
+    const scheduleResult = await setScheduleAmount(recurringid, after);
+    if (scheduleResult.error !== null) {
+      revalidatePath("/transactions");
+      revalidatePath("/accounts");
+      return { error: `Saved the transaction, but the schedule wasn't updated: ${scheduleResult.error}` };
+    }
+    revalidatePath("/recurring");
+    revalidatePath("/dashboard");
+  }
+
   revalidatePath("/transactions");
   // An edit can change the amount, type, or account -- any of which moves a
   // balance.
   revalidatePath("/accounts");
+  redirect("/transactions");
+}
+
+// Editing an existing transfer: both legs, one call, update_transfer()
+// (migration 59). From, to, amount, date, description and notes; swapping
+// from and to swaps the direction. A transfer confirmed from a schedule
+// gets the same scope question as any recurring transaction.
+export async function updateTransferAction(
+  _prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const transferGroupId = String(formData.get("transfer_group_id") ?? "");
+  if (!UUID_RE.test(transferGroupId)) {
+    return { error: "Missing transfer." };
+  }
+
+  const parsed = parseTransferFields(formData);
+  if ("error" in parsed) {
+    return parsed;
+  }
+
+  // The scope applies only when the amount changed; the stored amount is
+  // read here, not taken from the form.
+  const existing = await getTransferForEdit(transferGroupId);
+  if (existing.error !== null) {
+    return { error: existing.error };
+  }
+  if (existing.data === null) {
+    return { error: "That transfer isn't there anymore." };
+  }
+  const updateSchedule =
+    existing.data.schedule !== null &&
+    amountChanged(existing.data.amount, parsed.amount) &&
+    parseEditScope(formData.get("edit_scope")) === "future";
+
+  const { error } = await updateTransfer({
+    transferGroupId,
+    fromAccountId: parsed.fromAccountId,
+    toAccountId: parsed.toAccountId,
+    amount: parsed.amount,
+    date: parsed.date,
+    description: parsed.description,
+    notes: parsed.notes ?? null,
+    updateSchedule,
+  });
+  if (error) {
+    return { error };
+  }
+
+  // A transfer touches two balances, and can move safe to spend when an
+  // account crosses the spendable set.
+  revalidatePath("/transactions");
+  revalidatePath("/accounts");
+  revalidatePath("/dashboard");
+  if (updateSchedule) revalidatePath("/recurring");
   redirect("/transactions");
 }
 

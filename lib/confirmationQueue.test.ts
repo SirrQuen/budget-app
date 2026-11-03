@@ -28,6 +28,8 @@ function schedule(overrides: Partial<ProjectionSchedule> & Pick<ProjectionSchedu
     cardPayment: null,
     amountLow: null,
     amountHigh: null,
+    amountBasis: "fixed",
+    forecastBasis: null,
     isEstimate: false,
     nextRunDate: next,
     nextDueDate: next,
@@ -245,4 +247,19 @@ test("'It was different' saved with the pre-filled amount untouched stays estima
 
 test("a statement amount (not an estimate) stays a person's figure either way", () => {
   assert.equal(confirmedAmountIsEstimated(false, 700, 700), false);
+});
+
+test("a queue item shows what its own amount rests on", () => {
+  const electric = schedule({
+    kind: "Expense",
+    name: "Electric",
+    amount: 151,
+    amountHigh: 190,
+    amountBasis: "average_of_3",
+    forecastBasis: "highest_of_3",
+    nextDueDate: day(0),
+  });
+  const [item] = queue([electric]);
+  assert.equal(item.amount, 151);
+  assert.equal(item.basis, "average_of_3");
 });

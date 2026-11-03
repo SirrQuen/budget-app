@@ -27,6 +27,8 @@ function once(kind: "Income" | "Expense", name: string, amount: number, n: numbe
     amount,
     amountLow: null,
     amountHigh: null,
+    amountBasis: "fixed",
+    forecastBasis: null,
     isEstimate: false,
     nextRunDate: day(n),
     nextDueDate: day(n),

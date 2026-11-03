@@ -7,6 +7,7 @@
 // carried by the wording alone ("short" vs "below your cushion") -- never a
 // colour, an icon or an exclamation mark.
 
+import { amountBasisLabel } from "@/lib/amountBasis";
 import { formatCurrency, formatDayMonth } from "@/lib/format";
 import type { SafeToSpendProjection, SqueezeEpisode } from "@/lib/safeToSpendProjection";
 
@@ -58,7 +59,7 @@ function cause(e: SqueezeEpisode): string {
   // from today's balance -- any later start needs an obligation to begin.
   if (e.drivers.length === 0) return "Starts from today's balance.";
 
-  const named = e.drivers.slice(0, MAX_DRIVERS_NAMED).map((o) => `${o.name} (${formatCurrency(o.amount)})`);
+  const named = e.drivers.slice(0, MAX_DRIVERS_NAMED).map((o) => `${o.name} (${formatCurrency(o.amount)}, ${amountBasisLabel(o.basis)})`);
   const rest = e.drivers.length - named.length;
   const parts = rest > 0 ? [...named, `${rest} more`] : named;
   const verb = e.drivers.length === 1 ? "lands" : "land";

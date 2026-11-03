@@ -1,3 +1,4 @@
+import { parseAmountBasis, type AmountBasis } from "@/lib/amountBasis";
 import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
@@ -553,6 +554,8 @@ export type SafeToSpendIncome = {
    * than a known figure -- CLAUDE.md "Display": always mark an estimate.
    */
   isEstimate: boolean;
+  /** What amount rests on -- shown beside it (lib/amountBasis.ts). */
+  basis: AmountBasis;
 };
 
 export type SafeToSpend = SafeToSpendProjection & {
@@ -600,6 +603,8 @@ type UpcomingProjectionRow = {
   amount: number;
   amount_low: number | null;
   amount_high: number | null;
+  amount_basis: string;
+  forecast_basis: string | null;
   is_estimated_amount: boolean;
   // Null for a transfer template.
   category_type: string | null;
@@ -632,6 +637,7 @@ type UpcomingIncomeRow = {
   amount: number;
   next_due_date: string;
   date_tolerance_days: number;
+  amount_basis: string;
   is_estimated_amount: boolean;
   account_type: string | null;
 };
@@ -659,7 +665,7 @@ export const getIncomeSchedules = cache(async (): Promise<DbResult<IncomeSchedul
   const { data, error } = await supabase
     .from("v_upcoming_recurring")
     .select(
-      "recurring_id, description, amount, next_due_date, date_tolerance_days, is_estimated_amount, account_type",
+      "recurring_id, description, amount, amount_basis, next_due_date, date_tolerance_days, is_estimated_amount, account_type",
     )
     .eq("category_type", "Income")
     .order("next_due_date", { ascending: true })
@@ -681,6 +687,7 @@ export const getIncomeSchedules = cache(async (): Promise<DbResult<IncomeSchedul
             date: row.next_due_date,
             dateToleranceDays: row.date_tolerance_days,
             isEstimate: row.is_estimated_amount,
+            basis: parseAmountBasis(row.amount_basis)!,
           }
         : null,
       anyIncome: data.length > 0,
@@ -734,6 +741,8 @@ function toProjectionSchedule(row: UpcomingProjectionRow): ProjectionSchedule | 
     amount: row.amount,
     amountLow: row.amount_low,
     amountHigh: row.amount_high,
+    amountBasis: parseAmountBasis(row.amount_basis)!,
+    forecastBasis: parseAmountBasis(row.forecast_basis),
     isEstimate: row.is_estimated_amount,
     nextRunDate: row.next_run_date,
     nextDueDate: row.next_due_date,
@@ -758,7 +767,7 @@ const getProjectionSchedules = cache(async (): Promise<DbResult<ProjectionSchedu
   const { data, error } = await supabase
     .from("v_upcoming_recurring")
     .select(
-      "recurring_id, description, amount, amount_low, amount_high, is_estimated_amount, category_type, accountid, account_type, to_accountid, to_account_type, card_balance_owed, next_run_date, next_due_date, start_date, end_date, frequency, interval_count, business_day_offset, non_business_day_rule, date_tolerance_days, occurrences_remaining, amount_is_variable, next_amount_confirmed_at, statement_day, to_account_name",
+      "recurring_id, description, amount, amount_low, amount_high, amount_basis, forecast_basis, is_estimated_amount, category_type, accountid, account_type, to_accountid, to_account_type, card_balance_owed, next_run_date, next_due_date, start_date, end_date, frequency, interval_count, business_day_offset, non_business_day_rule, date_tolerance_days, occurrences_remaining, amount_is_variable, next_amount_confirmed_at, statement_day, to_account_name",
     )
     .returns<UpcomingProjectionRow[]>();
 

@@ -23,6 +23,8 @@ function once(kind: "Income" | "Expense", name: string, amount: number, n: numbe
     amount,
     amountLow: null,
     amountHigh: null,
+    amountBasis: "fixed",
+    forecastBasis: null,
     isEstimate: false,
     nextRunDate: day(n),
     nextDueDate: day(n),
@@ -245,7 +247,7 @@ test("shortfall and tight phrasing", () => {
   const [item] = items(whatsAhead(tight));
   assert.equal(item.when, "3 October");
   assert.equal(item.headline, "Down to $140.00, below your $300.00 cushion");
-  assert.equal(item.cause, "Rent ($300.00) lands that day.");
+  assert.equal(item.cause, "Rent ($300.00, fixed) lands that day.");
   assert.equal(item.recovery, "Back above your cushion on 3 October, when Paycheck comes in.");
 });
 
@@ -255,7 +257,7 @@ test("a multi-day run names its range and the day of its low", () => {
 
   assert.equal(item.when, "3–6 October");
   assert.equal(item.headline, "Down to $200.00, below your $300.00 cushion on 3 October");
-  assert.equal(item.cause, "Rent ($800.00) lands in this stretch.");
+  assert.equal(item.cause, "Rent ($800.00, fixed) lands in this stretch.");
 });
 
 test("a run already under way today names today's balance as its start", () => {

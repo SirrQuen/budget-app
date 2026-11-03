@@ -162,12 +162,12 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
   }
 
   // A card payment's real amount only ever comes from a confirmed
-  // next_amount or a live card-balance estimate (see
-  // estimateCardPaymentDue/v_upcoming_recurring) -- amount stays 0, an
+  // next_amount or a live card-balance estimate (v_recurring_amounts,
+  // migration 59) -- amount stays 0, an
   // unused placeholder the NOT NULL column still needs. An Income or
   // Expense schedule always keeps its amount input, even while
   // amount_is_variable: it's the fallback estimate (estimate_income_amount/
-  // estimate_expense_amount) until three linked transactions exist, never
+  // estimate_expense_amount) until three supplied amounts exist, never
   // an unused placeholder the way a card's is.
   const amountInputHidden = kind === "Transfer" && amount_is_variable;
   let amount = 0;
