@@ -611,6 +611,16 @@ Re-derived on `feat/goal-contributions-in-safe-to-spend` (main merged in):
   before it links a goal (57), so a failed source link removes the
   schedule before any goal points at it.
 
+**Found in the browser check on sorrel-dev (2026-11-03): a goal near its
+target holds its full monthly amount.** Emergency fund, $950 of $1,000
+saved, monthly target $200, nothing yet this month: it holds $200, though
+it can only take $50 more. The view's rule is `max(0, monthly - contributed
+this month)` and never looks at what's left to the target. It errs on the
+cautious side, but it's money the goal will never need: safe to spend is
+$150 lower than it should be. Likely rule:
+`least(monthly - contributed this month, target - saved)`, floored at 0.
+Not changed: it's a decision about the number, and 57 hasn't shipped.
+
 The original record follows.
 
 **Original status (2026-10-31): built on `feat/goal-contributions-in-safe-to-spend`, unmerged.
