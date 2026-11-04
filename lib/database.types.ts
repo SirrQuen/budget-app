@@ -364,6 +364,13 @@ export type Database = {
             foreignKeyName: "goals_funding_recurringid_fkey"
             columns: ["userid", "funding_recurringid"]
             isOneToOne: false
+            referencedRelation: "v_recurring_amounts"
+            referencedColumns: ["userid", "recurring_id"]
+          },
+          {
+            foreignKeyName: "goals_funding_recurringid_fkey"
+            columns: ["userid", "funding_recurringid"]
+            isOneToOne: false
             referencedRelation: "v_upcoming_recurring"
             referencedColumns: ["userid", "recurring_id"]
           },
