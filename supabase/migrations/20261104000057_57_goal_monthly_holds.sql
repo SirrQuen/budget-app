@@ -1,9 +1,29 @@
 -- =====================================================================
--- EverNest 57: safe to spend sets aside this month's goal money
+-- Sorrel 57: safe to spend sets aside this month's goal money
 --
--- HELD (feat/goal-contributions-in-safe-to-spend). Never push this to the
--- shared sorrel-dev: test it on a throwaway project (CLAUDE.md "A held
--- branch's migration must never be pushed to the shared dev database").
+-- Re-derived 2026-11-03 on top of 58, 59, 60 and 61, and given a new
+-- timestamp (was 20261031000057, which sorts before all four). It keeps
+-- the number 57: every reference to it says 57. The version Supabase
+-- tracks is the timestamp, so it applies after 61.
+--
+-- What re-deriving checked:
+--   - v_goal_monthly_holds reads v_upcoming_recurring's recurring_id,
+--     account_type and to_account_type. All three are unchanged through
+--     59 (which re-created the view) and 61 (which dropped and re-created
+--     it). 59's occurrence count (occurrences, not legs) only changes
+--     WHICH transfers are in the view -- an ended one drops out, as it
+--     should, and its goal's target holds again.
+--   - 60 links a "Make recurring" source to its schedule; it adds no
+--     column a goal or this view reads.
+--   - 61 made schedule amounts numeric(12,2). This view reads no amount
+--     from a schedule. It reads goals.monthly_contribution and
+--     goal_contributions.amount, still bare numeric -- the same gap,
+--     recorded separately (none beyond 2 decimals on production,
+--     2026-11-03).
+--
+-- This view becomes a dependent of v_upcoming_recurring. Anything that
+-- drops v_upcoming_recurring (as 61 did) must drop and re-create this
+-- view too, by name, with its ACL and comment.
 --
 -- A goal's monthly_contribution is an intention, not a transaction, so
 -- nothing here is written: the hold is derived per request, in
@@ -83,8 +103,11 @@ select g.userid,
 comment on view public.v_goal_monthly_holds is
   'Per goal, this month''s money safe to spend sets aside: max(0, monthly_contribution - contributed this month), for active, uncompleted goals with a monthly target and no counted funding transfer (goals.funding_recurringid). Derived, never stored. Read by getSafeToSpend (lib/db/dashboard.ts); subtracted flat, after the cushion, never raising the running-low line.';
 
-revoke all on table public.v_goal_monthly_holds from public, anon;
-grant select on table public.v_goal_monthly_holds to authenticated;
+-- Production's view ACL, explicitly (as migration 61 does): revoke
+-- everything first, so neither project's default privileges decide it.
+revoke all on table public.v_goal_monthly_holds from public, anon, authenticated, service_role;
+grant select, references, trigger, truncate, maintain on table public.v_goal_monthly_holds to authenticated;
+grant references, trigger, truncate, maintain on table public.v_goal_monthly_holds to service_role;
 
 -- ---------------------------------------------------------------------
 -- 3. set_goal_funding: the recurring form's side of the link

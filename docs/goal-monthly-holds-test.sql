@@ -1,12 +1,11 @@
 -- =====================================================================
--- Goal monthly holds test (migration 57, held branch
--- feat/goal-contributions-in-safe-to-spend)
+-- Goal monthly holds test (migration 57)
 --
--- Run it on a THROWAWAY project only -- never the shared sorrel-dev
--- while 57 is held (CLAUDE.md "A held branch's migration must never be
--- pushed to the shared dev database"):
+--   npx supabase db query --remote=tztbebdzlezlhvsbylsf -f docs/goal-monthly-holds-test.sql
 --
---   npx supabase@latest db query --linked -f docs/goal-monthly-holds-test.sql
+-- Sections 1-9 were first run on a throwaway project while 57 was held
+-- (2026-10-31, 19/19). 10 and 11 were added when 57 was re-derived on
+-- top of 58-61 (2026-11-03).
 --
 -- Returns one row per assertion; a run is clean only when every `pass`
 -- is true. Self-cleaning, same as docs/recurring-confirmation-test.sql:
@@ -35,6 +34,11 @@
 --      unlinks the rest atomically; omitted goal = "No"; refuses a
 --      schedule that isn't a transfer, and another user's goal or
 --      schedule (P0002 -- RLS hides them).
+--  10  (59) A funding transfer with an occurrence limit counts
+--      OCCURRENCES: limit 2, one confirmed (two legs) is still counted,
+--      so its goal still holds nothing. Counting rows, it had ended.
+--  11  The view carries production's ACL (as 61 restores it), and anon
+--      can't read it.
 -- =====================================================================
 
 begin;
@@ -109,6 +113,9 @@ declare
   link_user   uuid;
   rent_cat    uuid;
   rent_s      constant uuid := 'dddddddd-0000-4000-8000-000000000014';
+  lim_s       constant uuid := 'dddddddd-0000-4000-8000-000000000015';
+  g_limit     constant uuid := 'dddddddd-0000-4000-8000-000000000031';
+  grp         uuid := gen_random_uuid();
   linked      text;
 begin
   perform pg_temp.become(u);
@@ -247,8 +254,37 @@ begin
   perform pg_temp.unbecome();
   select coalesce(funding_recurringid::text, '<null>') into hold from public.goals where id = g_plain;
   perform pg_temp.rec('9 ... and left it unlinked', '<null>', hold);
+
+  -- 10 -----------------------------------------------------------------
+  perform pg_temp.become(u);
+  insert into public.recurring_transactions
+    (id, userid, accountid, to_accountid, description, amount, frequency,
+     next_run_date, start_date, next_due_date, occurrence_limit)
+  values (lim_s, u, chk, sav, 'Two to savings', 200, 'Monthly',
+          current_date + 5, current_date - 26, current_date + 5, 2);
+  -- One confirmed occurrence: two legs, the shape confirmOccurrence writes.
+  insert into public.transactions (userid, accountid, categoryid, amount, transaction_type,
+                                   transaction_date, description, recurringid, transfer_group_id)
+  values (u, chk, null, 200, 'Expense', current_date - 26, 'Two to savings', lim_s, grp),
+         (u, sav, null, 200, 'Income',  current_date - 26, 'Two to savings', lim_s, grp);
+  insert into public.goals (id, userid, goal_name, goal_type, target_amount, monthly_contribution, is_active, funding_recurringid)
+  values (g_limit, u, 'Limited', 'Vacation', 5000, 200, true, lim_s);
+  select occurrences_remaining::text into hold from public.v_upcoming_recurring where recurring_id = lim_s;
+  perform pg_temp.rec('10 (fixture) limit 2, one confirmed: one occurrence left', '1', hold);
+  select count(*) into n from public.v_goal_monthly_holds where goalid = g_limit;
+  perform pg_temp.rec('10 its goal is still funded by it: absent from the holds', '0', n::text);
+  perform pg_temp.unbecome();
 end
 $$;
+
+-- 11 -------------------------------------------------------------------
+select pg_temp.rec('11 v_goal_monthly_holds ACL',
+                   'postgres=arwdDxtm/postgres authenticated=rDxtm/postgres service_role=Dxtm/postgres',
+                   (select array_to_string(relacl, ' ') from pg_class where oid = 'public.v_goal_monthly_holds'::regclass));
+select pg_temp.rec('11 anon cannot read v_goal_monthly_holds', 'false',
+                   has_table_privilege('anon', 'public.v_goal_monthly_holds', 'select')::text);
+select pg_temp.rec('11 v_goal_monthly_holds is security_invoker', 'security_invoker=true',
+                   (select array_to_string(reloptions, ',') from pg_class where oid = 'public.v_goal_monthly_holds'::regclass));
 
 select seq, check_, expected, actual, pass from gh_results order by seq;
 

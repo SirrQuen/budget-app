@@ -1036,7 +1036,10 @@ begin
       ('public.enforce_recurring_variability_scope()',           'authenticated', false),
       -- "Make recurring" links its source (migration 60). Signed-in only.
       ('public.link_transaction_to_schedule(uuid,uuid)',         'anon',          false),
-      ('public.link_transaction_to_schedule(uuid,uuid)',         'authenticated', true)
+      ('public.link_transaction_to_schedule(uuid,uuid)',         'authenticated', true),
+      -- The recurring form's side of a goal's funding link (migration 57).
+      ('public.set_goal_funding(uuid,uuid)',                     'anon',          false),
+      ('public.set_goal_funding(uuid,uuid)',                     'authenticated', true)
     ) as t(fn, role, expected)
   loop
     v_actual := has_function_privilege(v_check.role, v_check.fn::regprocedure, 'execute');

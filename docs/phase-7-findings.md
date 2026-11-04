@@ -582,9 +582,38 @@ with scripts disabled in headless Chrome: Enter did nothing.
   error-capture some other way). `useActionForm`'s comment, which used to
   say "a submit before hydration still posts natively", now says this.
 
-## Goal money in safe to spend (2026-10-31) -- HELD
+## Goal money in safe to spend (2026-10-31)
 
-**Status: built on `feat/goal-contributions-in-safe-to-spend`, unmerged.
+**Status (2026-11-03): no longer held; re-derived on top of 58-61 to
+ship as its own deploy, with its own tester note dated 2026-11-04.** The
+hold existed because testers couldn't attribute a moving hero number to
+a cause; a dated note per change answers that better than waiting.
+
+Re-derived on `feat/goal-contributions-in-safe-to-spend` (main merged in):
+
+- **New timestamp, same number:** `20261104000057_57_goal_monthly_holds.sql`.
+  The old one (`20261031000057`) sorted before 58-61.
+- **The view checked against today's `v_upcoming_recurring`:** it reads
+  `recurring_id`, `account_type` and `to_account_type`, unchanged through
+  59 and 61. 59's occurrence count changes which transfers are counted --
+  a limited transfer now ends after its last *occurrence*, not its
+  second-to-last leg -- so `goal-monthly-holds-test.sql` gained section
+  10 for it.
+- **Grants made explicit**, as 61 does: 57 revoked only from public and
+  anon, so on sorrel-dev the view would have taken INSERT/UPDATE/DELETE
+  from that project's default privileges, the way 59's view did. Section
+  11 checks the ACL; the RLS harness's 2d now checks
+  `set_goal_funding()`'s grants.
+- **New dependent:** `v_goal_monthly_holds` reads `v_upcoming_recurring`.
+  The next migration that drops `v_upcoming_recurring` (as 61 did) drops
+  and re-creates this view too.
+- **Code:** `createRecurringAction` links a "Make recurring" source (60)
+  before it links a goal (57), so a failed source link removes the
+  schedule before any goal points at it.
+
+The original record follows.
+
+**Original status (2026-10-31): built on `feat/goal-contributions-in-safe-to-spend`, unmerged.
 Hold until the week of 9 November 2026. Reason: three changes to the
 hero number inside a week leaves testers unable to give interpretable
 feedback about it.** Migration 57 has been on a throwaway project only
@@ -713,7 +742,7 @@ Pointer only. The full records live on the branches, unmerged.
 
 | Branch | Migration | Hold |
 |---|---|---|
-| `feat/goal-contributions-in-safe-to-spend` | 57: safe to spend sets aside this month's goal money | **Until the week of 9 November 2026.** Reason: three changes to the hero number inside a week leaves testers unable to give interpretable feedback about it. |
+| `feat/goal-contributions-in-safe-to-spend` | 57: safe to spend sets aside this month's goal money | **Released 2026-11-03**, to ship as its own deploy with a dated tester note (2026-11-04), re-derived on top of 58-61. See "Goal money in safe to spend". |
 | `feat/linked-goals` | 52: a goal's progress read from a linked account | Until that branch merges (its own commits say what it needs). |
 
 **Whichever merges second must be RE-DERIVED on top of the first**, not
@@ -818,6 +847,18 @@ rather than becoming a fourth dependent to drop.
   Production has the baseline's ACL. 61 revokes everything and grants
   production's set on all three views, so dev and production now match.
 - Checks: `docs/recurring-amount-scale-test.sql`.
+
+## Goal money columns are unconstrained `numeric` too (2026-11-03)
+
+Found while re-deriving 57: `goals.target_amount`,
+`goals.monthly_contribution` and `goal_contributions.amount` are bare
+`numeric`, the same gap migration 61 closed for schedules. Production,
+read-only, 2026-11-03: 4, 2 and 3 values, none beyond two decimals, so
+nothing is wrong today. The fix is the same shape as 61 (retype, then
+drop and re-create every dependent view by name -- `v_goal_progress`,
+`v_goals_summary`, `v_goal_monthly_holds`, and whatever else the
+enumeration finds). Not written. It would touch the views held 52
+replaces, so it belongs after 52 is decided.
 
 ## Recurring dates: what each one means (2026-10-31)
 
