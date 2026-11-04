@@ -3,10 +3,19 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import { describeReadError, describeWriteError, logDbError, sessionUserId } from "@/lib/db/errors";
 import { getToday } from "@/lib/db/settings";
+import { parseAmountBasis, type AmountBasis } from "@/lib/amountBasis";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
 import { getBankHolidays } from "@/lib/db/holidays";
 import { nextOccurrenceISO } from "@/lib/recurringCadence";
-import { confirmEach, type BulkConfirmResult } from "@/lib/confirmationQueue";
+import {
+  alreadyRecorded,
+  confirmEach,
+  confirmedAmountIsEstimated,
+  type BulkConfirmResult,
+  type RecordedOccurrence,
+} from "@/lib/confirmationQueue";
+import { confirmationOpensOn, paydayWindowEnd } from "@/lib/recurringSchedule";
+import { formatDate } from "@/lib/format";
 
 type RecurringRow = Database["public"]["Tables"]["recurring_transactions"]["Row"];
 type RecurringInsert = Database["public"]["Tables"]["recurring_transactions"]["Insert"];
@@ -160,6 +169,28 @@ export async function createRecurring(
   }
 
   return { data, error: null };
+}
+
+// "Make recurring": the transaction the schedule was made from becomes its
+// first occurrence -- recurringid set on it, or on both legs of a
+// transfer, in one call (link_transaction_to_schedule, migration 60).
+// false means the source isn't this schedule's kind of thing (the person
+// changed its account or direction in the form), so nothing was linked.
+export async function linkSourceTransaction(
+  recurringId: string,
+  transactionId: string,
+): Promise<DbResult<boolean>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("link_transaction_to_schedule", {
+    p_transaction_id: transactionId,
+    p_recurring_id: recurringId,
+  });
+
+  if (error) {
+    return { data: null, error: describeWriteError(error, "recurring") };
+  }
+  return { data: data === true, error: null };
 }
 
 export type UpdateRecurringPatch = Omit<
@@ -319,54 +350,53 @@ export async function confirmVariableAmount(
   return { data, error: null };
 }
 
-// Mean of the last three confirmed Income transactions linked by
-// recurringid, falling back to the schedule's own `amount` with fewer than
-// three -- the one canonical implementation (estimate_income_amount,
-// 29_recurring_income_confirmation.sql), called here via .rpc() for the
-// recurring list page, which reads the base recurring_transactions table
-// rather than v_upcoming_recurring (that view already calls the same
-// function for every other reader -- dashboard, safe-to-spend, the
-// upcoming list -- so a paused schedule, which the view's is_active filter
-// excludes, still gets an estimate here). CLAUDE.md: never aggregate money
-// in JavaScript -- this stays a single SQL round trip, never a client-side
-// average over fetched rows.
-export async function estimateIncomeAmount(
-  recurringId: string,
-  fallbackAmount: number,
-): Promise<DbResult<number>> {
+// "This and future occurrences" (lib/recurringEditScope.ts): the schedule
+// expects the edited amount from now on. Only the amount -- the cursor,
+// dates and any staged statement amount are untouched. A transfer's
+// schedule is updated inside update_transfer() instead, in the same call
+// as its legs.
+export async function setScheduleAmount(id: string, amount: number): Promise<DbResult<null>> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc("estimate_income_amount", {
-    p_recurring_id: recurringId,
-    p_fallback_amount: fallbackAmount,
-  });
+  const { data, error } = await supabase
+    .from("recurring_transactions")
+    .update({ amount })
+    .eq("id", id)
+    .select("id");
 
   if (error) {
-    return { data: null, error: describeReadError(error, "recurring transactions") };
+    return { data: null, error: describeWriteError(error, "recurring") };
   }
-
-  return { data: data ?? fallbackAmount, error: null };
+  if (data.length === 0) {
+    return { data: null, error: "That schedule isn't there anymore." };
+  }
+  return { data: null, error: null };
 }
 
-// Same as estimateIncomeAmount, but the Expense counterpart
-// (estimate_expense_amount, 31_recurring_expense_variability.sql), for the
-// recurring list page for the same reason.
-export async function estimateExpenseAmount(
-  recurringId: string,
-  fallbackAmount: number,
-): Promise<DbResult<number>> {
+export type RecurringAmount = { amount: number; basis: AmountBasis };
+
+// Every schedule's upcoming amount and what it rests on -- paused ones
+// included -- from v_recurring_amounts (migration 59), the same view
+// v_upcoming_recurring reads, so this page and the dashboard can't
+// disagree about a figure or its label. One query for the whole list.
+export async function listRecurringAmounts(): Promise<DbResult<Map<string, RecurringAmount>>> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc("estimate_expense_amount", {
-    p_recurring_id: recurringId,
-    p_fallback_amount: fallbackAmount,
-  });
+  const { data, error } = await supabase
+    .from("v_recurring_amounts")
+    .select("recurring_id, amount, amount_basis")
+    .returns<{ recurring_id: string; amount: number; amount_basis: string }[]>();
 
   if (error) {
     return { data: null, error: describeReadError(error, "recurring transactions") };
   }
 
-  return { data: data ?? fallbackAmount, error: null };
+  return {
+    data: new Map(
+      data.map((r) => [r.recurring_id, { amount: Number(r.amount), basis: parseAmountBasis(r.amount_basis)! }]),
+    ),
+    error: null,
+  };
 }
 
 // The schedule fields a confirmation needs. Read from v_upcoming_recurring,
@@ -376,7 +406,7 @@ export async function estimateExpenseAmount(
 // the income/expense estimate). A paused or finished schedule isn't in the
 // view, and has nothing to confirm.
 const CONFIRM_SELECT =
-  "recurring_id, description, amount, accountid, categoryid, to_accountid, category_type, next_run_date, next_due_date, start_date, frequency, interval_count, business_day_offset, non_business_day_rule, next_amount, next_amount_confirmed_at";
+  "recurring_id, description, amount, accountid, categoryid, to_accountid, category_type, next_run_date, next_due_date, start_date, frequency, interval_count, business_day_offset, non_business_day_rule, next_amount, next_amount_confirmed_at, is_estimated_amount, date_tolerance_days";
 
 type ConfirmScheduleRow = {
   recurring_id: string;
@@ -396,6 +426,8 @@ type ConfirmScheduleRow = {
   non_business_day_rule: string;
   next_amount: number | null;
   next_amount_confirmed_at: string | null;
+  is_estimated_amount: boolean;
+  date_tolerance_days: number;
 };
 
 // The transaction row(s) one confirmed occurrence writes. A transfer
@@ -408,6 +440,7 @@ function occurrenceRows(
   userid: string,
   amount: number,
   date: string,
+  is_estimated: boolean,
 ): TransactionInsert[] {
   if (s.to_accountid !== null) {
     const leg = {
@@ -418,6 +451,7 @@ function occurrenceRows(
       description: s.description,
       recurringid: s.recurring_id,
       transfer_group_id: crypto.randomUUID(),
+      is_estimated,
     };
     return [
       { ...leg, accountid: s.accountid, transaction_type: "Expense" },
@@ -437,6 +471,7 @@ function occurrenceRows(
       transaction_date: date,
       description: s.description,
       recurringid: s.recurring_id,
+      is_estimated,
     },
   ];
 }
@@ -505,6 +540,32 @@ async function advanceOneCycle(
   return { data: data.length > 0, error: null };
 }
 
+// Transactions already carrying this schedule's recurringid between two
+// dates -- one per occurrence (a transfer's Expense leg stands for both).
+async function readRecordedBetween(
+  supabase: Supabase,
+  id: string,
+  from: string,
+  to: string,
+): Promise<DbResult<RecordedOccurrence[]>> {
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("transaction_date, amount, transaction_type, transfer_group_id")
+    .eq("recurringid", id)
+    .gte("transaction_date", from)
+    .lte("transaction_date", to);
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "recurring transaction") };
+  }
+  return {
+    data: data
+      .filter((t) => t.transfer_group_id === null || t.transaction_type === "Expense")
+      .map((t) => ({ date: t.transaction_date, amount: Number(t.amount) })),
+    error: null,
+  };
+}
+
 export type ConfirmOccurrenceInput = {
   /** The occurrence being answered -- the queue item's dueDate. */
   dueDate: string;
@@ -548,6 +609,10 @@ export async function confirmOccurrence(
 
   const today = await getToday();
   const amount = input.amount ?? Number(s.amount);
+  // True when no person supplied this amount -- a one-tap confirm of a
+  // variable schedule (CLAUDE.md "is_estimated"). The estimates skip
+  // these rows, so a guess never feeds the next guess.
+  const isEstimated = confirmedAmountIsEstimated(s.is_estimated_amount, Number(s.amount), input.amount);
   const date = input.date ?? (s.next_due_date <= today ? s.next_due_date : today);
 
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -557,13 +622,41 @@ export async function confirmOccurrence(
     return { data: null, error: "That date hasn't happened yet. Choose today or earlier." };
   }
 
+  // Say so before writing (CLAUDE.md "Confirmation writes"): a row already
+  // linked to this schedule on the date being written, or -- for a one-tap
+  // "as expected" -- anywhere in this occurrence's window, means it may
+  // already be recorded. Checked before the claim, so nothing moves.
+  const windowFrom = confirmationOpensOn(s.next_due_date, s.date_tolerance_days);
+  const windowTo = paydayWindowEnd(s.next_due_date, s.date_tolerance_days);
+  const recorded = await readRecordedBetween(
+    supabase,
+    id,
+    date < windowFrom ? date : windowFrom,
+    date > windowTo ? date : windowTo,
+  );
+  if (recorded.error !== null) return recorded;
+  const asExpected = input.amount === undefined && input.date === undefined;
+  if (!asExpected && recorded.data.some((t) => t.date === date)) {
+    return {
+      data: null,
+      error: `${s.description} already has a transaction on ${formatDate(date)}. Choose the day this one landed.`,
+    };
+  }
+  const inWindow = alreadyRecorded(s.next_due_date, s.date_tolerance_days, recorded.data);
+  if (asExpected && (inWindow !== null || recorded.data.some((t) => t.date === date))) {
+    return {
+      data: null,
+      error: `${s.description} already has a transaction on ${formatDate(inWindow?.date ?? date)}. If that was this one, choose Not happening this time. If it's another, choose It was different and enter its date.`,
+    };
+  }
+
   const claim = await advanceOneCycle(supabase, s);
   if (claim.error !== null) return claim;
   if (!claim.data) return { data: "already_answered", error: null };
 
   const { error: insertError } = await supabase
     .from("transactions")
-    .insert(occurrenceRows(s, userid, amount, date));
+    .insert(occurrenceRows(s, userid, amount, date, isEstimated));
 
   if (insertError) {
     const { error: restoreError } = await supabase

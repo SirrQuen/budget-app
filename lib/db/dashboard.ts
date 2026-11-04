@@ -1,3 +1,4 @@
+import { parseAmountBasis, type AmountBasis } from "@/lib/amountBasis";
 import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
@@ -18,7 +19,12 @@ import {
 import { isSpendableAccountType } from "@/lib/safeToSpend";
 import { isLiabilityAccountType } from "@/lib/accountOptions";
 import { listAccountBalances } from "@/lib/db/accounts";
-import { buildConfirmationQueue, type ConfirmationItem } from "@/lib/confirmationQueue";
+import {
+  alreadyRecorded,
+  buildConfirmationQueue,
+  type ConfirmationItem,
+  type RecordedOccurrence,
+} from "@/lib/confirmationQueue";
 import { getNotYetKeys } from "@/lib/confirmationLater";
 import { deriveLoggingStreak, type LoggingStreakSummary } from "@/lib/streak";
 
@@ -553,6 +559,8 @@ export type SafeToSpendIncome = {
    * than a known figure -- CLAUDE.md "Display": always mark an estimate.
    */
   isEstimate: boolean;
+  /** What amount rests on -- shown beside it (lib/amountBasis.ts). */
+  basis: AmountBasis;
 };
 
 export type SafeToSpend = SafeToSpendProjection & {
@@ -599,6 +607,9 @@ type UpcomingProjectionRow = {
   description: string;
   amount: number;
   amount_low: number | null;
+  amount_high: number | null;
+  amount_basis: string;
+  forecast_basis: string | null;
   is_estimated_amount: boolean;
   // Null for a transfer template.
   category_type: string | null;
@@ -631,6 +642,7 @@ type UpcomingIncomeRow = {
   amount: number;
   next_due_date: string;
   date_tolerance_days: number;
+  amount_basis: string;
   is_estimated_amount: boolean;
   account_type: string | null;
 };
@@ -658,7 +670,7 @@ export const getIncomeSchedules = cache(async (): Promise<DbResult<IncomeSchedul
   const { data, error } = await supabase
     .from("v_upcoming_recurring")
     .select(
-      "recurring_id, description, amount, next_due_date, date_tolerance_days, is_estimated_amount, account_type",
+      "recurring_id, description, amount, amount_basis, next_due_date, date_tolerance_days, is_estimated_amount, account_type",
     )
     .eq("category_type", "Income")
     .order("next_due_date", { ascending: true })
@@ -680,6 +692,7 @@ export const getIncomeSchedules = cache(async (): Promise<DbResult<IncomeSchedul
             date: row.next_due_date,
             dateToleranceDays: row.date_tolerance_days,
             isEstimate: row.is_estimated_amount,
+            basis: parseAmountBasis(row.amount_basis)!,
           }
         : null,
       anyIncome: data.length > 0,
@@ -732,6 +745,9 @@ function toProjectionSchedule(row: UpcomingProjectionRow): ProjectionSchedule | 
         : null,
     amount: row.amount,
     amountLow: row.amount_low,
+    amountHigh: row.amount_high,
+    amountBasis: parseAmountBasis(row.amount_basis)!,
+    forecastBasis: parseAmountBasis(row.forecast_basis),
     isEstimate: row.is_estimated_amount,
     nextRunDate: row.next_run_date,
     nextDueDate: row.next_due_date,
@@ -756,7 +772,7 @@ const getProjectionSchedules = cache(async (): Promise<DbResult<ProjectionSchedu
   const { data, error } = await supabase
     .from("v_upcoming_recurring")
     .select(
-      "recurring_id, description, amount, amount_low, is_estimated_amount, category_type, accountid, account_type, to_accountid, to_account_type, card_balance_owed, next_run_date, next_due_date, start_date, end_date, frequency, interval_count, business_day_offset, non_business_day_rule, date_tolerance_days, occurrences_remaining, amount_is_variable, next_amount_confirmed_at, statement_day, to_account_name",
+      "recurring_id, description, amount, amount_low, amount_high, amount_basis, forecast_basis, is_estimated_amount, category_type, accountid, account_type, to_accountid, to_account_type, card_balance_owed, next_run_date, next_due_date, start_date, end_date, frequency, interval_count, business_day_offset, non_business_day_rule, date_tolerance_days, occurrences_remaining, amount_is_variable, next_amount_confirmed_at, statement_day, to_account_name",
     )
     .returns<UpcomingProjectionRow[]>();
 
@@ -892,6 +908,12 @@ function splitBySpendable(rows: AccountBalanceRow[]): Pick<SafeToSpend, "drawnFr
 export type ConfirmationQueueItem = ConfirmationItem & {
   /** The account(s) the transaction lands on -- two for a transfer. */
   accounts: { id: string; name: string; openingDate: string }[];
+  /**
+   * A transaction already carrying this schedule's recurringid inside this
+   * occurrence's window (alreadyRecorded) -- the queue says so before
+   * anything is written. null in the normal case.
+   */
+  alreadyRecorded: RecordedOccurrence | null;
 };
 
 // The confirmation queue (lib/confirmationQueue.ts) for this user, today.
@@ -926,6 +948,14 @@ export async function getConfirmationQueue(): Promise<DbResult<ConfirmationQueue
   const accountById = new Map(accountsRes.data.map((a) => [a.id, a]));
   const items = buildConfirmationQueue(schedulesRes.data, today, holidaysRes.data ?? new Set<string>(), notYet);
 
+  const recordedRes = await listRecordedOccurrences(
+    supabase,
+    items.map((i) => ({ recurringId: i.recurringId, from: addDaysISO(i.dueDate, -i.dateToleranceDays) })),
+  );
+  if (recordedRes.error !== null) {
+    return { data: null, error: recordedRes.error };
+  }
+
   return {
     data: items.map((item) => ({
       ...item,
@@ -934,9 +964,47 @@ export async function getConfirmationQueue(): Promise<DbResult<ConfirmationQueue
         .map((id) => accountById.get(id))
         .filter((a) => a !== undefined)
         .map((a) => ({ id: a.id, name: a.account_name, openingDate: a.opening_date })),
+      alreadyRecorded: alreadyRecorded(
+        item.dueDate,
+        item.dateToleranceDays,
+        recordedRes.data.get(item.recurringId) ?? [],
+      ),
     })),
     error: null,
   };
+}
+
+// The transactions already linked to each queued schedule, from the
+// earliest window start on -- one query for the whole queue. A transfer's
+// two legs are one occurrence: only its Expense leg is kept.
+async function listRecordedOccurrences(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  windows: { recurringId: string; from: string }[],
+): Promise<DbResult<Map<string, RecordedOccurrence[]>>> {
+  const byId = new Map<string, RecordedOccurrence[]>();
+  if (windows.length === 0) return { data: byId, error: null };
+
+  const from = windows.reduce((min, w) => (w.from < min ? w.from : min), windows[0].from);
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("recurringid, transaction_date, amount, transaction_type, transfer_group_id")
+    .in(
+      "recurringid",
+      windows.map((w) => w.recurringId),
+    )
+    .gte("transaction_date", from);
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "dashboard") };
+  }
+  for (const t of data) {
+    if (t.recurringid === null) continue;
+    if (t.transfer_group_id !== null && t.transaction_type !== "Expense") continue;
+    const list = byId.get(t.recurringid) ?? [];
+    list.push({ date: t.transaction_date, amount: Number(t.amount) });
+    byId.set(t.recurringid, list);
+  }
+  return { data: byId, error: null };
 }
 
 export type DashboardStat = {

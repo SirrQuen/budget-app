@@ -4,10 +4,12 @@ import { addDaysISO } from "./date";
 import { projectSafeToSpend, type ProjectionSchedule } from "./safeToSpendProjection";
 import { nextOccurrenceISO } from "./recurringCadence";
 import {
+  alreadyRecorded,
   buildConfirmationQueue,
   confirmEach,
   confirmationCountLabel,
   confirmationKey,
+  confirmedAmountIsEstimated,
 } from "./confirmationQueue";
 
 const TODAY = "2026-10-15";
@@ -26,6 +28,9 @@ function schedule(overrides: Partial<ProjectionSchedule> & Pick<ProjectionSchedu
     statementDay: null,
     cardPayment: null,
     amountLow: null,
+    amountHigh: null,
+    amountBasis: "fixed",
+    forecastBasis: null,
     isEstimate: false,
     nextRunDate: next,
     nextDueDate: next,
@@ -222,4 +227,84 @@ test("payee marks transfers into a card or loan only", () => {
   ]);
   const marked = Object.fromEntries(items.map((i) => [i.recurringId, i.payee]));
   assert.deepEqual(marked, { card: "card", loan: "loan", savings: null, rent: null });
+});
+
+// is_estimated: TRUE when the amount was never supplied by a person.
+
+test("one-tap on a variable schedule is estimated; on a fixed one it isn't", () => {
+  assert.equal(confirmedAmountIsEstimated(true, 151), true);
+  assert.equal(confirmedAmountIsEstimated(false, 1850), false);
+});
+
+test("'It was different' with the amount changed is the person's figure", () => {
+  assert.equal(confirmedAmountIsEstimated(true, 151, 163.4), false);
+});
+
+test("'It was different' saved with the pre-filled amount untouched stays estimated", () => {
+  assert.equal(confirmedAmountIsEstimated(true, 151, 151), true);
+  // Compared in cents, so a float round-trip doesn't read as a change.
+  assert.equal(confirmedAmountIsEstimated(true, 0.1 + 0.2, 0.3), true);
+});
+
+test("a statement amount (not an estimate) stays a person's figure either way", () => {
+  assert.equal(confirmedAmountIsEstimated(false, 700, 700), false);
+});
+
+test("a queue item shows what its own amount rests on", () => {
+  const electric = schedule({
+    kind: "Expense",
+    name: "Electric",
+    amount: 151,
+    amountHigh: 190,
+    amountBasis: "average_of_3",
+    forecastBasis: "highest_of_3",
+    nextDueDate: day(0),
+  });
+  const [item] = queue([electric]);
+  assert.equal(item.amount, 151);
+  assert.equal(item.basis, "average_of_3");
+});
+
+// The narrow duplicate net: only rows already carrying this schedule's
+// recurringid, only inside this occurrence's window.
+test("alreadyRecorded: a linked row on a fixed occurrence's own day", () => {
+  assert.deepEqual(alreadyRecorded("2026-11-01", 0, [{ date: "2026-11-01", amount: 10 }]), {
+    date: "2026-11-01",
+    amount: 10,
+  });
+});
+
+test("alreadyRecorded: a fixed date's window is the day itself", () => {
+  assert.equal(alreadyRecorded("2026-11-01", 0, [{ date: "2026-10-31", amount: 10 }]), null);
+  assert.equal(alreadyRecorded("2026-11-01", 0, [{ date: "2026-10-01", amount: 10 }]), null);
+});
+
+test("alreadyRecorded: an approximate date's window is give or take its tolerance", () => {
+  const linked = [{ date: "2026-10-28", amount: 50 }];
+  assert.notEqual(alreadyRecorded("2026-10-30", 2, linked), null);
+  assert.equal(alreadyRecorded("2026-10-31", 2, linked), null);
+  assert.notEqual(alreadyRecorded("2026-10-26", 2, linked), null);
+  assert.equal(alreadyRecorded("2026-10-25", 2, linked), null);
+});
+
+test("alreadyRecorded: the closest to the due date wins", () => {
+  const linked = [
+    { date: "2026-10-27", amount: 1 },
+    { date: "2026-10-31", amount: 2 },
+    { date: "2026-10-28", amount: 3 },
+  ];
+  assert.equal(alreadyRecorded("2026-10-30", 3, linked)?.amount, 2);
+});
+
+test("alreadyRecorded: on a tie, the earlier one", () => {
+  const linked = [
+    { date: "2026-10-31", amount: 2 },
+    { date: "2026-10-29", amount: 3 },
+  ];
+  assert.equal(alreadyRecorded("2026-10-30", 3, linked)?.amount, 3);
+});
+
+test("the queue carries each schedule's tolerance for the window", () => {
+  const items = buildConfirmationQueue([schedule({ kind: "Expense", amount: 20, nextDueDate: TODAY, dateToleranceDays: 3 })], TODAY, NO_HOLIDAYS);
+  assert.equal(items[0].dateToleranceDays, 3);
 });

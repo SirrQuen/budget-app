@@ -4,7 +4,7 @@
 -- Run against the linked project after any migration that touches
 -- tables, views, grants, policies or functions:
 --
---   npx supabase@latest db query --linked -f docs/rls-isolation-test.sql
+--   npx supabase db query --remote=tztbebdzlezlhvsbylsf -f docs/rls-isolation-test.sql
 --
 -- Returns one row per assertion (section, object, check, expected,
 -- actual, pass). Read every row; a run is clean only when every `pass`

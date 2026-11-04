@@ -16,7 +16,7 @@ import { PaymentNote } from "@/components/PaymentNote";
 export type VariableAmountTarget = StatementCycle & {
   id: string;
   cardName: string;
-  /** Prefill -- the live estimate off the card's current balance (see estimateCardPaymentDue). */
+  /** Prefill -- what the card owes now (v_recurring_amounts.amount for an unconfirmed card payment). */
   estimatedAmount: number;
 };
 

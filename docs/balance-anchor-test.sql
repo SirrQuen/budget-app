@@ -4,7 +4,7 @@
 -- Run against the linked project after any change to anchor_includes(),
 -- v_account_balances, the anchor triggers or their readers:
 --
---   npx supabase@latest db query --linked -f docs/balance-anchor-test.sql
+--   npx supabase db query --remote=tztbebdzlezlhvsbylsf -f docs/balance-anchor-test.sql
 --
 -- One row per assertion (section, check, expected, actual, pass). A run
 -- is clean only when every `pass` is true.

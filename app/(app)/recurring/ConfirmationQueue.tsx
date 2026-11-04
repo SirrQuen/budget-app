@@ -16,6 +16,7 @@ import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { formatDateWithWeekday } from "@/lib/format";
 import { ConfirmOccurrenceSheet } from "./ConfirmOccurrenceSheet";
 import { PaymentNote } from "@/components/PaymentNote";
+import { AmountBasisTag } from "@/components/AmountBasisTag";
 
 // The confirmation queue: the only way a recurring schedule becomes a
 // transaction (CLAUDE.md "Confirmation creates every recurring
@@ -105,16 +106,30 @@ function QueueRow({ item, disabled }: { item: ConfirmationQueueItem; disabled: b
     <li className="flex flex-col gap-2 py-3 text-sm">
       <div className="flex items-baseline gap-3">
         <span className="min-w-0 flex-1 break-words text-ink sm:truncate">{item.name}</span>
-        <Amount amount={item.amount} type={item.kind === "Income" ? "Income" : "Expense"} column className="shrink-0" />
+        <span className="flex shrink-0 items-baseline gap-1.5">
+          <Amount amount={item.amount} type={item.kind === "Income" ? "Income" : "Expense"} column />
+          <AmountBasisTag basis={item.basis} />
+        </span>
       </div>
       <p className="text-xs text-ink-secondary">
         {item.approximate ? "Around " : "Expected "}
         {formatDateWithWeekday(item.dueDate)}
-        {item.isEstimate ? " · amount is an estimate" : ""}
         {item.outstanding > 1
           ? ` · ${item.outstanding - 1} more after this one`
           : ""}
       </p>
+
+      {/* Said before anything is written: this schedule already has a
+          transaction in this occurrence's window (lib/confirmationQueue.ts
+          alreadyRecorded). Neutral ink -- a fact, not an alarm. "It landed"
+          is refused for it on the server too. */}
+      {item.alreadyRecorded ? (
+        <p className="text-xs text-ink-secondary">
+          Already recorded:{" "}
+          <Amount amount={item.alreadyRecorded.amount} type={item.kind === "Income" ? "Income" : "Expense"} /> on{" "}
+          {formatDateWithWeekday(item.alreadyRecorded.date)}. If that was this one, choose Not happening this time.
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <button

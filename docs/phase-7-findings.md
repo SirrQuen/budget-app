@@ -804,6 +804,110 @@ the old form carried a typed value across the Amount / Statement day swap
 `app/(app)/recurring/RecurringForm.test.tsx`. Whether the tester's 29 was
 that carry-over, an autopay date, or real is still their answer to give.
 
+## The "I run every db push myself" rule was never enforced (2026-11-03)
+
+**It held by convention, not by configuration, from the day it was
+written.** CLAUDE.md has said since 2026-10-14 (`3a0c284`; the "never
+allowlist it" wording since `0eaaf87`, 2026-10-16) that `supabase db push`
+is run by Matt, every time, and never allowlisted, and it bans
+`supabase db reset --linked` and `supabase config push` outright. Meanwhile
+`.claude/settings.local.json` allowed two wildcards over the whole CLI:
+
+- `Bash(npx supabase@latest *)` -- every subcommand of whatever version
+  `@latest` resolved to that day.
+- `Bash(npx supabase *)` -- the same family through the local binary.
+  Pinning the CLI at 3.0.0 (`chore/pin-supabase-cli`) made this the exact
+  form every Supabase command now takes, so it would have become the
+  live hole the moment the first one was removed.
+
+Between them they matched `db push --remote`, `db reset --remote`/
+`--linked`, `config push`, `link` (relinking, which CLAUDE.md also
+reserves to Matt), `projects delete`, `secrets set` and `functions deploy`
+-- no permission prompt for any of them. A wildcard on a command family
+silently grants everything in the family; the entry's intent (probably
+the read-only `projects list` and `db query`) doesn't narrow what it
+matches. CLI 3.0's own confirmation for hosted writes doesn't close it
+either: it accepts `--yes`, and an allowlisted wildcard matches a command
+carrying `--yes`.
+
+Found 2026-11-03 while pinning the CLI. Whether either entry was ever
+used to push, reset or change config wasn't checked and can't be told from
+the repo. `settings.local.json` is gitignored, so when the entries were
+added can't be recovered either.
+
+**Fixed:** both entries removed 2026-11-03. Every Supabase command now
+prompts.
+
+**The same file, audited the same day** (what each entry matches, not
+what it was for):
+
+| Entry | Matches |
+|---|---|
+| `Bash(npx eslint *)` | Any eslint run, including `--fix` (rewrites source) and `-c <file>`/plugins (loads arbitrary JS). |
+| `Bash(npx tsc *)` | Any compile, including emitting JS anywhere `--outDir`/`--outFile` points. |
+| `Bash(git add *)` | Staging anything, including `git add -f` on ignored files -- `.env.local`. |
+| `Bash(git commit -m ' *)` | Any commit whose message starts with `'`, plus anything after it: `--amend`, `--no-verify` (skips hooks, which CLAUDE.md forbids). With `git add *`, an ignored secret can be committed without a prompt. No push. |
+| `Bash(npm run *)` | Every package.json script -- `test:parity` runs a remote query -- and any script added later. Package.json is editable, so this is arbitrary code behind one edit. |
+| `Bash(powershell -Command "Get-Content -Encoding Byte -TotalCount 20 lib/database.types.ts")` | That exact read only. Harmless. |
+| `Bash(python3 -c ' *)` | Arbitrary Python: a shell, `subprocess` included. On its own it matches every command every other rule here exists to gate, `db push` included. |
+
+Remaining entries were left in place for Matt to decide; the last row is
+the one that makes the others moot.
+
+**Not yet done: enforcement.** Removing allow rules restores the prompt;
+it doesn't make the ban configuration. Deny rules for the banned commands
+in the committed `.claude/settings.json` would (a deny beats an allow and
+isn't a per-machine file). Until then the rule is enforced by a prompt a
+person has to read.
+
+## "Make recurring" wrote the source transaction twice (2026-11-03)
+
+**A tester hit it.** "Make recurring" created a schedule that knew nothing
+about the row it was made from. People set the schedule's first date to
+the source's own date (the form defaulted to today, and "this bill is on
+the 6th" is the natural answer), so the queue asked for an occurrence
+already in the ledger, and "It landed" wrote it again.
+`recurring_tx_no_double_post` couldn't see the pair: the source had no
+recurringid. The source's amount was also lost as estimate history.
+
+**Fix (`fix/make-recurring-source-is-first`, migration 60).** The source
+IS the first occurrence. Saving links it (`link_transaction_to_schedule()`,
+both legs of a transfer, SECURITY DEFINER scoped to `auth.uid()`); the
+first date defaults to the occurrence after it; the source anchors the
+day of month. If linking fails, the new schedule is deleted rather than
+left unlinked. The net: `confirmOccurrence()` refuses, before writing, a
+date that already has a row linked to the schedule, and a one-tap confirm
+when a linked row is in the occurrence's window; the queue item says so
+first. Linked rows only. There is no same-amount detector.
+DB checks: `docs/link-source-transaction-test.sql`.
+
+**Production, read-only, 2026-11-03.** I looked for schedules whose
+`start_date` equals the date of an unlinked transaction with the same
+amount on the same account (the Expense leg, for a transfer). 12 pairs,
+two users:
+
+- **One user, 11 pairs, all created 2026-10-28**, each schedule 16 s to
+  67 s after its source: 5 Expense, 3 Income, 3 Transfer. The sources are
+  dated 2026-10-30 to 2026-11-23, mostly **in the future**: upcoming
+  bills entered as transactions and then made recurring on the same date.
+  None has been confirmed yet, so no duplicate rows exist. But one
+  (2026-10-30, Expense) is already open in their queue, and the rest open
+  as their dates arrive. They may already be double-counted in the
+  forecast: balances have no upper date bound (only the anchor rule), so
+  a future-dated row is in the balance today while its schedule is also a
+  commitment.
+- **One user, 1 pair: the reported duplicate.** A transfer created
+  2026-11-01, confirmed once, and that confirmation sits on the same date
+  as the unlinked source.
+
+Not changed. Tester data is a conversation with them. The fix stops new
+pairs; it doesn't link these 12 (they were made before it).
+
+**Not caught, by design.** A person who logged a bill twice by hand and
+makes the *earlier* row recurring gets a first date that may collide with
+the later, unlinked row. Only a fuzzy match would see that, and that's
+ruled out.
+
 ## Phase 8 policy item: auth audit log retained after deletion (2026-10-06)
 
 **Decision: deliberate retention, not an oversight.** It must match the

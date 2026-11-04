@@ -20,6 +20,9 @@ function schedule(overrides: Partial<ProjectionSchedule> & Pick<ProjectionSchedu
     statementDay: null,
     cardPayment: null,
     amountLow: null,
+    amountHigh: null,
+    amountBasis: "fixed",
+    forecastBasis: null,
     isEstimate: false,
     nextRunDate: next,
     nextDueDate: next,
@@ -158,6 +161,7 @@ test("income uses the late edge of its tolerance and the low amount", () => {
     name: "Paycheck",
     amount: 1500,
     amountLow: 1200,
+    amountHigh: null,
     dateToleranceDays: 3,
     nextDueDate: day(5),
   });
@@ -248,7 +252,7 @@ test("an unconfirmed paycheck past its late edge is left out of the maths and su
   const result = run([stale, rent], 2000, 0);
 
   assert.deepEqual(result.unconfirmedIncome, [
-    { recurringId: "Paycheck", name: "Paycheck", amount: 800, dueDate: day(-3), isEstimate: false },
+    { recurringId: "Paycheck", name: "Paycheck", amount: 800, dueDate: day(-3), isEstimate: false, basis: "fixed" },
   ]);
   // Not counted: the first income in the projection is next week's, on
   // its late edge (day 4 + 1 day of tolerance).
@@ -269,7 +273,7 @@ test("an overdue unposted bill is subtracted today and surfaced", () => {
   assert.equal(result.trough.date, TODAY);
   assert.equal(result.trough.amount, 200);
   assert.deepEqual(result.overdueObligations, [
-    { recurringId: "Rent", name: "Rent", amount: 1800, dueDate: day(-3), isEstimate: false },
+    { recurringId: "Rent", name: "Rent", amount: 1800, dueDate: day(-3), isEstimate: false, basis: "fixed" },
   ]);
 });
 
@@ -342,6 +346,9 @@ test("unconfirmed variable income -> every occurrence at the LOW amount and the 
     name: "Paycheck",
     amount: 1500,
     amountLow: 1200,
+    amountHigh: null,
+    amountBasis: "fixed",
+    forecastBasis: null,
     isEstimate: true,
     frequency: "Weekly",
     intervalCount: 2,
@@ -373,6 +380,9 @@ test("a confirmed paycheck uses its confirmed values, not the estimate", () => {
     name: "Paycheck",
     amount: 1500,
     amountLow: 1200,
+    amountHigh: null,
+    amountBasis: "fixed",
+    forecastBasis: null,
     isEstimate: true,
     frequency: "Weekly",
     intervalCount: 2,
@@ -562,6 +572,9 @@ test("variable-amount income -> the LOW end of the estimate and the LATE end of 
     name: "Paycheck",
     amount: 1500,
     amountLow: 1200,
+    amountHigh: null,
+    amountBasis: "fixed",
+    forecastBasis: null,
     isEstimate: true,
     dateToleranceDays: 3,
     nextDueDate: day(5),
@@ -786,4 +799,102 @@ test("an Investment -> Loan transfer touches nothing", () => {
     nextDueDate: day(3),
   });
   assert.equal(delta([latePay, rent, between], [latePay, rent]), 0);
+});
+
+// Migration 58: a variable obligation counts at its recent high, the
+// mirror of income's low. `amount` (the mean) is what's shown; the
+// forecast never counts it for a variable bill.
+
+test("a variable bill is counted at its high estimate, and says it's an estimate", () => {
+  const electric = schedule({
+    kind: "Expense",
+    name: "Electric",
+    amount: 151,
+    amountHigh: 190,
+    isEstimate: true,
+    nextDueDate: day(3),
+    occurrencesRemaining: 1,
+  });
+  const result = run([paycheck, electric], 2000, 0);
+
+  assert.equal(result.obligations[0].amount, 190);
+  assert.equal(result.obligations[0].isEstimate, true);
+  assert.equal(result.trough.amount, 1810);
+  assert.deepEqual(result.cautious, { billsAtHigh: true, payAtLow: false });
+});
+
+test("a high estimate equal to the amount changes nothing and says nothing", () => {
+  const water = schedule({ kind: "Expense", name: "Water", amount: 60, amountHigh: 60, nextDueDate: day(3), occurrencesRemaining: 1 });
+  const result = run([paycheck, water], 2000, 0);
+
+  assert.equal(result.obligations[0].amount, 60);
+  assert.deepEqual(result.cautious, { billsAtHigh: false, payAtLow: false });
+});
+
+test("pay counted at its low sets payAtLow; both together set both", () => {
+  const pay = schedule({ kind: "Income", name: "Pay", amount: 1500, amountLow: 1200, nextDueDate: day(5) });
+  assert.deepEqual(run([pay, rent]).cautious, { billsAtHigh: false, payAtLow: true });
+
+  const electric = schedule({ kind: "Expense", name: "Electric", amount: 151, amountHigh: 190, nextDueDate: day(3) });
+  assert.deepEqual(run([pay, electric]).cautious, { billsAtHigh: true, payAtLow: true });
+});
+
+test("a variable charge on a card reaches the card payment at its high end", () => {
+  const streaming = schedule({
+    kind: "Expense",
+    name: "Streaming",
+    amount: 20,
+    amountHigh: 35,
+    fromAccountType: "Credit Card",
+    accountId: CARD,
+    nextDueDate: "2026-10-12",
+  });
+  const result = run([latePay, cardPayment({}), streaming], 5000, 0);
+
+  assert.deepEqual(
+    result.obligations.filter((o) => o.name === "Card payment").map((o) => [o.date, o.amount]),
+    [
+      ["2026-10-22", 900],
+      ["2026-11-22", 35],
+    ],
+  );
+  assert.equal(result.cautious.billsAtHigh, true);
+});
+
+// Migration 59: every counted amount carries what it rests on.
+
+test("a counted amount is labelled by what the forecast counts, not by what's shown", () => {
+  const electric = schedule({
+    kind: "Expense",
+    name: "Electric",
+    amount: 151,
+    amountHigh: 190,
+    amountBasis: "average_of_3",
+    forecastBasis: "highest_of_3",
+    nextDueDate: day(3),
+    occurrencesRemaining: 1,
+  });
+  const pay = schedule({
+    kind: "Income",
+    name: "Pay",
+    amount: 1500,
+    amountLow: 1200,
+    amountBasis: "average_of_3",
+    forecastBasis: "lowest_of_3",
+    nextDueDate: day(5),
+  });
+  const result = run([pay, electric, rent]);
+
+  assert.equal(result.obligations.find((o) => o.name === "Electric")!.basis, "highest_of_3");
+  assert.equal(result.obligations.find((o) => o.name === "Rent")!.basis, "fixed");
+  assert.equal(result.incomes[0].basis, "lowest_of_3");
+});
+
+test("a card payment's first occurrence keeps its basis; later ones are card charges", () => {
+  const result = run([latePay, cardPayment({ amountBasis: "card_balance" }), netflix], 5000, 0);
+
+  assert.deepEqual(
+    result.obligations.filter((o) => o.name === "Card payment").map((o) => o.basis),
+    ["card_balance", "card_charges"],
+  );
 });

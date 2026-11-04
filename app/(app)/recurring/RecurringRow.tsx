@@ -18,6 +18,8 @@ import type { TransactionType } from "@/lib/db/transactions";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { TransactionAccountOption } from "../transactions/AddTransactionForm";
 import { callAction } from "@/components/useActionForm";
+import { AmountBasisTag } from "@/components/AmountBasisTag";
+import type { RecurringAmount } from "@/lib/db/recurring";
 
 export function RecurringRow({
   recurring,
@@ -25,7 +27,7 @@ export function RecurringRow({
   expenseCategories,
   accounts,
   holidays = [],
-  estimatedAmount,
+  amount,
   today,
 }: {
   recurring: RecurringWithRelations;
@@ -35,12 +37,10 @@ export function RecurringRow({
   /** ISO dates, for RecurringForm's live timing preview -- see its own doc comment. */
   holidays?: string[];
   /**
-   * The live estimate for a variable-amount schedule -- a card-balance
-   * estimate for a transfer, estimate_income_amount's mean-of-last-3 for an
-   * Income schedule. Only meaningful while amount_is_variable; ignored
-   * (recurring.amount is used instead) for a fixed-amount schedule.
+   * The upcoming amount and what it rests on, from v_recurring_amounts --
+   * the same figure and label the dashboard shows (migration 59).
    */
-  estimatedAmount: number;
+  amount: RecurringAmount;
   /** getToday(), for deciding whether an unconfirmed variable schedule is already overdue. */
   today: string;
 }) {
@@ -83,18 +83,6 @@ export function RecurringRow({
   const needsConfirmation =
     isTransfer && recurring.amount_is_variable && recurring.next_amount_confirmed_at === null;
   const isOverdueNeedsAmount = needsConfirmation && recurring.next_due_date <= today;
-  const displayAmount = !recurring.amount_is_variable
-    ? Number(recurring.amount)
-    : recurring.next_amount_confirmed_at !== null
-      ? Number(recurring.next_amount)
-      : estimatedAmount;
-  // A variable-amount Expense schedule (31_recurring_expense_variability.sql)
-  // has no statement amount to enter, unlike the card case above. Still
-  // needs SOME visible marker that displayAmount is a guess rather than a
-  // known figure (CLAUDE.md "Display"), hence this inline label instead.
-  const isEstimatedExpenseSchedule =
-    !isTransfer && recurring.category_type === "Expense" && recurring.amount_is_variable;
-
   if (editing) {
     const editable: EditableRecurring = {
       id: recurring.id,
@@ -175,10 +163,7 @@ export function RecurringRow({
           </div>
 
           <span className="shrink-0 text-right text-sm font-medium tabular-nums text-ink @4xl:col-start-4 @4xl:justify-self-end">
-            {formatCurrency(displayAmount)}
-            {isEstimatedExpenseSchedule ? (
-              <span className="ml-1 text-xs font-normal text-ink-muted">est.</span>
-            ) : null}
+            {formatCurrency(amount.amount)} <AmountBasisTag basis={amount.basis} />
           </span>
         </div>
 
@@ -247,7 +232,7 @@ export function RecurringRow({
             target={{
               id: recurring.id,
               cardName: recurring.to_account_name ?? "the card",
-              estimatedAmount,
+              estimatedAmount: amount.amount,
               statementDay: recurring.statement_day ?? 1,
               cursorDate: recurring.next_run_date,
               dueDate: recurring.next_due_date,

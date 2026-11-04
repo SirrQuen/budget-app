@@ -7,6 +7,7 @@
 // carried by the wording alone ("short" vs "below your cushion") -- never a
 // colour, an icon or an exclamation mark.
 
+import { amountBasisLabel } from "@/lib/amountBasis";
 import { formatCurrency, formatDayMonth } from "@/lib/format";
 import type { SafeToSpendProjection, SqueezeEpisode } from "@/lib/safeToSpendProjection";
 
@@ -58,7 +59,7 @@ function cause(e: SqueezeEpisode): string {
   // from today's balance -- any later start needs an obligation to begin.
   if (e.drivers.length === 0) return "Starts from today's balance.";
 
-  const named = e.drivers.slice(0, MAX_DRIVERS_NAMED).map((o) => `${o.name} (${formatCurrency(o.amount)})`);
+  const named = e.drivers.slice(0, MAX_DRIVERS_NAMED).map((o) => `${o.name} (${formatCurrency(o.amount)}, ${amountBasisLabel(o.basis)})`);
   const rest = e.drivers.length - named.length;
   const parts = rest > 0 ? [...named, `${rest} more`] : named;
   const verb = e.drivers.length === 1 ? "lands" : "land";
@@ -103,4 +104,17 @@ export function whatsAhead(
     items,
     more: hidden > 0 ? `and ${hidden} more later in the forecast` : null,
   };
+}
+
+// How the forecast is cautious, said once for bills and pay together. The
+// queue and the upcoming list show each bill's usual amount; the figure
+// counts its recent high (and a paycheck's recent low), so the breakdown
+// names the difference rather than leaving two numbers to disagree.
+export function cautionLine(cautious: { billsAtHigh: boolean; payAtLow: boolean }): string | null {
+  if (cautious.billsAtHigh && cautious.payAtLow) {
+    return "Variable bills are counted at their recent high, and variable pay at its recent low.";
+  }
+  if (cautious.billsAtHigh) return "Variable bills are counted at their recent high.";
+  if (cautious.payAtLow) return "Variable pay is counted at its recent low.";
+  return null;
 }

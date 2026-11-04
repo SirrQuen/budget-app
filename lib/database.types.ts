@@ -836,6 +836,13 @@ export type Database = {
             foreignKeyName: "transactions_recurringid_fkey"
             columns: ["userid", "recurringid"]
             isOneToOne: false
+            referencedRelation: "v_recurring_amounts"
+            referencedColumns: ["userid", "recurring_id"]
+          },
+          {
+            foreignKeyName: "transactions_recurringid_fkey"
+            columns: ["userid", "recurringid"]
+            isOneToOne: false
             referencedRelation: "v_upcoming_recurring"
             referencedColumns: ["userid", "recurring_id"]
           },
@@ -1186,6 +1193,27 @@ export type Database = {
           },
         ]
       }
+      v_recurring_amounts: {
+        Row: {
+          amount: number | null
+          amount_basis: string | null
+          amount_high: number | null
+          amount_low: number | null
+          card_balance_owed: number | null
+          forecast_basis: string | null
+          recurring_id: string | null
+          userid: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_transactions_userid_fkey"
+            columns: ["userid"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_upcoming_recurring: {
         Row: {
           account_color: string | null
@@ -1193,6 +1221,8 @@ export type Database = {
           account_type: string | null
           accountid: string | null
           amount: number | null
+          amount_basis: string | null
+          amount_high: number | null
           amount_is_variable: boolean | null
           amount_low: number | null
           business_day_offset: number | null
@@ -1206,6 +1236,7 @@ export type Database = {
           days_until: number | null
           description: string | null
           end_date: string | null
+          forecast_basis: string | null
           frequency: string | null
           interval_count: number | null
           is_estimated_amount: boolean | null
@@ -1330,6 +1361,10 @@ export type Database = {
         Args: { p_fallback_amount: number; p_recurring_id: string }
         Returns: number
       }
+      estimate_expense_amount_high: {
+        Args: { p_fallback_amount: number; p_recurring_id: string }
+        Returns: number
+      }
       estimate_income_amount: {
         Args: { p_fallback_amount: number; p_recurring_id: string }
         Returns: number
@@ -1342,11 +1377,19 @@ export type Database = {
         Args: { p_current: string; p_goal_id: string; p_target: number }
         Returns: string
       }
+      has_three_supplied_amounts: {
+        Args: { p_recurring_id: string; p_type: string }
+        Returns: boolean
+      }
       is_business_day: { Args: { d: string }; Returns: boolean }
       is_spendable_account_type: { Args: { p_type: string }; Returns: boolean }
       join_waitlist: { Args: { p_email: string }; Returns: undefined }
       leaves_spendable_set: {
         Args: { p_from_type: string; p_to_type: string }
+        Returns: boolean
+      }
+      link_transaction_to_schedule: {
+        Args: { p_recurring_id: string; p_transaction_id: string }
         Returns: boolean
       }
       record_login: {
@@ -1372,6 +1415,19 @@ export type Database = {
       }
       spendable_cash_balance: { Args: never; Returns: number }
       suggested_safe_to_spend_cushion: { Args: never; Returns: number }
+      update_transfer: {
+        Args: {
+          p_amount: number
+          p_description: string
+          p_from_accountid: string
+          p_notes?: string
+          p_to_accountid: string
+          p_transaction_date: string
+          p_transfer_group_id: string
+          p_update_schedule?: boolean
+        }
+        Returns: undefined
+      }
       username_is_available: { Args: { p_username: string }; Returns: boolean }
     }
     Enums: {
