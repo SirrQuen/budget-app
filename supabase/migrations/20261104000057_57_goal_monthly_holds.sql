@@ -21,9 +21,16 @@
 --     recorded separately (none beyond 2 decimals on production,
 --     2026-11-03).
 --
--- This view becomes a dependent of v_upcoming_recurring. Anything that
--- drops v_upcoming_recurring (as 61 did) must drop and re-create this
--- view too, by name, with its ACL and comment.
+-- This view depends on v_upcoming_recurring and on v_goal_progress (it
+-- reads remaining_amount, so the hold can't disagree with the goals page
+-- about what's left). Anything that drops either view -- as 61 dropped
+-- v_upcoming_recurring -- must drop and re-create this one too, by name,
+-- with its ACL and comment. Held 52 replaces v_goal_progress: re-derive
+-- it with this view in mind.
+--
+-- Changed after the first dev push (2026-11-03): a goal near its target
+-- held its full monthly amount (Emergency fund, $50 from its target,
+-- held $200). The hold is now capped at what's left to the target.
 --
 -- A goal's monthly_contribution is an intention, not a transaction, so
 -- nothing here is written: the hold is derived per request, in
@@ -39,8 +46,10 @@
 --    for in the same step as the monthly target (GoalForm).
 --
 -- 2. v_goal_monthly_holds: per goal, what's still to set aside this
---    month -- max(0, monthly target - contributed this month). Per goal,
---    never summed first: one over-funded goal must not cover another.
+--    month -- max(0, monthly target - contributed this month), but never
+--    more than is left to the target (v_goal_progress.remaining_amount,
+--    the goals page's own figure). Per goal, never summed first: one
+--    over-funded goal must not cover another.
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
@@ -81,8 +90,15 @@ select g.userid,
        g.goal_name,
        g.monthly_contribution,
        coalesce(m.contributed, 0::numeric) as contributed_this_month,
-       greatest(g.monthly_contribution - coalesce(m.contributed, 0::numeric), 0::numeric) as still_to_set_aside
+       -- Never more than the goal can still take: a goal $50 from its
+       -- target holds $50, not its $200 monthly amount.
+       least(
+         greatest(g.monthly_contribution - coalesce(m.contributed, 0::numeric), 0::numeric),
+         p.remaining_amount
+       ) as still_to_set_aside,
+       p.remaining_amount as remaining_to_target
   from public.goals g
+  join public.v_goal_progress p on p.goal_id = g.id
   left join lateral (
     select sum(gc.amount) as contributed
       from public.goal_contributions gc
@@ -101,7 +117,7 @@ select g.userid,
    );
 
 comment on view public.v_goal_monthly_holds is
-  'Per goal, this month''s money safe to spend sets aside: max(0, monthly_contribution - contributed this month), for active, uncompleted goals with a monthly target and no counted funding transfer (goals.funding_recurringid). Derived, never stored. Read by getSafeToSpend (lib/db/dashboard.ts); subtracted flat, after the cushion, never raising the running-low line.';
+  'Per goal, this month''s money safe to spend sets aside: max(0, monthly_contribution - contributed this month), capped at what''s left to the target (v_goal_progress.remaining_amount), for active, uncompleted goals with a monthly target and no counted funding transfer (goals.funding_recurringid). Derived, never stored. Read by getSafeToSpend (lib/db/dashboard.ts); subtracted flat, after the cushion, never raising the running-low line.';
 
 -- Production's view ACL, explicitly (as migration 61 does): revoke
 -- everything first, so neither project's default privileges decide it.

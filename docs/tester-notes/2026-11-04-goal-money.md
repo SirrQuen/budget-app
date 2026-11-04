@@ -13,6 +13,8 @@ What that means for your number:
 - A goal with a $200 monthly target and nothing added yet this month
   takes $200 off safe to spend. Add $150 to it and only $50 comes off.
   Once you've hit the month's target, it takes nothing.
+- It never takes more than a goal still needs. A goal that's $30 from
+  done takes $30, even if its monthly target is bigger.
 - Each goal counts on its own, so one goal that's ahead doesn't cover
   another that's behind.
 - It's the same amount all month. It isn't spread across your days.

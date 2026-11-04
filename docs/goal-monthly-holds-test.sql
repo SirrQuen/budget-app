@@ -39,6 +39,9 @@
 --      so its goal still holds nothing. Counting rows, it had ended.
 --  11  The view carries production's ACL (as 61 restores it), and anon
 --      can't read it.
+--  12  A goal near its target holds only what's left: $950 of $1,000
+--      saved, $200 a month, holds $50 -- and agrees with
+--      v_goal_progress.remaining_amount, the goals page's own figure.
 -- =====================================================================
 
 begin;
@@ -115,6 +118,7 @@ declare
   rent_s      constant uuid := 'dddddddd-0000-4000-8000-000000000014';
   lim_s       constant uuid := 'dddddddd-0000-4000-8000-000000000015';
   g_limit     constant uuid := 'dddddddd-0000-4000-8000-000000000031';
+  g_near      constant uuid := 'dddddddd-0000-4000-8000-000000000032';
   grp         uuid := gen_random_uuid();
   linked      text;
 begin
@@ -273,6 +277,20 @@ begin
   perform pg_temp.rec('10 (fixture) limit 2, one confirmed: one occurrence left', '1', hold);
   select count(*) into n from public.v_goal_monthly_holds where goalid = g_limit;
   perform pg_temp.rec('10 its goal is still funded by it: absent from the holds', '0', n::text);
+
+  -- 12 -----------------------------------------------------------------
+  insert into public.goals (id, userid, goal_name, goal_type, target_amount, monthly_contribution, is_active)
+  values (g_near, u, 'Near', 'Emergency Fund', 1000, 200, true);
+  insert into public.goal_contributions (userid, goalid, amount, date, funding_method)
+  values (u, g_near, 950, month_start - 1, 'manual');   -- last month: none this month
+  select (still_to_set_aside = 50)::text into hold from public.v_goal_monthly_holds where goalid = g_near;
+  perform pg_temp.rec('12 $50 from its target, $200 a month: holds $50', 'true', hold);
+  select (h.still_to_set_aside = p.remaining_amount)::text into hold
+    from public.v_goal_monthly_holds h join public.v_goal_progress p on p.goal_id = h.goalid
+   where h.goalid = g_near;
+  perform pg_temp.rec('12 ... the same figure the goals page shows as left', 'true', hold);
+  select (still_to_set_aside = 200)::text into hold from public.v_goal_monthly_holds where goalid = g_plain;
+  perform pg_temp.rec('12 a goal far from its target still holds its monthly amount', 'true', hold);
   perform pg_temp.unbecome();
 end
 $$;

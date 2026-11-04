@@ -180,7 +180,8 @@ export type SafeToSpendProjectionInput = {
   /**
    * This month's goal money still to set aside, per goal
    * (v_goal_monthly_holds): max(0, monthly target - contributed this
-   * month), already excluding goals a counted transfer funds. Subtracted
+   * month), capped at what's left to the target, already excluding goals
+   * a counted transfer funds. Subtracted
    * flat after the cushion, like it. Never raises the running-low line:
    * a cushion is money not to touch; goal money can be deferred, and
    * skipping a contribution when short is the right call.

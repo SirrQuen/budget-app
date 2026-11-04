@@ -828,7 +828,8 @@ async function getGoalMonthlyHolds(): Promise<DbResult<GoalHold[]>> {
 //              occurrence itself.
 //   cushion    settings.safe_to_spend_cushion, or the suggestion.
 //   goals      v_goal_monthly_holds: each goal's monthly target less what
-//              it got this month, unless a counted transfer funds it.
+//              it got this month, never more than is left to its target,
+//              unless a counted transfer funds it.
 //   holidays   for resolving occurrences after the stored next_due_date.
 //   window     the settings fallback (next payday / end of month / 30
 //              days), used only when there's no usable income schedule.
