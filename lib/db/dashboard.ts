@@ -19,7 +19,12 @@ import {
 import { isSpendableAccountType } from "@/lib/safeToSpend";
 import { isLiabilityAccountType } from "@/lib/accountOptions";
 import { listAccountBalances } from "@/lib/db/accounts";
-import { buildConfirmationQueue, type ConfirmationItem } from "@/lib/confirmationQueue";
+import {
+  alreadyRecorded,
+  buildConfirmationQueue,
+  type ConfirmationItem,
+  type RecordedOccurrence,
+} from "@/lib/confirmationQueue";
 import { getNotYetKeys } from "@/lib/confirmationLater";
 import { deriveLoggingStreak, type LoggingStreakSummary } from "@/lib/streak";
 
@@ -903,6 +908,12 @@ function splitBySpendable(rows: AccountBalanceRow[]): Pick<SafeToSpend, "drawnFr
 export type ConfirmationQueueItem = ConfirmationItem & {
   /** The account(s) the transaction lands on -- two for a transfer. */
   accounts: { id: string; name: string; openingDate: string }[];
+  /**
+   * A transaction already carrying this schedule's recurringid inside this
+   * occurrence's window (alreadyRecorded) -- the queue says so before
+   * anything is written. null in the normal case.
+   */
+  alreadyRecorded: RecordedOccurrence | null;
 };
 
 // The confirmation queue (lib/confirmationQueue.ts) for this user, today.
@@ -937,6 +948,14 @@ export async function getConfirmationQueue(): Promise<DbResult<ConfirmationQueue
   const accountById = new Map(accountsRes.data.map((a) => [a.id, a]));
   const items = buildConfirmationQueue(schedulesRes.data, today, holidaysRes.data ?? new Set<string>(), notYet);
 
+  const recordedRes = await listRecordedOccurrences(
+    supabase,
+    items.map((i) => ({ recurringId: i.recurringId, from: addDaysISO(i.dueDate, -i.dateToleranceDays) })),
+  );
+  if (recordedRes.error !== null) {
+    return { data: null, error: recordedRes.error };
+  }
+
   return {
     data: items.map((item) => ({
       ...item,
@@ -945,9 +964,47 @@ export async function getConfirmationQueue(): Promise<DbResult<ConfirmationQueue
         .map((id) => accountById.get(id))
         .filter((a) => a !== undefined)
         .map((a) => ({ id: a.id, name: a.account_name, openingDate: a.opening_date })),
+      alreadyRecorded: alreadyRecorded(
+        item.dueDate,
+        item.dateToleranceDays,
+        recordedRes.data.get(item.recurringId) ?? [],
+      ),
     })),
     error: null,
   };
+}
+
+// The transactions already linked to each queued schedule, from the
+// earliest window start on -- one query for the whole queue. A transfer's
+// two legs are one occurrence: only its Expense leg is kept.
+async function listRecordedOccurrences(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  windows: { recurringId: string; from: string }[],
+): Promise<DbResult<Map<string, RecordedOccurrence[]>>> {
+  const byId = new Map<string, RecordedOccurrence[]>();
+  if (windows.length === 0) return { data: byId, error: null };
+
+  const from = windows.reduce((min, w) => (w.from < min ? w.from : min), windows[0].from);
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("recurringid, transaction_date, amount, transaction_type, transfer_group_id")
+    .in(
+      "recurringid",
+      windows.map((w) => w.recurringId),
+    )
+    .gte("transaction_date", from);
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "dashboard") };
+  }
+  for (const t of data) {
+    if (t.recurringid === null) continue;
+    if (t.transfer_group_id !== null && t.transaction_type !== "Expense") continue;
+    const list = byId.get(t.recurringid) ?? [];
+    list.push({ date: t.transaction_date, amount: Number(t.amount) });
+    byId.set(t.recurringid, list);
+  }
+  return { data: byId, error: null };
 }
 
 export type DashboardStat = {

@@ -119,6 +119,18 @@ function QueueRow({ item, disabled }: { item: ConfirmationQueueItem; disabled: b
           : ""}
       </p>
 
+      {/* Said before anything is written: this schedule already has a
+          transaction in this occurrence's window (lib/confirmationQueue.ts
+          alreadyRecorded). Neutral ink -- a fact, not an alarm. "It landed"
+          is refused for it on the server too. */}
+      {item.alreadyRecorded ? (
+        <p className="text-xs text-ink-secondary">
+          Already recorded:{" "}
+          <Amount amount={item.alreadyRecorded.amount} type={item.kind === "Income" ? "Income" : "Expense"} /> on{" "}
+          {formatDateWithWeekday(item.alreadyRecorded.date)}. If that was this one, choose Not happening this time.
+        </p>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <button
           type="button"

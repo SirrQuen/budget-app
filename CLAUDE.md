@@ -699,7 +699,17 @@ transaction form, from the same SQL rule (`counts_toward_balance_preview`,
 migration 48).
 
 - `transactions.recurringid` non-null means the row was confirmed from a
-  schedule. Nothing else distinguishes them.
+  schedule -- or is the row the schedule was made from (below). Nothing
+  else distinguishes them.
+- **"Make recurring": the source transaction IS the first occurrence.**
+  Saving links it -- `link_transaction_to_schedule()` (migration 60) sets
+  its recurringid, both legs of a transfer -- so it counts toward
+  `occurrence_limit`, feeds the estimate, and `recurring_tx_no_double_post`
+  can see it. The first date defaults to the occurrence after it (following
+  Repeats until the person sets one), never today. A source on a different
+  account or direction than the saved schedule isn't linked. Never create
+  a schedule from a transaction without linking it: an unlinked source is
+  asked for again by the queue, and "It landed" writes it twice.
 - Those rows carry a small recurring icon in lists -- an icon, not a
   separate status or a different colour. They are normal transactions.
 - Editing or deleting one is unremarkable: no extra confirmation, no
@@ -737,6 +747,14 @@ migration 48).
   occurrence stays open and counted rather than silently skipped.
 - Every answer is keyed on the occurrence's due date; a stale button acts on
   nothing rather than the next cycle.
+- Before writing, `confirmOccurrence()` looks for a row already carrying
+  the schedule's recurringid: on the date being written, it refuses; in
+  the occurrence's window (due date give or take `date_tolerance_days`),
+  it refuses a one-tap "as expected". The queue shows the same fact on the
+  item first (`alreadyRecorded()`, `lib/confirmationQueue.ts`). Linked
+  rows only -- never a same-amount, same-day match on unlinked rows: two
+  $5 coffees on a Tuesday aren't a duplicate, and a warning that cries
+  wolf gets dismissed by reflex.
 - `recurring_tx_no_double_post`, unique on
   `(recurringid, transaction_date, transaction_type)` (migration 19), still
   stands: a schedule can't have two transactions of one type on one date.
