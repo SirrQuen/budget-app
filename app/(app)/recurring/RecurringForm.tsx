@@ -11,7 +11,7 @@ import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { TransactionAccountOption } from "../transactions/AddTransactionForm";
 import { useToday } from "@/components/TodayProvider";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
-import { formatDate, formatDateWithWeekday } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateWithWeekday } from "@/lib/format";
 import { ordinal } from "@/lib/recurringSchedule";
 import { firstDateAfterSource } from "@/lib/recurringCadence";
 import { Amount } from "@/components/ui/Amount";
@@ -681,7 +681,14 @@ export function RecurringForm({
             this transaction's schedule, and the server won't link it. */}
         {source && kind === source.kind ? (
           <p className="text-sm text-ink-secondary">
-            Your <Amount amount={source.amount} type={source.kind === "Income" ? "Income" : "Expense"} /> on{" "}
+            {/* A transfer is unsigned, as the transaction list shows it. */}
+            Your{" "}
+            {source.kind === "Transfer" ? (
+              <span className="font-medium text-ink">{formatCurrency(source.amount)}</span>
+            ) : (
+              <Amount amount={source.amount} type={source.kind} />
+            )}{" "}
+            on{" "}
             {formatDate(source.sourceDate)} counts as the first one.
           </p>
         ) : null}
