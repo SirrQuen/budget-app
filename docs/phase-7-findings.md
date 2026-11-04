@@ -663,6 +663,37 @@ view from wherever it stands then:
 Check first that no row would change: with none beyond 2 decimals on
 production, the cast is lossless there; re-run the count on the day.
 
+**Written: migration 61 (2026-11-03).** Order: after 58, 59 and 60,
+BEFORE 57, so 57's `v_goal_monthly_holds` is re-derived on top of it
+rather than becoming a fourth dependent to drop.
+
+- **Correction to the above:** `numeric(12,2)` doesn't refuse a third
+  decimal place, it rounds it on write (12.345 is stored as 12.35), exactly
+  as `transactions.amount` does. That still closes the gap: a schedule and
+  the transaction confirmed from it round the same way, so they can't
+  disagree.
+- **Counted again on the day, read-only:** production has 70 schedule
+  amounts and 6 statement amounts, none beyond 2 decimals, largest 5,000;
+  dev has 10 and 0. The migration refuses to run if that has changed.
+- **Dependents, read-only on both databases (identical):**
+  `v_recurring_amounts` (reads `amount`, `next_amount`),
+  `v_upcoming_recurring` (`next_amount`, and `v_recurring_amounts`),
+  `v_integrity_issues` (`v_upcoming_recurring`). Nothing depends on
+  `v_integrity_issues`. No function, policy or column grant reads either
+  column. The view definitions hashed identically on dev and production,
+  so each is recreated from its migration text unchanged. The one
+  exception: `greatest(-balance, 0)` (a card's balance owed) is cast to
+  `numeric(12,2)`, because a card owing nothing returned a bare `0`.
+- **Dropped by name, dependents first, no CASCADE.** The ACL and all five
+  comments are restored explicitly.
+- **ACL drift found while enumerating:** on sorrel-dev,
+  `v_recurring_amounts` granted INSERT/UPDATE/DELETE to `authenticated`
+  and `service_role`, picked up from that project's default privileges
+  (migration 59 granted only SELECT and never revoked the rest).
+  Production has the baseline's ACL. 61 revokes everything and grants
+  production's set on all three views, so dev and production now match.
+- Checks: `docs/recurring-amount-scale-test.sql`.
+
 ## Recurring dates: what each one means (2026-10-31)
 
 A recurring schedule has one user-entered date, `next_run_date` (the form
