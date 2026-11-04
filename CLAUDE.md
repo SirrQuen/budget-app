@@ -440,6 +440,13 @@ builds `main` to mysorrel.com. One branch per batch, merged when that
 batch's verification passes. Never accumulate more than one batch on a
 branch.
 
+A change that moves a number a tester can see (safe to spend, an
+estimate, a balance) gets a dated note in `docs/tester-notes/`: sent
+date, migration, merge commit, then the message as sent. One change per
+note, never two on the same day, so a moved number traces to a cause.
+Matt sends it; draft it with the change, and fill in the merge commit
+when it merges. Format: `docs/tester-notes/README.md`.
+
 ## Privacy policy notice
 
 The privacy policy (`docs/legal/privacy-and-terms.md`) promises testers an

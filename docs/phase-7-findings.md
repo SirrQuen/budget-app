@@ -848,6 +848,16 @@ rather than becoming a fourth dependent to drop.
   production's set on all three views, so dev and production now match.
 - Checks: `docs/recurring-amount-scale-test.sql`.
 
+## Commercial launch, not beta: an in-app "what changed" surface (2026-11-03)
+
+Tester notes go out by message and are recorded in `docs/tester-notes/`
+(sent date, migration, merge commit), starting with 57's. With five
+testers and a direct channel, a message invites a reply, and replies are
+the point of the beta. An in-app line is one-way, needs dismissal state
+for one sentence, and puts a changelog on the hero, which should be
+about the user's money rather than Sorrel's development. Decide this at
+commercial launch, when there's no direct channel. Not before.
+
 ## Goal money columns are unconstrained `numeric` too (2026-11-03)
 
 Found while re-deriving 57: `goals.target_amount`,
