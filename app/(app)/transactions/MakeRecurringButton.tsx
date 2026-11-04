@@ -9,9 +9,9 @@ import type { GoalOption } from "@/lib/db/goals";
 // "Make this recurring" on an existing transaction (or transfer) row --
 // most people's actual first recurring schedule: they've logged rent twice
 // by hand and realize there's a better way. Opens RecurringForm in create
-// mode, seeded from this row, with the schedule itself (Repeats/Next due
-// date/Ends) left at its normal create-mode defaults -- a one-off entry
-// implies no cadence, only the user knows what one to start.
+// mode, seeded from this row. The row IS the schedule's first occurrence:
+// the first date defaults to the one after it, and saving links the row
+// to the schedule (migration 60), so the queue never asks for it again.
 //
 // A native <dialog> (showModal) rather than FullFormOverlay's hand-rolled
 // focus trap -- same approach ConfirmDialog already uses, and it gets

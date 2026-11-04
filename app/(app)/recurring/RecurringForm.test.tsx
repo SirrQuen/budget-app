@@ -76,7 +76,7 @@ after(async () => {
 });
 
 async function render(
-  props: { goals?: GoalOption[]; recurring?: EditableRecurring } = {},
+  props: { goals?: GoalOption[]; recurring?: EditableRecurring; prefill?: import("./RecurringForm").RecurringPrefill } = {},
 ): Promise<HTMLElement> {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -87,6 +87,7 @@ async function render(
     root.render(
       <TodayProvider today="2026-10-31" timeZone={zone}>
         <RecurringForm
+          prefill={props.prefill}
           incomeCategories={[]}
           expenseCategories={[]}
           accounts={ACCOUNTS}
@@ -255,4 +256,42 @@ test("funding two goals: no picker -- one answer would unlink the other -- and n
   assert.equal(goalPicker(c), null);
   assert.equal(asked(c), null);
   assert.ok((c.textContent ?? "").includes("This transfer funds Car, Japan. Change that from each goal."));
+});
+
+// "Make recurring": the source transaction is the first occurrence, so the
+// schedule's first date is the one after it -- never today, never the
+// source's own date -- and it follows the cadence until someone sets it.
+const SOURCE = {
+  description: "Rent",
+  amount: 1850,
+  kind: "Expense" as const,
+  categoryid: null,
+  accountid: "checking",
+  to_accountid: null,
+  sourceTransactionId: "tx-1",
+  sourceDate: "2026-10-01",
+};
+
+test("from a transaction, the first date is the next occurrence after it", async () => {
+  const c = await render({ prefill: SOURCE });
+  assert.equal(q<HTMLInputElement>(c, 'input[name="next_run_date"]')!.value, "2026-11-01");
+  assert.equal(q<HTMLInputElement>(c, 'input[name="source_transaction_id"]')!.value, "tx-1");
+});
+
+test("the default follows Repeats until the date is set by hand, then stays", async () => {
+  const c = await render({ prefill: SOURCE });
+  await click(q<HTMLInputElement>(c, 'input[name="frequency"][value="Weekly"]')!);
+  assert.equal(q<HTMLInputElement>(c, 'input[name="next_run_date"]')!.value, "2026-10-08");
+  await setValue(q<HTMLInputElement>(c, 'input[name="interval_count"]')!, "2");
+  assert.equal(q<HTMLInputElement>(c, 'input[name="next_run_date"]')!.value, "2026-10-15");
+
+  await setValue(q<HTMLInputElement>(c, 'input[name="next_run_date"]')!, "2026-10-20");
+  await click(q<HTMLInputElement>(c, 'input[name="frequency"][value="Monthly"]')!);
+  assert.equal(q<HTMLInputElement>(c, 'input[name="next_run_date"]')!.value, "2026-10-20");
+});
+
+test("a new schedule without a source still starts today, with no source field", async () => {
+  const c = await render();
+  assert.equal(q<HTMLInputElement>(c, 'input[name="next_run_date"]')!.value, "2026-10-31");
+  assert.equal(q(c, 'input[name="source_transaction_id"]'), null);
 });

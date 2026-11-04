@@ -707,6 +707,118 @@ explaining what went wrong. 57 goes to a throwaway project
 (`sorrel-scratch-57`), named so it can't be mistaken for sorrel-dev,
 and is deleted the same day.
 
+## Held branches that touch goals (2026-10-31)
+
+Pointer only. The full records live on the branches, unmerged.
+
+| Branch | Migration | Hold |
+|---|---|---|
+| `feat/goal-contributions-in-safe-to-spend` | 57: safe to spend sets aside this month's goal money | **Until the week of 9 November 2026.** Reason: three changes to the hero number inside a week leaves testers unable to give interpretable feedback about it. |
+| `feat/linked-goals` | 52: a goal's progress read from a linked account | Until that branch merges (its own commits say what it needs). |
+
+**Whichever merges second must be RE-DERIVED on top of the first**, not
+just given a fresh timestamp. 53 was written against a dev that had 52
+applied and had to be re-derived; the same trap is now set twice. Where
+they meet: 52 refuses contributions to a linked goal, and 57 measures
+"contributed this month" from contributions, so on top of 52 a linked
+goal would hold its full monthly target every month. 52 also replaces
+`v_goal_progress` from its pre-53 definition, both add columns to
+`goals`, and 52's timestamp (2026-10-26) is already older than 53, 54,
+56 and 57.
+
+57 was verified on a throwaway project (`sorrel-scratch-57`, deleted
+2026-10-31), never sorrel-dev. Neither migration is on sorrel-dev or
+production. Detail: that branch's `docs/phase-7-findings.md`, "Goal money
+in safe to spend".
+
+## Schedule amounts are unconstrained `numeric` (2026-11-03)
+
+**`recurring_transactions.amount` and `next_amount` are plain `numeric`;
+`transactions.amount` is `numeric(12,2)`.** So money can be written to a
+schedule at any scale -- `1850`, `1850.00`, or `12.345` -- and nothing in
+the schema stops a third decimal place. CLAUDE.md's rule is exact dollars;
+for schedules it holds only because the forms send two decimals.
+
+Found 2026-11-03 when `docs/expense-estimate-test.sql` (migration 58)
+failed four checks on formatting: expected `190`, actual `190.00`, with
+the value right. The test compared as text; it now compares as numeric
+(`pg_temp.rec_num`).
+
+**Where the mixed scale comes from.** `v_upcoming_recurring.amount` is a
+`CASE` across sources of different types, so the column is plain `numeric`
+and each value keeps the scale of the branch that produced it:
+
+| Branch | Source | Renders |
+|---|---|---|
+| Fixed schedule | `r.amount` (unconstrained) | as written: `1850` |
+| Variable, below three supplied | `r.amount` (fallback) | as written: `60` |
+| Variable, mean of three | `round(avg(t.amount), 2)` | `150.67` |
+| Card payment, statement entered | `r.next_amount` (unconstrained) | as written |
+| Card payment, owed | `greatest(-balance, 0)` | balance's scale |
+| `amount_high` / `amount_low` | `max`/`min` of `transactions.amount` | `190.00` |
+
+**Production, read-only, 2026-11-03:** 69 schedules -- 35 store `amount`
+at scale 0, 30 at scale 2, none beyond 2 decimals (`amount` or
+`next_amount`). So nothing is wrong today; the constraint is missing.
+
+**What it affects.** Not the app: PostgREST sends numeric as a JSON
+number, so `1850` and `1850.00` parse alike, and the generated types say
+`number` either way. It does affect anything that treats money as text --
+`::text` comparisons (the test above), CSV export, string equality in SQL
+-- and it lets a schedule hold an amount `transactions` can't: a 12.345
+schedule would round on confirmation, so the ledger and the forecast
+would disagree by a fraction of a cent.
+
+**The fix (this branch, not yet written):** `alter column ... type
+numeric(12,2)` on `recurring_transactions.amount` and `next_amount`, so
+every money value in the view has scale 2 and the third decimal is
+refused. Postgres won't retype a column a view reads, so the migration
+drops and recreates `v_upcoming_recurring` around it -- re-deriving the
+view from wherever it stands then:
+
+- **after migration 58** (`fix/expense-estimate-high-end`), which appends
+  `amount_high`. Write this on top of 58, never from a main without it.
+- **with the occurrence-limit fix** (counting transfer occurrences, not
+  legs), if that has landed -- it replaces the same view.
+- **before or re-derived against held migration 57**
+  (`feat/goal-contributions-in-safe-to-spend`), whose
+  `v_goal_monthly_holds` reads `v_upcoming_recurring`: a drop cascades to
+  it, so whichever lands second re-creates the other's dependants.
+
+Check first that no row would change: with none beyond 2 decimals on
+production, the cast is lossless there; re-run the count on the day.
+
+**Written: migration 61 (2026-11-03).** Order: after 58, 59 and 60,
+BEFORE 57, so 57's `v_goal_monthly_holds` is re-derived on top of it
+rather than becoming a fourth dependent to drop.
+
+- **Correction to the above:** `numeric(12,2)` doesn't refuse a third
+  decimal place, it rounds it on write (12.345 is stored as 12.35), exactly
+  as `transactions.amount` does. That still closes the gap: a schedule and
+  the transaction confirmed from it round the same way, so they can't
+  disagree.
+- **Counted again on the day, read-only:** production has 70 schedule
+  amounts and 6 statement amounts, none beyond 2 decimals, largest 5,000;
+  dev has 10 and 0. The migration refuses to run if that has changed.
+- **Dependents, read-only on both databases (identical):**
+  `v_recurring_amounts` (reads `amount`, `next_amount`),
+  `v_upcoming_recurring` (`next_amount`, and `v_recurring_amounts`),
+  `v_integrity_issues` (`v_upcoming_recurring`). Nothing depends on
+  `v_integrity_issues`. No function, policy or column grant reads either
+  column. The view definitions hashed identically on dev and production,
+  so each is recreated from its migration text unchanged. The one
+  exception: `greatest(-balance, 0)` (a card's balance owed) is cast to
+  `numeric(12,2)`, because a card owing nothing returned a bare `0`.
+- **Dropped by name, dependents first, no CASCADE.** The ACL and all five
+  comments are restored explicitly.
+- **ACL drift found while enumerating:** on sorrel-dev,
+  `v_recurring_amounts` granted INSERT/UPDATE/DELETE to `authenticated`
+  and `service_role`, picked up from that project's default privileges
+  (migration 59 granted only SELECT and never revoked the rest).
+  Production has the baseline's ACL. 61 revokes everything and grants
+  production's set on all three views, so dev and production now match.
+- Checks: `docs/recurring-amount-scale-test.sql`.
+
 ## Recurring dates: what each one means (2026-10-31)
 
 A recurring schedule has one user-entered date, `next_run_date` (the form
@@ -847,6 +959,110 @@ the old form carried a typed value across the Amount / Statement day swap
 15. Both fields now clear on every swap, pinned by
 `app/(app)/recurring/RecurringForm.test.tsx`. Whether the tester's 29 was
 that carry-over, an autopay date, or real is still their answer to give.
+
+## The "I run every db push myself" rule was never enforced (2026-11-03)
+
+**It held by convention, not by configuration, from the day it was
+written.** CLAUDE.md has said since 2026-10-14 (`3a0c284`; the "never
+allowlist it" wording since `0eaaf87`, 2026-10-16) that `supabase db push`
+is run by Matt, every time, and never allowlisted, and it bans
+`supabase db reset --linked` and `supabase config push` outright. Meanwhile
+`.claude/settings.local.json` allowed two wildcards over the whole CLI:
+
+- `Bash(npx supabase@latest *)` -- every subcommand of whatever version
+  `@latest` resolved to that day.
+- `Bash(npx supabase *)` -- the same family through the local binary.
+  Pinning the CLI at 3.0.0 (`chore/pin-supabase-cli`) made this the exact
+  form every Supabase command now takes, so it would have become the
+  live hole the moment the first one was removed.
+
+Between them they matched `db push --remote`, `db reset --remote`/
+`--linked`, `config push`, `link` (relinking, which CLAUDE.md also
+reserves to Matt), `projects delete`, `secrets set` and `functions deploy`
+-- no permission prompt for any of them. A wildcard on a command family
+silently grants everything in the family; the entry's intent (probably
+the read-only `projects list` and `db query`) doesn't narrow what it
+matches. CLI 3.0's own confirmation for hosted writes doesn't close it
+either: it accepts `--yes`, and an allowlisted wildcard matches a command
+carrying `--yes`.
+
+Found 2026-11-03 while pinning the CLI. Whether either entry was ever
+used to push, reset or change config wasn't checked and can't be told from
+the repo. `settings.local.json` is gitignored, so when the entries were
+added can't be recovered either.
+
+**Fixed:** both entries removed 2026-11-03. Every Supabase command now
+prompts.
+
+**The same file, audited the same day** (what each entry matches, not
+what it was for):
+
+| Entry | Matches |
+|---|---|
+| `Bash(npx eslint *)` | Any eslint run, including `--fix` (rewrites source) and `-c <file>`/plugins (loads arbitrary JS). |
+| `Bash(npx tsc *)` | Any compile, including emitting JS anywhere `--outDir`/`--outFile` points. |
+| `Bash(git add *)` | Staging anything, including `git add -f` on ignored files -- `.env.local`. |
+| `Bash(git commit -m ' *)` | Any commit whose message starts with `'`, plus anything after it: `--amend`, `--no-verify` (skips hooks, which CLAUDE.md forbids). With `git add *`, an ignored secret can be committed without a prompt. No push. |
+| `Bash(npm run *)` | Every package.json script -- `test:parity` runs a remote query -- and any script added later. Package.json is editable, so this is arbitrary code behind one edit. |
+| `Bash(powershell -Command "Get-Content -Encoding Byte -TotalCount 20 lib/database.types.ts")` | That exact read only. Harmless. |
+| `Bash(python3 -c ' *)` | Arbitrary Python: a shell, `subprocess` included. On its own it matches every command every other rule here exists to gate, `db push` included. |
+
+Remaining entries were left in place for Matt to decide; the last row is
+the one that makes the others moot.
+
+**Not yet done: enforcement.** Removing allow rules restores the prompt;
+it doesn't make the ban configuration. Deny rules for the banned commands
+in the committed `.claude/settings.json` would (a deny beats an allow and
+isn't a per-machine file). Until then the rule is enforced by a prompt a
+person has to read.
+
+## "Make recurring" wrote the source transaction twice (2026-11-03)
+
+**A tester hit it.** "Make recurring" created a schedule that knew nothing
+about the row it was made from. People set the schedule's first date to
+the source's own date (the form defaulted to today, and "this bill is on
+the 6th" is the natural answer), so the queue asked for an occurrence
+already in the ledger, and "It landed" wrote it again.
+`recurring_tx_no_double_post` couldn't see the pair: the source had no
+recurringid. The source's amount was also lost as estimate history.
+
+**Fix (`fix/make-recurring-source-is-first`, migration 60).** The source
+IS the first occurrence. Saving links it (`link_transaction_to_schedule()`,
+both legs of a transfer, SECURITY DEFINER scoped to `auth.uid()`); the
+first date defaults to the occurrence after it; the source anchors the
+day of month. If linking fails, the new schedule is deleted rather than
+left unlinked. The net: `confirmOccurrence()` refuses, before writing, a
+date that already has a row linked to the schedule, and a one-tap confirm
+when a linked row is in the occurrence's window; the queue item says so
+first. Linked rows only. There is no same-amount detector.
+DB checks: `docs/link-source-transaction-test.sql`.
+
+**Production, read-only, 2026-11-03.** I looked for schedules whose
+`start_date` equals the date of an unlinked transaction with the same
+amount on the same account (the Expense leg, for a transfer). 12 pairs,
+two users:
+
+- **One user, 11 pairs, all created 2026-10-28**, each schedule 16 s to
+  67 s after its source: 5 Expense, 3 Income, 3 Transfer. The sources are
+  dated 2026-10-30 to 2026-11-23, mostly **in the future**: upcoming
+  bills entered as transactions and then made recurring on the same date.
+  None has been confirmed yet, so no duplicate rows exist. But one
+  (2026-10-30, Expense) is already open in their queue, and the rest open
+  as their dates arrive. They may already be double-counted in the
+  forecast: balances have no upper date bound (only the anchor rule), so
+  a future-dated row is in the balance today while its schedule is also a
+  commitment.
+- **One user, 1 pair: the reported duplicate.** A transfer created
+  2026-11-01, confirmed once, and that confirmation sits on the same date
+  as the unlinked source.
+
+Not changed. Tester data is a conversation with them. The fix stops new
+pairs; it doesn't link these 12 (they were made before it).
+
+**Not caught, by design.** A person who logged a bill twice by hand and
+makes the *earlier* row recurring gets a first date that may collide with
+the later, unlinked row. Only a fuzzy match would see that, and that's
+ruled out.
 
 ## Phase 8 policy item: auth audit log retained after deletion (2026-10-06)
 

@@ -7,6 +7,7 @@ import { logout } from "@/lib/auth/actions";
 import { HomeIcon, ListIcon, WalletIcon, TagIcon, PieIcon, TargetIcon, RepeatIcon, SettingsIcon, MenuIcon, CloseIcon, type IconProps } from "@/components/ui/icons";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { QuickAddBar } from "@/components/quick-add/QuickAddBar";
+import { showsQuickAdd } from "@/lib/quickAdd/visibility";
 import { OptimisticTransactionsProvider } from "@/components/quick-add/OptimisticTransactionsContext";
 import { ConfirmPulseProvider } from "@/components/ui/ConfirmPulse";
 import { SorrelMark } from "@/components/SorrelMark";
@@ -137,7 +138,8 @@ export function AppShell({
               so its desktop sticky form lines up with the page below. */}
           <div className="mx-auto w-full max-w-6xl">
             <OptimisticTransactionsProvider>
-              {quickAdd ? (
+              {/* Not on Recurring or Goals (lib/quickAdd/visibility.ts). */}
+              {quickAdd && showsQuickAdd(pathname) ? (
                 <QuickAddBar
                   accounts={quickAdd.accounts}
                   incomeCategories={quickAdd.incomeCategories}

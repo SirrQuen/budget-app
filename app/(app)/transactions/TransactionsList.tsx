@@ -92,7 +92,22 @@ type TransferDisplayRow = {
   recurringid: string | null;
   fromAccountId: string | null;
   toAccountId: string | null;
+  /** Both legs share one amount, so either leg's is_estimated speaks for the pair. */
+  isEstimated: boolean;
 };
+
+// is_estimated: no person supplied this amount -- a one-tap confirm of a
+// variable schedule, or a row the removed catch-up posted (CLAUDE.md
+// "is_estimated"). Marked so someone reconciling against their bank knows
+// which figures to check. Editing the amount clears it
+// (trg_transactions_amount_supplied). Neutral ink: housekeeping, not a fault.
+function ApproximateTag() {
+  return (
+    <span className="ml-2 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
+      Approximate
+    </span>
+  );
+}
 
 type SingleDisplayRow = { kind: "single"; tx: TransactionWithRelations };
 
@@ -129,6 +144,7 @@ function buildDisplayRows(transactions: TransactionWithRelations[]): DisplayRow[
       fromAccountName: fromLeg?.account_name ?? null,
       toAccountName: toLeg?.account_name ?? null,
       recurringid: tx.recurringid,
+      isEstimated: tx.is_estimated,
       fromAccountId: fromLeg?.accountid ?? null,
       toAccountId: toLeg?.accountid ?? null,
     });
@@ -479,7 +495,10 @@ export function TransactionsList({
                     <td className="whitespace-nowrap px-4 py-3 text-ink-secondary">
                       {formatDate(row.transaction_date)}
                     </td>
-                    <td className="px-4 py-3 text-ink">{row.description}</td>
+                    <td className="px-4 py-3 text-ink">
+                      {row.description}
+                      {row.isEstimated ? <ApproximateTag /> : null}
+                    </td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center gap-2 text-ink-secondary">
                         <TransferIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -509,6 +528,8 @@ export function TransactionsList({
                               categoryid: null,
                               accountid: row.fromAccountId,
                               to_accountid: row.toAccountId,
+                              sourceTransactionId: row.id,
+                              sourceDate: row.transaction_date,
                             }}
                             incomeCategories={incomeCategories}
                             expenseCategories={expenseCategories}
@@ -549,15 +570,7 @@ export function TransactionsList({
                   </td>
                   <td className="px-4 py-3 text-ink">
                     {tx.description}
-                    {/* A variable-amount Expense schedule's generated row --
-                        auto-posted at a live estimate, never confirmed, so
-                        it stays visibly a guess until someone edits it
-                        (updateTransactionAction clears this on save). */}
-                    {tx.is_estimated ? (
-                      <span className="ml-2 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
-                        Estimate
-                      </span>
-                    ) : null}
+                    {tx.is_estimated ? <ApproximateTag /> : null}
                   </td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-2 text-ink-secondary">
@@ -587,6 +600,8 @@ export function TransactionsList({
                             categoryid: tx.categoryid,
                             accountid: tx.accountid,
                             to_accountid: null,
+                            sourceTransactionId: tx.id,
+                            sourceDate: tx.transaction_date,
                           }}
                           incomeCategories={incomeCategories}
                           expenseCategories={expenseCategories}

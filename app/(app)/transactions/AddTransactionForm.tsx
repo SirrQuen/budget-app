@@ -28,6 +28,8 @@ import { paymentPayee } from "@/lib/accountOptions";
 import { Celebration } from "@/components/ui/Celebration";
 import { useConfirmPulse } from "@/components/ui/ConfirmPulse";
 import { BalanceDateNote } from "@/components/BalanceDateNote";
+import { EditScopeChoice } from "@/components/EditScopeChoice";
+import { amountChanged } from "@/lib/recurringEditScope";
 import { ChevronDownIcon, FlameIcon } from "@/components/ui/icons";
 
 const fieldClassName = FIELD_CLASS;
@@ -78,6 +80,11 @@ export type TransactionInitialValues = {
   payment_method: string | null;
   /** counts_toward_balance as loaded -- seeds the note for the stored account and date. */
   counts_toward_balance?: boolean | null;
+  /**
+   * The schedule this row was confirmed from, when it still exists. Changing
+   * the amount then asks "Just this one / This and future occurrences".
+   */
+  schedule?: { description: string; amountIsVariable: boolean } | null;
 };
 
 // Groups an already type-filtered category list by its category group for
@@ -460,6 +467,13 @@ export function AddTransactionForm({
                 />
               </FormField>
             </div>
+
+            {isEdit && initialValues?.schedule && Number(amount) > 0 && amountChanged(initialValues.amount, Number(amount)) ? (
+              <EditScopeChoice
+                scheduleName={initialValues.schedule.description}
+                amountIsVariable={initialValues.schedule.amountIsVariable}
+              />
+            ) : null}
 
             <FormField label="Description" htmlFor={fieldId("description")} required>
               <Input

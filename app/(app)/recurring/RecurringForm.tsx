@@ -11,10 +11,12 @@ import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { TransactionAccountOption } from "../transactions/AddTransactionForm";
 import { useToday } from "@/components/TodayProvider";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
-import { formatCurrency, formatDateWithWeekday } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateWithWeekday } from "@/lib/format";
 import { isSafeToSpendCommitment } from "@/lib/safeToSpend";
 import type { GoalOption } from "@/lib/db/goals";
 import { ordinal } from "@/lib/recurringSchedule";
+import { firstDateAfterSource } from "@/lib/recurringCadence";
+import { Amount } from "@/components/ui/Amount";
 import { FormField, useFieldId } from "@/components/ui/FormField";
 import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -146,11 +148,12 @@ export type EditableRecurring = {
   non_business_day_rule: string;
 };
 
-// Seeds a fresh (create-mode) schedule from something that already carries
-// this data -- currently just an existing transaction ("Make this
-// recurring"). Unlike EditableRecurring, deliberately carries no schedule
-// fields: a one-off transaction implies no cadence, so Repeats/Next due
-// date/Ends all start from this form's normal create-mode defaults instead.
+// Seeds a fresh (create-mode) schedule from an existing transaction ("Make
+// this recurring"). That transaction IS the schedule's first occurrence
+// (migration 60): the server links it, and the first date defaults to the
+// next occurrence after it -- following Repeats until the person sets a
+// date themselves. Repeats and Ends start from the create-mode defaults; a
+// one-off implies no cadence.
 export type RecurringPrefill = {
   description: string;
   amount: number;
@@ -158,6 +161,10 @@ export type RecurringPrefill = {
   categoryid: string | null;
   accountid: string;
   to_accountid: string | null;
+  /** The transaction it's made from -- either leg of a transfer. */
+  sourceTransactionId: string;
+  /** Its date: the first occurrence. */
+  sourceDate: string;
 };
 
 // Groups an already type-filtered category list by its category group for
@@ -372,15 +379,30 @@ export function RecurringForm({
   const [ends, setEnds] = useState<Ends>(
     recurring ? endsFromRecord(recurring.occurrence_limit, recurring.end_date) : "never",
   );
-  const initialIntervalCount = recurring
-    ? intervalFromFrequency(recurring.frequency, recurring.interval_count)
-    : 1;
+  const [intervalCount, setIntervalCount] = useState(
+    String(recurring ? intervalFromFrequency(recurring.frequency, recurring.interval_count) : 1),
+  );
 
   // Controlled (not defaultValue) because the live timing preview below
   // needs to react to every change -- see nextRunDate's own comment on the
   // date input further down.
   const today = useToday();
-  const [nextRunDate, setNextRunDate] = useState(recurring?.next_run_date ?? today);
+  const source = isEdit ? undefined : prefill;
+  // From a transaction: the occurrence after it, on the chosen cadence,
+  // until the person picks a date. Adjusted during render, not in an
+  // effect, so no frame shows a date for the previous cadence.
+  const sourceDefault = source
+    ? firstDateAfterSource(
+        source.sourceDate,
+        repeats,
+        repeats === "Weekly" ? Math.max(1, Math.trunc(Number(intervalCount)) || 1) : 1,
+      )
+    : null;
+  const [nextRunDate, setNextRunDate] = useState(recurring?.next_run_date ?? sourceDefault ?? today);
+  const [dateTouched, setDateTouched] = useState(false);
+  if (sourceDefault !== null && !dateTouched && nextRunDate !== sourceDefault) {
+    setNextRunDate(sourceDefault);
+  }
 
   const initialTiming = timingFromRecord(
     recurring?.business_day_offset ?? 0,
@@ -424,6 +446,7 @@ export function RecurringForm({
       className="flex flex-col gap-5 rounded-2xl border border-hairline bg-surface p-5"
     >
       {isEdit ? <input type="hidden" name="id" value={recurring.id} /> : null}
+      {source ? <input type="hidden" name="source_transaction_id" value={source.sourceTransactionId} /> : null}
 
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold text-ink">
@@ -683,7 +706,8 @@ export function RecurringForm({
                   min="1"
                   max="52"
                   required
-                  defaultValue={initialIntervalCount}
+                  value={intervalCount}
+                  onChange={(e) => setIntervalCount(e.target.value)}
                   className="w-20"
                 />
                 <span className="text-sm text-ink-secondary">week(s)</span>
@@ -702,10 +726,29 @@ export function RecurringForm({
             type="date"
             required
             value={nextRunDate}
-            onChange={(e) => setNextRunDate(e.target.value)}
+            onChange={(e) => {
+              setDateTouched(true);
+              setNextRunDate(e.target.value);
+            }}
             className={fieldClassName}
           />
         </FormField>
+
+        {/* Only while the type is the source's -- another type isn't
+            this transaction's schedule, and the server won't link it. */}
+        {source && kind === source.kind ? (
+          <p className="text-sm text-ink-secondary">
+            {/* A transfer is unsigned, as the transaction list shows it. */}
+            Your{" "}
+            {source.kind === "Transfer" ? (
+              <span className="font-medium text-ink">{formatCurrency(source.amount)}</span>
+            ) : (
+              <Amount amount={source.amount} type={source.kind} />
+            )}{" "}
+            on{" "}
+            {formatDate(source.sourceDate)} counts as the first one.
+          </p>
+        ) : null}
 
         {/* The point of this line: it turns an abstract rule into a
             concrete date a user can check against their own bank, live as
@@ -777,7 +820,15 @@ export function RecurringForm({
         </fieldset>
 
         {ends === "count" ? (
-          <FormField label="Occurrences" htmlFor={fieldId("occurrence_count")} hint="How many times this posts before it stops.">
+          <FormField
+            label="Occurrences"
+            htmlFor={fieldId("occurrence_count")}
+            hint={
+              source
+                ? `How many times this happens before it stops, counting the one on ${formatDate(source.sourceDate)}.`
+                : "How many times this posts before it stops."
+            }
+          >
             <Input
               id={fieldId("occurrence_count")}
               name="occurrence_count"

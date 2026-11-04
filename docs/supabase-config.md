@@ -9,7 +9,7 @@ item below re-applied.
 Production project: `ybdwqyihvbokowocvlgq`.
 
 Status: draft, 2026-10-08. Sections 1 and 2 were read from production
-(read-only catalog queries via `supabase db query --linked`). Section 3
+(read-only catalog queries via `supabase db query --remote=<ref>`). Section 3
 cannot be read from the database; values there are recorded from the
 dashboard with the date read, and every `TODO` is still unverified.
 

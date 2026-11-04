@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { BalanceDateNote } from "@/components/BalanceDateNote";
 import { PaymentNote } from "@/components/PaymentNote";
+import { formatDate } from "@/lib/format";
 
 // "Landed differently": the amount and the date, both pre-filled with the
 // prediction and both editable, whatever else changed -- the date matters
@@ -134,6 +135,13 @@ export function ConfirmOccurrenceSheet({
                 Cancel
               </button>
             </div>
+
+            {item.alreadyRecorded ? (
+              <p className="text-sm text-ink-secondary">
+                {item.name} already has a transaction on {formatDate(item.alreadyRecorded.date)}. If this is
+                another one, enter the day it landed.
+              </p>
+            ) : null}
 
             {item.approximate ? (
               <>

@@ -111,3 +111,34 @@ export function shouldReanchor(
     edited.interval_count !== stored.interval_count
   );
 }
+
+// "Make recurring": the transaction it's made from IS the schedule's first
+// occurrence, so the schedule's own first date is the one after it -- never
+// today, and never the source's date (that would ask to confirm a row
+// that's already in the ledger). Anchored on the source, so a 31st stays
+// the 31st after a short month.
+export function firstDateAfterSource(
+  sourceDateISO: string,
+  frequency: string,
+  intervalCount: number,
+): string {
+  return nextOccurrenceISO(sourceDateISO, frequency, intervalCount, sourceDateISO);
+}
+
+// start_date for a new schedule: the anchor nextOccurrenceISO reads its
+// day of month from. When the schedule continues from a source transaction
+// on the default cadence, the source is its first occurrence and anchors
+// it (Jan 31 -> Feb 28 -> Mar 31). Otherwise -- no source, or the person
+// moved the date -- the first date anchors it, as it always has.
+export function newScheduleStartDate(
+  next: CadenceFields,
+  sourceDateISO: string | null,
+): string {
+  if (
+    sourceDateISO !== null &&
+    firstDateAfterSource(sourceDateISO, next.frequency, next.interval_count) === next.next_run_date
+  ) {
+    return sourceDateISO;
+  }
+  return next.next_run_date;
+}

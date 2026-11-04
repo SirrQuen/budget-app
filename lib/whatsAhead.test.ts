@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { addDaysISO } from "./date";
 import { projectSafeToSpend, type ProjectionSchedule } from "./safeToSpendProjection";
-import { whatsAhead, type WhatsAheadItem } from "./whatsAhead";
+import { cautionLine, whatsAhead, type WhatsAheadItem } from "./whatsAhead";
 
 const TODAY = "2026-10-01";
 const day = (n: number) => addDaysISO(TODAY, n);
@@ -22,6 +22,9 @@ function once(kind: "Income" | "Expense", name: string, amount: number, n: numbe
     cardPayment: null,
     amount,
     amountLow: null,
+    amountHigh: null,
+    amountBasis: "fixed",
+    forecastBasis: null,
     isEstimate: false,
     nextRunDate: day(n),
     nextDueDate: day(n),
@@ -245,7 +248,7 @@ test("shortfall and tight phrasing", () => {
   const [item] = items(whatsAhead(tight));
   assert.equal(item.when, "3 October");
   assert.equal(item.headline, "Down to $140.00, below your $300.00 cushion");
-  assert.equal(item.cause, "Rent ($300.00) lands that day.");
+  assert.equal(item.cause, "Rent ($300.00, fixed) lands that day.");
   assert.equal(item.recovery, "Back above your cushion on 3 October, when Paycheck comes in.");
 });
 
@@ -255,7 +258,7 @@ test("a multi-day run names its range and the day of its low", () => {
 
   assert.equal(item.when, "3–6 October");
   assert.equal(item.headline, "Down to $200.00, below your $300.00 cushion on 3 October");
-  assert.equal(item.cause, "Rent ($800.00) lands in this stretch.");
+  assert.equal(item.cause, "Rent ($800.00, fixed) lands in this stretch.");
 });
 
 test("a run already under way today names today's balance as its start", () => {
@@ -283,4 +286,14 @@ test("no user-facing string uses alarm words or exclamation marks", () => {
         : [...view.items.flatMap((i) => [i.when, i.headline, i.cause, i.recovery]), view.more ?? ""];
     for (const s of strings) assert.ok(!banned.test(s), s);
   }
+});
+
+test("the caution line names bills, pay, or both -- and is absent when nothing was adjusted", () => {
+  assert.equal(cautionLine({ billsAtHigh: false, payAtLow: false }), null);
+  assert.equal(cautionLine({ billsAtHigh: true, payAtLow: false }), "Variable bills are counted at their recent high.");
+  assert.equal(cautionLine({ billsAtHigh: false, payAtLow: true }), "Variable pay is counted at its recent low.");
+  assert.equal(
+    cautionLine({ billsAtHigh: true, payAtLow: true }),
+    "Variable bills are counted at their recent high, and variable pay at its recent low.",
+  );
 });
