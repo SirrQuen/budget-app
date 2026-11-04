@@ -1037,6 +1037,7 @@ export type Database = {
           goal_name: string | null
           goalid: string | null
           monthly_contribution: number | null
+          remaining_to_target: number | null
           still_to_set_aside: number | null
           userid: string | null
         }
