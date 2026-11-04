@@ -164,7 +164,9 @@ service role run outside the hook, in UTC.
 - All database access goes through functions in `lib/` — pages and components
   never call Supabase directly.
 - Money is never a float. In the database it is exact `numeric` dollars
-  (`transactions.amount` is `numeric(12,2)`). Pure TypeScript calculations
+  (`transactions.amount` is `numeric(12,2)`; so are
+  `recurring_transactions.amount` and `next_amount`, since migration 61).
+  A new money column is `numeric(12,2)`, never bare `numeric`. Pure TypeScript calculations
   that must do arithmetic convert to integer cents internally and back to
   dollars only at the edges (see `lib/safeToSpendProjection.ts`).
 - Foreign key columns in this schema have no underscore: `userid`, `accountid`,

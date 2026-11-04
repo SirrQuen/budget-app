@@ -53,6 +53,10 @@
 --   2e Waitlist   operator-only table (migration 51): anon and
 --                 authenticated can't read or touch it; join_waitlist()
 --                 answers a duplicate exactly as it answers a new address
+--   2f Definer write functions
+--                 link_transaction_to_schedule() (migration 60): B can't
+--                 link A's transaction, link to A's schedule, or learn
+--                 either exists; A can link A's own (the control)
 --
 -- Every "must be 0" read carries a positive control: A must see the
 -- same row the table owner sees. Without it, a 0 from B proves nothing
@@ -1018,13 +1022,87 @@ begin
       ('public.enforce_category_type()',                         'anon',          false),
       ('public.enforce_category_type()',                         'authenticated', false),
       ('public.enforce_recurring_variability_scope()',           'anon',          false),
-      ('public.enforce_recurring_variability_scope()',           'authenticated', false)
+      ('public.enforce_recurring_variability_scope()',           'authenticated', false),
+      -- "Make recurring" links its source (migration 60). Signed-in only.
+      ('public.link_transaction_to_schedule(uuid,uuid)',         'anon',          false),
+      ('public.link_transaction_to_schedule(uuid,uuid)',         'authenticated', true)
     ) as t(fn, role, expected)
   loop
     v_actual := has_function_privilege(v_check.role, v_check.fn::regprocedure, 'execute');
     perform pg_temp.rec('2d function grants', v_check.fn, v_check.role || ' EXECUTE',
       v_check.expected::text, v_actual::text, v_actual = v_check.expected);
   end loop;
+end
+$$;
+
+
+
+-- ---------------------------------------------------------------------
+-- 2f -- Definer write functions: link_transaction_to_schedule()
+--
+-- SECURITY DEFINER, so RLS doesn't scope it -- its own auth.uid() checks
+-- do. B tries each way of reaching A's rows: A's transaction onto A's
+-- schedule, A's transaction onto B's, B's onto A's. Each must refuse with
+-- the same "not found" (P0002) a made-up id gets -- no oracle -- and
+-- leave both rows exactly as they were.
+--
+-- Its own rows, made here as the table owner: earlier sections move
+-- A_txn to another account and confirm A_recur onto today, so neither
+-- fixture is a clean source any more. The control (A links A's own)
+-- runs last and proves the refusals aren't a broken call.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  a uuid := pg_temp.fx('A');
+  b uuid := pg_temp.fx('B');
+  a_tx uuid := gen_random_uuid();
+  b_tx uuid := gen_random_uuid();
+  a_sched uuid := gen_random_uuid();
+  b_sched uuid := gen_random_uuid();
+  v_case record;
+  v_try record;
+  v_before_a text;
+  v_before_b text;
+  v_pass boolean;
+begin
+  insert into public.transactions (id, userid, accountid, categoryid, description, amount,
+                                   transaction_type, transaction_date)
+  values (a_tx, a, pg_temp.fx('A_acct'), pg_temp.fx('A_rent'), 'rls link source', 900, 'Expense', current_date - 10),
+         (b_tx, b, pg_temp.fx('B_acct'), pg_temp.fx('B_rent'), 'rls link source', 900, 'Expense', current_date - 10);
+  insert into public.recurring_transactions (id, userid, accountid, categoryid, description,
+                                             amount, frequency, next_run_date, start_date, next_due_date)
+  values (a_sched, a, pg_temp.fx('A_acct'), pg_temp.fx('A_rent'), 'rls link', 900, 'Monthly',
+          current_date + 20, current_date - 10, current_date + 20),
+         (b_sched, b, pg_temp.fx('B_acct'), pg_temp.fx('B_rent'), 'rls link', 900, 'Monthly',
+          current_date + 20, current_date - 10, current_date + 20);
+
+  v_before_a := pg_temp.row_hash('transactions', 'id', a_tx);
+  v_before_b := pg_temp.row_hash('transactions', 'id', b_tx);
+
+  for v_case in
+    select * from (values
+      ('B: A''s transaction onto A''s schedule', a_tx, a_sched),
+      ('B: A''s transaction onto B''s schedule', a_tx, b_sched),
+      ('B: B''s transaction onto A''s schedule', b_tx, a_sched),
+      ('B: made-up transaction (the oracle baseline)', gen_random_uuid(), b_sched)
+    ) as t(what, tx, sched)
+  loop
+    select * into v_try from pg_temp.try_as(b, format('select public.link_transaction_to_schedule(%L, %L)', v_case.tx, v_case.sched));
+    v_pass := v_try.state = 'P0002'
+      and pg_temp.row_hash('transactions', 'id', a_tx) is not distinct from v_before_a
+      and pg_temp.row_hash('transactions', 'id', b_tx) is not distinct from v_before_b;
+    perform pg_temp.rec('2f definer writes', 'link_transaction_to_schedule()', v_case.what,
+      'P0002; both rows intact', coalesce(v_try.state, 'no error') || coalesce(': ' || v_try.msg, ''), v_pass);
+  end loop;
+
+  -- Control: A links A's own -- the function works, so the refusals above mean something.
+  select * into v_try from pg_temp.try_as(a, format('select public.link_transaction_to_schedule(%L, %L)', a_tx, a_sched));
+  v_pass := v_try.state is null
+    and (select recurringid from public.transactions where id = a_tx) = a_sched;
+  perform pg_temp.rec('2f definer writes', 'link_transaction_to_schedule()',
+    'control: A links A''s own transaction to A''s schedule', 'linked',
+    coalesce(v_try.state || ': ' || v_try.msg, 'linked: ' || coalesce((select recurringid::text from public.transactions where id = a_tx), 'null')),
+    v_pass);
 end
 $$;
 
