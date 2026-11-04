@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { shouldReanchor } from "@/lib/recurringCadence";
+import { newScheduleStartDate, shouldReanchor } from "@/lib/recurringCadence";
 import {
   createRecurring,
   updateRecurring,
@@ -13,7 +13,9 @@ import {
   confirmOccurrence,
   skipOccurrence,
   confirmOccurrencesAsExpected,
+  linkSourceTransaction,
 } from "@/lib/db/recurring";
+import { getTransaction } from "@/lib/db/transactions";
 import { confirmationKey } from "@/lib/confirmationQueue";
 import { statementDayIsDueDay } from "@/lib/recurringSchedule";
 import { addNotYetKey } from "@/lib/confirmationLater";
@@ -278,7 +280,18 @@ export async function createRecurringAction(
     return parsed;
   }
 
-  const { error } = await createRecurring({
+  // "Make recurring": the row it was made from is the first occurrence.
+  // Its date is read here, never taken from the form.
+  const sourceId = String(formData.get("source_transaction_id") ?? "");
+  let sourceDate: string | null = null;
+  if (sourceId) {
+    const source = await getTransaction(sourceId);
+    if (source.error !== null) return { error: source.error };
+    if (source.data === null) return { error: "That transaction isn't there anymore." };
+    sourceDate = source.data.transaction_date;
+  }
+
+  const created = await createRecurring({
     description: parsed.description,
     amount: parsed.amount,
     categoryid: parsed.categoryid,
@@ -287,9 +300,11 @@ export async function createRecurringAction(
     frequency: parsed.frequency,
     interval_count: parsed.interval_count,
     next_run_date: parsed.next_run_date,
-    // Informational record of when the schedule began -- next_run_date is
-    // the only field the generator actually advances (see lib/db/recurring.ts).
-    start_date: parsed.next_run_date,
+    // The anchor nextOccurrenceISO reads its day of month from --
+    // next_run_date is the only field confirmation advances. A schedule
+    // continuing from its source on the default cadence is anchored on the
+    // source (see newScheduleStartDate).
+    start_date: newScheduleStartDate(parsed, sourceDate),
     occurrence_limit: parsed.occurrence_limit,
     end_date: parsed.end_date,
     amount_is_variable: parsed.amount_is_variable,
@@ -300,8 +315,19 @@ export async function createRecurringAction(
     non_business_day_rule: parsed.non_business_day_rule,
   });
 
-  if (error) {
-    return { error };
+  if (created.error !== null) {
+    return { error: created.error };
+  }
+
+  if (sourceId) {
+    const link = await linkSourceTransaction(created.data.id, sourceId);
+    if (link.error !== null) {
+      // Unlinked, the schedule would ask to confirm the source again -- the
+      // duplicate this exists to prevent. Take it back rather than keep it.
+      await deleteRecurring(created.data.id);
+      return { error: link.error };
+    }
+    revalidatePath("/transactions");
   }
 
   revalidatePath("/recurring");

@@ -803,6 +803,54 @@ in the committed `.claude/settings.json` would (a deny beats an allow and
 isn't a per-machine file). Until then the rule is enforced by a prompt a
 person has to read.
 
+## "Make recurring" wrote the source transaction twice (2026-11-03)
+
+**A tester hit it.** "Make recurring" created a schedule that knew nothing
+about the row it was made from. People set the schedule's first date to
+the source's own date (the form defaulted to today, and "this bill is on
+the 6th" is the natural answer), so the queue asked for an occurrence
+already in the ledger, and "It landed" wrote it again.
+`recurring_tx_no_double_post` couldn't see the pair: the source had no
+recurringid. The source's amount was also lost as estimate history.
+
+**Fix (`fix/make-recurring-source-is-first`, migration 60).** The source
+IS the first occurrence. Saving links it (`link_transaction_to_schedule()`,
+both legs of a transfer, SECURITY DEFINER scoped to `auth.uid()`); the
+first date defaults to the occurrence after it; the source anchors the
+day of month. If linking fails, the new schedule is deleted rather than
+left unlinked. The net: `confirmOccurrence()` refuses, before writing, a
+date that already has a row linked to the schedule, and a one-tap confirm
+when a linked row is in the occurrence's window; the queue item says so
+first. Linked rows only. There is no same-amount detector.
+DB checks: `docs/link-source-transaction-test.sql`.
+
+**Production, read-only, 2026-11-03.** I looked for schedules whose
+`start_date` equals the date of an unlinked transaction with the same
+amount on the same account (the Expense leg, for a transfer). 12 pairs,
+two users:
+
+- **One user, 11 pairs, all created 2026-10-28**, each schedule 16 s to
+  67 s after its source: 5 Expense, 3 Income, 3 Transfer. The sources are
+  dated 2026-10-30 to 2026-11-23, mostly **in the future**: upcoming
+  bills entered as transactions and then made recurring on the same date.
+  None has been confirmed yet, so no duplicate rows exist. But one
+  (2026-10-30, Expense) is already open in their queue, and the rest open
+  as their dates arrive. They may already be double-counted in the
+  forecast: balances have no upper date bound (only the anchor rule), so
+  a future-dated row is in the balance today while its schedule is also a
+  commitment.
+- **One user, 1 pair: the reported duplicate.** A transfer created
+  2026-11-01, confirmed once, and that confirmation sits on the same date
+  as the unlinked source.
+
+Not changed. Tester data is a conversation with them. The fix stops new
+pairs; it doesn't link these 12 (they were made before it).
+
+**Not caught, by design.** A person who logged a bill twice by hand and
+makes the *earlier* row recurring gets a first date that may collide with
+the later, unlinked row. Only a fuzzy match would see that, and that's
+ruled out.
+
 ## Phase 8 policy item: auth audit log retained after deletion (2026-10-06)
 
 **Decision: deliberate retention, not an oversight.** It must match the

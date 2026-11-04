@@ -1388,6 +1388,10 @@ export type Database = {
         Args: { p_from_type: string; p_to_type: string }
         Returns: boolean
       }
+      link_transaction_to_schedule: {
+        Args: { p_recurring_id: string; p_transaction_id: string }
+        Returns: boolean
+      }
       record_login: {
         Args: never
         Returns: {

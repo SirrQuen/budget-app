@@ -524,6 +524,8 @@ export function TransactionsList({
                               categoryid: null,
                               accountid: row.fromAccountId,
                               to_accountid: row.toAccountId,
+                              sourceTransactionId: row.id,
+                              sourceDate: row.transaction_date,
                             }}
                             incomeCategories={incomeCategories}
                             expenseCategories={expenseCategories}
@@ -593,6 +595,8 @@ export function TransactionsList({
                             categoryid: tx.categoryid,
                             accountid: tx.accountid,
                             to_accountid: null,
+                            sourceTransactionId: tx.id,
+                            sourceDate: tx.transaction_date,
                           }}
                           incomeCategories={incomeCategories}
                           expenseCategories={expenseCategories}

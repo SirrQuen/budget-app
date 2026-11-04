@@ -24,9 +24,9 @@
 // confirming or skipping advances it one cycle. When more than one cycle
 // is open, the item says how many.
 
-import { addDaysISO } from "@/lib/date";
+import { addDaysISO, daysBetweenInclusive } from "@/lib/date";
 import type { AmountBasis } from "@/lib/amountBasis";
-import { confirmationOpensOn } from "@/lib/recurringSchedule";
+import { confirmationOpensOn, paydayWindowEnd } from "@/lib/recurringSchedule";
 import { paymentPayee, type PaymentPayee } from "@/lib/accountOptions";
 import { expandOccurrences, type ProjectionSchedule } from "@/lib/safeToSpendProjection";
 
@@ -51,6 +51,8 @@ export type ConfirmationItem = {
   dueDate: string;
   /** date_tolerance_days > 0: the date is an estimate, so the UI leads with it. */
   approximate: boolean;
+  /** The schedule's date_tolerance_days -- the window alreadyRecorded checks. */
+  dateToleranceDays: number;
   /** Open cycles for this schedule, this one included. 1 in the common case. */
   outstanding: number;
 };
@@ -99,12 +101,48 @@ export function buildConfirmationQueue(
       basis: s.amountBasis,
       dueDate,
       approximate: tolerance > 0,
+      dateToleranceDays: tolerance,
       outstanding: open.length,
     });
   }
 
   return items.sort((a, b) =>
     a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : a.name.localeCompare(b.name),
+  );
+}
+
+/** A transaction already carrying the schedule's recurringid. */
+export type RecordedOccurrence = { date: string; amount: number };
+
+/**
+ * The transaction, if any, that already records this occurrence: one
+ * carrying THIS schedule's recurringid, dated inside the occurrence's
+ * window (due date give or take date_tolerance_days; the day itself for a
+ * fixed date). Confirming then would write it twice, so the queue says so
+ * before anything is written, and a one-tap confirm is refused.
+ *
+ * Deliberately narrow. It never looks at unlinked rows, amounts or
+ * descriptions: two $5 coffees on a Tuesday are two coffees, and a warning
+ * that fires on them gets dismissed by reflex. The case it exists for is
+ * "Make recurring", whose source row is linked as the first occurrence
+ * (migration 60) -- if the schedule's first date is moved back onto it,
+ * this catches it.
+ */
+export function alreadyRecorded(
+  dueDate: string,
+  dateToleranceDays: number,
+  linked: readonly RecordedOccurrence[],
+): RecordedOccurrence | null {
+  const from = confirmationOpensOn(dueDate, dateToleranceDays);
+  const to = paydayWindowEnd(dueDate, dateToleranceDays);
+  const hits = linked.filter((t) => t.date >= from && t.date <= to);
+  if (hits.length === 0) return null;
+  // The closest to the due date, earliest on a tie.
+  const distance = (d: string) => Math.abs(daysBetweenInclusive(dueDate, d) - 1);
+  return hits.reduce((best, t) =>
+    distance(t.date) < distance(best.date) || (distance(t.date) === distance(best.date) && t.date < best.date)
+      ? t
+      : best,
   );
 }
 
