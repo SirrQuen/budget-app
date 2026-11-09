@@ -138,7 +138,7 @@ export function AppShell({
               so its desktop sticky form lines up with the page below. */}
           <div className="mx-auto w-full max-w-6xl">
             <OptimisticTransactionsProvider>
-              {/* Not on Recurring or Goals (lib/quickAdd/visibility.ts). */}
+              {/* Only on the allowlisted screens (lib/quickAdd/visibility.ts). */}
               {quickAdd && showsQuickAdd(pathname) ? (
                 <QuickAddBar
                   accounts={quickAdd.accounts}
