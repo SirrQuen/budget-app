@@ -23,6 +23,21 @@
 // One item per schedule: a schedule has one cursor (next_run_date), and
 // confirming or skipping advances it one cycle. When more than one cycle
 // is open, the item says how many.
+//
+// Two states, one item (docs/Budgets-Reminders-and-Pending.md, item 1):
+//
+//   coming-up   from COMING_UP_DAYS before the due date until the confirm
+//               window opens -- "Rent · $1,850 · Friday". Nothing to
+//               answer yet; dismissible until the window opens.
+//   to-confirm  from the confirm window's opening on -- "Did Rent come
+//               out?" The four answers.
+//
+// The item seen Monday is the item confirmed Friday: same schedule, same
+// occurrence, same key. When the confirm window opens early (date
+// tolerance), IT is the reminder: coming-up runs only until it opens, so a
+// tolerance of COMING_UP_DAYS or more leaves no coming-up span at all.
+// Correct, not a gap. Coming-up is never counted, never confirmed in
+// bulk, never an input to anything.
 
 import { addDaysISO, daysBetweenInclusive } from "@/lib/date";
 import type { AmountBasis } from "@/lib/amountBasis";
@@ -30,9 +45,16 @@ import { confirmationOpensOn, paydayWindowEnd } from "@/lib/recurringSchedule";
 import { paymentPayee, type PaymentPayee } from "@/lib/accountOptions";
 import { expandOccurrences, type ProjectionSchedule } from "@/lib/safeToSpendProjection";
 
+/** How far ahead an occurrence shows as coming up. */
+export const COMING_UP_DAYS = 5;
+
+export type QueueState = "coming-up" | "to-confirm";
+
 export type ConfirmationItem = {
   /** confirmationKey(recurringId, dueDate) -- one occurrence of one schedule. */
   key: string;
+  /** Coming up (a reminder, nothing to answer) or to confirm (the four answers). */
+  state: QueueState;
   recurringId: string;
   name: string;
   kind: ProjectionSchedule["kind"];
@@ -66,30 +88,49 @@ export function confirmationKey(recurringId: string, dueDate: string): string {
  *
  * `later` holds the keys answered "hasn't landed yet" today -- hidden until
  * tomorrow, nothing written, and the projection never reads it.
+ * `dismissed` holds coming-up keys the person said "got it" to -- hidden
+ * until the confirm window opens, when the same item asks as usual.
  */
 export function buildConfirmationQueue(
   schedules: ProjectionSchedule[],
   today: string,
   holidays: ReadonlySet<string>,
   later: ReadonlySet<string> = new Set(),
+  dismissed: ReadonlySet<string> = new Set(),
 ): ConfirmationItem[] {
   const items: ConfirmationItem[] = [];
 
   for (const s of schedules) {
     const tolerance = s.dateToleranceDays;
-    // An occurrence is open once its early edge is today or before, i.e.
-    // its due date is no later than today + tolerance.
-    const open = expandOccurrences(s, addDaysISO(today, tolerance), holidays).filter(
-      (o) => confirmationOpensOn(o.due, tolerance) <= today,
+    // Far enough ahead to see both an occurrence that's open (its due date
+    // is no later than today + tolerance) and one that's coming up (due
+    // within COMING_UP_DAYS).
+    const occurrences = expandOccurrences(
+      s,
+      addDaysISO(today, Math.max(tolerance, COMING_UP_DAYS)),
+      holidays,
     );
-    if (open.length === 0) continue;
+    const open = occurrences.filter((o) => confirmationOpensOn(o.due, tolerance) <= today);
 
-    const dueDate = open[0].due;
+    let state: QueueState;
+    let dueDate: string;
+    if (open.length > 0) {
+      state = "to-confirm";
+      dueDate = open[0].due;
+    } else {
+      const next = occurrences[0];
+      if (!next || !isComingUp(next.due, tolerance, today)) continue;
+      state = "coming-up";
+      dueDate = next.due;
+    }
+
     const key = confirmationKey(s.recurringId, dueDate);
-    if (later.has(key)) continue;
+    if (state === "to-confirm" && later.has(key)) continue;
+    if (state === "coming-up" && dismissed.has(key)) continue;
 
     items.push({
       key,
+      state,
       recurringId: s.recurringId,
       name: s.name,
       kind: s.kind,
@@ -102,13 +143,46 @@ export function buildConfirmationQueue(
       dueDate,
       approximate: tolerance > 0,
       dateToleranceDays: tolerance,
-      outstanding: open.length,
+      outstanding: Math.max(open.length, 1),
     });
   }
 
+  // To confirm first, then coming up; each earliest first.
   return items.sort((a, b) =>
-    a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : a.name.localeCompare(b.name),
+    a.state !== b.state
+      ? a.state === "to-confirm"
+        ? -1
+        : 1
+      : a.dueDate < b.dueDate
+        ? -1
+        : a.dueDate > b.dueDate
+          ? 1
+          : a.name.localeCompare(b.name),
   );
+}
+
+/**
+ * Coming up: from COMING_UP_DAYS before the due date until the confirm
+ * window opens (confirmationOpensOn). Empty when the tolerance is
+ * COMING_UP_DAYS or more -- the early-opening window is the reminder.
+ */
+export function isComingUp(dueDate: string, toleranceDays: number, today: string): boolean {
+  return addDaysISO(dueDate, -COMING_UP_DAYS) <= today && today < confirmationOpensOn(dueDate, toleranceDays);
+}
+
+/** The items that are to confirm -- the ones counted and confirmed in bulk. */
+export function toConfirmItems<T extends { state: QueueState }>(items: T[]): T[] {
+  return items.filter((i) => i.state === "to-confirm");
+}
+
+/**
+ * The to-confirm question. "Did Rent come out?" -- plain, never "overdue",
+ * never "due soon".
+ */
+export function confirmQuestion(item: Pick<ConfirmationItem, "name" | "kind">): string {
+  if (item.kind === "Income") return `Did ${item.name} land?`;
+  if (item.kind === "Transfer") return `Did ${item.name} go through?`;
+  return `Did ${item.name} come out?`;
 }
 
 /** A transaction already carrying the schedule's recurringid. */

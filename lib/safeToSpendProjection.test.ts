@@ -685,7 +685,9 @@ test("a Savings -> Checking transfer past its late edge drops out of the maths b
     [["From savings", day(-5)]],
   );
   assert.deepEqual(
-    buildConfirmationQueue([paycheck, rent, fromSavings], TODAY, NO_HOLIDAYS).map((q) => q.name),
+    buildConfirmationQueue([paycheck, rent, fromSavings], TODAY, NO_HOLIDAYS)
+      .filter((q) => q.state === "to-confirm")
+      .map((q) => q.name),
     ["From savings"],
   );
 });
@@ -763,7 +765,9 @@ test("an Investment -> Checking transfer past its late edge drops out of the mat
     [["From brokerage", day(-5)]],
   );
   assert.deepEqual(
-    buildConfirmationQueue([paycheck, rent, fromBrokerage], TODAY, NO_HOLIDAYS).map((q) => q.name),
+    buildConfirmationQueue([paycheck, rent, fromBrokerage], TODAY, NO_HOLIDAYS)
+      .filter((q) => q.state === "to-confirm")
+      .map((q) => q.name),
     ["From brokerage"],
   );
 });

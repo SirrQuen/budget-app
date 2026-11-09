@@ -774,6 +774,14 @@ When something asks the user, and what each ask can write.
   the early edge for an approximate one (it can land up to that many days
   early). It stays until answered; there is no closing date. Writes a
   transaction only on "landed".
+- **Coming up** -- the same queue item, a second state, never a second
+  list. From `COMING_UP_DAYS` (5) before the due date until the confirm
+  window opens: "Rent · $1,850 · Friday" -- the weekday, never "in 5
+  days", "due soon" or "overdue"; neutral ink and a calendar icon, no
+  colour, no count badge. When the window opens early (tolerance >= 5)
+  the window IS the reminder and coming-up never shows. "Got it" hides
+  it until the window opens (a cookie, `lib/comingUpDismissed.ts`); it
+  never touches the confirmation. Never counted, never in Confirm all.
 - **Statement amount** -- variable card payments only. From the
   statement date (`statementDateForCycle`) through the payment's adjusted
   due date (`isAwaitingStatementAmount`). Revises the expectation

@@ -19,6 +19,7 @@ import { getTransaction } from "@/lib/db/transactions";
 import { confirmationKey } from "@/lib/confirmationQueue";
 import { statementDayIsDueDay } from "@/lib/recurringSchedule";
 import { addNotYetKey } from "@/lib/confirmationLater";
+import { addDismissedComingUpKey } from "@/lib/comingUpDismissed";
 import { getToday } from "@/lib/db/settings";
 
 export type ActionState = { error?: string } | undefined;
@@ -533,6 +534,20 @@ export async function notYetAction(id: string, dueDate: string): Promise<ActionS
     return { error: "We couldn't tell which one that was." };
   }
   await addNotYetKey(confirmationKey(id, dueDate), await getToday());
+  revalidatePath("/recurring");
+  revalidatePath("/dashboard");
+}
+
+/**
+ * "Got it" on a coming-up reminder -- writes nothing. Hides the coming-up
+ * state until the confirm window opens; the confirmation itself is
+ * untouched and asks as usual on the day.
+ */
+export async function dismissComingUpAction(id: string, dueDate: string): Promise<ActionState> {
+  if (!id || !ISO_DATE.test(dueDate)) {
+    return { error: "We couldn't tell which one that was." };
+  }
+  await addDismissedComingUpKey(confirmationKey(id, dueDate), await getToday());
   revalidatePath("/recurring");
   revalidatePath("/dashboard");
 }
