@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { useActionForm } from "@/components/useActionForm";
 import {
   createBudgetAction,
-  updateBudgetAction,
+  setBudgetAmountAction,
   type ActionState,
 } from "@/lib/actions/budgets";
 import type { CategoryWithGroup } from "@/lib/db/categories";
@@ -12,14 +12,20 @@ import { FormField, useFieldId } from "@/components/ui/FormField";
 import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { formatMonthName } from "@/lib/budgetMonth";
 
 const fieldClassName = FIELD_CLASS;
 
+// An existing budget: its category and month identify it and are never
+// edited -- only the amount. carriedFrom is set when this month has no row
+// of its own yet; saving then writes this month's row, for this category
+// only (setBudgetAmountAction).
 export type EditableBudget = {
-  id: string;
   categoryid: string;
+  category_name: string;
   budget_month: string;
   budget_amount: number;
+  carriedFrom: string | null;
 };
 
 // Groups an already type-filtered category list by its category group for
@@ -57,7 +63,7 @@ export function BudgetForm({
 }) {
   const isEdit = budget !== undefined;
   const [state, action, pending, submit] = useActionForm<ActionState>(
-    isEdit ? updateBudgetAction : createBudgetAction,
+    isEdit ? setBudgetAmountAction : createBudgetAction,
     undefined,
   );
   // The create form and any open edit row share a page -- see useFieldId.
@@ -79,11 +85,16 @@ export function BudgetForm({
       onSubmit={submit}
       className="flex flex-col gap-5 rounded-2xl border border-hairline bg-surface p-5"
     >
-      {isEdit ? <input type="hidden" name="id" value={budget.id} /> : null}
+      {isEdit ? (
+        <>
+          <input type="hidden" name="categoryid" value={budget.categoryid} />
+          <input type="hidden" name="budget_month" value={budget.budget_month} />
+        </>
+      ) : null}
 
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold text-ink">
-          {isEdit ? "Edit budget" : "New budget"}
+          {isEdit ? `${budget.category_name} budget` : "New budget"}
         </h2>
         <button
           type="button"
@@ -94,40 +105,53 @@ export function BudgetForm({
         </button>
       </div>
 
-      <FormField label="Category" htmlFor={fieldId("categoryid")} required>
-        <select
-          id={fieldId("categoryid")}
-          name="categoryid"
-          required
-          defaultValue={budget?.categoryid ?? ""}
-          className={fieldClassName}
-        >
-          <option value="" disabled>
-            Select a category
-          </option>
-          {categoryGroups.map((group) => (
-            <optgroup key={group.name} label={group.name}>
-              {group.categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.category_name}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </FormField>
+      {/* A new budget picks its category and month. An existing one keeps
+          them -- they're what identifies it -- and changes its amount. */}
+      {isEdit ? (
+        budget.carriedFrom ? (
+          <p className="text-sm text-ink-secondary">
+            Carried from {formatMonthName(budget.carriedFrom)}. Saving sets {formatMonthName(budget.budget_month)}
+            &apos;s amount, and later months carry it from here.
+          </p>
+        ) : null
+      ) : (
+        <FormField label="Category" htmlFor={fieldId("categoryid")} required>
+          <select
+            id={fieldId("categoryid")}
+            name="categoryid"
+            required
+            defaultValue=""
+            className={fieldClassName}
+          >
+            <option value="" disabled>
+              Select a category
+            </option>
+            {categoryGroups.map((group) => (
+              <optgroup key={group.name} label={group.name}>
+                {group.categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.category_name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </FormField>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="Month" htmlFor={fieldId("budget_month")} required>
-          <input
-            id={fieldId("budget_month")}
-            name="budget_month"
-            type="month"
-            required
-            defaultValue={(budget?.budget_month ?? month).slice(0, 7)}
-            className={fieldClassName}
-          />
-        </FormField>
+        {isEdit ? null : (
+          <FormField label="Month" htmlFor={fieldId("budget_month")} required>
+            <input
+              id={fieldId("budget_month")}
+              name="budget_month"
+              type="month"
+              required
+              defaultValue={month.slice(0, 7)}
+              className={fieldClassName}
+            />
+          </FormField>
+        )}
 
         <FormField label="Budgeted amount" htmlFor={fieldId("budget_amount")} required>
           <Input
@@ -135,7 +159,7 @@ export function BudgetForm({
             name="budget_amount"
             type="number"
             inputMode="decimal"
-            min="0.01"
+            min="0"
             step="0.01"
             placeholder="0.00"
             required

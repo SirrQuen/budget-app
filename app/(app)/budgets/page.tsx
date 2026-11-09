@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { monthStartISO, parseLocalDate } from "@/lib/date";
 import { getToday } from "@/lib/db/settings";
-import { getBudgetProgress } from "@/lib/db/budgets";
+import { getBudgetProgress, getBudgetsForMonth } from "@/lib/db/budgets";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { getChronicOverBudgetInsight } from "@/lib/budgetInsights";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -37,7 +37,9 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
       : monthStartISO(await getToday());
 
   const [progressResult, historyResult, categoriesResult] = await Promise.all([
-    getBudgetProgress({ budget_month: month }),
+    // This month's budgets, carried ones included -- derived in SQL, so
+    // opening the page writes nothing (budget_progress_for_month).
+    getBudgetsForMonth(month),
     // Unfiltered: every month, every category, for the "runs over most
     // months" check below -- one query instead of one per budget row.
     getBudgetProgress({}),
@@ -63,10 +65,11 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
     );
   }
 
-  // v_budget_vs_actual also reports categories with spend but no budget
-  // (status "Unbudgeted", budget_id null) -- this page only manages actual
-  // budgets, so those rows are filtered out.
-  const budgets = progressResult.data.filter((row) => row.budget_id !== null);
+  const budgets = progressResult.data;
+  // "Add budget" offers only categories with no budget this month, own or
+  // carried -- one that has one is changed from its row instead.
+  const budgeted = new Set(budgets.map((b) => b.category_id));
+  const unbudgetedCategories = categoriesResult.data.filter((c) => !budgeted.has(c.id));
 
   const historyByCategory = new Map<string, typeof historyResult.data>();
   for (const row of historyResult.data) {
@@ -102,7 +105,7 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
         </Link>
       </div>
 
-      <CreateBudgetForm categories={categoriesResult.data} month={month} />
+      <CreateBudgetForm categories={unbudgetedCategories} month={month} />
 
       {budgets.length === 0 ? (
         <EmptyState
@@ -118,7 +121,7 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
               : null;
             return (
               <BudgetRow
-                key={budget.budget_id}
+                key={budget.category_id}
                 budget={budget}
                 categories={categoriesResult.data}
                 insight={insight}

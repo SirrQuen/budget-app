@@ -632,6 +632,15 @@ recorded in docs/supabase-config.md.
   recurring estimate skips true rows -- an estimate is never built from an
   estimate -- so someone who only ever taps keeps the schedule's own
   amount. The transaction list marks them "Approximate".
+- **A budget amount is standing, not monthly.** Each category shows its
+  own row for a month, else its most recent earlier row ("carried from
+  October"), per category -- derived by `budget_progress_for_month()`
+  (migration 63), never written. No rollover job, no rows created by
+  opening a page. Editing an amount writes ONE row, that category and
+  month (`setBudgetForMonth`, an upsert on
+  `budgets_one_per_category_month`); the rest keep carrying. $0 is a
+  budget and carries. Archived categories don't carry. An edit never
+  changes a budget's category or month.
 - "First login" is decided when the session starts (`lib/auth/firstSession.ts`),
   never from `lastlogin`, which `record_login()` stamps on every request.
 - Tier is profiles.subscription_plan / subscription_status, via getPlan().

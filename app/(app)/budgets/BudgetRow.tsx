@@ -9,7 +9,8 @@ import { Meter } from "@/components/ui/Meter";
 import { Celebration } from "@/components/ui/Celebration";
 import { TrashIcon } from "@/components/ui/icons";
 import { formatCurrency } from "@/lib/format";
-import type { BudgetProgressRow } from "@/lib/db/budgets";
+import type { MonthBudgetRow } from "@/lib/db/budgets";
+import { carriedFromLabel, formatMonthName } from "@/lib/budgetMonth";
 import type { ChronicOverBudget } from "@/lib/budgetInsights";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import { callAction } from "@/components/useActionForm";
@@ -27,10 +28,10 @@ export function BudgetRow({
   categories,
   insight,
 }: {
-  // Callers only ever pass rows with budget_id set (see the filter in
-  // page.tsx) -- this is still the view's row type since the view itself
-  // leaves every column nullable.
-  budget: BudgetProgressRow;
+  // One category's budget for the viewed month: its own row (budget_id
+  // set), or carried from an earlier month (carried_from set, budget_id
+  // null -- no row exists for this month until the amount is edited).
+  budget: MonthBudgetRow;
   categories: CategoryWithGroup[];
   /** Non-null when this category has run over budget in most of the last
    * few months -- see getChronicOverBudgetInsight. */
@@ -97,17 +98,18 @@ export function BudgetRow({
 
   if (editing) {
     const editable: EditableBudget = {
-      id: budget.budget_id!,
-      categoryid: budget.category_id!,
-      budget_month: budget.budget_month!,
+      categoryid: budget.category_id,
+      category_name: budget.category_name,
+      budget_month: budget.budget_month,
       budget_amount: adjustAmount ?? budget.budget_amount ?? 0,
+      carriedFrom: budget.carried_from,
     };
     return (
       <li className="p-4">
         <BudgetForm
           budget={editable}
           categories={categories}
-          month={budget.budget_month!}
+          month={budget.budget_month}
           onSuccess={closeForm}
           onCancel={closeForm}
         />
@@ -129,7 +131,16 @@ export function BudgetRow({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <div className="flex min-w-0 items-center gap-3 sm:flex-1">
           <CategoryIcon icon={budget.category_icon} className="h-4 w-4 shrink-0 text-ink-secondary" />
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{budget.category_name}</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">
+            {budget.category_name}
+            {/* Says where an untouched amount came from, so it doesn't read
+                as something set for this month and forgotten. */}
+            {budget.carried_from ? (
+              <span className="ml-2 text-xs font-normal text-ink-muted">
+                {carriedFromLabel(budget.carried_from, budget.budget_month)}
+              </span>
+            ) : null}
+          </span>
           <span className="shrink-0 text-base font-semibold tabular-nums text-ink">{Math.round(pctUsed)}%</span>
         </div>
         <div className="-mx-2 flex shrink-0 items-center gap-1 sm:mx-0 sm:gap-3">
@@ -141,6 +152,7 @@ export function BudgetRow({
           >
             Edit
           </button>
+          {budget.budget_id === null ? null : (
           <button
             type="button"
             onClick={() => setConfirmingDelete(true)}
@@ -148,6 +160,7 @@ export function BudgetRow({
           >
             Delete
           </button>
+          )}
         </div>
       </div>
 
@@ -192,7 +205,7 @@ export function BudgetRow({
       <ConfirmDialog
         open={confirmingDelete}
         title={`Delete budget for "${budget.category_name}"?`}
-        description="This removes the monthly budget for this category. Past transactions aren't affected."
+        description={`This removes ${formatMonthName(budget.budget_month)}'s amount for this category. If an earlier month has one, that carries in again. Past transactions aren't affected.`}
         confirmLabel={isDeleting ? "Deleting…" : "Delete"}
         confirmIcon={<TrashIcon className="h-4 w-4" aria-hidden="true" />}
         cancelLabel="Cancel"

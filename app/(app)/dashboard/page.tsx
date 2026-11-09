@@ -14,7 +14,7 @@ import {
   getUpcomingRecurring,
   getConfirmationQueue,
 } from "@/lib/db/dashboard";
-import { getBudgetProgress } from "@/lib/db/budgets";
+import { getBudgetsForMonth } from "@/lib/db/budgets";
 import { listAccountBalances } from "@/lib/db/accounts";
 import { getReturnSummaryFacts } from "@/lib/actions/activity";
 import { isAwaitingStatementAmount } from "@/lib/recurringSchedule";
@@ -87,7 +87,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     getDashboardOnboarding(),
     getSafeToSpend(),
     getNetWorthStat(),
-    getBudgetProgress({ budget_month: currentMonth }),
+    getBudgetsForMonth(currentMonth),
     getGoalProgress(),
     getUpcomingRecurring(),
     getConfirmationQueue(),
@@ -149,10 +149,10 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       ? movementResult.data
       : null;
 
-  // v_budget_vs_actual is ordered status_rank desc (problems first); a
-  // budget_id of null is a spent-but-unbudgeted category, not a budget.
+  // budget_progress_for_month is ordered status_rank desc (problems first),
+  // and includes budgets carried from an earlier month (migration 63).
   const topBudgets =
-    budgetResult.data?.filter((b) => b.budget_id !== null).slice(0, 3) ?? [];
+    budgetResult.data?.slice(0, 3) ?? [];
   const activeGoals =
     goalResult.data?.filter((g) => g.status === "Active").slice(0, 3) ?? [];
   // Built from the projection, not from v_upcoming_recurring's one-row-per-
