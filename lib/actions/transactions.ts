@@ -14,7 +14,7 @@ import {
   bulkDeleteTransactions,
   getTransactionCount,
   suggestCategoryForMerchant,
-  countsTowardBalancePreview,
+  balanceAnchorPreview,
   type CreateTransactionInput,
   type CreateTransferInput,
   type TransactionType,
@@ -22,6 +22,7 @@ import {
 } from "@/lib/db/transactions";
 import { setScheduleAmount } from "@/lib/db/recurring";
 import { amountChanged, parseEditScope } from "@/lib/recurringEditScope";
+import { NO_ANCHOR_ANSWER, parseAnchorAnswer, type AnchorPreview } from "@/lib/anchorAnswer";
 
 // "kind" is a plain string, not the icon itself -- Server Action results
 // cross the server/client boundary as serialized data, so the client picks
@@ -97,6 +98,9 @@ function parseTransactionFields(formData: FormData): CreateTransactionInput | { 
     merchant: merchant || null,
     notes: notes || null,
     payment_method: payment_method || null,
+    // The pre-anchor answer, when the form asked (migration 62). Whether
+    // one was needed is the database's call -- it refuses a missing one.
+    ...parseAnchorAnswer(formData, accountid),
   };
 }
 
@@ -139,6 +143,8 @@ function parseTransferFields(formData: FormData): CreateTransferInput | { error:
     date: transaction_date,
     description,
     notes: notes || null,
+    fromAnchorAnswer: parseAnchorAnswer(formData, fromAccountId),
+    toAnchorAnswer: parseAnchorAnswer(formData, toAccountId),
   };
 }
 
@@ -164,19 +170,19 @@ export async function suggestCategoryAction(
   return result.data;
 }
 
-// Also a lookup, not a mutation: the transaction form's "won't change
-// that balance" note asks this whenever the account or date changes. null
-// when it can't be answered -- the note is advisory, so it stays hidden
-// rather than guessing.
-export async function countsTowardBalanceAction(
+// Also a lookup, not a mutation: the pre-anchor question (migration 62)
+// asks this whenever the account or date changes. null when it can't be
+// answered -- the form then shows no question, and if one was needed the
+// database refuses the save and says so.
+export async function balanceAnchorAction(
   accountId: string,
   transactionDate: string,
   transactionId: string | null,
-): Promise<boolean | null> {
+): Promise<AnchorPreview | null> {
   if (!accountId || !/^\d{4}-\d{2}-\d{2}$/.test(transactionDate)) {
     return null;
   }
-  const result = await countsTowardBalancePreview(accountId, transactionDate, transactionId);
+  const result = await balanceAnchorPreview(accountId, transactionDate, transactionId);
   return result.data;
 }
 
@@ -335,6 +341,8 @@ export async function updateTransferAction(
     description: parsed.description,
     notes: parsed.notes ?? null,
     updateSchedule,
+    fromAnchorAnswer: parsed.fromAnchorAnswer ?? NO_ANCHOR_ANSWER,
+    toAnchorAnswer: parsed.toAnchorAnswer ?? NO_ANCHOR_ANSWER,
   });
   if (error) {
     return { error };

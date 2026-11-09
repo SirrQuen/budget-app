@@ -7,9 +7,9 @@ import {
   confirmAsExpectedAction,
   notYetAction,
   skipOccurrenceAction,
-  type ActionState,
+  type OneTapState,
 } from "@/lib/actions/recurring";
-import { confirmationCountLabel } from "@/lib/confirmationQueue";
+import { confirmationCountLabel, needsAnswerLabel } from "@/lib/confirmationQueue";
 import { callAction } from "@/components/useActionForm";
 import { Amount } from "@/components/ui/Amount";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
@@ -39,16 +39,22 @@ export function ConfirmationQueue({ items }: { items: ConfirmationQueueItem[] })
   const headingId = useId();
   const [bulkPending, startBulk] = useTransition();
   const [bulkError, setBulkError] = useState<string | null>(null);
+  // Confirm all says what it left: items dated before a balance date need
+  // the "already included?" answer, which one press can't give (migration
+  // 62). They stay in the list for their own sheet.
+  const [bulkSkipped, setBulkSkipped] = useState(0);
 
   if (items.length === 0) return null;
 
   const confirmAll = () => {
     setBulkError(null);
+    setBulkSkipped(0);
     startBulk(async () => {
       const result = await callAction(() =>
         confirmAllAsExpectedAction(items.map((i) => ({ id: i.recurringId, dueDate: i.dueDate }))),
       );
       if (result.error) setBulkError(result.error);
+      setBulkSkipped("needsAnswer" in result ? result.needsAnswer : 0);
     });
   };
 
@@ -79,6 +85,14 @@ export function ConfirmationQueue({ items }: { items: ConfirmationQueueItem[] })
 
       {bulkError ? <ErrorMessage message={bulkError} /> : null}
 
+      {/* Neutral ink: housekeeping, not a failure. */}
+      {bulkSkipped > 0 ? (
+        <p role="status" className="mb-2 text-xs text-ink-secondary">
+          {needsAnswerLabel(bulkSkipped)}. {bulkSkipped === 1 ? "It's" : "They're"} dated before a balance
+          date, so choose It landed on {bulkSkipped === 1 ? "it" : "each one"} to answer.
+        </p>
+      ) : null}
+
       <ul className="divide-y divide-hairline">
         {items.map((item) => (
           <QueueRow key={item.key} item={item} disabled={bulkPending} />
@@ -91,12 +105,16 @@ export function ConfirmationQueue({ items }: { items: ConfirmationQueueItem[] })
 function QueueRow({ item, disabled }: { item: ConfirmationQueueItem; disabled: boolean }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Bumped when "It landed" comes back needing the pre-anchor answer: the
+  // sheet opens to ask it. Nothing was written.
+  const [askRequest, setAskRequest] = useState(0);
 
-  const answer = (call: () => Promise<ActionState>) => {
+  const answer = (call: () => Promise<OneTapState>) => {
     setError(null);
     startTransition(async () => {
       const result = await callAction(call);
-      if (result?.error) setError(result.error);
+      if (result && "needsAnswer" in result && result.needsAnswer) setAskRequest((n) => n + 1);
+      else if (result?.error) setError(result.error);
     });
   };
 
@@ -141,6 +159,7 @@ function QueueRow({ item, disabled }: { item: ConfirmationQueueItem; disabled: b
           {pending ? "Saving…" : "It landed"}
         </button>
         <ConfirmOccurrenceSheet
+          openRequest={askRequest}
           item={item}
           trigger={(open) => (
             <button type="button" onClick={open} disabled={busy} className={QUIET}>

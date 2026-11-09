@@ -4,6 +4,12 @@
 import util from "node:util";
 import { isAuthError, isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { UNREACHABLE } from "@/lib/unreachable";
+import {
+  ANCHOR_ANSWER_REQUIRED,
+  ANCHOR_ANSWER_REQUIRED_CODE,
+  ANCHOR_ANSWER_STALE,
+  ANCHOR_ANSWER_STALE_CODE,
+} from "@/lib/anchorAnswer";
 
 // Turns a PostgREST / Postgres error into a string that's safe to show a
 // user, and makes sure the ones that are our fault are never lost.
@@ -163,6 +169,19 @@ export function describeWriteError(error: DbError, context: WriteContext): strin
   if (error.code === "23505") {
     console.info(`[db:${context}] duplicate rejected: ${error.message}`);
     return DUPLICATE[context];
+  }
+  // A transaction dated before its account's balance date, saved without
+  // the "already included?" answer, or with one given against a balance
+  // that has since changed (trg_transactions_anchor_answer, migration 62).
+  // The person answers and saves again; callers that can show the
+  // question recognise these exact strings (needsAnchorAnswer).
+  if (error.code === ANCHOR_ANSWER_REQUIRED_CODE) {
+    console.info(`[db:${context}] pre-anchor answer required`);
+    return ANCHOR_ANSWER_REQUIRED;
+  }
+  if (error.code === ANCHOR_ANSWER_STALE_CODE) {
+    console.info(`[db:${context}] pre-anchor answer stale`);
+    return ANCHOR_ANSWER_STALE;
   }
 
   const kind = classifyDbError(error);

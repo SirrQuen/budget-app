@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { callAction, useActionForm } from "@/components/useActionForm";
+import { useActionForm } from "@/components/useActionForm";
 import {
   IDEMPOTENCY_FIELD,
   keyForSubmission,
@@ -10,7 +10,6 @@ import {
   type IdempotencyAttempt,
 } from "@/lib/idempotency";
 import {
-  countsTowardBalanceAction,
   createTransactionAction,
   updateTransactionAction,
   type ActionState,
@@ -27,7 +26,8 @@ import { PaymentNote } from "@/components/PaymentNote";
 import { paymentPayee } from "@/lib/accountOptions";
 import { Celebration } from "@/components/ui/Celebration";
 import { useConfirmPulse } from "@/components/ui/ConfirmPulse";
-import { BalanceDateNote } from "@/components/BalanceDateNote";
+import { PreAnchorQuestion, asksAnchorQuestion, useAnchorPreviews } from "@/components/PreAnchorQuestion";
+import type { AnchorAnswerColumns } from "@/lib/anchorAnswer";
 import { EditScopeChoice } from "@/components/EditScopeChoice";
 import { amountChanged } from "@/lib/recurringEditScope";
 import { ChevronDownIcon, FlameIcon } from "@/components/ui/icons";
@@ -62,7 +62,10 @@ export type AddTransactionPrefill = {
   description?: string;
   amount?: string;
   merchant?: string;
-  transaction_type?: "Transfer";
+  /** "Transfer" with both accounts; Income/Expense with categoryid and accountid (quick add). */
+  transaction_type?: TransactionType | "Transfer";
+  categoryid?: string;
+  accountid?: string;
   fromAccountId?: string;
   toAccountId?: string;
 };
@@ -78,8 +81,8 @@ export type TransactionInitialValues = {
   merchant: string | null;
   notes: string | null;
   payment_method: string | null;
-  /** counts_toward_balance as loaded -- seeds the note for the stored account and date. */
-  counts_toward_balance?: boolean | null;
+  /** The stored pre-anchor answer (migration 62), shown when the question is asked again on edit. */
+  anchorAnswer?: AnchorAnswerColumns;
   /**
    * The schedule this row was confirmed from, when it still exists. Changing
    * the amount then asks "Just this one / This and future occurrences".
@@ -154,8 +157,8 @@ export function AddTransactionForm({
   const [type, setType] = useState<TransactionType | "Transfer">(
     initialValues?.transaction_type ?? prefill?.transaction_type ?? "Expense",
   );
-  const [categoryid, setCategoryid] = useState(initialValues?.categoryid ?? "");
-  const [accountid, setAccountid] = useState(initialValues?.accountid ?? "");
+  const [categoryid, setCategoryid] = useState(initialValues?.categoryid ?? prefill?.categoryid ?? "");
+  const [accountid, setAccountid] = useState(initialValues?.accountid ?? prefill?.accountid ?? "");
   const [fromAccountId, setFromAccountId] = useState(prefill?.fromAccountId ?? "");
   const [toAccountId, setToAccountId] = useState(prefill?.toAccountId ?? "");
   const [transactionDate, setTransactionDate] = useState(
@@ -182,19 +185,6 @@ export function AddTransactionForm({
   const [celebrateMessage, setCelebrateMessage] = useState("Logged");
   const [celebrateIcon, setCelebrateIcon] = useState<React.ReactNode>("✓");
   const pulse = useConfirmPulse();
-  // The "won't change that balance" note's answers, from SQL
-  // (counts_toward_balance, migration 48), keyed "accountId|date" so going
-  // back to an earlier choice doesn't ask again. An edit seeds its stored
-  // account and date from the row it loaded.
-  const [balanceAnswers, setBalanceAnswers] = useState<Record<string, boolean | null>>(() =>
-    initialValues?.counts_toward_balance !== undefined
-      ? {
-          [`${initialValues.accountid}|${initialValues.transaction_date}`]:
-            initialValues.counts_toward_balance,
-        }
-      : {},
-  );
-  const balanceAsked = useRef(new Set<string>());
   const formRef = useRef<HTMLFormElement>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
   const wasPending = useRef(false);
@@ -210,42 +200,36 @@ export function AddTransactionForm({
     type === "Transfer" ? [] : groupByCategoryGroup(type === "Income" ? incomeCategories : expenseCategories);
   const accountsMismatch = type === "Transfer" && fromAccountId !== "" && fromAccountId === toAccountId;
 
-  // Asks SQL about every account the form currently names, once per
-  // account and date. An edit always asks about its own transaction: its
-  // recorded time decides a date on the balance date.
-  const noteAccountIds = type === "Transfer" ? [fromAccountId, toAccountId] : [accountid];
-  const unaskedKeys = noteAccountIds
-    .filter((id) => id !== "" && /^\d{4}-\d{2}-\d{2}$/.test(transactionDate))
-    .map((id) => `${id}|${transactionDate}`)
-    .filter((key) => !(key in balanceAnswers))
-    .join(",");
+  // The pre-anchor question (migration 62): SQL says, per account the form
+  // names and the chosen date, whether the date alone keeps this out of
+  // the balance. An edit asks about its own transaction: its recorded time
+  // decides a date on the balance date.
+  const questionAccountIds = type === "Transfer" ? [fromAccountId, toAccountId] : [accountid];
   const editingId = initialValues?.id ?? null;
-  useEffect(() => {
-    if (unaskedKeys === "") return;
-    for (const key of unaskedKeys.split(",")) {
-      if (balanceAsked.current.has(key)) continue;
-      balanceAsked.current.add(key);
-      const [accountId, date] = key.split("|");
-      void callAction(() => countsTowardBalanceAction(accountId, date, editingId)).then((answer) => {
-        setBalanceAnswers((prev) => ({ ...prev, [key]: typeof answer === "boolean" ? answer : null }));
-      });
-    }
-  }, [unaskedKeys, editingId]);
+  const anchorPreviews = useAnchorPreviews(questionAccountIds, transactionDate, editingId);
 
-  // The note for whichever account id is passed in (the single Account
-  // field, or either leg of a Transfer) -- shown only when SQL says this
-  // transaction won't count toward that account's balance. The fix is the
-  // account's edit form, where a new balance and its date are set together.
-  function renderBalanceNote(accountId: string) {
+  // The question for whichever account id is passed in (the single Account
+  // field, or either leg of a Transfer). Required when shown. On an edit,
+  // the stored answer is pre-selected while it still applies -- only for
+  // the account and date it was stored with.
+  function renderAnchorQuestion(accountId: string) {
     const account = accounts.find((a) => a.id === accountId);
-    if (!account) return null;
-    if (balanceAnswers[`${accountId}|${transactionDate}`] !== false) return null;
+    const preview = anchorPreviews[accountId];
+    if (!account || !asksAnchorQuestion(preview)) return null;
+    const stored =
+      initialValues?.anchorAnswer && initialValues.accountid === accountId
+        ? initialValues.anchorAnswer
+        : undefined;
 
     return (
-      <BalanceDateNote
+      <PreAnchorQuestion
+        key={`${accountId}|${transactionDate}`}
+        idPrefix={fieldId("anchor")}
         accountId={account.id}
         accountName={account.account_name}
-        openingDate={account.opening_date}
+        preview={preview}
+        stored={stored}
+        nameAccount={type === "Transfer"}
       />
     );
   }
@@ -510,7 +494,7 @@ export function AddTransactionForm({
                     ))}
                   </select>
                 </FormField>
-                {fromAccountId ? renderBalanceNote(fromAccountId) : null}
+                {fromAccountId ? renderAnchorQuestion(fromAccountId) : null}
 
                 <FormField
                   label="To account"
@@ -537,7 +521,7 @@ export function AddTransactionForm({
                     ))}
                   </select>
                 </FormField>
-                {toAccountId ? renderBalanceNote(toAccountId) : null}
+                {toAccountId ? renderAnchorQuestion(toAccountId) : null}
               </>
             ) : (
               <>
@@ -586,7 +570,7 @@ export function AddTransactionForm({
                     ))}
                   </select>
                 </FormField>
-                {accountid ? renderBalanceNote(accountid) : null}
+                {accountid ? renderAnchorQuestion(accountid) : null}
               </>
             )}
           </div>

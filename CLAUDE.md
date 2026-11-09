@@ -242,6 +242,28 @@ or an obligation's early edge -- never a transfer rule of its own.
 **Never discourage the user about spending.**
 Forecast copy states facts, names days, names causes. No alarm language.
 
+**A transaction dated before the balance anchor asks; it never guesses.**
+The anchor reflects what the bank had POSTED, not what had happened, so
+a pending charge that posts later, backdated, isn't in the figure. The
+app can't tell that from back-filled history (which is), so the
+transaction form, quick add (via the full form), the confirm sheet and
+the transfer editor ask "Was it already included in that balance?" --
+Yes, it's already counted / No, add it to my balance. The answer is
+REQUIRED (`trg_transactions_anchor_answer`, migration 62, refuses a save
+without one): defaulting yes reproduces the bug, defaulting no
+double-counts history. Never infer it from `created_at` > `opening_set_at`.
+It's stored on the row (`counts_despite_anchor`, `anchor_answer_set_at`)
+and read by THE rule, `anchor_includes()` -- never a second comparison.
+Opening the transaction shows the answer given.
+
+**An override is valid only against the anchor it answered.** Any stored
+exception to a rule keyed on an anchor (or any other re-settable
+reference point) carries the identity of the anchor it answered -- here
+`anchor_answer_set_at` = the account's `opening_set_at` -- and applies
+only while they match. Setting a new balance supersedes every earlier
+answer, because the new figure already reflects them. Nothing is
+cleared; the old answer simply stops applying, and the form says so.
+
 ## Design language
 
 Dark-first. Bold and confident (Cash App / Monzo), encouraging and
@@ -696,9 +718,11 @@ amount and anything supplied). docs/Recurring-Amounts-and-Transfer-Editing.md as
 occurrence carries the last confirmed amount forward; it never did.
 
 A confirmation dated before an account's balance date is allowed; the
-confirm sheet shows the same "before your balance date" note as the
-transaction form, from the same SQL rule (`counts_toward_balance_preview`,
-migration 48).
+confirm sheet asks the same "was it already included?" question as the
+transaction form, from the same SQL rule (`balance_anchor_preview`,
+migration 62). A one-tap "It landed" can't answer it, so the queue opens
+the sheet instead; Confirm all leaves those items and says how many
+("2 items need an answer").
 
 - `transactions.recurringid` non-null means the row was confirmed from a
   schedule -- or is the row the schedule was made from (below). Nothing

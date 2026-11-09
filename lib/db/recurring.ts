@@ -16,6 +16,7 @@ import {
 } from "@/lib/confirmationQueue";
 import { confirmationOpensOn, paydayWindowEnd } from "@/lib/recurringSchedule";
 import { formatDate } from "@/lib/format";
+import { NO_ANCHOR_ANSWER, type AnchorAnswersByAccount } from "@/lib/anchorAnswer";
 
 type RecurringRow = Database["public"]["Tables"]["recurring_transactions"]["Row"];
 type RecurringInsert = Database["public"]["Tables"]["recurring_transactions"]["Insert"];
@@ -441,7 +442,11 @@ function occurrenceRows(
   amount: number,
   date: string,
   is_estimated: boolean,
+  anchorAnswers: AnchorAnswersByAccount,
 ): TransactionInsert[] {
+  // Each row carries the pre-anchor answer for its own account, when one
+  // was given (migration 62). The database decides whether it was needed.
+  const answerFor = (accountId: string) => anchorAnswers[accountId] ?? NO_ANCHOR_ANSWER;
   if (s.to_accountid !== null) {
     const leg = {
       userid,
@@ -454,8 +459,8 @@ function occurrenceRows(
       is_estimated,
     };
     return [
-      { ...leg, accountid: s.accountid, transaction_type: "Expense" },
-      { ...leg, accountid: s.to_accountid, transaction_type: "Income" },
+      { ...leg, accountid: s.accountid, transaction_type: "Expense", ...answerFor(s.accountid) },
+      { ...leg, accountid: s.to_accountid, transaction_type: "Income", ...answerFor(s.to_accountid) },
     ];
   }
   return [
@@ -472,6 +477,7 @@ function occurrenceRows(
       description: s.description,
       recurringid: s.recurring_id,
       is_estimated,
+      ...answerFor(s.accountid),
     },
   ];
 }
@@ -573,6 +579,12 @@ export type ConfirmOccurrenceInput = {
   amount?: number;
   /** "Landed differently": the real date. Omitted = the predicted date. */
   date?: string;
+  /**
+   * Pre-anchor answers by account id (migration 62), from the sheet. A
+   * one-tap "as expected" carries none; if its date is before a balance
+   * date the database refuses it, and the queue asks instead.
+   */
+  anchorAnswers?: AnchorAnswersByAccount;
 };
 
 // The ONLY path from a schedule to a transaction (CLAUDE.md "Confirmation
@@ -656,7 +668,7 @@ export async function confirmOccurrence(
 
   const { error: insertError } = await supabase
     .from("transactions")
-    .insert(occurrenceRows(s, userid, amount, date, isEstimated));
+    .insert(occurrenceRows(s, userid, amount, date, isEstimated, input.anchorAnswers ?? {}));
 
   if (insertError) {
     const { error: restoreError } = await supabase
