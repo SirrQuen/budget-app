@@ -39,6 +39,13 @@ changes, and a balance only moves when you answer "No". Editing a
 description or a note never asks. Changing an older transaction's date,
 amount or account does.
 
+You may already have transactions dated before your balance date, if you
+filled in past spending when you set up. Open one and you'll see a line
+saying it's dated before your balance, so it isn't counted in it. That's
+how it's always worked; it just says so now. If you think one of them
+wasn't in your balance after all, the simplest fix is to set the balance
+again from your bank, on the account's page.
+
 You'll also see it when you confirm a recurring item dated before your
 balance date. "It landed" opens the sheet so you can answer, and
 "Confirm all" tells you how many it left for you.
