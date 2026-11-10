@@ -10,7 +10,12 @@ import { FormField, useFieldId } from "@/components/ui/FormField";
 import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
-import { PreAnchorQuestion, asksAnchorQuestion, useAnchorPreviews } from "@/components/PreAnchorQuestion";
+import {
+  PreAnchorQuestion,
+  StoredAnchorAnswer,
+  asksAnchorQuestion,
+  useAnchorPreviews,
+} from "@/components/PreAnchorQuestion";
 import { PaymentNote } from "@/components/PaymentNote";
 import { EditScopeChoice } from "@/components/EditScopeChoice";
 import { paymentPayee } from "@/lib/accountOptions";
@@ -52,16 +57,23 @@ export function TransferEditForm({
   // answer is offered back only while it still names the account it was
   // given for -- after a swap it answered a different balance.
   const anchorPreviews = useAnchorPreviews([fromAccountId, toAccountId], date, transfer.fromLeg.id);
+  //
+  // A leg is asked only when its date, amount or account changed -- what
+  // the database asks about. An untouched leg says what's stored instead.
+  const dateOrAmountChanged =
+    date !== transfer.date || (Number(amount) > 0 && amountChanged(transfer.amount, Number(amount)));
   const legs = [
     {
       account: from,
       legId: transfer.fromLeg.id,
       stored: fromAccountId === transfer.fromLeg.accountId ? transfer.fromLeg.anchorAnswer : undefined,
+      asks: dateOrAmountChanged || fromAccountId !== transfer.fromLeg.accountId,
     },
     {
       account: to,
       legId: transfer.toLeg.id,
       stored: toAccountId === transfer.toLeg.accountId ? transfer.toLeg.anchorAnswer : undefined,
+      asks: dateOrAmountChanged || toAccountId !== transfer.toLeg.accountId,
     },
   ];
 
@@ -189,7 +201,19 @@ export function TransferEditForm({
         ? null
         : legs.map((l) => {
             const preview = l.account ? anchorPreviews[l.account.id] : undefined;
-            return l.account && asksAnchorQuestion(preview) ? (
+            if (!l.account || !asksAnchorQuestion(preview)) return null;
+            if (!l.asks) {
+              return (
+                <StoredAnchorAnswer
+                  key={l.legId}
+                  accountName={l.account.account_name}
+                  preview={preview}
+                  stored={l.stored}
+                  nameAccount
+                />
+              );
+            }
+            return (
               <PreAnchorQuestion
                 key={`${l.legId}|${l.account.id}|${date}`}
                 idPrefix={fieldId("anchor")}
@@ -199,7 +223,7 @@ export function TransferEditForm({
                 stored={l.stored}
                 nameAccount
               />
-            ) : null;
+            );
           })}
 
       {effectLine ? <p className="text-sm text-ink-secondary">{effectLine}</p> : null}

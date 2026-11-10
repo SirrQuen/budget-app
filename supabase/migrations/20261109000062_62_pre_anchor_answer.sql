@@ -200,16 +200,21 @@ drop function public.anchor_includes(date, timestamptz, date, timestamptz);
 -- ---------------------------------------------------------------------
 -- 7. The answer is required: trg_transactions_anchor_answer
 --
--- Fires on insert, and on any update that names the account, the date or
--- the answer. When the date rule alone says the row won't count, an
--- answer must be present and must answer the account's CURRENT anchor;
--- when the date rule says it counts, there is no question, and any
--- answer is cleared rather than left to look meaningful.
+-- Asks on INSERT, and on an UPDATE that changes the DATE, the AMOUNT or
+-- the ACCOUNT -- or the answer itself. Nothing else: editing a
+-- description or a note never asks whether a six-month-old charge was in
+-- a balance. "Changes" means the value, not the SET list: PostgREST and
+-- update_transfer() send the account and date on every save, so the
+-- trigger compares NEW with OLD and steps aside when all four are equal.
 --
--- An update that names none of those columns (a description, a note, an
--- amount through PostgREST that sends only that) doesn't fire it, so a
--- row from before this migration is never forced to answer by an edit
--- that doesn't touch what the rule reads.
+-- When it asks and the date rule alone says the row won't count, an
+-- answer must be present and must answer the account's CURRENT anchor; a
+-- stored answer for the current anchor still satisfies it (the form shows
+-- it pre-selected). When the date rule says it counts, there is no
+-- question, and any answer is cleared rather than left to look meaningful.
+--
+-- Rows from before this migration have no answer and keep counting as
+-- they did; only a change to their date, amount or account asks.
 --
 -- Two SQLSTATEs the app recognises (lib/db/errors.ts):
 --   SRA01  an answer is required
@@ -225,6 +230,16 @@ declare
   v_anchor_date   date;
   v_anchor_set_at timestamptz;
 begin
+  -- Nothing the question is about changed: no question.
+  if tg_op = 'UPDATE'
+     and new.accountid = old.accountid
+     and new.transaction_date = old.transaction_date
+     and new.amount = old.amount
+     and new.counts_despite_anchor is not distinct from old.counts_despite_anchor
+     and new.anchor_answer_set_at is not distinct from old.anchor_answer_set_at then
+    return new;
+  end if;
+
   select a.opening_date, a.opening_set_at
     into v_anchor_date, v_anchor_set_at
     from public.accounts a
@@ -258,12 +273,12 @@ end;
 $$;
 
 comment on function public.require_anchor_answer() is
-  'BEFORE INSERT/UPDATE OF accountid, transaction_date, counts_despite_anchor, anchor_answer_set_at on transactions: a row the date rule excludes needs an answer against the account''s current anchor (SRA01 missing, SRA02 stale); a row the date rule counts carries none (migration 62).';
+  'BEFORE INSERT, and UPDATE that changes accountid, transaction_date, amount or the answer, on transactions: a row the date rule excludes needs an answer against the account''s current anchor (SRA01 missing, SRA02 stale); a row the date rule counts carries none. Any other edit is left alone (migration 62).';
 
 revoke all on function public.require_anchor_answer() from public, anon, authenticated;
 
 create trigger trg_transactions_anchor_answer
-  before insert or update of accountid, transaction_date, counts_despite_anchor, anchor_answer_set_at
+  before insert or update of accountid, transaction_date, amount, counts_despite_anchor, anchor_answer_set_at
   on public.transactions
   for each row execute function public.require_anchor_answer();
 
@@ -274,7 +289,8 @@ create trigger trg_transactions_anchor_answer
 -- A transfer's two legs sit on two accounts with two anchors, so each
 -- leg is asked about separately. The from-answer goes on the Expense leg,
 -- the to-answer on the Income leg, following the accounts through a swap.
--- Otherwise unchanged from migration 59.
+-- A leg passed no answer keeps the one it has. Otherwise unchanged from
+-- migration 59.
 -- ---------------------------------------------------------------------
 drop function public.update_transfer(uuid, uuid, uuid, numeric, date, text, text, boolean);
 
@@ -344,10 +360,17 @@ begin
          transaction_date = p_transaction_date,
          description = btrim(p_description),
          notes = nullif(btrim(coalesce(p_notes, '')), ''),
-         counts_despite_anchor = case transaction_type when 'Expense'
-                                   then p_from_counts_despite_anchor else p_to_counts_despite_anchor end,
-         anchor_answer_set_at  = case transaction_type when 'Expense'
-                                   then p_from_anchor_answer_set_at else p_to_anchor_answer_set_at end
+         -- A leg keeps its stored answer unless a new one is passed: the
+         -- editor asks only when that leg's date, amount or account
+         -- changed, and the trigger asks for one if it's needed.
+         counts_despite_anchor = case transaction_type
+                                   when 'Expense' then coalesce(p_from_counts_despite_anchor, counts_despite_anchor)
+                                   else coalesce(p_to_counts_despite_anchor, counts_despite_anchor) end,
+         anchor_answer_set_at  = case transaction_type
+                                   when 'Expense' then case when p_from_counts_despite_anchor is null
+                                                            then anchor_answer_set_at else p_from_anchor_answer_set_at end
+                                   else case when p_to_counts_despite_anchor is null
+                                             then anchor_answer_set_at else p_to_anchor_answer_set_at end end
    where transfer_group_id = p_transfer_group_id and userid = v_uid;
 
   -- "This and future occurrences": the schedule expects the new amount.

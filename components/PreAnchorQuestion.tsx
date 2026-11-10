@@ -172,3 +172,40 @@ export function PreAnchorQuestion({
     </fieldset>
   );
 }
+
+/**
+ * On an edit that leaves the date, amount and account alone, the question
+ * isn't asked again (the database doesn't ask either). This says what's
+ * stored instead, so the exception stays visible: counted despite its
+ * date, already in the balance, or -- for a row from before the question
+ * existed, or one answered for an earlier balance -- simply not counted.
+ */
+export function StoredAnchorAnswer({
+  accountName,
+  preview,
+  stored,
+  nameAccount = false,
+}: {
+  accountName: string;
+  preview: AnchorPreview;
+  stored?: AnchorAnswerColumns;
+  nameAccount?: boolean;
+}) {
+  const balance = formatAccountBalance(preview.anchorBalance, preview.accountType);
+  const on = formatDayMonth(preview.anchorDate);
+  const choice = stored && storedAnswerApplies(stored, preview.anchorSetAt) ? storedChoice(stored) : null;
+  const which = nameAccount ? `${accountName} ` : "";
+
+  return (
+    <p className="flex items-start gap-2 rounded-lg border border-hairline bg-surface-raised px-3 py-2 text-sm text-ink-secondary">
+      <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
+      <span className="flex-1">
+        {choice === "add"
+          ? `Dated before your ${which}balance of ${balance} on ${on}. You said that balance didn't include it, so it counts toward the balance despite its date.`
+          : choice === "counted"
+            ? `Dated before your ${which}balance of ${balance} on ${on}. You said that balance already included it, so it doesn't change the balance.`
+            : `Dated before your ${which}balance of ${balance} on ${on}, so it isn't counted in that balance.`}
+      </span>
+    </p>
+  );
+}

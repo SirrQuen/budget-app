@@ -101,3 +101,42 @@ test("an answer given for an earlier balance is not pre-selected, and the form s
 test("a transfer names the account each question is about", () => {
   assert.match(text(render({ nameAccount: true })), /before your Checking balance of/);
 });
+
+// An edit that leaves date, amount and account alone doesn't ask again;
+// it says what's stored, so the exception stays visible.
+let StoredAnchorAnswer: typeof import("./PreAnchorQuestion").StoredAnchorAnswer;
+before(async () => {
+  ({ StoredAnchorAnswer } = await import("./PreAnchorQuestion"));
+});
+
+function renderStored(stored?: { counts_despite_anchor: boolean | null; anchor_answer_set_at: string | null }) {
+  return text(
+    renderToStaticMarkup(
+      React.createElement(StoredAnchorAnswer, { accountName: "Checking", preview: PREVIEW, stored }),
+    ),
+  );
+}
+
+test("unchanged edit: no radios, just the stored answer in words", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(StoredAnchorAnswer, {
+      accountName: "Checking",
+      preview: PREVIEW,
+      stored: { counts_despite_anchor: true, anchor_answer_set_at: "2026-11-03T17:00:00Z" },
+    }),
+  );
+  assert.doesNotMatch(html, /type="radio"/);
+  assert.match(text(html), /counts toward the balance despite its date/);
+  assert.match(
+    renderStored({ counts_despite_anchor: false, anchor_answer_set_at: "2026-11-03T17:00:00Z" }),
+    /already included it, so it doesn't change the balance/,
+  );
+});
+
+test("unchanged edit of a row never asked, or answered for an earlier balance: not counted, said plainly", () => {
+  assert.match(renderStored(undefined), /Dated before your balance of \$1,240\.00 on 3 November, so it isn't counted/);
+  assert.match(
+    renderStored({ counts_despite_anchor: true, anchor_answer_set_at: "2026-10-01T09:00:00Z" }),
+    /so it isn't counted in that balance/,
+  );
+});

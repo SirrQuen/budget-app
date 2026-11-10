@@ -22,7 +22,12 @@ import {
 } from "@/lib/db/transactions";
 import { setScheduleAmount } from "@/lib/db/recurring";
 import { amountChanged, parseEditScope } from "@/lib/recurringEditScope";
-import { NO_ANCHOR_ANSWER, parseAnchorAnswer, type AnchorPreview } from "@/lib/anchorAnswer";
+import {
+  NO_ANCHOR_ANSWER,
+  parseAnchorAnswer,
+  type AnchorAnswerColumns,
+  type AnchorPreview,
+} from "@/lib/anchorAnswer";
 
 // "kind" is a plain string, not the icon itself -- Server Action results
 // cross the server/client boundary as serialized data, so the client picks
@@ -98,10 +103,16 @@ function parseTransactionFields(formData: FormData): CreateTransactionInput | { 
     merchant: merchant || null,
     notes: notes || null,
     payment_method: payment_method || null,
-    // The pre-anchor answer, when the form asked (migration 62). Whether
-    // one was needed is the database's call -- it refuses a missing one.
-    ...parseAnchorAnswer(formData, accountid),
+    // The pre-anchor answer, only when the form asked (migration 62).
+    // Omitted otherwise, so an edit that didn't ask -- a new description
+    // on an old charge -- leaves the stored answer exactly as it was.
+    // Whether one was needed is the database's call; it refuses a missing one.
+    ...answerIfGiven(parseAnchorAnswer(formData, accountid)),
   };
+}
+
+function answerIfGiven(answer: AnchorAnswerColumns): Partial<AnchorAnswerColumns> {
+  return answer.counts_despite_anchor === null ? {} : answer;
 }
 
 // Mirrors parseTransactionFields -- the "From and to must differ" check is

@@ -26,7 +26,12 @@ import { PaymentNote } from "@/components/PaymentNote";
 import { paymentPayee } from "@/lib/accountOptions";
 import { Celebration } from "@/components/ui/Celebration";
 import { useConfirmPulse } from "@/components/ui/ConfirmPulse";
-import { PreAnchorQuestion, asksAnchorQuestion, useAnchorPreviews } from "@/components/PreAnchorQuestion";
+import {
+  PreAnchorQuestion,
+  StoredAnchorAnswer,
+  asksAnchorQuestion,
+  useAnchorPreviews,
+} from "@/components/PreAnchorQuestion";
 import type { AnchorAnswerColumns } from "@/lib/anchorAnswer";
 import { EditScopeChoice } from "@/components/EditScopeChoice";
 import { amountChanged } from "@/lib/recurringEditScope";
@@ -207,6 +212,11 @@ export function AddTransactionForm({
   const questionAccountIds = type === "Transfer" ? [fromAccountId, toAccountId] : [accountid];
   const editingId = initialValues?.id ?? null;
   const anchorPreviews = useAnchorPreviews(questionAccountIds, transactionDate, editingId);
+  const anchorInputsChanged =
+    initialValues !== undefined &&
+    (accountid !== initialValues.accountid ||
+      transactionDate !== initialValues.transaction_date ||
+      (Number(amount) > 0 && amountChanged(initialValues.amount, Number(amount))));
 
   // The question for whichever account id is passed in (the single Account
   // field, or either leg of a Transfer). Required when shown. On an edit,
@@ -220,6 +230,20 @@ export function AddTransactionForm({
       initialValues?.anchorAnswer && initialValues.accountid === accountId
         ? initialValues.anchorAnswer
         : undefined;
+
+    // An edit asks only when the date, amount or account changed -- the
+    // same three the database asks about. Otherwise it says what's stored
+    // and asks nothing: a new description never re-opens the question.
+    if (initialValues && !anchorInputsChanged) {
+      return (
+        <StoredAnchorAnswer
+          accountName={account.account_name}
+          preview={preview}
+          stored={stored}
+          nameAccount={type === "Transfer"}
+        />
+      );
+    }
 
     return (
       <PreAnchorQuestion

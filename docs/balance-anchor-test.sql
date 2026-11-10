@@ -259,6 +259,21 @@ select pg_temp.rec('3 balances', 'an edit that touches nothing the rule reads: a
                                    where id = 'a7c4a7c4-0000-4000-8000-0000000000b4'$q$), 'null')
                    || ' ' || (select public.counts_toward_balance(t)::text from public.transactions t
                                where t.id = 'a7c4a7c4-0000-4000-8000-0000000000b4')));
+-- How the app actually saves an edit: PostgREST and update_transfer()
+-- send the account, date and amount every time, unchanged. Only a CHANGE
+-- to one of them asks -- a new description on an old charge doesn't.
+select pg_temp.rec('3 balances', 'a description edit that resends account, date and amount unchanged: allowed',
+  'null', coalesce(pg_temp.sqlstate_of($q$update public.transactions
+                     set description = 'b4 renamed', accountid = accountid,
+                         transaction_date = transaction_date, amount = amount
+                   where id = 'a7c4a7c4-0000-4000-8000-0000000000b4'$q$), 'null'));
+select pg_temp.rec('3 balances', 'changing a pre-anchor row''s amount, no answer: asks (refused)',
+  'SRA01', pg_temp.sqlstate_of($q$update public.transactions set amount = 81
+                                  where id = 'a7c4a7c4-0000-4000-8000-0000000000b4'$q$));
+select pg_temp.rec('3 balances', 'changing its account to the same account: no change, no question',
+  'null', coalesce(pg_temp.sqlstate_of($q$update public.transactions
+                     set accountid = 'a7c4a7c4-0000-4000-8000-000000000001'
+                   where id = 'a7c4a7c4-0000-4000-8000-0000000000b4'$q$), 'null'));
 
 -- Re-set the anchor later the same day (21:00Z): b2 (18:00Z) is now in the figure.
 select pg_temp.unbecome();

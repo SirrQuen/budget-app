@@ -251,7 +251,14 @@ the transfer editor ask "Was it already included in that balance?" --
 Yes, it's already counted / No, add it to my balance. The answer is
 REQUIRED (`trg_transactions_anchor_answer`, migration 62, refuses a save
 without one): defaulting yes reproduces the bug, defaulting no
-double-counts history. Never infer it from `created_at` > `opening_set_at`.
+double-counts history. It's asked on INSERT and when the DATE, AMOUNT or
+ACCOUNT changes -- by value, since PostgREST resends them on every save --
+never on any other edit: a new description never asks whether an old
+charge was in a balance. The edit forms follow the same three. A script
+or fixture that writes a pre-anchor row must answer too, or anchor the
+account before its history (as docs/leaves-spendable-set-parity.sql
+does); so must a one-off service-role fix that moves a pre-anchor row's
+date, amount or account. Never infer it from `created_at` > `opening_set_at`.
 It's stored on the row (`counts_despite_anchor`, `anchor_answer_set_at`)
 and read by THE rule, `anchor_includes()` -- never a second comparison.
 Opening the transaction shows the answer given.
