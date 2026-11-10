@@ -44,6 +44,7 @@ function run(schedules: ProjectionSchedule[], cash: number, cushion = 300) {
     today: TODAY,
     cash,
     cushion,
+    goalHolds: [],
     schedules,
     holidays: new Set(),
     fallbackWindowEnd: "2026-10-31",
