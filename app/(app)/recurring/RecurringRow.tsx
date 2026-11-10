@@ -17,6 +17,7 @@ import type { RecurringWithRelations } from "@/lib/db/recurring";
 import type { TransactionType } from "@/lib/db/transactions";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { TransactionAccountOption } from "../transactions/AddTransactionForm";
+import type { GoalOption } from "@/lib/db/goals";
 import { callAction } from "@/components/useActionForm";
 import { AmountBasisTag } from "@/components/AmountBasisTag";
 import type { RecurringAmount } from "@/lib/db/recurring";
@@ -26,6 +27,7 @@ export function RecurringRow({
   incomeCategories,
   expenseCategories,
   accounts,
+  goals,
   holidays = [],
   amount,
   today,
@@ -34,6 +36,7 @@ export function RecurringRow({
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
   accounts: TransactionAccountOption[];
+  goals: GoalOption[];
   /** ISO dates, for RecurringForm's live timing preview -- see its own doc comment. */
   holidays?: string[];
   /**
@@ -110,6 +113,7 @@ export function RecurringRow({
           incomeCategories={incomeCategories}
           expenseCategories={expenseCategories}
           accounts={accounts}
+          goals={goals}
           holidays={holidays}
           onSuccess={() => setEditing(false)}
           onCancel={() => setEditing(false)}

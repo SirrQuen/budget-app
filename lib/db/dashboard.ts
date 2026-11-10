@@ -12,6 +12,7 @@ import { paydayWindowEnd } from "@/lib/recurringSchedule";
 import type { NonBusinessDayRule } from "@/lib/businessDays";
 import {
   projectSafeToSpend,
+  type GoalHold,
   type ProjectedObligation,
   type ProjectionSchedule,
   type SafeToSpendProjection,
@@ -787,8 +788,31 @@ const getProjectionSchedules = cache(async (): Promise<DbResult<ProjectionSchedu
   };
 });
 
+// This month's goal money still to set aside, per goal -- derived in SQL
+// (v_goal_monthly_holds, migration 57), never stored. The view already
+// drops archived, completed, target-less and transfer-funded goals.
+async function getGoalMonthlyHolds(): Promise<DbResult<GoalHold[]>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("v_goal_monthly_holds")
+    .select("goalid, goal_name, still_to_set_aside")
+    .order("goal_name");
+  if (error) {
+    return { data: null, error: describeReadError(error, "dashboard") };
+  }
+  return {
+    data: data.flatMap((r) =>
+      r.goalid !== null && r.goal_name !== null
+        ? [{ goalId: r.goalid, name: r.goal_name, amount: Number(r.still_to_set_aside ?? 0) }]
+        : [],
+    ),
+    error: null,
+  };
+}
+
 // "Safe to spend" = the lowest the spendable balance gets between today
-// and the horizon, minus a cushion, floored at zero. The calculation
+// and the horizon, minus a cushion and this month's goal money, floored at
+// zero. The calculation
 // itself -- horizon, which rows count, the date/amount edges, the
 // day-by-day walk -- lives in lib/safeToSpendProjection.ts, pure and
 // unit tested. This function only gathers its inputs:
@@ -804,6 +828,9 @@ const getProjectionSchedules = cache(async (): Promise<DbResult<ProjectionSchedu
 //              guard. The projection steps each one forward past its next
 //              occurrence itself.
 //   cushion    settings.safe_to_spend_cushion, or the suggestion.
+//   goals      v_goal_monthly_holds: each goal's monthly target less what
+//              it got this month, never more than is left to its target,
+//              unless a counted transfer funds it.
 //   holidays   for resolving occurrences after the stored next_due_date.
 //   window     the settings fallback (next payday / end of month / 30
 //              days), used only when there's no usable income schedule.
@@ -815,15 +842,17 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
 
   const today = await getToday();
 
-  const [cashRes, recurringRes, incomeRes, cushionRes, holidaysRes, windowPref, accountsRes] = await Promise.all([
-    supabase.rpc("spendable_cash_balance"),
-    getProjectionSchedules(),
-    getIncomeSchedules(),
-    getSafeToSpendCushion(),
-    getBankHolidays(),
-    getSafeToSpendWindowPref(),
-    listAccountBalances({ is_active: true }),
-  ]);
+  const [cashRes, recurringRes, incomeRes, cushionRes, holidaysRes, windowPref, accountsRes, goalHoldsRes] =
+    await Promise.all([
+      supabase.rpc("spendable_cash_balance"),
+      getProjectionSchedules(),
+      getIncomeSchedules(),
+      getSafeToSpendCushion(),
+      getBankHolidays(),
+      getSafeToSpendWindowPref(),
+      listAccountBalances({ is_active: true }),
+      getGoalMonthlyHolds(),
+    ]);
 
   if (cashRes.error) {
     return { data: null, error: describeReadError(cashRes.error, "dashboard") };
@@ -839,6 +868,11 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   }
   if (cushionRes.error !== null) {
     return { data: null, error: cushionRes.error };
+  }
+  // Part of the hero's arithmetic, like the cushion: a failed read is an
+  // error, never a silent $0 that would overstate safe to spend.
+  if (goalHoldsRes.error !== null) {
+    return { data: null, error: goalHoldsRes.error };
   }
 
   // Fallback window -- the same rules as before the projection existed.
@@ -867,6 +901,7 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
     today,
     cash: cashRes.data,
     cushion: cushionRes.data.amount,
+    goalHolds: goalHoldsRes.data,
     schedules: recurringRes.data,
     // A failed holiday read degrades to weekends-only -- not a reason to
     // fail the hero.
