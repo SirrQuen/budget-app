@@ -223,3 +223,19 @@ export async function listAccountTypeSubtotals(
 
   return { data: new Map(data.map((row) => [row.account_type, row.subtotal])), error: null };
 }
+
+// When each account was last logged to: the user's calendar day of its
+// most recently CREATED transaction (account_last_logged, migration 64) --
+// created_at, never transaction_date, so a week of backdated entries made
+// today reads as today. Accounts with no transactions are absent.
+export async function getAccountLastLogged(): Promise<DbResult<Map<string, string>>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("account_last_logged");
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "accounts") };
+  }
+
+  return { data: new Map(data.map((r) => [r.account_id, r.last_logged_on])), error: null };
+}

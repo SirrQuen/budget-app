@@ -1400,6 +1400,13 @@ export type Database = {
         }
         Returns: boolean
       }
+      account_last_logged: {
+        Args: never
+        Returns: {
+          account_id: string
+          last_logged_on: string
+        }[]
+      }
       apply_user_timezone: { Args: never; Returns: undefined }
       balance_anchor_preview: {
         Args: {

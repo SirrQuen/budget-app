@@ -15,7 +15,7 @@ import {
   getConfirmationQueue,
 } from "@/lib/db/dashboard";
 import { getBudgetsForMonth } from "@/lib/db/budgets";
-import { listAccountBalances } from "@/lib/db/accounts";
+import { getAccountLastLogged, listAccountBalances } from "@/lib/db/accounts";
 import { getReturnSummaryFacts } from "@/lib/actions/activity";
 import { isAwaitingStatementAmount } from "@/lib/recurringSchedule";
 import type { VariableAmountTarget } from "../recurring/ConfirmVariableAmountSheet";
@@ -33,6 +33,7 @@ import { ScopedRegion } from "./ScopedRegion";
 import { CashflowChart } from "./CashflowChart";
 import { GroupMovementChart } from "./GroupMovementChart";
 import { BudgetMeters } from "./BudgetMeters";
+import { AccountActivity } from "./AccountActivity";
 import { GoalMeters } from "./GoalMeters";
 import { UpcomingList, type UpcomingScheduleMeta } from "./UpcomingList";
 import { buildUpcomingOccurrences } from "@/lib/upcomingOccurrences";
@@ -80,6 +81,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     movementResult,
     balancesResult,
     netWorthResult,
+    lastLoggedResult,
   ] = await Promise.all([
     greetingPromise,
     // Decided when the session started -- see lib/auth/firstSession.ts.
@@ -97,6 +99,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     getGroupMovement(range),
     listAccountBalances({ is_active: true }),
     getNetWorth(),
+    getAccountLastLogged(),
   ]);
 
   // A failed profile read just means no name -- "Welcome back" alone.
@@ -235,6 +238,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       ["Income and spending", rangeStatsResult.error],
       ["Cash flow", cashflowResult.error],
       ["Category movement", movementResult.error],
+      ["Accounts", balancesResult.error ?? lastLoggedResult.error],
     ] as const
   )
     .filter(([, error]) => error != null)
@@ -384,6 +388,16 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
                 schedules={upcomingSchedules}
               />
             ) : null}
+            {/* "Last logged 12 days ago", per account -- a fact, never a nudge. */}
+            {balancesResult.error || lastLoggedResult.error ? (
+              sectionError("Accounts")
+            ) : (
+              <AccountActivity
+                accounts={balancesResult.data ?? []}
+                lastLogged={lastLoggedResult.data ?? new Map()}
+                today={today}
+              />
+            )}
           </div>
         ) : null}
       </section>
