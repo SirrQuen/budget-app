@@ -62,6 +62,7 @@ function project(schedules: ProjectionSchedule[], cash: number, today = TODAY) {
     cushion: 100,
     goalHolds: [],
     schedules,
+    futureTransactions: [],
     holidays: NO_HOLIDAYS,
     fallbackWindowEnd: "2026-11-30",
   });

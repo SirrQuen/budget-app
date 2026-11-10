@@ -55,6 +55,7 @@ function safeToSpend(
     cushion,
     goalHolds,
     schedules,
+    futureTransactions: [],
     holidays: new Set(),
     fallbackWindowEnd: "2026-10-31",
   });

@@ -15,6 +15,7 @@ import {
   type GoalHold,
   type ProjectedObligation,
   type ProjectionSchedule,
+  type ProjectionTransaction,
   type SafeToSpendProjection,
 } from "@/lib/safeToSpendProjection";
 import { isSpendableAccountType } from "@/lib/safeToSpend";
@@ -788,6 +789,49 @@ const getProjectionSchedules = cache(async (): Promise<DbResult<ProjectionSchedu
   };
 });
 
+/** A future-dated transaction as the projection reads it, plus its row icon. */
+export type FutureTransaction = ProjectionTransaction & { categoryIcon: string | null };
+
+// Transactions dated after today that the balance doesn't count yet
+// (v_future_transactions, migration 65) -- the projection counts them on
+// their date. cache()d: the hero and the Upcoming list read the same rows.
+export const getFutureTransactions = cache(async (): Promise<DbResult<FutureTransaction[]>> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("v_future_transactions")
+    .select(
+      "transaction_id, kind, description, amount, transaction_date, account_type, to_account_type, counts_later, to_counts_later, category_icon",
+    )
+    .order("transaction_date");
+  if (error) {
+    return { data: null, error: describeReadError(error, "dashboard") };
+  }
+  return {
+    data: data.flatMap((r): FutureTransaction[] =>
+      r.transaction_id !== null &&
+      r.transaction_date !== null &&
+      r.account_type !== null &&
+      (r.kind === "Income" || r.kind === "Expense" || r.kind === "Transfer")
+        ? [
+            {
+              transactionId: r.transaction_id,
+              name: r.description ?? "",
+              kind: r.kind,
+              fromAccountType: r.account_type,
+              toAccountType: r.to_account_type,
+              fromCountsLater: r.counts_later === true,
+              toCountsLater: r.to_counts_later === true,
+              amount: Number(r.amount ?? 0),
+              date: r.transaction_date,
+              categoryIcon: r.category_icon,
+            },
+          ]
+        : [],
+    ),
+    error: null,
+  };
+});
+
 // This month's goal money still to set aside, per goal -- derived in SQL
 // (v_goal_monthly_holds, migration 57), never stored. The view already
 // drops archived, completed, target-less and transfer-funded goals.
@@ -823,6 +867,9 @@ async function getGoalMonthlyHolds(): Promise<DbResult<GoalHold[]>> {
 //   accounts   active balances, split by the same classifier into the
 //              accounts cash is drawn from and the assets it leaves out --
 //              for the breakdown's labels only, never summed here.
+//   future     v_future_transactions: one-off transactions dated after
+//              today, which the balance doesn't count until their date
+//              (migration 65). Counted on that date, no confirmation.
 //   schedules  every row of v_upcoming_recurring, which already applies
 //              is_active, the end-date guard and the occurrence_limit
 //              guard. The projection steps each one forward past its next
@@ -842,7 +889,7 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
 
   const today = await getToday();
 
-  const [cashRes, recurringRes, incomeRes, cushionRes, holidaysRes, windowPref, accountsRes, goalHoldsRes] =
+  const [cashRes, recurringRes, incomeRes, cushionRes, holidaysRes, windowPref, accountsRes, goalHoldsRes, futureRes] =
     await Promise.all([
       supabase.rpc("spendable_cash_balance"),
       getProjectionSchedules(),
@@ -852,6 +899,7 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
       getSafeToSpendWindowPref(),
       listAccountBalances({ is_active: true }),
       getGoalMonthlyHolds(),
+      getFutureTransactions(),
     ]);
 
   if (cashRes.error) {
@@ -873,6 +921,10 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
   // error, never a silent $0 that would overstate safe to spend.
   if (goalHoldsRes.error !== null) {
     return { data: null, error: goalHoldsRes.error };
+  }
+  // Also the hero's arithmetic: a future charge left out overstates it.
+  if (futureRes.error !== null) {
+    return { data: null, error: futureRes.error };
   }
 
   // Fallback window -- the same rules as before the projection existed.
@@ -903,6 +955,7 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
     cushion: cushionRes.data.amount,
     goalHolds: goalHoldsRes.data,
     schedules: recurringRes.data,
+    futureTransactions: futureRes.data,
     // A failed holiday read degrades to weekends-only -- not a reason to
     // fail the hero.
     holidays: holidaysRes.data ?? new Set<string>(),

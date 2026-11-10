@@ -2242,3 +2242,26 @@ a commit that was never meant to ship. It wasn't several commits in one
 push each deploying -- Vercel builds the pushed head, and the 00:09 push's
 ~20 commits (including 62's earlier states) didn't deploy individually.
 It was a push made at an intermediate state, followed by more work.
+
+## Budget progress counts future-dated transactions (2026-11-10)
+
+**Deferred deliberately; decide before commercial launch.**
+
+Budget progress counts a future-dated transaction from the moment it is
+entered. Rent dated the 28th makes the budget read "$1,850 of $2,000
+spent" on the 2nd, while the balance correctly says the money hasn't
+moved. Same transaction, two screens, two answers.
+
+Migration 65 made balances count a transaction only from its date
+(`counts_in_balance()`: the anchor rule AND not after the user's today),
+and the safe-to-spend projection count it on that date
+(`v_future_transactions`). Budget progress (`budget_progress_for_month`,
+`v_budget_vs_actual`) sums by `transaction_date` within the month and
+doesn't read the balance rule, so it was left as it was. Cash flow,
+category spending and the streak sum by date the same way; the budget is
+the one a tester will actually hit, because a bill entered early for this
+month lands in this month's budget.
+
+Production carried 12 future-dated rows (one user, 6 of them transfer
+legs, 8 on Checking or Cash, the furthest 22 days ahead) when counted on
+2026-11-10 (`docs/future-dated-audit.sql`, read-only).

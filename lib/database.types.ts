@@ -281,6 +281,13 @@ export type Database = {
             referencedColumns: ["userid", "id"]
           },
           {
+            foreignKeyName: "goal_contributions_transactionid_fkey"
+            columns: ["userid", "transactionid"]
+            isOneToOne: false
+            referencedRelation: "v_future_transactions"
+            referencedColumns: ["userid", "transaction_id"]
+          },
+          {
             foreignKeyName: "goal_contributions_userid_fkey"
             columns: ["userid"]
             isOneToOne: false
@@ -1040,6 +1047,63 @@ export type Database = {
           },
         ]
       }
+      v_future_transactions: {
+        Row: {
+          account_name: string | null
+          account_type: string | null
+          accountid: string | null
+          amount: number | null
+          category_icon: string | null
+          counts_later: boolean | null
+          description: string | null
+          kind: string | null
+          to_account_name: string | null
+          to_account_type: string | null
+          to_accountid: string | null
+          to_counts_later: boolean | null
+          transaction_date: string | null
+          transaction_id: string | null
+          transfer_group_id: string | null
+          userid: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_accountid_fkey"
+            columns: ["userid", "to_accountid"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "transactions_accountid_fkey"
+            columns: ["userid", "accountid"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "transactions_accountid_fkey"
+            columns: ["userid", "to_accountid"]
+            isOneToOne: false
+            referencedRelation: "v_account_balances"
+            referencedColumns: ["userid", "account_id"]
+          },
+          {
+            foreignKeyName: "transactions_accountid_fkey"
+            columns: ["userid", "accountid"]
+            isOneToOne: false
+            referencedRelation: "v_account_balances"
+            referencedColumns: ["userid", "account_id"]
+          },
+          {
+            foreignKeyName: "transactions_userid_fkey"
+            columns: ["userid"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_goal_monthly_holds: {
         Row: {
           contributed_this_month: number | null
@@ -1467,6 +1531,18 @@ export type Database = {
           group_sort_order: number
           total_spend: number
         }[]
+      }
+      counts_in_balance: {
+        Args: {
+          p_anchor_date: string
+          p_anchor_set_at: string
+          p_answer_set_at: string
+          p_as_of: string
+          p_counts_despite_anchor: boolean
+          p_recorded_at: string
+          p_transaction_date: string
+        }
+        Returns: boolean
       }
       counts_toward_balance: {
         Args: { t: Database["public"]["Tables"]["transactions"]["Row"] }

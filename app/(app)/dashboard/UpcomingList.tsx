@@ -38,11 +38,14 @@ export function UpcomingList({
   data,
   unconfirmedIncome,
   schedules,
+  futureTransactions,
 }: {
   data: UpcomingOccurrences;
   /** The projection's missed paychecks -- what a "missed" row describes. */
   unconfirmedIncome: OverdueOccurrence[];
   schedules: Record<string, UpcomingScheduleMeta>;
+  /** Per one-off future transaction, by id -- never a confirm action. */
+  futureTransactions: Record<string, UpcomingScheduleMeta>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
@@ -81,7 +84,17 @@ export function UpcomingList({
               item.status === "missed" ? (
                 <MissedRow key={item.key} item={item} unconfirmedIncome={unconfirmedIncome} />
               ) : (
-                <OccurrenceRow key={item.key} item={item} meta={schedules[item.recurringId]} />
+                <OccurrenceRow
+                  key={item.key}
+                  item={item}
+                  meta={
+                    item.recurringId !== null
+                      ? schedules[item.recurringId]
+                      : item.transactionId !== null
+                        ? futureTransactions[item.transactionId]
+                        : undefined
+                  }
+                />
               ),
             )}
           </ul>
@@ -135,7 +148,18 @@ function OccurrenceRow({ item, meta }: { item: UpcomingOccurrence; meta: Upcomin
         {/* Wraps below sm: beside the date and amount, a 320px viewport
             cut the name to ~70px. */}
         <span className="min-w-0 flex-1 break-words text-ink sm:truncate">
-          {item.name}
+          {/* A one-off the person entered: no confirmation on its date --
+              if it didn't happen, they edit or delete it. */}
+          {item.transactionId !== null ? (
+            <Link
+              href={`/transactions/${item.transactionId}/edit`}
+              className="rounded underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            >
+              {item.name}
+            </Link>
+          ) : (
+            item.name
+          )}
           {/* Quiet on purpose: no colour, no icon -- what the amount rests on. */}
           <AmountBasisTag basis={item.basis} className="ml-1.5" />
         </span>

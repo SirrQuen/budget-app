@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useLayoutEffect, useState, useTransition } from "react";
 import type { TransactionType, TransactionWithRelations } from "@/lib/db/transactions";
 import { bulkDeleteTransactionsAction } from "@/lib/actions/transactions";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ListIcon, TransferIcon, TrashIcon } from "@/components/ui/icons";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatDayMonthShort } from "@/lib/format";
+import { useToday } from "@/components/TodayProvider";
+import { DATED_AHEAD_STORAGE_KEY, isDatedAhead, readRemembered, settleRows } from "@/lib/datedAhead";
 import { Amount } from "@/components/ui/Amount";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -107,6 +109,61 @@ function ApproximateTag() {
       Approximate
     </span>
   );
+}
+
+// A transaction dated after today isn't in its balance yet (migration 65).
+// The chip names the date it starts counting -- "15 Nov", never
+// "Scheduled" and never "Pending", which means something specific on a
+// card. Neutral ink, a dashed edge to match the row's.
+function DatedAheadChip({ date }: { date: string }) {
+  return (
+    <span className="ml-2 inline-flex rounded-full border border-dashed border-ink-muted px-2 py-0.5 text-xs font-medium tabular-nums text-ink-secondary">
+      <span className="sr-only">Counts toward the balance from </span>
+      {formatDayMonthShort(date)}
+    </span>
+  );
+}
+
+// Rows this browser showed dated ahead that have since reached their date
+// -- each settles once (lib/datedAhead.ts). Layout effect, so a settling
+// row never paints a frame fully settled before its animation starts.
+// Storage is a per-viewer nicety: unavailable, nothing animates.
+function useSettlingRows(items: { key: string; date: string }[], today: string): ReadonlySet<string> {
+  const [settling, setSettling] = useState<ReadonlySet<string>>(() => new Set());
+  const signature = items.map((i) => `${i.key}@${i.date}`).join("|");
+  useLayoutEffect(() => {
+    const rows = signature === ""
+      ? []
+      : signature.split("|").map((part) => {
+          const at = part.lastIndexOf("@");
+          return { key: part.slice(0, at), datedAhead: isDatedAhead(part.slice(at + 1), today) };
+        });
+    let remembered: string[] = [];
+    try {
+      remembered = readRemembered(window.localStorage.getItem(DATED_AHEAD_STORAGE_KEY));
+    } catch {
+      return;
+    }
+    const { settling: now, remember } = settleRows(remembered, rows);
+    try {
+      window.localStorage.setItem(DATED_AHEAD_STORAGE_KEY, JSON.stringify(remember));
+    } catch {
+      // Not remembered: it may settle again next visit. Harmless.
+    }
+    // Synchronising with an external store (localStorage), before paint:
+    // read-then-render is the point, and it runs only when the rows or
+    // the day change.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (now.length > 0) setSettling((prev) => new Set([...prev, ...now]));
+  }, [signature, today]);
+  return settling;
+}
+
+/** Ghosted while dated ahead; settling once on its date; otherwise the usual entrance. */
+function rowStateClass(datedAhead: boolean, settling: boolean): string {
+  if (datedAhead) return "row-dated-ahead";
+  if (settling) return "row-settling";
+  return "motion-safe:animate-[row-in_600ms_ease-out]";
 }
 
 type SingleDisplayRow = { kind: "single"; tx: TransactionWithRelations };
@@ -241,6 +298,14 @@ export function TransactionsList({
   // cheap even when the page ends up rendering an EmptyState instead.
   const displayRows = buildDisplayRows(transactions);
   const selectionInfos = displayRows.map(selectionInfoFor);
+  const today = useToday();
+  const settling = useSettlingRows(
+    displayRows.map((row, i) => ({
+      key: selectionInfos[i].key,
+      date: row.kind === "transfer" ? row.transaction_date : row.tx.transaction_date,
+    })),
+    today,
+  );
   const selectableKeys = selectionInfos.map((info) => info.key);
 
   const allSelected = selectableKeys.length > 0 && selectableKeys.every((key) => selected.has(key));
@@ -472,8 +537,13 @@ export function TransactionsList({
             {displayRows.map((row, index) => {
               const { key } = selectionInfos[index];
               const isSelected = selected.has(key);
+              const datedAhead = isDatedAhead(
+                row.kind === "transfer" ? row.transaction_date : row.tx.transaction_date,
+                today,
+              );
+              const stateClass = rowStateClass(datedAhead, settling.has(key));
               const checkbox = (
-                <td className="px-4 py-3">
+                <td className="row-rail px-4 py-3">
                   <input
                     type="checkbox"
                     aria-label={`Select transaction: ${row.kind === "transfer" ? row.description : row.tx.description}`}
@@ -489,7 +559,7 @@ export function TransactionsList({
                 return (
                   <tr
                     key={`transfer-${row.transferGroupId}`}
-                    className="group transition-colors duration-150 hover:bg-surface-raised motion-safe:animate-[row-in_600ms_ease-out]"
+                    className={`group transition-colors duration-150 hover:bg-surface-raised ${stateClass}`}
                   >
                     {checkbox}
                     <td className="whitespace-nowrap px-4 py-3 text-ink-secondary">
@@ -497,6 +567,7 @@ export function TransactionsList({
                     </td>
                     <td className="px-4 py-3 text-ink">
                       {row.description}
+                      {datedAhead ? <DatedAheadChip date={row.transaction_date} /> : null}
                       {row.isEstimated ? <ApproximateTag /> : null}
                     </td>
                     <td className="px-4 py-3">
@@ -562,7 +633,7 @@ export function TransactionsList({
               return (
                 <tr
                   key={tx.id}
-                  className="group transition-colors duration-150 hover:bg-surface-raised motion-safe:animate-[row-in_600ms_ease-out]"
+                  className={`group transition-colors duration-150 hover:bg-surface-raised ${stateClass}`}
                 >
                   {checkbox}
                   <td className="whitespace-nowrap px-4 py-3 text-ink-secondary">
@@ -570,6 +641,7 @@ export function TransactionsList({
                   </td>
                   <td className="px-4 py-3 text-ink">
                     {tx.description}
+                    {datedAhead ? <DatedAheadChip date={tx.transaction_date} /> : null}
                     {tx.is_estimated ? <ApproximateTag /> : null}
                   </td>
                   <td className="px-4 py-3">

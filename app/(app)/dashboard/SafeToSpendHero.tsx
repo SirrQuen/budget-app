@@ -8,6 +8,7 @@ import type {
   SafeToSpendWindowReason,
 } from "@/lib/db/dashboard";
 import type { OverdueOccurrence } from "@/lib/safeToSpendProjection";
+import { occurrenceKey } from "@/lib/upcomingOccurrences";
 import { UnconfirmedIncomeNote, UnconfirmedObligationNote } from "./UnconfirmedIncomeNote";
 import type { HorizonReason } from "@/lib/safeToSpendProjection";
 import { Amount } from "@/components/ui/Amount";
@@ -258,11 +259,11 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
                   </dd>
                 </div>
                 {data.trough.obligations.map((c) => (
-                  <ObligationRow key={`${c.recurringId}-${c.dueDate}`} c={c} indent />
+                  <ObligationRow key={occurrenceKey(c)} c={c} indent />
                 ))}
               </>
             ) : data.obligations.length > 0 ? (
-              data.obligations.map((c) => <ObligationRow key={`${c.recurringId}-${c.dueDate}`} c={c} />)
+              data.obligations.map((c) => <ObligationRow key={occurrenceKey(c)} c={c} />)
             ) : (
               <div className="flex items-baseline justify-between gap-4">
                 <dt className="text-ink-secondary">No recurring commitments due in this window</dt>

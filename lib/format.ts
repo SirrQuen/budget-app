@@ -42,6 +42,7 @@ const shortDate = new Intl.DateTimeFormat("en-US", {
 // spelled-out weekday name every other formatter here uses.
 const weekdayLong = new Intl.DateTimeFormat("en-US", { weekday: "long" });
 const dayMonthLong = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long" });
+const dayMonthShort = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
 
 const ISO_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -150,6 +151,15 @@ export function formatWeekday(date: string | Date): string {
  */
 export function formatDayMonth(date: string | Date): string {
   return formatOrBlank(date, (d) => dayMonthLong.format(d), "formatDayMonth");
+}
+
+/**
+ * "15 Nov" -- day + short month. The date chip on a transaction dated
+ * after today (lib/datedAhead.ts): the date it starts counting, never
+ * "Scheduled" or "Pending". Same never-throws contract as formatDate.
+ */
+export function formatDayMonthShort(date: string | Date): string {
+  return formatOrBlank(date, (d) => dayMonthShort.format(d), "formatDayMonthShort");
 }
 
 /**

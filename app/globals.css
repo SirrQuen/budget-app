@@ -474,6 +474,86 @@
   }
 }
 
+/* A transaction dated after today (migration 65): not in its balance
+   until its date. Ghosted, with a dashed leading edge drawn on the row's
+   first cell (.row-rail); the date chip beside the description says when
+   it starts counting. Neutral ink -- never red, never a status colour. */
+.row-rail {
+  position: relative;
+}
+.row-dated-ahead {
+  opacity: 0.55;
+}
+.row-dated-ahead .row-rail::before,
+.row-settling .row-rail::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: repeating-linear-gradient(to bottom, var(--ink-muted) 0 4px, transparent 4px 8px);
+}
+
+/* On its date it SETTLES, once per transaction (lib/datedAhead.ts): the
+   dash resolves into a solid rail, the ghost fills in, then the rail
+   steps away so the row reads like every other. No sound. Reduced
+   motion skips it entirely -- the row is simply settled. */
+@media (prefers-reduced-motion: no-preference) {
+  .row-settling {
+    animation: row-settle 1400ms var(--icon-anim-ease) both;
+  }
+  .row-settling .row-rail::before {
+    animation: rail-dash-out 1400ms var(--icon-anim-ease) both;
+  }
+  .row-settling .row-rail::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 2px;
+    background: var(--ink-muted);
+    animation: rail-solid 1400ms var(--icon-anim-ease) both;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .row-settling .row-rail::before {
+    content: none;
+  }
+}
+
+@keyframes row-settle {
+  0% {
+    opacity: 0.55;
+  }
+  45%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes rail-dash-out {
+  0% {
+    opacity: 1;
+  }
+  35%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes rail-solid {
+  0% {
+    opacity: 0;
+  }
+  35%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 body {
   background: var(--page);
   color: var(--ink);

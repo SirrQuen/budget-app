@@ -26,6 +26,11 @@
 // transfer crossing the set (Checking -> Savings out, Savings -> Checking
 // in) takes the rules of the side it acts as.
 //
+// A one-off transaction dated after today isn't in the balance yet
+// (counts_in_balance, migration 65); it is counted here on its own date,
+// classified by the same rule, with no confirmation. Beyond the horizon it
+// waits, as a schedule's occurrence would.
+//
 // With no usable income schedule there's no payday to project to, so the
 // caller's window (next payday / end of month / 30 days, from settings)
 // is used as the horizon with no income in it -- which reduces exactly to
@@ -116,8 +121,37 @@ export type ProjectionSchedule = {
   occurrencesRemaining: number | null;
 };
 
-export type ProjectedObligation = {
-  recurringId: string;
+/**
+ * A one-off transaction dated after today (v_future_transactions,
+ * migration 65). The balance doesn't count it until its date; until then
+ * the projection does, on its date, like a recurring occurrence -- but
+ * with no confirmation: the person created it, so it simply starts
+ * counting. Classified by the same rule as schedules (lib/safeToSpend.ts),
+ * so a future charge on Savings or a Credit Card never enters.
+ */
+export type ProjectionTransaction = {
+  transactionId: string;
+  name: string;
+  kind: "Income" | "Expense" | "Transfer";
+  /** Its account's type -- where Income lands, where an outflow leaves from. */
+  fromAccountType: string;
+  /** A Transfer's destination type; null otherwise. */
+  toAccountType: string | null;
+  /** That leg will count toward its balance on its date (and doesn't yet). */
+  fromCountsLater: boolean;
+  /** A Transfer's destination leg, likewise; false otherwise. */
+  toCountsLater: boolean;
+  /** Dollars, positive. */
+  amount: number;
+  date: string;
+};
+
+/** Where a projected occurrence comes from: a schedule, or a one-off transaction. */
+export type ProjectedSource =
+  | { recurringId: string; transactionId: null }
+  | { recurringId: null; transactionId: string };
+
+export type ProjectedObligation = ProjectedSource & {
   name: string;
   /** Positive outflow, dollars. */
   amount: number;
@@ -133,8 +167,7 @@ export type ProjectedObligation = {
   basis: AmountBasis;
 };
 
-export type ProjectedIncome = {
-  recurringId: string;
+export type ProjectedIncome = ProjectedSource & {
   name: string;
   /** Low estimate, dollars. */
   amount: number;
@@ -188,6 +221,8 @@ export type SafeToSpendProjectionInput = {
    */
   goalHolds: GoalHold[];
   schedules: ProjectionSchedule[];
+  /** One-off transactions dated after today. Never set the horizon. */
+  futureTransactions: ProjectionTransaction[];
   holidays: ReadonlySet<string>;
   /** Horizon to use when there's no usable income schedule. */
   fallbackWindowEnd: string;
@@ -441,6 +476,7 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
       }
       allIncomes.push({
         recurringId: s.recurringId,
+        transactionId: null,
         name: s.name,
         amount: s.amountLow ?? s.amount,
         date,
@@ -519,6 +555,7 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
       if (date > horizonEnd) return;
       obligations.push({
         recurringId: s.recurringId,
+        transactionId: null,
         name: s.name,
         amount: toDollars(amountsCents[k]),
         date,
@@ -532,6 +569,31 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
       });
     });
   }
+
+  // One-off future transactions, on their own date. Beyond the horizon
+  // they wait, like a schedule's occurrence that far out. Income only in
+  // projection mode, as for schedules: window mode counts no income.
+  for (const t of input.futureTransactions) {
+    const date = t.date < today ? today : t.date;
+    if (date > horizonEnd) continue;
+    const source = { recurringId: null, transactionId: t.transactionId } as const;
+    const base = { ...source, name: t.name, amount: t.amount, date, dueDate: t.date, isEstimate: false, basis: "entered" as const };
+    if (
+      t.kind !== "Income" &&
+      t.fromCountsLater &&
+      isSafeToSpendCommitment({ transactionType: t.kind, fromAccountType: t.fromAccountType, toAccountType: t.toAccountType })
+    ) {
+      obligations.push(base);
+    } else if (
+      mode === "projection" &&
+      t.kind !== "Expense" &&
+      (t.kind === "Income" ? t.fromCountsLater : t.toCountsLater) &&
+      isSafeToSpendIncome({ transactionType: t.kind, fromAccountType: t.fromAccountType, toAccountType: t.toAccountType })
+    ) {
+      incomes.push(base);
+    }
+  }
+  incomes.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   obligations.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
   // Day-by-day walk. Outflows before inflows within a day; the earliest
@@ -595,8 +657,10 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
     overdueObligations,
     episodes: findSqueezeEpisodes(days, cushionCents, troughDate),
     cautious: {
-      billsAtHigh: obligations.some((o) => atHigh.has(o.recurringId) || paymentsCarryingHigh.has(o.recurringId)),
-      payAtLow: incomes.some((i) => atLow.has(i.recurringId)),
+      billsAtHigh: obligations.some(
+        (o) => o.recurringId !== null && (atHigh.has(o.recurringId) || paymentsCarryingHigh.has(o.recurringId)),
+      ),
+      payAtLow: incomes.some((i) => i.recurringId !== null && atLow.has(i.recurringId)),
     },
     daily: days.map((d) => ({ date: d.date, low: toDollars(d.lowCents), end: toDollars(d.endCents) })),
   };

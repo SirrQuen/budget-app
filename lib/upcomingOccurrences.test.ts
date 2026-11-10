@@ -44,6 +44,7 @@ function upcoming(schedules: ProjectionSchedule[]) {
     cushion: 0,
     goalHolds: [],
     schedules,
+    futureTransactions: [],
     holidays: new Set(),
     fallbackWindowEnd: "2026-10-31",
   });
@@ -115,4 +116,37 @@ test("keys stay unique when missed bill occurrences all land on today", () => {
 test("the default window is 14 days, today included", () => {
   const { list } = upcoming([weeklyPay]);
   assert.equal(list.windowEnd, day(13));
+});
+
+test("a one-off transaction dated ahead is listed on its date, keyed by transaction, with no schedule", () => {
+  const projection = projectSafeToSpend({
+    today: TODAY,
+    cash: 2000,
+    cushion: 0,
+    goalHolds: [],
+    schedules: [weeklyPay],
+    futureTransactions: [
+      {
+        transactionId: "t1",
+        name: "Dentist",
+        kind: "Expense",
+        fromAccountType: "Checking",
+        toAccountType: null,
+        fromCountsLater: true,
+        toCountsLater: false,
+        amount: 90,
+        date: day(4),
+      },
+    ],
+    holidays: new Set(),
+    fallbackWindowEnd: "2026-10-31",
+  });
+  const item = buildUpcomingOccurrences(projection, TODAY).items.find((i) => i.transactionId === "t1");
+  assert.ok(item);
+  assert.equal(item.key, "tx-t1");
+  assert.equal(item.recurringId, null);
+  assert.equal(item.date, day(4));
+  assert.equal(item.direction, "bill");
+  assert.equal(item.status, "known");
+  assert.equal(item.basis, "entered");
 });

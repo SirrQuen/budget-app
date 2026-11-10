@@ -214,6 +214,12 @@ begin
     values (pg_temp.fx(u || '_txn'), uid, pg_temp.fx(u || '_acct'), pg_temp.fx(u || '_groceries'),
             'RLS ' || u || ' groceries', 25, 'Expense', current_date);
 
+    -- Dated ahead: gives v_future_transactions (migration 65) a row.
+    insert into public.transactions (userid, accountid, categoryid, description, amount,
+                                     transaction_type, transaction_date)
+    values (uid, pg_temp.fx(u || '_acct'), pg_temp.fx(u || '_groceries'),
+            'RLS ' || u || ' dated ahead', 7, 'Expense', current_date + 10);
+
     insert into public.budgets (id, userid, categoryid, budget_amount, budget_month)
     values (pg_temp.fx(u || '_budget'), uid, pg_temp.fx(u || '_groceries'), 100,
             date_trunc('month', current_date)::date);
@@ -287,6 +293,7 @@ begin
       ('2 views', 'v_category_activity',    format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_category_spending',    format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_daily_cashflow',       format('userid = %L', a),                            format('userid <> %L', b)),
+      ('2 views', 'v_future_transactions',  format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_goal_monthly_holds',   format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_goal_progress',        format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_goals_summary',        format('userid = %L', a),                            format('userid <> %L', b)),

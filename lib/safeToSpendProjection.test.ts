@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { addDaysISO } from "./date";
-import { projectSafeToSpend, type GoalHold, type ProjectionSchedule } from "./safeToSpendProjection";
+import {
+  projectSafeToSpend,
+  type GoalHold,
+  type ProjectionSchedule,
+  type ProjectionTransaction,
+} from "./safeToSpendProjection";
 import { buildConfirmationQueue } from "./confirmationQueue";
 
 const TODAY = "2026-10-01";
@@ -41,13 +46,20 @@ function schedule(overrides: Partial<ProjectionSchedule> & Pick<ProjectionSchedu
 const paycheck = schedule({ kind: "Income", name: "Paycheck", amount: 1500, nextDueDate: day(5) });
 const rent = schedule({ kind: "Expense", name: "Rent", amount: 1800, nextDueDate: day(7) });
 
-function run(schedules: ProjectionSchedule[], cash = 2000, cushion = 300, goalHolds: GoalHold[] = []) {
+function run(
+  schedules: ProjectionSchedule[],
+  cash = 2000,
+  cushion = 300,
+  goalHolds: GoalHold[] = [],
+  futureTransactions: ProjectionTransaction[] = [],
+) {
   return projectSafeToSpend({
     today: TODAY,
     cash,
     cushion,
     goalHolds,
     schedules,
+    futureTransactions,
     holidays: NO_HOLIDAYS,
     fallbackWindowEnd: "2026-10-31",
   });
@@ -955,4 +967,120 @@ test("a card payment's first occurrence keeps its basis; later ones are card cha
     result.obligations.filter((o) => o.name === "Card payment").map((o) => o.basis),
     ["card_balance", "card_charges"],
   );
+});
+
+// ---------------------------------------------------------------------
+// One-off transactions dated after today (migration 65). The balance
+// doesn't count them until their date; the projection does, on it.
+// ---------------------------------------------------------------------
+
+function future(overrides: Partial<ProjectionTransaction> & Pick<ProjectionTransaction, "amount" | "date">): ProjectionTransaction {
+  return {
+    transactionId: overrides.name ?? "tx",
+    name: "One-off",
+    kind: "Expense",
+    fromAccountType: "Checking",
+    toAccountType: null,
+    fromCountsLater: true,
+    toCountsLater: false,
+    ...overrides,
+  };
+}
+
+test("future-dated: a checking charge counts from the moment it's entered, on its date", () => {
+  const without = run([paycheck]);
+  const withIt = run([paycheck], 2000, 300, [], [future({ name: "Rent", amount: 400, date: day(3) })]);
+
+  assert.equal(withIt.safeToSpend, without.safeToSpend - 400);
+  const o = withIt.obligations.find((x) => x.transactionId === "Rent");
+  assert.ok(o);
+  assert.equal(o.date, day(3));
+  assert.equal(o.recurringId, null);
+  assert.equal(o.basis, "entered");
+  assert.equal(o.isEstimate, false);
+});
+
+test("future-dated: a charge on savings or a card never enters safe to spend", () => {
+  const without = run([paycheck]);
+  for (const fromAccountType of ["Savings", "Credit Card", "Investment", "Loan"]) {
+    const r = run([paycheck], 2000, 300, [], [future({ amount: 400, date: day(3), fromAccountType })]);
+    assert.equal(r.safeToSpend, without.safeToSpend, fromAccountType);
+    assert.equal(r.obligations.length, 0, fromAccountType);
+  }
+});
+
+test("future-dated: cash (spendable) counts like checking", () => {
+  const r = run([paycheck], 2000, 300, [], [future({ amount: 50, date: day(2), fromAccountType: "Cash" })]);
+  assert.equal(r.obligations.length, 1);
+});
+
+test("future-dated transfers follow the classifier: out of the set, within it, into it", () => {
+  const base = run([paycheck]);
+  const out = run([paycheck], 2000, 300, [], [
+    future({ kind: "Transfer", amount: 500, date: day(2), toAccountType: "Savings", toCountsLater: true }),
+  ]);
+  assert.equal(out.safeToSpend, base.safeToSpend - 500);
+
+  const cardPayment = run([paycheck], 2000, 300, [], [
+    future({ kind: "Transfer", amount: 300, date: day(2), toAccountType: "Credit Card", toCountsLater: true }),
+  ]);
+  assert.equal(cardPayment.safeToSpend, base.safeToSpend - 300);
+
+  const atm = run([paycheck], 2000, 300, [], [
+    future({ kind: "Transfer", amount: 200, date: day(2), toAccountType: "Cash", toCountsLater: true }),
+  ]);
+  assert.equal(atm.safeToSpend, base.safeToSpend);
+  assert.equal([...atm.obligations, ...atm.incomes].filter((x) => x.transactionId !== null).length, 0);
+
+  const intoSet = run([paycheck], 2000, 300, [], [
+    future({ kind: "Transfer", amount: 700, date: day(2), fromAccountType: "Savings", fromCountsLater: false, toAccountType: "Checking", toCountsLater: true }),
+  ]);
+  assert.equal(intoSet.incomes.filter((i) => i.transactionId !== null).length, 1);
+});
+
+test("future-dated: a leg that won't count later (archived account) is left out", () => {
+  const r = run([paycheck], 2000, 300, [], [future({ amount: 400, date: day(3), fromCountsLater: false })]);
+  assert.equal(r.obligations.length, 0);
+});
+
+test("future-dated: beyond the horizon it waits, like a schedule's occurrence", () => {
+  const r = run([paycheck], 2000, 300, [], [future({ amount: 400, date: day(200) })]);
+  assert.equal(r.obligations.length, 0);
+  assert.equal(r.safeToSpend, run([paycheck]).safeToSpend);
+});
+
+test("future-dated: income counts in projection mode, never in window mode", () => {
+  const refund = future({ kind: "Income", name: "Refund", amount: 120, date: day(2) });
+  const projected = run([paycheck, rent], 2000, 300, [], [refund]);
+  assert.ok(projected.incomes.some((i) => i.transactionId === "Refund"));
+
+  const windowed = run([rent], 2000, 300, [], [refund]);
+  assert.equal(windowed.mode, "window");
+  assert.equal(windowed.incomes.length, 0);
+});
+
+test("future-dated: the hero doesn't move on the day it settles into the balance", () => {
+  // The day before: cash excludes it, the projection counts it tomorrow.
+  const before = projectSafeToSpend({
+    today: day(0),
+    cash: 2000,
+    cushion: 300,
+    goalHolds: [],
+    schedules: [paycheck],
+    futureTransactions: [future({ amount: 400, date: day(1) })],
+    holidays: NO_HOLIDAYS,
+    fallbackWindowEnd: "2026-10-31",
+  });
+  // Its date: the balance now counts it, and the view no longer returns it.
+  const after = projectSafeToSpend({
+    today: day(1),
+    cash: 1600,
+    cushion: 300,
+    goalHolds: [],
+    schedules: [paycheck],
+    futureTransactions: [],
+    holidays: NO_HOLIDAYS,
+    fallbackWindowEnd: "2026-10-31",
+  });
+  assert.equal(after.safeToSpend, before.safeToSpend);
 });

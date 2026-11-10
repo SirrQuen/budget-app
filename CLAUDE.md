@@ -269,10 +269,31 @@ docs/*-test.sql fixtures do on purpose inside a rolled-back transaction;
 never do it outside one. Never infer the answer from `created_at` >
 `opening_set_at`.
 It's stored on the row (`counts_despite_anchor`, `anchor_answer_set_at`)
-and read by THE rule, `anchor_includes()` -- never a second comparison.
+and read by THE anchor rule, `anchor_includes()` -- never a second
+comparison. Balances read it through `counts_in_balance()` (below).
 Opening the transaction shows the answer given, and always offers "Was
 this in your balance?" (or "Change your answer") to answer by choice --
 an "isn't counted" line with no way to act on it is never shipped.
+
+**A transaction counts toward a balance from its date, never before.**
+The mirror of the anchor rule, in the same place: `counts_in_balance()`
+(migration 65) = `anchor_includes()` AND not after `p_as_of`, the
+USER'S today -- `current_date` inside a request (migration 40 makes it
+their day). Two functions, composed: every balance reads
+`counts_in_balance()`; the anchor trigger and `balance_anchor_preview`
+read `anchor_includes()` alone, so a future date is never asked the
+anchor question. `p_as_of` is required -- null raises, never the anchor
+answer alone. Never restate either comparison. Until its date a
+Checking/Cash transaction is an expectation in the projection
+(`v_future_transactions`, classified by `lib/safeToSpend.ts`, counted on
+its date, waiting beyond the horizon like a schedule's occurrence) and
+in Upcoming. NO confirmation: the person created it, so it simply
+starts counting; if it didn't happen they edit or delete it. In the
+list it's ghosted with a dashed leading edge and a date chip ("15 Nov"
+-- never "Scheduled", never "Pending"), and settles once on its date
+(`lib/datedAhead.ts`). Budget progress, cash flow and category spending
+still count it from entry -- deferred, see docs/phase-7-findings.md,
+"Budget progress counts future-dated transactions".
 
 **An override is valid only against the anchor it answered.** Any stored
 exception to a rule keyed on an anchor (or any other re-settable
@@ -626,6 +647,37 @@ check anything taken from it against the migrations. The contract:
    `>` writes UTF-16LE, git stores the file as binary, and `git diff`
    shows nothing (2026-11-03). Review the diff before committing.
 3. Commit both together
+4. If it created or recreated a view: run `docs/view-acl-check.sql`
+   (read-only) on each project it reached, and report how many views it
+   checked as well as how many failed
+
+### Any migration that creates a view uses migration 57's grant block
+
+That includes a view that is dropped and recreated. Revoke from all four
+roles, then grant exactly what the baseline views carry:
+
+    revoke all on table public.v_x from public, anon, authenticated, service_role;
+    grant select, references, trigger, truncate, maintain on table public.v_x to authenticated;
+    grant references, trigger, truncate, maintain on table public.v_x to service_role;
+
+Never 59's two-line form (`revoke ... from public, anon; grant select ...
+to authenticated`). A new object picks up the PROJECT's default
+privileges, and those differ between our projects (`pg_default_acl`,
+checked 2026-11-10): on sorrel-dev, the stock Supabase defaults give
+anon, authenticated and service_role every privilege; production's were
+reduced at some point to `Dxtm`. The two-line form is right only on a
+project whose defaults match production's. A migration can't know which
+project it is running on, and any new project starts with the stock
+defaults. 59 and the first draft of 65 both left authenticated holding
+insert, update and delete on dev.
+
+"Writes fail anyway because the view isn't updatable" was true of both.
+It depends on the view's SHAPE: joins and subqueries make a view
+non-updatable. Simplify the view later and the grant goes live without
+anyone touching it. Safety never rests on that incidental property; the
+grant itself must be right. Every view also carries
+`with (security_invoker = true)`, or it reads as its owner and returns
+every user's rows to every user.
 
 **Never run `supabase config push`.** It overwrites remote auth settings not
 represented locally. Auth configuration lives in the Supabase dashboard and is

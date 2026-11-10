@@ -13,6 +13,7 @@ import {
   getGoalProgress,
   getUpcomingRecurring,
   getConfirmationQueue,
+  getFutureTransactions,
 } from "@/lib/db/dashboard";
 import { getBudgetsForMonth } from "@/lib/db/budgets";
 import { getAccountLastLogged, listAccountBalances } from "@/lib/db/accounts";
@@ -82,6 +83,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     balancesResult,
     netWorthResult,
     lastLoggedResult,
+    futureResult,
   ] = await Promise.all([
     greetingPromise,
     // Decided when the session started -- see lib/auth/firstSession.ts.
@@ -100,6 +102,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     listAccountBalances({ is_active: true }),
     getNetWorth(),
     getAccountLastLogged(),
+    // cache()d -- the same rows getSafeToSpend counted, for their icons.
+    getFutureTransactions(),
   ]);
 
   // A failed profile read just means no name -- "Welcome back" alone.
@@ -188,6 +192,15 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
               }
             : null,
       },
+    ]),
+  );
+
+  // One-off transactions dated after today: icon only, never a confirm --
+  // the person entered them, so they simply start counting on their date.
+  const upcomingFuture: Record<string, UpcomingScheduleMeta> = Object.fromEntries(
+    (futureResult.data ?? []).map((t) => [
+      t.transactionId,
+      { categoryIcon: t.categoryIcon, isTransfer: t.kind === "Transfer", confirm: null },
     ]),
   );
 
@@ -386,6 +399,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
                 data={upcoming}
                 unconfirmedIncome={safeToSpendResult.data?.unconfirmedIncome ?? []}
                 schedules={upcomingSchedules}
+                futureTransactions={upcomingFuture}
               />
             ) : null}
             {/* "Last logged 12 days ago", per account -- a fact, never a nudge. */}

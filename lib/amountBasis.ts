@@ -7,6 +7,8 @@
 // one that produced the figure. This file only names them. Card payments
 // past the next one are built by the projection from the card's own
 // charges (lib/safeToSpendProjection.ts) -- "card_charges" is that case.
+// "entered" is a one-off transaction dated after today: the amount the
+// person typed, counted on its date (migration 65).
 
 export const AMOUNT_BASES = [
   "fixed",
@@ -19,6 +21,7 @@ export const AMOUNT_BASES = [
   "statement",
   "card_balance",
   "card_charges",
+  "entered",
 ] as const;
 
 export type AmountBasis = (typeof AMOUNT_BASES)[number];
@@ -34,6 +37,7 @@ const LABELS: Record<AmountBasis, string> = {
   statement: "statement",
   card_balance: "card balance",
   card_charges: "card charges",
+  entered: "as entered",
 };
 
 export function amountBasisLabel(basis: AmountBasis): string {
