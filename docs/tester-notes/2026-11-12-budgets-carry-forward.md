@@ -1,7 +1,7 @@
 Sent:      not yet (planned 2026-11-12)
 Migration: 63
 Merge:     67951d2
-Deployed:  not yet
+Deployed:  2026-11-10
 
 # Your budgets now carry from month to month
 
