@@ -257,8 +257,17 @@ never on any other edit: a new description never asks whether an old
 charge was in a balance. The edit forms follow the same three. A script
 or fixture that writes a pre-anchor row must answer too, or anchor the
 account before its history (as docs/leaves-spendable-set-parity.sql
-does); so must a one-off service-role fix that moves a pre-anchor row's
-date, amount or account. Never infer it from `created_at` > `opening_set_at`.
+does). The trigger has NO role exemption: it fires for service_role as
+for everyone (BYPASSRLS skips policies, not triggers; service_role isn't
+a superuser, so it can't switch triggers off with
+session_replication_role). A one-off service-role fix that moves a
+pre-anchor row's date, amount or account must pass an answer, and is
+trusted to pass the right one -- a person running SQL can always write a
+wrong answer, which is inherent, not a hole. The only way past the
+trigger is the table owner's `alter table ... disable trigger`, which the
+docs/*-test.sql fixtures do on purpose inside a rolled-back transaction;
+never do it outside one. Never infer the answer from `created_at` >
+`opening_set_at`.
 It's stored on the row (`counts_despite_anchor`, `anchor_answer_set_at`)
 and read by THE rule, `anchor_includes()` -- never a second comparison.
 Opening the transaction shows the answer given, and always offers "Was

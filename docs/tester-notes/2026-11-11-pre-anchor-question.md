@@ -1,6 +1,6 @@
 Sent:      not yet (planned 2026-11-11 -- not the 10th, which has goal money)
 Migration: 62
-Merge:     0336ce9
+Merge:     e8f7916
 Deployed:  not yet
 
 # A new question when you log something dated before your balance
