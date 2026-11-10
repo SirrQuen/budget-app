@@ -2155,3 +2155,38 @@ nothing for as long as it loops. The leaflets are SVG children, which
 composite in current Chrome (see "animation-delay costs a layout pass per
 frame" above, which is also why the fold's stagger is held keyframes, not
 delays).
+
+## Pre-anchor question: an older transaction can't be answered directly (2026-11-10)
+
+**Status: open. Build after 62 ships, as its own small cycle.**
+
+Migration 62 asks "Was it already included in that balance?" on insert,
+and on an edit only when the date, amount or account changes -- a new
+description must never re-open the question (the trigger and both edit
+forms follow the same three). The consequence: a transaction that was
+already dated before its account's anchor when 62 shipped, and was never
+asked, has no direct way to answer "No, add it to my balance". Its edit
+page shows "Dated before your balance of $X on <date>, so it isn't
+counted in that balance" and no question.
+
+Scale on production, read-only before the push (2026-11-10): 177 of 313
+transactions, 4 of 5 users, are dated before their account's anchor.
+Nearly all are back-filled history, correctly not counted; the gap only
+matters for one that was really pending when the balance was set.
+
+Today's ways round it, neither good:
+
+- Set the balance again from the bank (what the 62 tester note tells
+  testers -- it always works, and supersedes earlier answers by design).
+- Change the date, amount or account to make the question appear: an
+  edit made only to unlock a question, and it changes a real field.
+
+Fix (decided 2026-11-10): a quiet "Was this in your balance?" link on the
+"isn't counted" line (StoredAnchorAnswer) that opens the question for that
+transaction alone and saves only the answer. The database already accepts
+it -- an UPDATE that changes only `counts_despite_anchor` /
+`anchor_answer_set_at` fires the trigger, which validates the answer
+against the current anchor; no migration needed. The same link should
+sit beside a stored answer that applies ("change your answer") and one
+voided by a newer balance. It moves a balance when answered "No", so it
+gets its own tester note.
