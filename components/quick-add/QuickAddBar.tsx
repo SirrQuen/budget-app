@@ -25,6 +25,7 @@ import { Celebration } from "@/components/ui/Celebration";
 import { useConfirmPulse } from "@/components/ui/ConfirmPulse";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { FullFormOverlay } from "@/components/quick-add/FullFormOverlay";
+import { needsAnchorAnswer } from "@/lib/anchorAnswer";
 import { FIELD_CLASS, FIELD_EDGE } from "@/components/ui/Input";
 
 export function QuickAddBar({
@@ -153,6 +154,11 @@ export function QuickAddBar({
       const clientId = pendingClientIdRef.current;
       pendingClientIdRef.current = null;
       if (clientId) failPending(clientId);
+      // Dated before the account's balance date ("yesterday", "Oct 3"): it
+      // needs the "already included?" answer (migration 62), which the bar
+      // has no room to ask. Nothing was saved; the full form opens with
+      // everything filled in and asks.
+      if (needsAnchorAnswer(state.error)) openFullForm();
     }
     if (wasPendingRef.current && !pending && !state?.error) {
       submittingRef.current = false;
@@ -238,6 +244,9 @@ export function QuickAddBar({
             description: parsed.merchant,
             amount: String(parsed.amount),
             merchant: parsed.merchant,
+            transaction_type: parsed.transaction_type,
+            categoryid: categoryid || undefined,
+            accountid: accountid || undefined,
           }
         : { description: text.trim() || undefined },
     );
@@ -408,7 +417,8 @@ export function QuickAddBar({
         </p>
       )}
 
-      {state?.error ? <ErrorMessage message={state.error} /> : null}
+      {/* A pre-anchor entry went to the full form, which asks; no error here. */}
+      {state?.error && !needsAnchorAnswer(state.error) ? <ErrorMessage message={state.error} /> : null}
     </form>
   );
 

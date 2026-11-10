@@ -1,16 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { callAction, useActionForm } from "@/components/useActionForm";
-import { countsTowardBalanceAction, updateTransferAction, type ActionState } from "@/lib/actions/transactions";
+import { useState } from "react";
+import { useActionForm } from "@/components/useActionForm";
+import { updateTransferAction, type ActionState } from "@/lib/actions/transactions";
 import type { TransferForEdit } from "@/lib/db/transactions";
 import type { TransactionAccountOption } from "../../AddTransactionForm";
 import { FormField, useFieldId } from "@/components/ui/FormField";
 import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
-import { BalanceDateNote } from "@/components/BalanceDateNote";
+import {
+  PreAnchorQuestion,
+  StoredAnchorAnswer,
+  asksAnchorQuestion,
+  useAnchorPreviews,
+} from "@/components/PreAnchorQuestion";
 import { PaymentNote } from "@/components/PaymentNote";
 import { EditScopeChoice } from "@/components/EditScopeChoice";
 import { paymentPayee } from "@/lib/accountOptions";
@@ -25,8 +30,9 @@ import { transferEffect, transferEffectLine } from "@/lib/transferEdit";
 //
 // Each leg sits on its own account with its own balance date, so moving
 // the date can put one leg before its account's balance date and leave the
-// other after its own. The note is asked per account from SQL
-// (counts_toward_balance_preview), keyed by that leg's own row.
+// other after its own. The pre-anchor question (migration 62) is asked
+// per account from SQL (balance_anchor_preview), and each leg carries its
+// own answer into update_transfer().
 export function TransferEditForm({
   transfer,
   accounts,
@@ -40,38 +46,36 @@ export function TransferEditForm({
   const [toAccountId, setToAccountId] = useState(transfer.toLeg.accountId);
   const [amount, setAmount] = useState(String(transfer.amount));
   const [date, setDate] = useState(transfer.date);
-  const [answers, setAnswers] = useState<Record<string, boolean | null>>({});
-  const asked = useRef(new Set<string>());
 
   const from = accounts.find((a) => a.id === fromAccountId);
   const to = accounts.find((a) => a.id === toAccountId);
   const sameAccount = fromAccountId === toAccountId;
 
-  // The Expense leg is always the source, the Income leg the destination --
-  // so the source account is asked with the Expense leg's row and the
-  // destination with the Income leg's, whichever accounts they now name.
+  // The Expense leg is always the source, the Income leg the destination.
+  // Both legs were inserted together, so they share a recorded time; the
+  // Expense leg's row stands for both when SQL is asked. A leg's stored
+  // answer is offered back only while it still names the account it was
+  // given for -- after a swap it answered a different balance.
+  const anchorPreviews = useAnchorPreviews([fromAccountId, toAccountId], date, transfer.fromLeg.id);
+  //
+  // A leg is asked only when its date, amount or account changed -- what
+  // the database asks about. An untouched leg says what's stored instead.
+  const dateOrAmountChanged =
+    date !== transfer.date || (Number(amount) > 0 && amountChanged(transfer.amount, Number(amount)));
   const legs = [
-    { account: from, legId: transfer.fromLeg.id },
-    { account: to, legId: transfer.toLeg.id },
+    {
+      account: from,
+      legId: transfer.fromLeg.id,
+      stored: fromAccountId === transfer.fromLeg.accountId ? transfer.fromLeg.anchorAnswer : undefined,
+      asks: dateOrAmountChanged || fromAccountId !== transfer.fromLeg.accountId,
+    },
+    {
+      account: to,
+      legId: transfer.toLeg.id,
+      stored: toAccountId === transfer.toLeg.accountId ? transfer.toLeg.anchorAnswer : undefined,
+      asks: dateOrAmountChanged || toAccountId !== transfer.toLeg.accountId,
+    },
   ];
-  const keyFor = (accountId: string, legId: string) => `${accountId}|${date}|${legId}`;
-  const unasked = /^\d{4}-\d{2}-\d{2}$/.test(date)
-    ? legs
-        .flatMap((l) => (l.account ? [keyFor(l.account.id, l.legId)] : []))
-        .filter((k) => !(k in answers))
-        .join(",")
-    : "";
-  useEffect(() => {
-    if (unasked === "") return;
-    for (const key of unasked.split(",")) {
-      if (asked.current.has(key)) continue;
-      asked.current.add(key);
-      const [accountId, d, legId] = key.split("|");
-      void callAction(() => countsTowardBalanceAction(accountId, d, legId)).then((answer) => {
-        setAnswers((prev) => ({ ...prev, [key]: typeof answer === "boolean" ? answer : null }));
-      });
-    }
-  }, [unasked]);
 
   const originalFrom = accounts.find((a) => a.id === transfer.fromLeg.accountId);
   const originalTo = accounts.find((a) => a.id === transfer.toLeg.accountId);
@@ -193,16 +197,34 @@ export function TransferEditForm({
         />
       </FormField>
 
-      {legs.map((l) =>
-        l.account && answers[keyFor(l.account.id, l.legId)] === false ? (
-          <BalanceDateNote
-            key={l.legId}
-            accountId={l.account.id}
-            accountName={l.account.account_name}
-            openingDate={l.account.opening_date}
-          />
-        ) : null,
-      )}
+      {sameAccount
+        ? null
+        : legs.map((l) => {
+            const preview = l.account ? anchorPreviews[l.account.id] : undefined;
+            if (!l.account || !asksAnchorQuestion(preview)) return null;
+            if (!l.asks) {
+              return (
+                <StoredAnchorAnswer
+                  key={l.legId}
+                  accountName={l.account.account_name}
+                  preview={preview}
+                  stored={l.stored}
+                  nameAccount
+                />
+              );
+            }
+            return (
+              <PreAnchorQuestion
+                key={`${l.legId}|${l.account.id}|${date}`}
+                idPrefix={fieldId("anchor")}
+                accountId={l.account.id}
+                accountName={l.account.account_name}
+                preview={preview}
+                stored={l.stored}
+                nameAccount
+              />
+            );
+          })}
 
       {effectLine ? <p className="text-sm text-ink-secondary">{effectLine}</p> : null}
 

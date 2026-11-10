@@ -1,5 +1,5 @@
 -- =====================================================================
--- Balance anchor test (migration 48)
+-- Balance anchor test (migrations 48, 62)
 --
 -- Run against the linked project after any change to anchor_includes(),
 -- v_account_balances, the anchor triggers or their readers:
@@ -24,8 +24,12 @@
 --   1  The rule      anchor_includes() truth table
 --   2  Triggers      created_at and opening_set_at are the database's
 --   3  Balances      v_account_balances, counts_toward_balance and
---                    counts_toward_balance_preview agree on the scenarios
---                    that motivated the rule
+--                    balance_anchor_preview agree on the scenarios that
+--                    motivated the rule
+--   4  Answers       a pre-anchor transaction needs an answer (migration
+--                    62); "No" moves the balance by exactly its amount,
+--                    once; "Yes" doesn't; a new balance voids earlier
+--                    answers
 -- =====================================================================
 
 begin;
@@ -64,6 +68,17 @@ begin
 end
 $$;
 
+-- Runs a statement and returns its SQLSTATE, or null if it succeeded. A
+-- failed statement rolls back to its own savepoint, not the whole run.
+create function pg_temp.sqlstate_of(p_sql text) returns text language plpgsql as $$
+begin
+  execute p_sql;
+  return null;
+exception when others then
+  return sqlstate;
+end
+$$;
+
 
 -- ---------------------------------------------------------------------
 -- 1. The rule
@@ -78,7 +93,21 @@ select '1 rule', v.what, v.expected::text, r::text, r = v.expected
     ('on the date, recorded at the anchor instant', date '2026-10-10', timestamptz '2026-10-10 17:00Z', false)
   ) as v(what, txn_date, recorded, expected)
  cross join lateral (
-   select public.anchor_includes(v.txn_date, v.recorded, date '2026-10-10', timestamptz '2026-10-10 17:00Z') as r
+   select public.anchor_includes(v.txn_date, v.recorded, date '2026-10-10', timestamptz '2026-10-10 17:00Z',
+                                 null, null) as r
+ ) x;
+
+insert into anchor_results (section, check_, expected, actual, pass)
+select '1 rule', v.what, v.expected::text, r::text, r = v.expected
+  from (values
+    ('before the date, answered No for this anchor',     true,  timestamptz '2026-10-10 17:00Z', true),
+    ('before the date, answered No for an older anchor', true,  timestamptz '2026-10-01 09:00Z', false),
+    ('before the date, answered Yes for this anchor',    false, timestamptz '2026-10-10 17:00Z', false)
+  ) as v(what, counts, answer_set_at, expected)
+ cross join lateral (
+   select public.anchor_includes(date '2026-10-09', timestamptz '2026-10-10 18:00Z',
+                                 date '2026-10-10', timestamptz '2026-10-10 17:00Z',
+                                 v.counts, v.answer_set_at) as r
  ) x;
 
 
@@ -171,6 +200,9 @@ select pg_temp.rec('2 triggers', 'anchor posted unchanged: opening_set_at re-sta
 select pg_temp.unbecome();
 alter table public.accounts disable trigger trg_accounts_anchor_1_lock;
 alter table public.transactions disable trigger trg_transactions_created_at;
+-- b1, b4 and b5 are dated before the anchor with no answer: rows from
+-- before migration 62, so its answer trigger is off for this insert too.
+alter table public.transactions disable trigger trg_transactions_anchor_answer;
 delete from public.transactions where id = 'a7c4a7c4-0000-4000-8000-0000000000a1';
 update public.accounts set opening_set_at = timestamptz '2026-10-10 17:00Z'
  where id = 'a7c4a7c4-0000-4000-8000-000000000001';
@@ -189,6 +221,7 @@ select v.id::uuid, 'a7c4a7c4-a7c4-4a7c-8a7c-a7c4a7c4a7c4', 'a7c4a7c4-0000-4000-8
  where c.userid = 'a7c4a7c4-a7c4-4a7c-8a7c-a7c4a7c4a7c4' and c.category_name = 'Groceries';
 alter table public.accounts enable trigger trg_accounts_anchor_1_lock;
 alter table public.transactions enable trigger trg_transactions_created_at;
+alter table public.transactions enable trigger trg_transactions_anchor_answer;
 select pg_temp.become('a7c4a7c4-a7c4-4a7c-8a7c-a7c4a7c4a7c4');
 
 -- 1000 - 20 (b2) - 40 (b3)
@@ -202,21 +235,45 @@ select pg_temp.rec('3 balances', 'counts_toward_balance agrees with the view, ro
              where t.accountid = 'a7c4a7c4-0000-4000-8000-000000000001'
                and public.counts_toward_balance(t)));
 
--- Edit b5's date onto the anchor date: logged before the anchor, so still out.
-update public.transactions set transaction_date = date '2026-10-10'
- where id = 'a7c4a7c4-0000-4000-8000-0000000000b5';
-select pg_temp.rec('3 balances', 'date edited onto the anchor date, logged before it: not counted',
-  'false', (select public.counts_toward_balance(t)::text from public.transactions t
-             where t.id = 'a7c4a7c4-0000-4000-8000-0000000000b5'));
-select pg_temp.rec('3 balances', 'preview for that edit agrees',
-  'false', public.counts_toward_balance_preview('a7c4a7c4-0000-4000-8000-000000000001',
-             date '2026-10-10', 'a7c4a7c4-0000-4000-8000-0000000000b5')::text);
+-- Edit b5's date onto the anchor date: logged before the anchor, so it
+-- still wouldn't count -- and since migration 62 that edit needs an answer.
+select pg_temp.rec('3 balances', 'date edited onto the anchor date, logged before it, no answer: refused',
+  'SRA01', pg_temp.sqlstate_of($q$update public.transactions set transaction_date = date '2026-10-10'
+                                  where id = 'a7c4a7c4-0000-4000-8000-0000000000b5'$q$));
+select pg_temp.rec('3 balances', 'preview for that edit: not counted by date',
+  'false', (select counts_by_date::text from public.balance_anchor_preview(
+              'a7c4a7c4-0000-4000-8000-000000000001', date '2026-10-10',
+              'a7c4a7c4-0000-4000-8000-0000000000b5')));
 select pg_temp.rec('3 balances', 'preview, new transaction on the anchor date: counts',
-  'true', public.counts_toward_balance_preview('a7c4a7c4-0000-4000-8000-000000000001',
-            date '2026-10-10')::text);
+  'true', (select counts_by_date::text from public.balance_anchor_preview(
+             'a7c4a7c4-0000-4000-8000-000000000001', date '2026-10-10')));
 select pg_temp.rec('3 balances', 'preview, new transaction before the anchor date: not counted',
-  'false', public.counts_toward_balance_preview('a7c4a7c4-0000-4000-8000-000000000001',
-             date '2026-10-09')::text);
+  'false', (select counts_by_date::text from public.balance_anchor_preview(
+              'a7c4a7c4-0000-4000-8000-000000000001', date '2026-10-09')));
+select pg_temp.rec('3 balances', 'preview names the anchor it would ask about',
+  '1000.00 2026-10-10 2026-10-10 17:00:00+00',
+  (select concat_ws(' ', anchor_balance, anchor_date, anchor_set_at at time zone 'UTC' || '+00')
+     from public.balance_anchor_preview('a7c4a7c4-0000-4000-8000-000000000001', date '2026-10-09')));
+select pg_temp.rec('3 balances', 'an edit that touches nothing the rule reads: allowed, still out',
+  'null false', (select coalesce(pg_temp.sqlstate_of($q$update public.transactions set notes = 'n'
+                                   where id = 'a7c4a7c4-0000-4000-8000-0000000000b4'$q$), 'null')
+                   || ' ' || (select public.counts_toward_balance(t)::text from public.transactions t
+                               where t.id = 'a7c4a7c4-0000-4000-8000-0000000000b4')));
+-- How the app actually saves an edit: PostgREST and update_transfer()
+-- send the account, date and amount every time, unchanged. Only a CHANGE
+-- to one of them asks -- a new description on an old charge doesn't.
+select pg_temp.rec('3 balances', 'a description edit that resends account, date and amount unchanged: allowed',
+  'null', coalesce(pg_temp.sqlstate_of($q$update public.transactions
+                     set description = 'b4 renamed', accountid = accountid,
+                         transaction_date = transaction_date, amount = amount
+                   where id = 'a7c4a7c4-0000-4000-8000-0000000000b4'$q$), 'null'));
+select pg_temp.rec('3 balances', 'changing a pre-anchor row''s amount, no answer: asks (refused)',
+  'SRA01', pg_temp.sqlstate_of($q$update public.transactions set amount = 81
+                                  where id = 'a7c4a7c4-0000-4000-8000-0000000000b4'$q$));
+select pg_temp.rec('3 balances', 'changing its account to the same account: no change, no question',
+  'null', coalesce(pg_temp.sqlstate_of($q$update public.transactions
+                     set accountid = 'a7c4a7c4-0000-4000-8000-000000000001'
+                   where id = 'a7c4a7c4-0000-4000-8000-0000000000b4'$q$), 'null'));
 
 -- Re-set the anchor later the same day (21:00Z): b2 (18:00Z) is now in the figure.
 select pg_temp.unbecome();
@@ -236,6 +293,93 @@ select pg_temp.rec('3 balances', 'anchor re-set later the same day: earlier same
 select pg_temp.rec('3 balances', 'backdated before the anchor date: never counted',
   'false', (select public.counts_toward_balance(t)::text from public.transactions t
              where t.id = 'a7c4a7c4-0000-4000-8000-0000000000b4'));
+
+select pg_temp.unbecome();
+
+
+-- ---------------------------------------------------------------------
+-- 4. Answers (migration 62)
+--
+-- The anchor is now 2026-10-10, set 21:00Z, $950; the balance is 910.00.
+-- ---------------------------------------------------------------------
+select pg_temp.become('a7c4a7c4-a7c4-4a7c-8a7c-a7c4a7c4a7c4');
+
+create function pg_temp.insert_c(p_id text, p_what text, p_amount numeric, p_date date,
+                                 p_counts boolean, p_set_at timestamptz)
+returns text language sql as $$
+  select pg_temp.sqlstate_of(format(
+    'insert into public.transactions (id, userid, accountid, categoryid, description, amount,
+                                      transaction_type, transaction_date, counts_despite_anchor,
+                                      anchor_answer_set_at)
+     select %L, %L, %L, c.id, %L, %s, %L, %L, %L, %L
+       from public.categories c
+      where c.userid = %L and c.category_name = %L',
+    p_id, 'a7c4a7c4-a7c4-4a7c-8a7c-a7c4a7c4a7c4', 'a7c4a7c4-0000-4000-8000-000000000001',
+    p_what, p_amount, 'Expense', p_date, p_counts, p_set_at,
+    'a7c4a7c4-a7c4-4a7c-8a7c-a7c4a7c4a7c4', 'Groceries'))
+$$;
+
+create function pg_temp.balance() returns text language sql as $$
+  select balance::text from public.v_account_balances
+   where account_id = 'a7c4a7c4-0000-4000-8000-000000000001'
+$$;
+
+select pg_temp.rec('4 answers', 'pre-anchor insert with no answer: refused',
+  'SRA01', pg_temp.insert_c('a7c4a7c4-0000-4000-8000-0000000000c0', 'c0', 7, date '2026-10-09', null, null));
+select pg_temp.rec('4 answers', 'pre-anchor insert answered against an older balance: refused',
+  'SRA02', pg_temp.insert_c('a7c4a7c4-0000-4000-8000-0000000000c0', 'c0', 7, date '2026-10-09',
+                            true, timestamptz '2026-10-10 17:00Z'));
+select pg_temp.rec('4 answers', 'an answer that names no anchor: refused',
+  'SRA02',pg_temp.insert_c('a7c4a7c4-0000-4000-8000-0000000000c0', 'c0', 7, date '2026-10-09', true, null));
+select pg_temp.rec('4 answers', 'nothing refused moved the balance', '910.00', pg_temp.balance());
+
+-- "No, add it to my balance": a $100 charge that was pending when the balance was read.
+select pg_temp.rec('4 answers', '"No" insert: accepted',
+  'null', coalesce(pg_temp.insert_c('a7c4a7c4-0000-4000-8000-0000000000c1', 'c1 pending', 100,
+                                    date '2026-10-09', true, timestamptz '2026-10-10 21:00Z'), 'null'));
+select pg_temp.rec('4 answers', '"No": the balance moves by exactly its amount', '810.00', pg_temp.balance());
+
+-- "Yes, it's already counted": a $5 purchase back-filled for the record.
+select pg_temp.rec('4 answers', '"Yes" insert: accepted',
+  'null', coalesce(pg_temp.insert_c('a7c4a7c4-0000-4000-8000-0000000000c2', 'c2 history', 5,
+                                    date '2026-10-01', false, timestamptz '2026-10-10 21:00Z'), 'null'));
+select pg_temp.rec('4 answers', '"Yes": the balance doesn''t move', '810.00', pg_temp.balance());
+
+select pg_temp.rec('4 answers', 'the stored answers read back, and counts_toward_balance agrees',
+  'c1 pending:true:true,c2 history:false:false',
+  (select string_agg(t.description || ':' || t.counts_despite_anchor || ':' || public.counts_toward_balance(t),
+                     ',' order by t.description)
+     from public.transactions t
+    where t.id in ('a7c4a7c4-0000-4000-8000-0000000000c1', 'a7c4a7c4-0000-4000-8000-0000000000c2')));
+
+-- Editing something the rule doesn't read leaves the answer standing.
+update public.transactions set description = 'c1 pending (renamed)'
+ where id = 'a7c4a7c4-0000-4000-8000-0000000000c1';
+select pg_temp.rec('4 answers', 'renaming a "No" row: still counted, once', '810.00', pg_temp.balance());
+
+-- An answer on a row the date rule already counts is cleared, not kept.
+select pg_temp.rec('4 answers', 'after-anchor insert carrying an answer: accepted',
+  'null', coalesce(pg_temp.insert_c('a7c4a7c4-0000-4000-8000-0000000000c3', 'c3 after', 1,
+                                    date '2026-10-20', true, timestamptz '2026-10-10 21:00Z'), 'null'));
+select pg_temp.rec('4 answers', 'after the anchor: no answer stored, counted once',
+  'null 809.00', (select coalesce(t.counts_despite_anchor::text, 'null') || ' ' || pg_temp.balance()
+                    from public.transactions t where t.id = 'a7c4a7c4-0000-4000-8000-0000000000c3'));
+
+-- A new balance supersedes the answers given against the old one.
+select pg_temp.unbecome();
+alter table public.accounts disable trigger trg_accounts_anchor_1_lock;
+alter table public.accounts disable trigger trg_accounts_anchor_2_stamp;
+update public.accounts set opening_set_at = timestamptz '2026-10-15 09:00Z', opening_balance = 700
+ where id = 'a7c4a7c4-0000-4000-8000-000000000001';
+alter table public.accounts enable trigger trg_accounts_anchor_1_lock;
+alter table public.accounts enable trigger trg_accounts_anchor_2_stamp;
+select pg_temp.become('a7c4a7c4-a7c4-4a7c-8a7c-a7c4a7c4a7c4');
+
+-- 700 - 40 (b3) - 1 (c3). c1 answered the 21:00Z anchor, so it's out.
+select pg_temp.rec('4 answers', 'new balance: the earlier "No" no longer counts', '659.00', pg_temp.balance());
+select pg_temp.rec('4 answers', 'moving that row''s date with its old answer: refused as stale',
+  'SRA02', pg_temp.sqlstate_of($q$update public.transactions set transaction_date = date '2026-10-08'
+                                  where id = 'a7c4a7c4-0000-4000-8000-0000000000c1'$q$));
 
 select pg_temp.unbecome();
 

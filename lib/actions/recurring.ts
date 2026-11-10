@@ -20,9 +20,18 @@ import { confirmationKey } from "@/lib/confirmationQueue";
 import { statementDayIsDueDay } from "@/lib/recurringSchedule";
 import { addNotYetKey } from "@/lib/confirmationLater";
 import { getToday } from "@/lib/db/settings";
+import { needsAnchorAnswer, parseAnchorAnswers } from "@/lib/anchorAnswer";
 import { setGoalFunding } from "@/lib/db/goals";
 
 export type ActionState = { error?: string } | undefined;
+
+/**
+ * A one-tap answer's result. needsAnswer: the occurrence is dated before
+ * a balance date and needs the "already included?" answer (migration 62),
+ * which one tap can't give -- the queue opens the sheet to ask. Nothing
+ * was written.
+ */
+export type OneTapState = { error?: string; needsAnswer?: boolean } | undefined;
 
 // What the schedule picker actually offers -- a subset of what
 // rectx_frequency_check still allows (Daily/Biweekly/Quarterly stay valid
@@ -520,12 +529,15 @@ function revalidateAnswered() {
 // succeeds quietly -- the outcome the user asked for already exists.
 
 /** Landed as expected -- one tap: the predicted date and amount. */
-export async function confirmAsExpectedAction(id: string, dueDate: string): Promise<ActionState> {
+export async function confirmAsExpectedAction(id: string, dueDate: string): Promise<OneTapState> {
   if (!id || !ISO_DATE.test(dueDate)) {
     return { error: "We couldn't tell which one that was." };
   }
   const { error } = await confirmOccurrence(id, { dueDate });
   if (error) {
+    // Refused by the database before anything stuck (the claim is put
+    // back): the queue asks the question in the sheet instead.
+    if (needsAnchorAnswer(error)) return { needsAnswer: true };
     return { error };
   }
   revalidateAnswered();
@@ -551,7 +563,12 @@ export async function confirmDifferentlyAction(
     return { error: "Choose the date it landed." };
   }
 
-  const { error } = await confirmOccurrence(id, { dueDate, amount, date });
+  const { error } = await confirmOccurrence(id, {
+    dueDate,
+    amount,
+    date,
+    anchorAnswers: parseAnchorAnswers(formData),
+  });
   if (error) {
     return { error };
   }
@@ -589,11 +606,13 @@ export async function skipOccurrenceAction(id: string, dueDate: string): Promise
  */
 export async function confirmAllAsExpectedAction(
   items: { id: string; dueDate: string }[],
-): Promise<{ confirmed: number; error?: string }> {
+): Promise<{ confirmed: number; needsAnswer: number; error?: string }> {
   const valid = items.filter((i) => i.id && ISO_DATE.test(i.dueDate));
   const result = await confirmOccurrencesAsExpected(valid);
   revalidateAnswered();
+  // needsAnswer is reported, never swallowed: the queue says "2 items need
+  // an answer" rather than quietly confirming fewer than it said it would.
   return result.errors.length > 0
-    ? { confirmed: result.confirmed, error: result.errors.join(" ") }
-    : { confirmed: result.confirmed };
+    ? { confirmed: result.confirmed, needsAnswer: result.needsAnswer, error: result.errors.join(" ") }
+    : { confirmed: result.confirmed, needsAnswer: result.needsAnswer };
 }

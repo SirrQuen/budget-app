@@ -179,13 +179,24 @@ begin
 
   -- 5 -----------------------------------------------------------------
   -- 10 days ago: after Checking's balance date (30 days), before Savings' (5 days).
-  perform public.update_transfer(grp, chk, sav, 120, current_date - 10, 'Moved', 'note');
-  select public.counts_toward_balance_preview(chk, current_date - 10,
-           (select id from public.transactions where transfer_group_id = grp and transaction_type = 'Expense'))::text
-    into v_text;
-  select public.counts_toward_balance_preview(sav, current_date - 10,
-           (select id from public.transactions where transfer_group_id = grp and transaction_type = 'Income'))::text
-    into v_text2;
+  -- Since migration 62 the Savings leg needs the "already included?"
+  -- answer: refused without it, accepted with "Yes, it's already counted".
+  begin
+    perform public.update_transfer(grp, chk, sav, 120, current_date - 10, 'Moved', 'note');
+    v_text := 'accepted';
+  exception when sqlstate 'SRA01' then
+    v_text := 'SRA01';
+  end;
+  perform pg_temp.rec('5 savings leg before its balance date, no answer: refused', 'SRA01', v_text);
+  perform public.update_transfer(grp, chk, sav, 120, current_date - 10, 'Moved', 'note', false,
+                                 null, null,
+                                 false, (select opening_set_at from public.accounts where id = sav));
+  select counts_by_date::text into v_text
+    from public.balance_anchor_preview(chk, current_date - 10,
+           (select id from public.transactions where transfer_group_id = grp and transaction_type = 'Expense'));
+  select counts_by_date::text into v_text2
+    from public.balance_anchor_preview(sav, current_date - 10,
+           (select id from public.transactions where transfer_group_id = grp and transaction_type = 'Income'));
   perform pg_temp.rec('5 checking leg counts (after its balance date)', 'true', v_text);
   perform pg_temp.rec('5 savings leg does not (before its balance date): the note shows for Savings only', 'false', v_text2);
 
@@ -222,10 +233,15 @@ begin
      next_run_date, start_date, next_due_date, occurrence_limit)
   values (xfer_s, u, chk, sav, 'To savings', 300, 'Monthly',
           current_date + 20, current_date - 10, current_date + 20, 3);
+  -- The Savings leg is before Savings' balance date (5 days): since
+  -- migration 62 it carries the "already included?" answer, which the
+  -- amount edits below keep (update_transfer passes no new one).
   insert into public.transactions (userid, accountid, categoryid, amount, transaction_type,
-                                   transaction_date, description, recurringid, transfer_group_id)
-  values (u, chk, null, 300, 'Expense', current_date - 10, 'To savings', xfer_s, rgrp),
-         (u, sav, null, 300, 'Income',  current_date - 10, 'To savings', xfer_s, rgrp);
+                                   transaction_date, description, recurringid, transfer_group_id,
+                                   counts_despite_anchor, anchor_answer_set_at)
+  values (u, chk, null, 300, 'Expense', current_date - 10, 'To savings', xfer_s, rgrp, null, null),
+         (u, sav, null, 300, 'Income',  current_date - 10, 'To savings', xfer_s, rgrp,
+          false, (select opening_set_at from public.accounts where id = sav));
 
   perform public.update_transfer(rgrp, chk, sav, 320, current_date - 10, 'To savings', null, false);
   select amount into v_num from public.recurring_transactions where id = xfer_s;
@@ -252,10 +268,14 @@ begin
   select amount_basis || '/' || forecast_basis into v_text from public.v_upcoming_recurring where recurring_id = elec_s;
   perform pg_temp.rec('10 variable, nothing supplied: your estimate both ways', 'schedule/schedule', v_text);
 
+  -- Both before Checking's balance date (30 days): answered "Yes, it's
+  -- already counted" (migration 62), so balances are as they were.
   insert into public.transactions (userid, accountid, categoryid, amount, transaction_type,
-                                   transaction_date, description, recurringid)
-  values (u, chk, exp_cat, 120, 'Expense', current_date - 85, 'Electric', elec_s),
-         (u, chk, exp_cat, 190, 'Expense', current_date - 55, 'Electric', elec_s);
+                                   transaction_date, description, recurringid,
+                                   counts_despite_anchor, anchor_answer_set_at)
+  select u, chk, exp_cat, v.amount, 'Expense', v.d, 'Electric', elec_s, false, a.opening_set_at
+    from (values (120, current_date - 85), (190, current_date - 55)) as v(amount, d)
+   cross join (select opening_set_at from public.accounts where id = chk) a;
   select amount_basis || '/' || forecast_basis into v_text from public.v_upcoming_recurring where recurring_id = elec_s;
   perform pg_temp.rec('10 two supplied, one above the schedule: your estimate / highest so far', 'schedule/highest_so_far', v_text);
 

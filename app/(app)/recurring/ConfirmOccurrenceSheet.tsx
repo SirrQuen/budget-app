@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { callAction, useActionForm } from "@/components/useActionForm";
+import { useActionForm } from "@/components/useActionForm";
 import { confirmDifferentlyAction, type ActionState } from "@/lib/actions/recurring";
-import { countsTowardBalanceAction } from "@/lib/actions/transactions";
 import type { ConfirmationQueueItem } from "@/lib/db/dashboard";
 import { useToday } from "@/components/TodayProvider";
 import { useConfirmPulse } from "@/components/ui/ConfirmPulse";
@@ -11,7 +10,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
-import { BalanceDateNote } from "@/components/BalanceDateNote";
+import { PreAnchorQuestion, asksAnchorQuestion, useAnchorPreviews } from "@/components/PreAnchorQuestion";
 import { PaymentNote } from "@/components/PaymentNote";
 import { formatDate } from "@/lib/format";
 
@@ -21,16 +20,19 @@ import { formatDate } from "@/lib/format";
 // IS the transaction's date. For an approximate schedule the date comes
 // first, since it's the part most likely to be wrong.
 //
-// The balance note asks SQL's anchor rule (counts_toward_balance_preview,
-// migration 48) about each account the transaction lands on -- the same
-// answer and the same note the transaction form shows. A date before an
-// account's balance date is allowed; the note says what it means.
+// The pre-anchor question (migration 62) asks SQL's anchor rule
+// (balance_anchor_preview) about each account the transaction lands on --
+// the same question the transaction form asks. A date before an account's
+// balance date is allowed, but needs the "already included?" answer.
 export function ConfirmOccurrenceSheet({
   item,
   trigger,
+  openRequest = 0,
 }: {
   item: ConfirmationQueueItem;
   trigger: (open: () => void) => React.ReactNode;
+  /** Bumped by the queue to open the sheet without its trigger (see above). */
+  openRequest?: number;
 }) {
   const today = useToday();
   const [open, setOpen] = useState(false);
@@ -38,8 +40,16 @@ export function ConfirmOccurrenceSheet({
   const pulse = useConfirmPulse();
   const predictedDate = item.dueDate <= today ? item.dueDate : today;
   const [date, setDate] = useState(predictedDate);
-  const [balanceAnswers, setBalanceAnswers] = useState<Record<string, boolean | null>>({});
-  const asked = useRef(new Set<string>());
+
+  // "It landed" found this occurrence dated before a balance date: it needs
+  // the pre-anchor answer one tap can't give, so the queue opens the sheet.
+  const lastRequest = useRef(openRequest);
+  useEffect(() => {
+    if (openRequest === lastRequest.current) return;
+    lastRequest.current = openRequest;
+    setDate(predictedDate);
+    setOpen(true);
+  }, [openRequest, predictedDate]);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -59,21 +69,14 @@ export function ConfirmOccurrenceSheet({
     wasPending.current = pending;
   }, [pending, state, pulse, item.kind]);
 
-  // Once per account and date, only while open.
-  const unasked = open && /^\d{4}-\d{2}-\d{2}$/.test(date)
-    ? item.accounts.map((a) => `${a.id}|${date}`).filter((k) => !(k in balanceAnswers)).join(",")
-    : "";
-  useEffect(() => {
-    if (unasked === "") return;
-    for (const key of unasked.split(",")) {
-      if (asked.current.has(key)) continue;
-      asked.current.add(key);
-      const [accountId, d] = key.split("|");
-      void callAction(() => countsTowardBalanceAction(accountId, d, null)).then((answer) => {
-        setBalanceAnswers((prev) => ({ ...prev, [key]: typeof answer === "boolean" ? answer : null }));
-      });
-    }
-  }, [unasked]);
+  // Once per account and date, only while open. A new transaction, so no
+  // transaction id: it would be recorded now.
+  const anchorPreviews = useAnchorPreviews(
+    item.accounts.map((a) => a.id),
+    date,
+    null,
+    open,
+  );
 
   const dateField = (
     <FormField label="Date it landed" htmlFor={`confirm-date-${item.recurringId}`} required>
@@ -155,11 +158,19 @@ export function ConfirmOccurrenceSheet({
               </>
             )}
 
-            {item.accounts
-              .filter((a) => balanceAnswers[`${a.id}|${date}`] === false)
-              .map((a) => (
-                <BalanceDateNote key={a.id} accountId={a.id} accountName={a.name} openingDate={a.openingDate} />
-              ))}
+            {item.accounts.map((a) => {
+              const preview = anchorPreviews[a.id];
+              return asksAnchorQuestion(preview) ? (
+                <PreAnchorQuestion
+                  key={`${a.id}|${date}`}
+                  idPrefix={`confirm-${item.recurringId}`}
+                  accountId={a.id}
+                  accountName={a.name}
+                  preview={preview}
+                  nameAccount={item.accounts.length > 1}
+                />
+              ) : null;
+            })}
 
             {state?.error ? <ErrorMessage message={state.error} /> : null}
 
