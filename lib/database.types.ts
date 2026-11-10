@@ -92,6 +92,7 @@ export type Database = {
           categoryid: string
           created_at: string
           id: string
+          not_budgeted: boolean
           userid: string
         }
         Insert: {
@@ -100,6 +101,7 @@ export type Database = {
           categoryid: string
           created_at?: string
           id?: string
+          not_budgeted?: boolean
           userid: string
         }
         Update: {
@@ -108,6 +110,7 @@ export type Database = {
           categoryid?: string
           created_at?: string
           id?: string
+          not_budgeted?: boolean
           userid?: string
         }
         Relationships: [
@@ -1411,6 +1414,41 @@ export type Database = {
           anchor_set_at: string
           counts_by_date: boolean
         }[]
+      }
+      budget_pct_used: {
+        Args: { p_budget: number; p_spend: number }
+        Returns: number
+      }
+      budget_progress_for_month: {
+        Args: { p_month: string }
+        Returns: {
+          actual_spend: number
+          budget_amount: number
+          budget_id: string
+          budget_month: string
+          carried_from: string
+          category_color: string
+          category_icon: string
+          category_id: string
+          category_name: string
+          group_id: string
+          group_name: string
+          is_over_budget: boolean
+          pct_used: number
+          remaining: number
+          status: string
+          status_rank: number
+          transaction_count: number
+          userid: string
+        }[]
+      }
+      budget_status: {
+        Args: { p_budget: number; p_spend: number }
+        Returns: string
+      }
+      budget_status_rank: {
+        Args: { p_budget: number; p_spend: number }
+        Returns: number
       }
       category_spend_between: {
         Args: { p_from: string; p_to: string }

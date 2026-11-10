@@ -1,92 +1,96 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createBudget, updateBudget, deleteBudget } from "@/lib/db/budgets";
+import { setBudgetForMonth, stopBudgetingForMonth } from "@/lib/db/budgets";
+import { parseBudgetAmount } from "@/lib/budgetAmount";
 
 export type ActionState = { error?: string } | undefined;
 
-type ParsedBudgetFields = {
-  categoryid: string;
-  budget_month: string;
-  budget_amount: number;
-};
-
-// Shared by create and update -- both forms offer the exact same fields.
-// budget_month arrives as "YYYY-MM" from the <input type="month"> and gets
-// normalized to the 1st here, matching the budgets_month_is_first CHECK.
-function parseBudgetFields(formData: FormData): ParsedBudgetFields | { error: string } {
-  const categoryid = String(formData.get("categoryid") ?? "");
-  const monthInput = String(formData.get("budget_month") ?? "");
-  const amountInput = String(formData.get("budget_amount") ?? "").trim();
-
-  if (!categoryid) {
-    return { error: "Choose a category." };
-  }
-  if (!/^\d{4}-\d{2}$/.test(monthInput)) {
-    return { error: "Choose a month." };
-  }
-
-  const budget_amount = Number(amountInput);
-  if (!Number.isFinite(budget_amount) || budget_amount <= 0) {
-    return { error: "Enter a budget amount greater than zero." };
-  }
-
-  return { categoryid, budget_month: `${monthInput}-01`, budget_amount };
+// budget_month arrives as the viewed month's "YYYY-MM-01" (a hidden field
+// on every budget form) and is normalized to the 1st, matching the
+// budgets_month_is_first CHECK.
+function parseMonth(formData: FormData): string | null {
+  return normalizeMonth(String(formData.get("budget_month") ?? ""));
 }
 
+function normalizeMonth(raw: string): string | null {
+  const match = /^(\d{4}-\d{2})(-01)?$/.exec(raw);
+  return match ? `${match[1]}-01` : null;
+}
+
+function revalidateBudgets() {
+  revalidatePath("/budgets");
+  revalidatePath("/dashboard");
+}
+
+// A category with no budget this month -- never had one, or stopped. It's
+// the same write as changing an amount: one row, this category, the
+// viewed month, upserted on budgets_one_per_category_month. "Add budget"
+// only offers categories with nothing this month, so it never silently
+// replaces an amount someone set; if a second tab did, the amount entered
+// last stands, and there is still one row.
 export async function createBudgetAction(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const parsed = parseBudgetFields(formData);
-  if ("error" in parsed) {
-    return parsed;
+  const categoryid = String(formData.get("categoryid") ?? "");
+  if (!categoryid) {
+    return { error: "Choose a category." };
+  }
+  const budget_month = parseMonth(formData);
+  if (!budget_month) {
+    return { error: "Choose a month." };
+  }
+  const amount = parseBudgetAmount(formData.get("budget_amount"));
+  if ("error" in amount) {
+    return amount;
   }
 
-  const { error } = await createBudget(parsed);
-
+  const { error } = await setBudgetForMonth({ categoryid, budget_month, budget_amount: amount.value });
   if (error) {
     return { error };
   }
-
-  revalidatePath("/budgets");
+  revalidateBudgets();
 }
 
-export async function updateBudgetAction(
+// Changing an amount -- whether this month has its own row or the amount
+// was carried from an earlier one. Writes exactly one row: this category,
+// this month. The category and month identify the budget; they're never
+// changed by an edit, so an edit can't land on another budget's row.
+export async function setBudgetAmountAction(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const id = String(formData.get("id") ?? "");
-  if (!id) {
-    return { error: "Missing budget id." };
+  const categoryid = String(formData.get("categoryid") ?? "");
+  const budget_month = parseMonth(formData);
+  if (!categoryid || !budget_month) {
+    return { error: "We couldn't tell which budget that was." };
+  }
+  const amount = parseBudgetAmount(formData.get("budget_amount"));
+  if ("error" in amount) {
+    return amount;
   }
 
-  const parsed = parseBudgetFields(formData);
-  if ("error" in parsed) {
-    return parsed;
-  }
-
-  const { error } = await updateBudget(id, parsed);
-
+  const { error } = await setBudgetForMonth({ categoryid, budget_month, budget_amount: amount.value });
   if (error) {
     return { error };
   }
-
-  revalidatePath("/budgets");
+  revalidateBudgets();
 }
 
-// Unlike categories/accounts this is a hard delete -- nothing references
-// budgets.id, so there's no history to preserve.
-export async function deleteBudgetAction(id: string): Promise<ActionState> {
-  if (!id) {
-    return { error: "Missing budget id." };
+// "Stop budgeting": deliberately not budgeted from this month on -- a
+// tombstone row, never a delete. Deleting the month's row would only bring
+// an earlier amount back, which isn't what "stop" means. Earlier months keep
+// their amounts; setting an amount again later starts it again.
+export async function stopBudgetingAction(categoryid: string, budgetMonth: string): Promise<ActionState> {
+  const budget_month = normalizeMonth(budgetMonth);
+  if (!categoryid || !budget_month) {
+    return { error: "We couldn't tell which budget that was." };
   }
 
-  const { error } = await deleteBudget(id);
-
+  const { error } = await stopBudgetingForMonth({ categoryid, budget_month });
   if (error) {
     return { error };
   }
-
-  revalidatePath("/budgets");
+  revalidateBudgets();
 }

@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { monthStartISO, parseLocalDate } from "@/lib/date";
 import { getToday } from "@/lib/db/settings";
-import { getBudgetProgress } from "@/lib/db/budgets";
+import { getBudgetsForMonth, type MonthBudgetRow } from "@/lib/db/budgets";
 import { listCategoriesForType } from "@/lib/db/categories";
-import { getChronicOverBudgetInsight } from "@/lib/budgetInsights";
+import { getChronicOverBudgetInsight, LOOKBACK_MONTHS } from "@/lib/budgetInsights";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadError } from "@/components/ui/LoadError";
@@ -36,15 +36,21 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
       ? params.month
       : monthStartISO(await getToday());
 
-  const [progressResult, historyResult, categoriesResult] = await Promise.all([
-    getBudgetProgress({ budget_month: month }),
-    // Unfiltered: every month, every category, for the "runs over most
-    // months" check below -- one query instead of one per budget row.
-    getBudgetProgress({}),
-    listCategoriesForType("Expense"),
-  ]);
+  // The months the "runs over most months" check looks back over, read
+  // the same way as this one -- carried budgets included, since under
+  // standing amounts most months carry (getChronicOverBudgetInsight).
+  const lookback = Array.from({ length: LOOKBACK_MONTHS }, (_, i) => shiftMonth(month, -(i + 1)));
 
-  if (progressResult.error !== null || historyResult.error !== null || categoriesResult.error !== null) {
+  const [progressResult, categoriesResult, ...historyResults] = await Promise.all([
+    // This month's budgets, carried ones included -- derived in SQL, so
+    // opening the page writes nothing (budget_progress_for_month).
+    getBudgetsForMonth(month),
+    listCategoriesForType("Expense"),
+    ...lookback.map((m) => getBudgetsForMonth(m)),
+  ]);
+  const historyError = historyResults.find((r) => r.error !== null)?.error ?? null;
+
+  if (progressResult.error !== null || historyError !== null || categoriesResult.error !== null) {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader
@@ -54,7 +60,7 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
         <LoadError
           message={
             progressResult.error ??
-            historyResult.error ??
+            historyError ??
             categoriesResult.error ??
             "We couldn't load your budgets. Refresh the page to try again."
           }
@@ -63,14 +69,14 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
     );
   }
 
-  // v_budget_vs_actual also reports categories with spend but no budget
-  // (status "Unbudgeted", budget_id null) -- this page only manages actual
-  // budgets, so those rows are filtered out.
-  const budgets = progressResult.data.filter((row) => row.budget_id !== null);
+  const budgets = progressResult.data;
+  // "Add budget" offers only categories with no budget this month, own or
+  // carried -- one that has one is changed from its row instead.
+  const budgeted = new Set(budgets.map((b) => b.category_id));
+  const unbudgetedCategories = categoriesResult.data.filter((c) => !budgeted.has(c.id));
 
-  const historyByCategory = new Map<string, typeof historyResult.data>();
-  for (const row of historyResult.data) {
-    if (row.category_id === null) continue;
+  const historyByCategory = new Map<string, MonthBudgetRow[]>();
+  for (const row of historyResults.flatMap((r) => r.data ?? [])) {
     const existing = historyByCategory.get(row.category_id);
     if (existing) {
       existing.push(row);
@@ -102,7 +108,7 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
         </Link>
       </div>
 
-      <CreateBudgetForm categories={categoriesResult.data} month={month} />
+      <CreateBudgetForm categories={unbudgetedCategories} month={month} />
 
       {budgets.length === 0 ? (
         <EmptyState
@@ -118,7 +124,7 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
               : null;
             return (
               <BudgetRow
-                key={budget.budget_id}
+                key={budget.category_id}
                 budget={budget}
                 categories={categoriesResult.data}
                 insight={insight}
