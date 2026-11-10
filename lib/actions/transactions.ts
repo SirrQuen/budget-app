@@ -21,6 +21,9 @@ import {
   type MerchantCategorySuggestion,
 } from "@/lib/db/transactions";
 import { setScheduleAmount } from "@/lib/db/recurring";
+import { getSafeToSpend } from "@/lib/db/dashboard";
+import { getToday } from "@/lib/db/settings";
+import { figureUnchangedNote } from "@/lib/whatsAhead";
 import { amountChanged, parseEditScope } from "@/lib/recurringEditScope";
 import {
   NO_ANCHOR_ANSWER,
@@ -37,7 +40,17 @@ import {
 // which one, so kind doesn't need to carry the day count; message does.
 export type Milestone = { kind: "first-transaction" | "streak"; message: string };
 
-export type ActionState = { error?: string; milestone?: Milestone } | undefined;
+export type ActionState =
+  | {
+      error?: string;
+      milestone?: Milestone;
+      /**
+       * Set only when a save provably leaves safe to spend as it was
+       * (figureUnchangedNote, lib/whatsAhead.ts) -- says so, and why.
+       */
+      note?: string;
+    }
+  | undefined;
 
 // Checked after every successful create. The streak milestone is off: the
 // streak counts days with a transaction, so celebrating it on save is a
@@ -161,14 +174,31 @@ function parseTransferFields(formData: FormData): CreateTransferInput | { error:
 
 // Shared by both branches of createTransactionAction -- revalidate, then
 // check for a milestone on whatever just got created.
-async function afterTransactionCreated(): Promise<ActionState> {
+async function afterTransactionCreated(saved: { id: string; transaction_date: string }[]): Promise<ActionState> {
   revalidatePath("/transactions");
   // Every create can move an account balance (a transfer always moves two)
   // -- "Make a payment" opens straight from /accounts, so that page needs to
   // reflect it without a manual refresh.
   revalidatePath("/accounts");
-  const milestone = await detectTransactionMilestone();
-  return milestone ? { milestone } : undefined;
+  const [milestone, note] = await Promise.all([detectTransactionMilestone(), figureNote(saved)]);
+  if (!milestone && !note) return undefined;
+  return { ...(milestone ? { milestone } : {}), ...(note ? { note } : {}) };
+}
+
+// docs/Safe-to-Spend-Why.md, "After a save". Only a row dated after today
+// can sit past the tightest day, so only those pay for a projection -- one
+// getSafeToSpend(), the same reads as a dashboard load. The save has
+// already succeeded: any failure here is silence, never an error.
+async function figureNote(saved: { id: string; transaction_date: string }[]): Promise<string | undefined> {
+  try {
+    const today = await getToday();
+    if (!saved.some((r) => r.transaction_date > today)) return undefined;
+    const result = await getSafeToSpend();
+    if (result.error || !result.data) return undefined;
+    return figureUnchangedNote(result.data, saved.map((r) => r.id)) ?? undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // Called directly as a function from the quick-add bar (not through
@@ -216,12 +246,12 @@ export async function createTransactionAction(
       return parsed;
     }
 
-    const { error } = await createTransfer({ ...parsed, idempotency_key: idempotencyKey });
+    const { data: legs, error } = await createTransfer({ ...parsed, idempotency_key: idempotencyKey });
     if (error) {
       return { error };
     }
 
-    return afterTransactionCreated();
+    return afterTransactionCreated(legs ?? []);
   }
 
   const parsed = parseTransactionFields(formData);
@@ -229,7 +259,7 @@ export async function createTransactionAction(
     return parsed;
   }
 
-  const { error } = await createTransaction({
+  const { data: row, error } = await createTransaction({
     ...parsed,
     idempotency_key: idempotencyKey,
   });
@@ -238,7 +268,7 @@ export async function createTransactionAction(
     return { error };
   }
 
-  return afterTransactionCreated();
+  return afterTransactionCreated(row ? [row] : []);
 }
 
 export async function updateTransactionAction(

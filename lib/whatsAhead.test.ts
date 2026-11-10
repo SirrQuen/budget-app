@@ -2,7 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { addDaysISO } from "./date";
 import { projectSafeToSpend, type ProjectionSchedule } from "./safeToSpendProjection";
-import { cautionLine, whatsAhead, type WhatsAheadItem } from "./whatsAhead";
+import { cautionLine, figureUnchangedNote, whatsAhead, whyThisNumber, type WhatsAheadItem } from "./whatsAhead";
+import { formatDateWithWeekday } from "./format";
+import type { ProjectionTransaction } from "./safeToSpendProjection";
 
 const TODAY = "2026-10-01";
 const day = (n: number) => addDaysISO(TODAY, n);
@@ -186,7 +188,10 @@ test("balance never falls below the cushion -> no episodes, and the single 'no t
   const result = run([once("Income", "Paycheck", 1500, 5), once("Expense", "Rent", 500, 7)], 2000);
 
   assert.deepEqual(result.episodes, []);
-  assert.deepEqual(whatsAhead(result), { kind: "clear", line: "No tight days in the next five weeks." });
+  assert.deepEqual(whatsAhead(result), {
+    kind: "clear",
+    line: "No tight days in the next five weeks. Your lowest point, $2,000.00 today, doesn't go below your $300.00 cushion.",
+  });
 });
 
 test("a day exactly at the cushion is clear, not tight", () => {
@@ -277,6 +282,8 @@ test("no user-facing string uses alarm words or exclamation marks", () => {
     run([once("Expense", "Rent", 1500, 2), once("Income", "Paycheck", 1000, 4)], 1000),
     run([once("Income", "Paycheck", 100, 3), once("Expense", "Rent", 900, 30)], 1000),
     run([once("Income", "Paycheck", 1500, 5)], 2000),
+    // Tightest day is the day after today -- named by weekday and date.
+    run([once("Expense", "Rent", 500, 1), once("Income", "Paycheck", 1000, 1)], 1000),
   ];
 
   for (const result of scenarios) {
@@ -285,7 +292,11 @@ test("no user-facing string uses alarm words or exclamation marks", () => {
       view.kind === "clear"
         ? [view.line]
         : [...view.items.flatMap((i) => [i.when, i.headline, i.cause, i.recovery]), view.more ?? ""];
-    for (const s of strings) assert.ok(!banned.test(s), s);
+    const why = whyThisNumber(result);
+    const all = [...strings, why.cause, why.consequence ?? ""];
+    for (const s of all) assert.ok(!banned.test(s), s);
+    // Relative words go stale on a page left open (docs/Safe-to-Spend-Why.md).
+    for (const s of all) assert.ok(!/\b(tomorrow|yesterday)\b|\bin \d+ days?\b/i.test(s), s);
   }
 });
 
@@ -297,4 +308,167 @@ test("the caution line names bills, pay, or both -- and is absent when nothing w
     cautionLine({ billsAtHigh: true, payAtLow: true }),
     "Variable bills are counted at their recent high, and variable pay at its recent low.",
   );
+});
+
+// ---------------------------------------------------------------------------
+// Why the figure is what it is (docs/Safe-to-Spend-Why.md)
+// ---------------------------------------------------------------------------
+
+const named = (n: number) => formatDateWithWeekday(day(n));
+
+test("why: one payment sets the tightest day; anything after it, up to the room, leaves the figure", () => {
+  // 1000 - 600 on day 3, pay the same day: the 11 November shape.
+  const why = whyThisNumber(run([once("Expense", "Visa payment", 600, 3), once("Income", "Pay", 2000, 3)], 1000));
+  assert.equal(named(3), "Sunday 4 October");
+  assert.deepEqual(why, {
+    cause: "Your tightest day is Sunday 4 October, after Visa payment comes out.",
+    consequence: "Anything dated after Sunday 4 October leaves this figure as it is, up to $2,000.00 in total.",
+  });
+});
+
+test("why: several payments on the tightest day -> the two largest named, the rest counted", () => {
+  const why = whyThisNumber(
+    run(
+      [
+        once("Expense", "Phone", 50, 3),
+        once("Expense", "Rent", 500, 3),
+        once("Expense", "Gym", 30, 3),
+        once("Expense", "Car", 200, 3),
+        once("Income", "Pay", 2000, 3),
+      ],
+      1000,
+    ),
+  );
+  assert.equal(why.cause, `Your tightest day is ${named(3)}, after Rent, Car and 2 more come out.`);
+});
+
+test("why: two payments -> both named", () => {
+  const why = whyThisNumber(
+    run([once("Expense", "Rent", 500, 3), once("Expense", "Car", 200, 3), once("Income", "Pay", 2000, 3)], 1000),
+  );
+  assert.equal(why.cause, `Your tightest day is ${named(3)}, after Rent and Car come out.`);
+});
+
+test("why: pay lands later -> everything until the payday counts in full, then the room", () => {
+  const why = whyThisNumber(run([once("Expense", "Rent", 600, 3), once("Income", "Pay", 2000, 5)], 1000));
+  assert.equal(
+    why.consequence,
+    `Anything dated through ${named(5)} comes off this figure in full. After that, up to $2,000.00 in total leaves it as it is.`,
+  );
+});
+
+test("why: tightest day today with nothing ahead going lower -> 'today', never a date", () => {
+  const why = whyThisNumber(run([once("Income", "Pay", 500, 0)], 1000));
+  assert.deepEqual(why, {
+    cause: "Today is your tightest day. Nothing ahead takes your balance below where it is now.",
+    consequence: "Anything dated after today leaves this figure as it is, up to $500.00 in total.",
+  });
+});
+
+test("why: an overdue bill moved to today -> 'Today is your tightest day, after ...'", () => {
+  const why = whyThisNumber(run([once("Expense", "Rent", 300, -3), once("Income", "Pay", 1000, 0)], 1000));
+  assert.equal(why.cause, "Today is your tightest day, after Rent comes out.");
+});
+
+test("why: no recovery inside the window -> everything through its end counts in full", () => {
+  const result = run([once("Expense", "Rent", 300, 3)], 1000);
+  assert.equal(result.after, null);
+  assert.equal(
+    whyThisNumber(result).consequence,
+    `Anything dated through ${formatDateWithWeekday(result.horizonEnd)} comes off this figure in full.`,
+  );
+});
+
+test("why: a $0 figure -> the cause only", () => {
+  const result = run([once("Expense", "Rent", 900, 3), once("Income", "Pay", 2000, 3)], 1000);
+  assert.equal(result.safeToSpend, 0);
+  assert.equal(whyThisNumber(result).consequence, null);
+  assert.equal(whyThisNumber(result).cause, `Your tightest day is ${named(3)}, after Rent comes out.`);
+});
+
+test("clear line with no cushion -> 'below zero'", () => {
+  const result = run([once("Income", "Pay", 500, 5)], 1000, 0);
+  assert.equal(
+    (whatsAhead(result) as { line: string }).line,
+    "No tight days in the next five weeks. Your lowest point, $1,000.00 today, doesn't go below zero.",
+  );
+});
+
+test("clear line names a later low point by weekday and date", () => {
+  const result = run([once("Expense", "Rent", 200, 3), once("Income", "Pay", 500, 3)], 1000);
+  assert.equal(
+    (whatsAhead(result) as { line: string }).line,
+    `No tight days in the next five weeks. Your lowest point, $800.00 on ${named(3)}, doesn't go below your $300.00 cushion.`,
+  );
+});
+
+// After a save -------------------------------------------------------------
+
+// $1,000 cash, $100 cushion. Tightest day is day 3: the payment, then pay
+// the same day. The saved row is a $300 checking expense on day 10 unless
+// a test says otherwise.
+function savedInput(saved: Partial<ProjectionTransaction> = {}) {
+  const row: ProjectionTransaction = {
+    transactionId: "saved",
+    name: "New",
+    kind: "Expense",
+    fromAccountType: "Checking",
+    toAccountType: null,
+    fromCountsLater: true,
+    toCountsLater: false,
+    amount: 300,
+    date: day(10),
+    ...saved,
+  };
+  return {
+    today: TODAY,
+    cash: 1000,
+    cushion: 100,
+    goalHolds: [],
+    schedules: [once("Expense", "Visa payment", 600, 3), once("Income", "Pay", 2000, 3)],
+    futureTransactions: [row],
+    holidays: new Set<string>(),
+    fallbackWindowEnd: "2026-10-31",
+  };
+}
+
+const withSaved = (saved: Partial<ProjectionTransaction>) => projectSafeToSpend(savedInput(saved));
+
+test("after a save: a checking expense after the tightest day -> the note, naming that day", () => {
+  assert.equal(
+    figureUnchangedNote(withSaved({ amount: 300, date: day(10) }), ["saved"]),
+    `Saved. This doesn't change your safe-to-spend figure — your tightest day is ${named(3)}, before this.`,
+  );
+});
+
+test("after a save: on or before the tightest day -> no note", () => {
+  assert.equal(figureUnchangedNote(withSaved({ amount: 300, date: day(3) }), ["saved"]), null);
+  assert.equal(figureUnchangedNote(withSaved({ amount: 300, date: day(2) }), ["saved"]), null);
+});
+
+test("after a save: big enough to make a new, later tightest day -> no note", () => {
+  // 2400 - 2500 on day 10 goes below the day-3 low of 400: it moved the figure.
+  assert.equal(figureUnchangedNote(withSaved({ amount: 2500, date: day(10) }), ["saved"]), null);
+});
+
+test("after a save: not counted as an outflow -> no note", () => {
+  // Credit card purchase: the card payment carries it, not this row.
+  assert.equal(figureUnchangedNote(withSaved({ amount: 300, date: day(10), fromAccountType: "Credit Card" }), ["saved"]), null);
+  // Savings: not spendable.
+  assert.equal(figureUnchangedNote(withSaved({ amount: 300, date: day(10), fromAccountType: "Savings" }), ["saved"]), null);
+  // Income.
+  assert.equal(figureUnchangedNote(withSaved({ amount: 300, date: day(10), kind: "Income" }), ["saved"]), null);
+  // Not the saved row.
+  assert.equal(figureUnchangedNote(withSaved({ amount: 300, date: day(10) }), ["other"]), null);
+});
+
+test("after a save: a $0 figure -> no note", () => {
+  const result = projectSafeToSpend({ ...savedInput(), cushion: 5000 });
+  assert.equal(result.safeToSpend, 0);
+  assert.equal(figureUnchangedNote(result, ["saved"]), null);
+});
+
+test("after a save: a transfer out of the set is matched by its Expense leg", () => {
+  const result = withSaved({ transactionId: "leg", kind: "Transfer", toAccountType: "Savings" });
+  assert.match(figureUnchangedNote(result, ["leg", "other-leg"]) ?? "", /^Saved\. This doesn't change/);
 });

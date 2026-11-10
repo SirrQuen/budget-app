@@ -242,6 +242,16 @@ export type SafeToSpendProjection = {
   goalHold: number;
   /** The lowest projected balance, the day it happens, and what lands that day. */
   trough: { amount: number; date: string; obligations: ProjectedObligation[] };
+  /**
+   * What an expense dated later can do to the figure (docs/Safe-to-Spend-Why.md).
+   * `date` is the LAST day the balance is as low as the trough -- the trough's
+   * own date unless a later day ties it. Anything dated on or before it comes
+   * off the figure in full; anything after it, up to `room` dollars in total,
+   * leaves the figure as it is, whatever its date: `room` is the lowest later
+   * day's margin over the trough. null when that last tightest day is the
+   * horizon's final day -- every dollar in the window then counts.
+   */
+  after: { date: string; room: number } | null;
   /** Every obligation inside the horizon, date order. */
   obligations: ProjectedObligation[];
   /** Every income occurrence counted, date order. Empty in window mode. */
@@ -648,6 +658,7 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
     goalHolds,
     goalHold: toDollars(goalHoldCents),
     trough: { amount: toDollars(troughCents), date: troughDate, obligations: troughObligations },
+    after: roomAfterTightest(days, troughCents),
     obligations,
     incomes,
     safeToSpend: toDollars(safeCents),
@@ -675,6 +686,24 @@ type WalkedDay = {
   out: ProjectedObligation[];
   income: ProjectedIncome[];
 };
+
+// The trough is the minimum of every day's low (a day with no obligations
+// opens on the previous day's end, which is never below that day's low), so
+// "as low as the trough" is lowCents === troughCents, exactly, in cents.
+//
+// An expense dated on day d lowers every low from d on. Dated after the last
+// tightest day, it can only set a new minimum by taking some later day below
+// the trough -- so the smallest later margin is how much it takes, whatever
+// day it lands on.
+function roomAfterTightest(days: WalkedDay[], troughCents: number): { date: string; room: number } | null {
+  let last = -1;
+  days.forEach((d, i) => {
+    if (d.lowCents === troughCents) last = i;
+  });
+  if (last === -1 || last === days.length - 1) return null;
+  const laterLow = Math.min(...days.slice(last + 1).map((d) => d.lowCents));
+  return { date: days[last].date, room: toDollars(laterLow - troughCents) };
+}
 
 // Group the walk's days into runs below the cushion. A day exactly at the
 // cushion is clear; a day exactly at zero is tight, not short.

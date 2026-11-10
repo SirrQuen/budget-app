@@ -25,6 +25,7 @@ import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { PaymentNote } from "@/components/PaymentNote";
 import { paymentPayee } from "@/lib/accountOptions";
 import { Celebration } from "@/components/ui/Celebration";
+import { SaveNote, useSaveNote } from "@/components/ui/SaveNote";
 import { useConfirmPulse } from "@/components/ui/ConfirmPulse";
 import {
   PreAnchorQuestion,
@@ -145,8 +146,10 @@ export function AddTransactionForm({
   headingId?: string;
   /** Embedded mode only: called instead of collapsing when Close is clicked. */
   onClose?: () => void;
-  /** Embedded mode only: called once the create-success celebration finishes. */
-  onSaved?: () => void;
+  /** Embedded mode only: called once the create-success celebration
+   * finishes, with the save's note (lib/whatsAhead.ts figureUnchangedNote)
+   * for the caller to show -- this form unmounts with its overlay. */
+  onSaved?: (note: string | null) => void;
 }) {
   const isEdit = mode === "edit";
   const today = useToday();
@@ -189,6 +192,7 @@ export function AddTransactionForm({
   const [celebrate, setCelebrate] = useState(false);
   const [celebrateMessage, setCelebrateMessage] = useState("Logged");
   const [celebrateIcon, setCelebrateIcon] = useState<React.ReactNode>("✓");
+  const [saveNote, showSaveNote] = useSaveNote();
   const pulse = useConfirmPulse();
   const formRef = useRef<HTMLFormElement>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
@@ -316,13 +320,16 @@ export function AddTransactionForm({
       setCelebrateMessage(milestone?.message ?? loggedMessage);
       setCelebrateIcon(milestone?.kind === "streak" ? <FlameIcon className="h-4 w-4" /> : "✓");
       setCelebrate(true);
+      // In an overlay the note goes to the caller, which outlives it.
+      const note = state?.note ?? null;
+      if (!onSaved) showSaveNote(note);
       // Fires only on user-initiated create. A recurring confirmation has
       // its own sheet and its own pulse, never this one.
       pulse(loggedType === "Income" ? "income" : "default");
       clearTimeout(celebrateTimeout.current);
       celebrateTimeout.current = setTimeout(() => {
         setCelebrate(false);
-        onSaved?.();
+        onSaved?.(note);
       }, 1600);
     }
     wasPending.current = pending;
@@ -667,8 +674,9 @@ export function AddTransactionForm({
       </form>
 
       {isEdit ? null : (
-        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center">
+        <div className="pointer-events-none fixed inset-x-4 bottom-6 z-50 flex flex-col items-center gap-2">
           <Celebration show={celebrate} message={celebrateMessage} icon={celebrateIcon} />
+          <SaveNote message={saveNote} />
         </div>
       )}
     </div>

@@ -5,6 +5,7 @@ import { AccountForm } from "./AccountForm";
 import { archiveAccountAction } from "@/lib/actions/accounts";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FullFormOverlay } from "@/components/quick-add/FullFormOverlay";
+import { SaveNote, useSaveNote } from "@/components/ui/SaveNote";
 import { formatAccountBalance } from "@/lib/format";
 import { isLiabilityAccountType } from "@/lib/accountOptions";
 import type { Database } from "@/lib/database.types";
@@ -36,6 +37,7 @@ export function AccountRow({
 }) {
   const [editing, setEditing] = useState(initiallyEditing);
   const [makingPayment, setMakingPayment] = useState(false);
+  const [saveNote, showSaveNote] = useSaveNote();
   const [confirmingArchive, setConfirmingArchive] = useState(false);
   const [archiveError, setArchiveError] = useState<string>();
   const [isArchiving, startArchive] = useTransition();
@@ -165,8 +167,18 @@ export function AccountRow({
           expenseCategories={expenseCategories}
           prefill={paymentPrefill}
           onClose={() => setMakingPayment(false)}
-          onSaved={() => setMakingPayment(false)}
+          onSaved={(note) => {
+            showSaveNote(note);
+            setMakingPayment(false);
+          }}
         />
+      ) : null}
+
+      {/* The overlay is gone by the time the note shows; it lives here. */}
+      {saveNote ? (
+        <div className="pointer-events-none fixed inset-x-4 bottom-6 z-50 flex justify-center">
+          <SaveNote message={saveNote} />
+        </div>
       ) : null}
     </li>
   );
