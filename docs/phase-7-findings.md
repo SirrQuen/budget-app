@@ -2206,30 +2206,36 @@ covers answering, changing the answer, and a stale anchor.
 and nothing written wrongly -- this entry exists so a later "I saw a label
 I can't find" has an answer.
 
-Times (origin/main's push log, -05:00):
+Times (-05:00; the migration time from Matt, the pushes from origin/main's
+push log):
 
+- **00:05** -- migration 62 pushed to production.
 - **00:09:58** -- `main` pushed with head `7e651ed`: 62 merged (`0336ce9`)
   WITHOUT the "Was this in your balance?" link. I had reported main ready
   to push at that commit; the link was folded into 62 afterwards.
 - **00:32:48** -- `main` pushed with head `327a6ac`, which carries the link
   (`e8f7916`). That is what testers have had since.
 
-What a tester could have seen in between depends on whether migration 62
-was already on production at 00:09 (the push time wasn't recorded; fill
-it in here if known):
+What a tester could have seen:
 
-- **62 already on production:** a transaction dated before the balance
-  date asked the question as designed. Opening an older one showed "Dated
-  before your balance of $X on <date>, so it isn't counted in that
-  balance" -- with NO link to answer it. That line still exists, now with
-  the link beside it; the link-less version is what someone may remember.
-- **62 not yet on production:** the new app called
-  `balance_anchor_preview()`, which didn't exist yet, so no question and
-  no line appeared; saves worked as before (no trigger to refuse them).
+- **00:05 to about 00:10 (the old app on 62's schema, until the 00:09
+  push deployed):** the deploy-order window the push plan warned about.
+  The old app's "before your balance date" note disappeared (the function
+  it called was gone), and a save dated before the balance date -- a
+  backdated quick add, a form entry, a confirmation, or changing an older
+  row's date, amount or account -- was refused with the generic "That
+  didn't save, and it's not something you did." The old app didn't know
+  SRA01. Nothing was written; trying again after the deploy worked.
+- **About 00:10 to 00:32 (62 without the link):** a transaction dated
+  before the balance date asked the question as designed. Opening an
+  older one showed "Dated before your balance of $X on <date>, so it
+  isn't counted in that balance" -- with NO link to answer it. That line
+  still exists, now with the link beside it; the link-less version is
+  what someone may remember.
 
-Either way nothing was damaged: no answer can be stored without the
-question, the old app's writes were unchanged, and production showed 0
-rows with an answer when checked after the 00:32 deploy.
+Nothing was damaged: no answer can be stored without the question, a
+refused save writes nothing, and production showed 0 rows with an answer
+when checked after the 00:32 deploy.
 
 Cause, and the rule it produced (CLAUDE.md "Shipping"): main was pushed at
 a commit that was never meant to ship. It wasn't several commits in one
