@@ -296,6 +296,25 @@ Verified by, in order:
    clean against the post-reconcile production dump (version header
    only); auth trigger, `authenticator` setting and `bank_holidays` rows
    match; RLS harness 215/215.
+5. **2026-11-09: the full chain built from empty -- the first time since
+   the squash.** Items 1 and 4 built the baseline alone; nothing had
+   applied the migrations written after it to an empty database until
+   throwaway project `sorrel-scratch-chain` (`pxscrlbiqjmarmedzfhl`,
+   created that day, deleted the same day). Range: all 17 files in
+   filename order, `00000000000000_baseline` through `20261104000057`
+   -- baseline, 44, 45, 46, 47, 48, 49, 50, 51, 53, 54, 56, 58, 59, 60,
+   61, then 57 (its re-derived timestamp sorts it after 61). Its
+   `schema_migrations` held all 17 in that order, and 57's objects were
+   present as written: `v_goal_monthly_holds` with `remaining_to_target`
+   (the e93eb68 cap), depending on `v_upcoming_recurring` and
+   `v_goal_progress` as 58-61 leave them; `goals.funding_recurringid`;
+   `set_goal_funding(uuid, uuid)`. This answered the hold rule's
+   renumbering question for 57 -- the number stands -- and is the only
+   evidence the post-squash chain rebuilds. Not covered: anything after
+   57 (62-64 were unmerged), and no RLS harness or schema diff was run
+   on it. A local rebuild wasn't possible that day: Docker Desktop needs
+   WSL, which isn't installed, and the local PostgreSQL 17/18 installs
+   are client tools only.
 
 Side effect, explained: preview branches without a GitHub integration
 are built by replaying production's recorded history. Until the
@@ -584,11 +603,14 @@ with scripts disabled in headless Chrome: Enter did nothing.
 
 ## Goal money in safe to spend (2026-10-31)
 
-**Status (2026-11-09): ready to ship as its own deploy, ahead of 62-64,
-with its own tester note (`docs/tester-notes/2026-11-09-goal-money.md`,
-re-dated from the planned 2026-11-04). It has been on sorrel-dev since
-the browser check, which is why dev couldn't take 62-64 until it ships.
-The near-target finding below is fixed (e93eb68).**
+**Status (2026-11-09): in production (pushed 2026-11-09, ahead of
+62-64), merged to main as its own deploy. Tester note
+`docs/tester-notes/2026-11-10-goal-money.md`, named for the day it
+sends, not the planned 2026-11-04. It had been on sorrel-dev since the
+browser check, which is why dev couldn't take 62-64 until it shipped.
+Kept its number: the full chain built from empty in filename order on
+2026-11-09 (see "The migrations have never rebuilt the database", item
+5). The near-target finding below is fixed (e93eb68).**
 
 **Status (2026-11-03): no longer held; re-derived on top of 58-61 to
 ship as its own deploy, with its own tester note dated 2026-11-04.** The
