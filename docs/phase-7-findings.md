@@ -296,6 +296,25 @@ Verified by, in order:
    clean against the post-reconcile production dump (version header
    only); auth trigger, `authenticator` setting and `bank_holidays` rows
    match; RLS harness 215/215.
+5. **2026-11-09: the full chain built from empty -- the first time since
+   the squash.** Items 1 and 4 built the baseline alone; nothing had
+   applied the migrations written after it to an empty database until
+   throwaway project `sorrel-scratch-chain` (`pxscrlbiqjmarmedzfhl`,
+   created that day, deleted the same day). Range: all 17 files in
+   filename order, `00000000000000_baseline` through `20261104000057`
+   -- baseline, 44, 45, 46, 47, 48, 49, 50, 51, 53, 54, 56, 58, 59, 60,
+   61, then 57 (its re-derived timestamp sorts it after 61). Its
+   `schema_migrations` held all 17 in that order, and 57's objects were
+   present as written: `v_goal_monthly_holds` with `remaining_to_target`
+   (the e93eb68 cap), depending on `v_upcoming_recurring` and
+   `v_goal_progress` as 58-61 leave them; `goals.funding_recurringid`;
+   `set_goal_funding(uuid, uuid)`. This answered the hold rule's
+   renumbering question for 57 -- the number stands -- and is the only
+   evidence the post-squash chain rebuilds. Not covered: anything after
+   57 (62-64 were unmerged), and no RLS harness or schema diff was run
+   on it. A local rebuild wasn't possible that day: Docker Desktop needs
+   WSL, which isn't installed, and the local PostgreSQL 17/18 installs
+   are client tools only.
 
 Side effect, explained: preview branches without a GitHub integration
 are built by replaying production's recorded history. Until the
@@ -582,13 +601,189 @@ with scripts disabled in headless Chrome: Enter did nothing.
   error-capture some other way). `useActionForm`'s comment, which used to
   say "a submit before hydration still posts natively", now says this.
 
+## Goal money in safe to spend (2026-10-31)
+
+**Status (2026-11-09): in production (pushed 2026-11-09, ahead of
+62-64), merged to main as its own deploy. Tester note
+`docs/tester-notes/2026-11-10-goal-money.md`, named for the day it
+sends, not the planned 2026-11-04. It had been on sorrel-dev since the
+browser check, which is why dev couldn't take 62-64 until it shipped.
+Kept its number: the full chain built from empty in filename order on
+2026-11-09 (see "The migrations have never rebuilt the database", item
+5). The near-target finding below is fixed (e93eb68).**
+
+**Status (2026-11-03): no longer held; re-derived on top of 58-61 to
+ship as its own deploy, with its own tester note dated 2026-11-04.** The
+hold existed because testers couldn't attribute a moving hero number to
+a cause; a dated note per change answers that better than waiting.
+
+Re-derived on `feat/goal-contributions-in-safe-to-spend` (main merged in):
+
+- **New timestamp, same number:** `20261104000057_57_goal_monthly_holds.sql`.
+  The old one (`20261031000057`) sorted before 58-61.
+- **The view checked against today's `v_upcoming_recurring`:** it reads
+  `recurring_id`, `account_type` and `to_account_type`, unchanged through
+  59 and 61. 59's occurrence count changes which transfers are counted --
+  a limited transfer now ends after its last *occurrence*, not its
+  second-to-last leg -- so `goal-monthly-holds-test.sql` gained section
+  10 for it.
+- **Grants made explicit**, as 61 does: 57 revoked only from public and
+  anon, so on sorrel-dev the view would have taken INSERT/UPDATE/DELETE
+  from that project's default privileges, the way 59's view did. Section
+  11 checks the ACL; the RLS harness's 2d now checks
+  `set_goal_funding()`'s grants.
+- **New dependent:** `v_goal_monthly_holds` reads `v_upcoming_recurring`.
+  The next migration that drops `v_upcoming_recurring` (as 61 did) drops
+  and re-creates this view too.
+- **Code:** `createRecurringAction` links a "Make recurring" source (60)
+  before it links a goal (57), so a failed source link removes the
+  schedule before any goal points at it.
+
+**Found in the browser check on sorrel-dev (2026-11-03): a goal near its
+target holds its full monthly amount.** Emergency fund, $950 of $1,000
+saved, monthly target $200, nothing yet this month: it holds $200, though
+it can only take $50 more. The view's rule is `max(0, monthly - contributed
+this month)` and never looks at what's left to the target. It errs on the
+cautious side, but it's money the goal will never need: safe to spend is
+$150 lower than it should be. Likely rule:
+`least(monthly - contributed this month, target - saved)`, floored at 0.
+Not changed: it's a decision about the number, and 57 hasn't shipped.
+**Fixed 2026-11-03 (e93eb68):** the hold is capped at the goal's
+remaining amount (`v_goal_progress.remaining_amount`, exposed as
+`remaining_to_target`), the rule above.
+
+The original record follows.
+
+**Original status (2026-10-31): built on `feat/goal-contributions-in-safe-to-spend`, unmerged.
+Hold until the week of 9 November 2026. Reason: three changes to the
+hero number inside a week leaves testers unable to give interpretable
+feedback about it.** Migration 57 has been on a throwaway project only
+(below), never sorrel-dev or production.
+
+**Two held branches now carry migrations that touch goals:**
+`feat/linked-goals` (52) and this one (57). Whichever merges second must
+be RE-DERIVED on top of the first, not just given a fresh timestamp. 53
+was written against a dev that had 52 applied and had to be re-derived;
+the same trap is now set twice. Where they meet: 52 refuses
+contributions to a linked goal, and 57 measures "contributed this month"
+from contributions, so on top of 52 a linked goal would hold its full
+monthly target every month. 52 also replaces `v_goal_progress` from its
+pre-53 definition, and both add columns to `goals`. 52's timestamp
+(2026-10-26) is already older than 53, 54, 56 and 57.
+
+Safe to spend sets aside each goal's `max(0, monthly target - contributed
+this month)`, per goal (one over-funded goal never covers another), flat
+after the cushion and never pro-rated. It's derived in
+`v_goal_monthly_holds`, never written. Archived, completed, no-target and
+zero-target goals hold nothing. The breakdown names it beside the cushion
+("Goals this month", then each goal). It comes off the headline only: the
+running-low line stays the cushion alone. A cushion is money not to touch;
+goal money can be deferred, and skipping a contribution when short is the
+right call.
+
+A goal can name the recurring transfer that funds it
+(`goals.funding_recurringid`, composite FK, ON DELETE SET NULL of the link
+only). While the projection counts that transfer (in
+`v_upcoming_recurring` and `leaves_spendable_set`), the transfer is the
+commitment and the target holds nothing, so the money never comes off
+twice. A paused, ended or Checking -> Cash transfer isn't counted, so the
+target holds again rather than the goal holding nothing. GoalForm asks
+"Do you move this money automatically?" as soon as a monthly target is
+typed, from the transfers the projection counts.
+
+The link is asked from both ends, because the feature is only correct
+when it exists. A goal set first and automated later is the same silent
+failure with the steps reversed: nothing links it, and both the target
+and the transfer come off safe to spend. So the recurring transfer form
+asks "Is this for a goal?" at create, at edit, and from "Make recurring"
+on a transfer row, whenever the transfer is one the projection counts.
+Its answer goes through `set_goal_funding()` (migration 57), which links
+one goal and unlinks any other in one call. When a transfer already
+funds several goals (linked from the goal side), the form says so and
+leaves them alone: one answer there would unlink the rest. The link is
+written only when the form asked, so an edit elsewhere never drops it.
+
+Named `funding_recurringid`, not `funding_schedule_id`: the FK convention
+(no underscore before `id`, like `to_accountid`).
+
+Before merging:
+
+1. Push 57 to a **throwaway project**, never sorrel-dev while held.
+2. There: `docs/goal-monthly-holds-test.sql` (new, 9 sections),
+   `docs/rls-isolation-test.sql` (extended: the view in section 2, the FK
+   in section 8 both ways), `docs/cross-user-references-audit.sql` (reads
+   FKs from `pg_constraint`, so it already covers the new one),
+   `npm run test:parity`.
+3. Regenerate `lib/database.types.ts` from that project. The 57 entries
+   were hand-written to match `gen types` and should come out identical
+   apart from ordering (`v_goal_monthly_holds` sorts before
+   `v_goal_progress`).
+
+**Done 2026-10-31 on `sorrel-scratch-57` (`aqyccrjydauiriulljnu`)**, the
+full chain pushed from zero (baseline through 57):
+
+- **The chain builds from zero.** All 13 applied, remote history equal
+  to local. Nothing had exercised that since sorrel-dev was rebuilt on
+  2026-10-27.
+- `goal-monthly-holds-test.sql` 19/19. `rls-isolation-test.sql` 279/279
+  (273 before, plus the view's three checks, the FK both ways, and
+  coverage). Cleanup 0 for both test users, the RLS waitlist rows, and
+  every goal and schedule. `npm run test:parity` 99/99: it runs
+  `db query --linked`, so it follows the CLI link, never `.env.local`.
+  `cross-user-references-audit.sql` 0 on all 14 references, the new FK
+  among them -- vacuous on an empty database: it shows the FK is
+  audited, not that real rows are clean.
+- **The hand-written types were wrong, not just reordered.** Every
+  hand-written line is in the generated file, but `gen types` added two
+  relationship entries the hand-written file lacked: `goal_contributions_goalid_fkey` and
+  `transactions_goalid_fkey` each also reference `v_goal_monthly_holds`
+  (`userid, goalid`), because the view exposes `goals(userid, id)` as
+  `goalid`. Two orderings moved as well: the view, as predicted, and the
+  two `goals_funding_recurringid_fkey` entries, which sort after the
+  existing `goals` relationships, not before. `set_goal_funding` and the
+  `goals` columns matched exactly. The generated file replaced the
+  hand-written one. Against `main` it is 54 lines, all additions, all
+  57's, so the chain from zero produces exactly `main`'s types for
+  everything before it. Lesson: a view over a table with composite FKs
+  gains relationship entries on every table that references that table.
+  Generate types; don't hand-write them.
+
+Known gaps:
+
+- **Closed 2026-10-31: a transfer created after the goal wasn't
+  linked.** The first build asked only on the goal side. The recurring
+  side (above) closes it, before merge.
+- **A new transfer whose goal link fails** is still saved, and the form
+  says so ("Your transfer is saved, but linking it to the goal didn't
+  work..."), since saving again would make a second schedule. The two
+  writes aren't one transaction: the schedule's business-day dates are
+  computed in TypeScript.
+- **Linked goals** (`feat/linked-goals`, held) measure progress from an
+  account balance, so "contributed this month" means something else for
+  them. Decide when that branch lands.
+- **`v_goals_summary` still filters on `status = 'Active'`**, which
+  CLAUDE.md says isn't used for archive or completion. Nothing visible
+  reads the affected fields (`planned_monthly_contribution`), and the new
+  view doesn't use it. Separate fix.
+
+### The held-migration rule was load-bearing here (2026-10-31)
+
+CLAUDE.md's "a held branch's migration must never be pushed to the shared
+dev database" caught 57 before it cost anything. Every earlier mention of
+the rule was retrospective: linked-goals' 52 sat on sorrel-dev and
+migration 53 was written around it, which is why dev was rebuilt on
+2026-10-27. This is the first time it shaped what happened instead of
+explaining what went wrong. 57 goes to a throwaway project
+(`sorrel-scratch-57`), named so it can't be mistaken for sorrel-dev,
+and is deleted the same day.
+
 ## Held branches that touch goals (2026-10-31)
 
 Pointer only. The full records live on the branches, unmerged.
 
 | Branch | Migration | Hold |
 |---|---|---|
-| `feat/goal-contributions-in-safe-to-spend` | 57: safe to spend sets aside this month's goal money | **Until the week of 9 November 2026.** Reason: three changes to the hero number inside a week leaves testers unable to give interpretable feedback about it. |
+| `feat/goal-contributions-in-safe-to-spend` | 57: safe to spend sets aside this month's goal money | **Released 2026-11-03**, to ship as its own deploy with a dated tester note (2026-11-04), re-derived on top of 58-61. See "Goal money in safe to spend". |
 | `feat/linked-goals` | 52: a goal's progress read from a linked account | Until that branch merges (its own commits say what it needs). |
 
 **Whichever merges second must be RE-DERIVED on top of the first**, not
@@ -693,6 +888,28 @@ rather than becoming a fourth dependent to drop.
   Production has the baseline's ACL. 61 revokes everything and grants
   production's set on all three views, so dev and production now match.
 - Checks: `docs/recurring-amount-scale-test.sql`.
+
+## Commercial launch, not beta: an in-app "what changed" surface (2026-11-03)
+
+Tester notes go out by message and are recorded in `docs/tester-notes/`
+(sent date, migration, merge commit), starting with 57's. With five
+testers and a direct channel, a message invites a reply, and replies are
+the point of the beta. An in-app line is one-way, needs dismissal state
+for one sentence, and puts a changelog on the hero, which should be
+about the user's money rather than Sorrel's development. Decide this at
+commercial launch, when there's no direct channel. Not before.
+
+## Goal money columns are unconstrained `numeric` too (2026-11-03)
+
+Found while re-deriving 57: `goals.target_amount`,
+`goals.monthly_contribution` and `goal_contributions.amount` are bare
+`numeric`, the same gap migration 61 closed for schedules. Production,
+read-only, 2026-11-03: 4, 2 and 3 values, none beyond two decimals, so
+nothing is wrong today. The fix is the same shape as 61 (retype, then
+drop and re-create every dependent view by name -- `v_goal_progress`,
+`v_goals_summary`, `v_goal_monthly_holds`, and whatever else the
+enumeration finds). Not written. It would touch the views held 52
+replaces, so it belongs after 52 is decided.
 
 ## Recurring dates: what each one means (2026-10-31)
 

@@ -19,7 +19,7 @@ import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { CheckIcon, ChevronDownIcon, TargetIcon, TrashIcon } from "@/components/ui/icons";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { GoalProgress } from "@/lib/db/dashboard";
-import type { GoalContribution } from "@/lib/db/goals";
+import type { FundingTransfer, GoalContribution } from "@/lib/db/goals";
 import type { GoalCompletion } from "@/lib/goalCompletion";
 import { ContributionList } from "./ContributionList";
 import { GoalForm } from "./GoalForm";
@@ -45,9 +45,14 @@ export function GoalRow({
   goal,
   contributions,
   completedOn,
+  fundingRecurringId,
+  fundingTransfers,
 }: {
   goal: GoalProgress;
   contributions: GoalContribution[];
+  /** goals.funding_recurringid -- v_goal_progress doesn't carry it. */
+  fundingRecurringId: string | null;
+  fundingTransfers: FundingTransfer[];
   /** completed_at as the user's calendar day, or null while not complete. */
   completedOn: string | null;
 }) {
@@ -190,7 +195,9 @@ export function GoalRow({
             target_amount: target,
             target_date: goal.target_date,
             monthly_contribution: goal.monthly_contribution,
+            funding_recurringid: fundingRecurringId,
           }}
+          fundingTransfers={fundingTransfers}
           onSuccess={closeEdit}
           onCancel={closeEdit}
           onCompleted={setCompletion}

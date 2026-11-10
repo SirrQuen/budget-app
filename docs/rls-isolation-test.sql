@@ -218,8 +218,10 @@ begin
     values (pg_temp.fx(u || '_budget'), uid, pg_temp.fx(u || '_groceries'), 100,
             date_trunc('month', current_date)::date);
 
-    insert into public.goals (id, userid, goal_name, goal_type, target_amount, status, tracking_method)
-    values (pg_temp.fx(u || '_goal'), uid, 'RLS ' || u || ' goal', 'Custom', 500, 'Active', 'Manual');
+    -- monthly_contribution: gives v_goal_monthly_holds (migration 57) a row
+    -- for each user -- 100 less this month's 50.
+    insert into public.goals (id, userid, goal_name, goal_type, target_amount, status, tracking_method, monthly_contribution)
+    values (pg_temp.fx(u || '_goal'), uid, 'RLS ' || u || ' goal', 'Custom', 500, 'Active', 'Manual', 100);
 
     insert into public.goal_contributions (id, userid, goalid, amount, date, funding_method)
     values (pg_temp.fx(u || '_contrib'), uid, pg_temp.fx(u || '_goal'), 50, current_date, 'manual');
@@ -285,6 +287,7 @@ begin
       ('2 views', 'v_category_activity',    format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_category_spending',    format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_daily_cashflow',       format('userid = %L', a),                            format('userid <> %L', b)),
+      ('2 views', 'v_goal_monthly_holds',   format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_goal_progress',        format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_goals_summary',        format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_integrity_issues',     format('userid = %L', a),                            format('userid <> %L', b)),
@@ -671,6 +674,7 @@ declare
   v_txn_goal uuid := gen_random_uuid();
   v_txn_recur uuid := gen_random_uuid();
   v_goal_linked uuid := gen_random_uuid();
+  v_goal_funded uuid := gen_random_uuid();
   v_row record;
 begin
   for r in
@@ -708,7 +712,10 @@ begin
       ('transactions_accountid_fkey',
         format('update public.transactions set accountid = %L where id = %L', pg_temp.fx('A_acct'), pg_temp.fx('B_txn'))),
       ('goal_contributions_goalid_fkey',
-        format('update public.goal_contributions set goalid = %L where id = %L', pg_temp.fx('A_goal'), pg_temp.fx('B_contrib')))
+        format('update public.goal_contributions set goalid = %L where id = %L', pg_temp.fx('A_goal'), pg_temp.fx('B_contrib'))),
+      -- Migration 57: a goal's funding transfer must be its own user's.
+      ('goals_funding_recurringid_fkey',
+        format('update public.goals set funding_recurringid = %L where id = %L', pg_temp.fx('A_recur'), pg_temp.fx('B_goal')))
     ) as t(fk, sql)
   loop
     select * into w from pg_temp.try_as(null, r.sql);
@@ -738,6 +745,8 @@ begin
           'Expense', current_date - 400);
   insert into public.goals (id, userid, goal_name, goal_type, target_amount, accountid)
   values (v_goal_linked, a, 'rls fk linked', 'Custom', 1, v_acct);
+  insert into public.goals (id, userid, goal_name, goal_type, target_amount, funding_recurringid)
+  values (v_goal_funded, a, 'rls fk funded', 'Custom', 1, v_recur);
 
   delete from public.goals where id = v_goal;
   delete from public.recurring_transactions where id = v_recur;
@@ -749,6 +758,8 @@ begin
     select 'transactions_recurringid_fkey', t.recurringid, t.userid from public.transactions t where t.id = v_txn_recur
     union all
     select 'goals_accountid_fkey', g.accountid, g.userid from public.goals g where g.id = v_goal_linked
+    union all
+    select 'goals_funding_recurringid_fkey', g.funding_recurringid, g.userid from public.goals g where g.id = v_goal_funded
   loop
     perform pg_temp.rec('8 composite FKs', v_row.fk, 'parent deleted: SET NULL nulls the reference only',
       'ref null, userid = A',
@@ -1025,7 +1036,10 @@ begin
       ('public.enforce_recurring_variability_scope()',           'authenticated', false),
       -- "Make recurring" links its source (migration 60). Signed-in only.
       ('public.link_transaction_to_schedule(uuid,uuid)',         'anon',          false),
-      ('public.link_transaction_to_schedule(uuid,uuid)',         'authenticated', true)
+      ('public.link_transaction_to_schedule(uuid,uuid)',         'authenticated', true),
+      -- The recurring form's side of a goal's funding link (migration 57).
+      ('public.set_goal_funding(uuid,uuid)',                     'anon',          false),
+      ('public.set_goal_funding(uuid,uuid)',                     'authenticated', true)
     ) as t(fn, role, expected)
   loop
     v_actual := has_function_privilege(v_check.role, v_check.fn::regprocedure, 'execute');
