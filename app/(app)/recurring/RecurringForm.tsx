@@ -12,6 +12,8 @@ import type { TransactionAccountOption } from "../transactions/AddTransactionFor
 import { useToday } from "@/components/TodayProvider";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
 import { formatCurrency, formatDate, formatDateWithWeekday } from "@/lib/format";
+import { isSafeToSpendCommitment } from "@/lib/safeToSpend";
+import type { GoalOption } from "@/lib/db/goals";
 import { ordinal } from "@/lib/recurringSchedule";
 import { firstDateAfterSource } from "@/lib/recurringCadence";
 import { Amount } from "@/components/ui/Amount";
@@ -272,6 +274,7 @@ export function RecurringForm({
   incomeCategories,
   expenseCategories,
   accounts,
+  goals,
   holidays = [],
   onSuccess,
   onCancel,
@@ -282,6 +285,8 @@ export function RecurringForm({
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
   accounts: TransactionAccountOption[];
+  /** Active, uncompleted goals with their current links -- "Is this for a goal?" (listGoalOptions). */
+  goals: GoalOption[];
   /**
    * ISO dates, for the live "Next: ..." timing preview below -- what
    * actually gets saved is resolved authoritatively server-side
@@ -322,6 +327,24 @@ export function RecurringForm({
     kind === initialKind ? (seed?.to_accountid ?? "") : "",
   );
   const toAccount = accounts.find((a) => a.id === toAccountId);
+  const [fromAccountId, setFromAccountId] = useState<string>(
+    kind === initialKind ? (seed?.accountid ?? "") : "",
+  );
+  const fromAccount = accounts.find((a) => a.id === fromAccountId);
+  // "Is this for a goal?" -- the recurring side of goals.funding_recurringid,
+  // so a goal set first and automated later still gets linked. Asked only
+  // for a transfer safe to spend counts (the same classifier), since only
+  // that one can stand in for a goal's monthly target.
+  const countedTransfer =
+    kind === "Transfer" &&
+    fromAccount !== undefined &&
+    toAccount !== undefined &&
+    isSafeToSpendCommitment({
+      transactionType: "Transfer",
+      fromAccountType: fromAccount.account_type,
+      toAccountType: toAccount.account_type,
+    });
+  const linkedGoals = isEdit ? goals.filter((g) => g.fundingRecurringId === recurring.id) : [];
   const toAccountIsCreditCard = toAccount?.account_type === "Credit Card";
   const [amountIsVariable, setAmountIsVariable] = useState(recurring?.amount_is_variable ?? false);
   const showCardVariableToggle = kind === "Transfer" && toAccountIsCreditCard;
@@ -507,7 +530,41 @@ export function RecurringForm({
             initialFromAccountId={kind === initialKind ? (seed?.accountid ?? "") : ""}
             initialToAccountId={kind === initialKind ? (seed?.to_accountid ?? "") : ""}
             onToAccountChange={setToAccountId}
+            onFromAccountChange={setFromAccountId}
           />
+
+          {countedTransfer && goals.length > 0 ? (
+            linkedGoals.length > 1 ? (
+              // Linked from several goals' side: one answer here would
+              // unlink the rest, so it isn't offered.
+              <p className="text-sm text-ink-secondary">
+                This transfer funds {linkedGoals.map((g) => g.name).join(", ")}. Change that from each goal.
+              </p>
+            ) : (
+              <>
+                <input type="hidden" name="funding_goal_asked" value="1" />
+                <FormField
+                  label="Is this for a goal?"
+                  htmlFor={fieldId("funding_goalid")}
+                  hint="Safe to spend then counts this transfer instead of the goal's monthly target, so the money isn't set aside twice."
+                >
+                  <select
+                    id={fieldId("funding_goalid")}
+                    name="funding_goalid"
+                    defaultValue={linkedGoals[0]?.id ?? ""}
+                    className={fieldClassName}
+                  >
+                    <option value="">No</option>
+                    {goals.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.monthlyContribution ? `${g.name} · ${formatCurrency(g.monthlyContribution)} a month` : g.name}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+              </>
+            )
+          ) : null}
 
           {showCardVariableToggle ? (
             <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-secondary">
@@ -817,12 +874,15 @@ function TransferAccountFields({
   initialFromAccountId,
   initialToAccountId,
   onToAccountChange,
+  onFromAccountChange,
 }: {
   accounts: TransactionAccountOption[];
   initialFromAccountId: string;
   initialToAccountId: string;
   /** Mirrors the selection up to RecurringForm, which needs it to know whether the destination is a Credit Card. */
   onToAccountChange: (accountId: string) => void;
+  /** Same, for the source -- whether the transfer is one safe to spend counts ("Is this for a goal?"). */
+  onFromAccountChange: (accountId: string) => void;
 }) {
   const fieldId = useFieldId();
   const [fromAccountId, setFromAccountId] = useState(initialFromAccountId);
@@ -837,7 +897,10 @@ function TransferAccountFields({
           name="accountid"
           required
           value={fromAccountId}
-          onChange={(e) => setFromAccountId(e.target.value)}
+          onChange={(e) => {
+            setFromAccountId(e.target.value);
+            onFromAccountChange(e.target.value);
+          }}
           className={fieldClassName}
         >
           <option value="" disabled>

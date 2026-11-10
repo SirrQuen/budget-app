@@ -164,12 +164,29 @@ export type HorizonReason =
   /** No usable income schedule -- the caller's window, no income counted. */
   | "window";
 
+export type GoalHold = {
+  goalId: string;
+  name: string;
+  /** Dollars, >= 0. */
+  amount: number;
+};
+
 export type SafeToSpendProjectionInput = {
   today: string;
   /** Active Checking + Cash balances (spendable_cash_balance()), dollars. */
   cash: number;
   /** Dollars, >= 0. */
   cushion: number;
+  /**
+   * This month's goal money still to set aside, per goal
+   * (v_goal_monthly_holds): max(0, monthly target - contributed this
+   * month), capped at what's left to the target, already excluding goals
+   * a counted transfer funds. Subtracted
+   * flat after the cushion, like it. Never raises the running-low line:
+   * a cushion is money not to touch; goal money can be deferred, and
+   * skipping a contribution when short is the right call.
+   */
+  goalHolds: GoalHold[];
   schedules: ProjectionSchedule[];
   holidays: ReadonlySet<string>;
   /** Horizon to use when there's no usable income schedule. */
@@ -184,13 +201,17 @@ export type SafeToSpendProjection = {
   daysRemaining: number;
   cashOnHand: number;
   cushion: number;
+  /** Goals still holding money this month, amount > 0 only, input order. */
+  goalHolds: GoalHold[];
+  /** Their total, dollars -- subtracted after the cushion. */
+  goalHold: number;
   /** The lowest projected balance, the day it happens, and what lands that day. */
   trough: { amount: number; date: string; obligations: ProjectedObligation[] };
   /** Every obligation inside the horizon, date order. */
   obligations: ProjectedObligation[];
   /** Every income occurrence counted, date order. Empty in window mode. */
   incomes: ProjectedIncome[];
-  /** max(0, trough - cushion). */
+  /** max(0, trough - cushion - goalHold). */
   safeToSpend: number;
   /** Set when the trough itself goes below zero -- how far, and when. */
   shortfall: { amount: number; date: string } | null;
@@ -548,7 +569,11 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
   }
 
   const cushionCents = Math.max(0, toCents(input.cushion));
-  const safeCents = Math.max(0, troughCents - cushionCents);
+  const goalHolds = input.goalHolds.filter((g) => toCents(g.amount) > 0);
+  const goalHoldCents = goalHolds.reduce((sum, g) => sum + toCents(g.amount), 0);
+  // Flat, like the cushion -- not pro-rated by horizon. The episodes below
+  // still measure against the cushion alone.
+  const safeCents = Math.max(0, troughCents - cushionCents - goalHoldCents);
   const daysRemaining = daysBetweenInclusive(today, horizonEnd);
 
   return {
@@ -558,6 +583,8 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
     daysRemaining,
     cashOnHand: toDollars(cashCents),
     cushion: toDollars(cushionCents),
+    goalHolds,
+    goalHold: toDollars(goalHoldCents),
     trough: { amount: toDollars(troughCents), date: troughDate, obligations: troughObligations },
     obligations,
     incomes,
