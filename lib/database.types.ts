@@ -1378,6 +1378,13 @@ export type Database = {
       }
     }
     Functions: {
+      account_last_logged: {
+        Args: never
+        Returns: {
+          account_id: string
+          last_logged_on: string
+        }[]
+      }
       account_type_subtotals: {
         Args: { p_include_archived: boolean }
         Returns: {
@@ -1399,13 +1406,6 @@ export type Database = {
           p_transaction_date: string
         }
         Returns: boolean
-      }
-      account_last_logged: {
-        Args: never
-        Returns: {
-          account_id: string
-          last_logged_on: string
-        }[]
       }
       apply_user_timezone: { Args: never; Returns: undefined }
       balance_anchor_preview: {
