@@ -24,7 +24,7 @@ export function FullFormOverlay({
   expenseCategories: CategoryWithGroup[];
   prefill?: AddTransactionPrefill;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (note: string | null) => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const labelId = useId();

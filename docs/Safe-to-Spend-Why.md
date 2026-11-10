@@ -29,8 +29,8 @@ to the figure above it.
 Two sentences: the cause, then what follows from it.
 
 > **Your tightest day is Wednesday 11 November, after Payment to Active
-> Cash Visa Card comes out. Anything dated after the 11th leaves this
-> figure as it is, up to $1,240 in total.**
+> Cash Visa Card comes out. Anything dated after Wednesday 11 November
+> leaves this figure as it is, up to $1,240 in total.**
 
 (The $1,240 is illustrative. The real figure comes from the walk.)
 
@@ -49,7 +49,11 @@ obligations, before its income) and the trough. Add two values to
 lastTightest  the LAST day whose lowCents == troughCents
               (the trough's date is the FIRST such day, since the
               earliest day wins a tie; these differ when a later day
-              falls exactly as low)
+              falls exactly as low -- which is the COMMON case, not a
+              rare one: a day's low is read before its income, so every
+              day from the trough up to and including the next payday
+              sits at the trough. They match only when pay lands on the
+              trough day itself, as on 11 November)
 roomAfter     min(lowCents over days after lastTightest) - troughCents
               null when lastTightest is the horizon's last day
 ```
@@ -74,19 +78,21 @@ as a pure function (`whyThisNumber(data)`), unit tested there.
 
 | Case | Sentence 1 (cause) | Sentence 2 (what follows) |
 |---|---|---|
-| Trough later than today, one item that day | "Your tightest day is {Weekday D Month}, after {name} comes out." | "Anything dated after the {Dth} leaves this figure as it is, up to {room} in total." |
+| Trough later than today, one item that day | "Your tightest day is {Weekday D Month}, after {name} comes out." | "Anything dated after {Weekday D Month} leaves this figure as it is, up to {room} in total." |
 | Several items that day | "…after {largest} and {n} more come out." (largest first, at most 2 named, as `cause()` does) | same |
 | Trough today, nothing ahead goes lower | "Today is your tightest day. Nothing ahead takes your balance below where it is now." | same, with "after today" |
 | Trough today from items moved to today (overdue, due today) | "Today is your tightest day, after {name} comes out." | same |
-| A later day falls exactly as low (`lastTightest` after trough date) | Sentence 1 for the trough's date | "Anything dated up to {lastTightest} comes off this figure in full. After that, up to {room} in total leaves it as it is." |
-| `after` is null (tightest day is the last day: no income in the window, or the balance only falls) | as above | "Anything dated before {horizon end} comes off this figure in full." |
+| A later day falls exactly as low (`lastTightest` after trough date) | Sentence 1 for the trough's date | "Anything dated through {lastTightest} comes off this figure in full. After that, up to {room} in total leaves it as it is." |
+| `after` is null (tightest day is the last day: no income in the window, or the balance only falls) | as above | "Anything dated through {horizon end} comes off this figure in full." |
 | Safe to spend is $0 | Sentence 1 only | none. "Room" against a figure already at zero would mislead, and the shortfall subline already says what matters |
 | Window mode (no paycheck) | same rules. Its walk falls until the last obligation, so it usually ends up in the `after` null case | |
 
 The weekday and date match the "Low point" line (`formatDateWithWeekday`),
-the same as everywhere else in the app. The "11th" style is used only in
-sentence 2, once the day has been named in full. Never "tomorrow" (see
-"Decided").
+the same as everywhere else in the app. Sentence 2 names the day in full
+too: it's shown inside the breakdown, apart from sentence 1 on the card,
+so a bare "the 11th" would have nothing to refer back to. "Through", not
+"before": the horizon's last day counts in full too. Never "tomorrow"
+(see "Decided").
 
 ### The "no tight days" line connects to the figure
 
@@ -144,8 +150,10 @@ those silent cases, and that's fine.
 
 **What it costs.** Cheap for the create paths, not for the edit paths:
 
-- **Create** (full form and quick add, both through
-  `createTransactionAction`): the action already returns an
+- **Create** (full form, quick add, and "Make a payment" on Accounts --
+  all through `createTransactionAction`; the two overlays hand the note
+  to their parent through `onSaved(note)`, since they close before it's
+  read): the action already returns an
   `ActionState` that carries a post-save message (`milestone`, shown by
   both forms). Add a second field for this note.
   `afterTransactionCreated()` calls `getSafeToSpend()` once, and only

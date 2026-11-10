@@ -13,7 +13,7 @@ import { UnconfirmedIncomeNote, UnconfirmedObligationNote } from "./UnconfirmedI
 import type { HorizonReason } from "@/lib/safeToSpendProjection";
 import { Amount } from "@/components/ui/Amount";
 import { useCountUp } from "@/components/ui/useCountUp";
-import { cautionLine, whatsAhead } from "@/lib/whatsAhead";
+import { cautionLine, whatsAhead, whyThisNumber } from "@/lib/whatsAhead";
 import {
   formatCurrency,
   formatDateShort,
@@ -159,6 +159,7 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
   const figureClass = `mt-1 block text-5xl ${animating ? "tabular-nums" : ""}`;
 
   const projection = data.mode === "projection";
+  const why = whyThisNumber(data);
 
   return (
     <div className="rounded-2xl border border-hairline bg-surface">
@@ -177,6 +178,10 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
             <span className={`font-medium text-ink ${figureClass}`}>{formatCurrency(0)}</span>
           )}
           <p className="mt-2 text-sm text-ink-secondary">{subline(data)}</p>
+          {/* The cause sits with the number (docs/Safe-to-Spend-Why.md): a
+              figure on its own reads as a verdict. Inside the button, so
+              it's part of the card's accessible name. */}
+          <p className="mt-1 text-xs text-ink-muted">{why.cause}</p>
         </div>
         <ChevronDownIcon
           aria-hidden="true"
@@ -219,6 +224,10 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
               ))}
             </ul>
           ) : null}
+
+          {/* What follows from the cause on the card: what will and won't
+              move the figure. None at $0 -- nothing lowers it further. */}
+          {why.consequence ? <p className="mb-3 text-sm text-ink-secondary">{why.consequence}</p> : null}
 
           {/* Label and value, unsigned throughout -- every line goes
               through formatCurrency, never the signed <Amount>, so a

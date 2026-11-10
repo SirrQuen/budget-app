@@ -22,6 +22,7 @@ import { PlusIcon, FlameIcon } from "@/components/ui/icons";
 import { Amount } from "@/components/ui/Amount";
 import { Button } from "@/components/ui/Button";
 import { Celebration } from "@/components/ui/Celebration";
+import { SaveNote, useSaveNote } from "@/components/ui/SaveNote";
 import { useConfirmPulse } from "@/components/ui/ConfirmPulse";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { FullFormOverlay } from "@/components/quick-add/FullFormOverlay";
@@ -66,6 +67,7 @@ export function QuickAddBar({
   const wasPendingRef = useRef(false);
   const celebrateTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const pendingClientIdRef = useRef<string | null>(null);
+  const [saveNote, showSaveNote] = useSaveNote();
   // Guards against a second Enter-triggered submit landing before React has
   // re-rendered with pending=true -- useActionState's `pending` is only
   // current as of the last commit, so a same-tick double Enter can race it.
@@ -184,6 +186,7 @@ export function QuickAddBar({
       setCelebrateMessage(message);
       setCelebrateIcon(icon);
       setCelebrate(true);
+      showSaveNote(state?.note ?? null);
       // Fires only on user-initiated create. A recurring confirmation has
       // its own sheet and its own pulse, never this one.
       pulse(isIncome ? "income" : "default");
@@ -253,7 +256,8 @@ export function QuickAddBar({
     setFullFormOpen(true);
   }
 
-  function handleFullFormSaved() {
+  function handleFullFormSaved(note: string | null) {
+    showSaveNote(note);
     setFullFormOpen(false);
     setText("");
     setSheetOpen(false);
@@ -461,8 +465,9 @@ export function QuickAddBar({
         />
       ) : null}
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center md:bottom-6">
+      <div className="pointer-events-none fixed inset-x-4 bottom-24 z-50 flex flex-col items-center gap-2 md:bottom-6">
         <Celebration show={celebrate} message={celebrateMessage} icon={celebrateIcon} />
+        <SaveNote message={saveNote} />
       </div>
 
       {fullFormOpen ? (

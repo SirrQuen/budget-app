@@ -1084,3 +1084,77 @@ test("future-dated: the hero doesn't move on the day it settles into the balance
   });
   assert.equal(after.safeToSpend, before.safeToSpend);
 });
+
+// ---------------------------------------------------------------------------
+// after: what an expense dated later does to the figure
+// (docs/Safe-to-Spend-Why.md). Single occurrences keep each walk to exactly
+// the events written down.
+// ---------------------------------------------------------------------------
+
+const one = (kind: "Income" | "Expense", name: string, amount: number, n: number) =>
+  schedule({ kind, name, amount, nextDueDate: day(n), occurrencesRemaining: 1 });
+
+test("after: pay landing on the trough day -> after is that day, room is the lowest later margin, to the cent", () => {
+  // 1000 - 600 = 400 on day 3, then +2000.37 the same day (after the bill).
+  const result = run([one("Expense", "Card", 600, 3), one("Income", "Pay", 2000.37, 3)], 1000, 0);
+  assert.equal(result.trough.date, day(3));
+  assert.deepEqual(result.after, { date: day(3), room: 2000.37 });
+});
+
+test("after: pay landing later -> the days until it are as low as the trough, so after is the payday", () => {
+  const result = run([one("Expense", "Card", 600, 3), one("Income", "Pay", 2000, 5)], 1000, 0);
+  assert.equal(result.trough.date, day(3));
+  // Days 3-5 all sit at 400 before the pay lands on day 5.
+  assert.deepEqual(result.after, { date: day(5), room: 2000 });
+});
+
+test("after: two days tie for the trough -> trough is the first, after is the last", () => {
+  const result = run(
+    [
+      one("Expense", "A", 600, 3),
+      one("Income", "Pay", 600, 3),
+      one("Expense", "B", 600, 8),
+      one("Income", "Pay 2", 1000, 8),
+    ],
+    1000,
+    0,
+  );
+  assert.equal(result.trough.date, day(3));
+  assert.equal(result.trough.amount, 400);
+  assert.deepEqual(result.after, { date: day(8), room: 1000 });
+});
+
+test("after: the balance never recovers before the horizon ends -> null", () => {
+  // No income: window mode, flat from the bill to the window's end.
+  const result = run([one("Expense", "Card", 600, 3)], 1000, 0);
+  assert.equal(result.mode, "window");
+  assert.equal(result.after, null);
+});
+
+test("after: trough today, pay landing today -> after is today", () => {
+  const result = run([one("Income", "Pay", 500, 0)], 1000, 0);
+  assert.equal(result.trough.date, TODAY);
+  assert.deepEqual(result.after, { date: TODAY, room: 500 });
+});
+
+test("after: the property itself -- room is exactly how much later spending the figure absorbs", () => {
+  const schedules = [one("Expense", "Card", 600, 3), one("Income", "Pay", 2000, 3), one("Expense", "Later", 500, 12)];
+  const base = run(schedules, 1000, 100);
+  // Lowest later day: day 12, 2400 - 500 = 1900. Room 1500.
+  assert.deepEqual(base.after, { date: day(3), room: 1500 });
+  const withSpend = (amount: number, n: number) =>
+    run(schedules, 1000, 100, [], [future({ name: "New", amount, date: day(n) })]).safeToSpend;
+
+  // Exactly the room, on any later date: unchanged.
+  for (const n of [4, 12, 20]) assert.equal(withSpend(1500, n), base.safeToSpend);
+  // A cent more on the lowest later day: down by exactly a cent.
+  assert.equal(withSpend(1500.01, 12), base.safeToSpend - 0.01);
+  // Room holds for every later date, because an expense lowers every day
+  // after its own: on day 4 it still reaches day 12, and day 20 is as low
+  // as day 12.
+  assert.equal(withSpend(1500.01, 4), base.safeToSpend - 0.01);
+  assert.equal(withSpend(1500.01, 20), base.safeToSpend - 0.01);
+  // On or before the tightest day: in full.
+  assert.equal(withSpend(50, 3), base.safeToSpend - 50);
+  assert.equal(withSpend(50, 1), base.safeToSpend - 50);
+});
