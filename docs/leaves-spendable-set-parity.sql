@@ -171,8 +171,13 @@ select d.account_type, n, gen_random_uuid() as id
   from parity_db_types d
  cross join generate_series(1, 2) n;
 
-insert into public.accounts (id, userid, account_name, account_type)
-select id, 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', account_type || ' ' || n, account_type
+-- Anchored before the fixture's history (90 days back). The default,
+-- today, would put every row below before the balance date, which since
+-- migration 62 needs the "already included?" answer. Nothing here reads a
+-- balance, so only the anchor moves.
+insert into public.accounts (id, userid, account_name, account_type, opening_date)
+select id, 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', account_type || ' ' || n, account_type,
+       current_date - 120
   from parity_accounts;
 
 do $$

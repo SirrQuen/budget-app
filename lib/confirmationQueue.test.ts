@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { addDaysISO } from "./date";
 import { projectSafeToSpend, type ProjectionSchedule } from "./safeToSpendProjection";
 import { nextOccurrenceISO } from "./recurringCadence";
+import { ANCHOR_ANSWER_REQUIRED, ANCHOR_ANSWER_STALE } from "./anchorAnswer";
 import {
   alreadyRecorded,
   buildConfirmationQueue,
@@ -11,6 +12,7 @@ import {
   isComingUp,
   confirmQuestion,
   COMING_UP_DAYS,
+  needsAnswerLabel,
   confirmationCountLabel,
   confirmationKey,
   confirmedAmountIsEstimated,
@@ -220,7 +222,24 @@ test("bulk confirm reports a failure and still confirms the rest; already-answer
         : { data: "answered" as const, error: null },
   );
   assert.equal(result.confirmed, 2);
+  assert.equal(result.needsAnswer, 0);
   assert.deepEqual(result.errors, ["Rent already has a transaction on that date."]);
+});
+
+// Confirm all must say what it skipped (migration 62): an item dated before
+// a balance date needs the "already included?" answer, which one tap can't
+// give. It's counted apart from failures and the rest still go through.
+test("bulk confirm counts items needing the pre-anchor answer apart from errors", async () => {
+  const result = await confirmEach(["a", "b", "c", "d"], async (k) =>
+    k === "a" || k === "c"
+      ? { data: null, error: k === "a" ? ANCHOR_ANSWER_REQUIRED : ANCHOR_ANSWER_STALE }
+      : { data: "answered" as const, error: null },
+  );
+  assert.equal(result.confirmed, 2);
+  assert.equal(result.needsAnswer, 2);
+  assert.deepEqual(result.errors, []);
+  assert.equal(needsAnswerLabel(2), "2 items need an answer");
+  assert.equal(needsAnswerLabel(1), "1 item needs an answer");
 });
 
 // PaymentNote's switch: a transfer paying money owed to a third party (a

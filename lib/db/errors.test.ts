@@ -1,6 +1,7 @@
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { createClient } from "@supabase/supabase-js";
+import { ANCHOR_ANSWER_REQUIRED, ANCHOR_ANSWER_STALE, needsAnchorAnswer } from "@/lib/anchorAnswer";
 import {
   classifyDbError,
   describeReadError,
@@ -184,4 +185,20 @@ test("mustReachUserUnchanged: only the session and outage lines", async (t) => {
   assert.ok(mustReachUserUnchanged(outage));
   assert.ok(mustReachUserUnchanged(describeWriteError({ code: "PGRST301", message: "JWT expired" }, "settings")));
   assert.ok(!mustReachUserUnchanged(describeWriteError({ code: "42501", message: "x" }, "settings")));
+});
+
+// The pre-anchor trigger's refusals (migration 62) reach the person as
+// Sorrel's sentence, never Postgres's raise text -- and as the exact
+// strings needsAnchorAnswer() recognises, which is how "It landed",
+// Confirm all and quick add know to ask instead of failing.
+test("describeWriteError: SRA01/SRA02 become the answer prompts, never the raw raise text", (t) => {
+  quiet(t);
+  const raw = "This is dated before the account's balance date. Say whether that balance already included it.";
+  const required = describeWriteError({ code: "SRA01", message: raw }, "transaction");
+  const stale = describeWriteError({ code: "SRA02", message: "The account's balance changed since this was answered." }, "transfer");
+  assert.equal(required, ANCHOR_ANSWER_REQUIRED);
+  assert.equal(stale, ANCHOR_ANSWER_STALE);
+  assert.notEqual(required, raw);
+  assert.ok(needsAnchorAnswer(required) && needsAnchorAnswer(stale));
+  assert.doesNotMatch(required + stale, /SRA0|account's balance date\. Say whether/);
 });

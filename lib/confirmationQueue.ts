@@ -44,6 +44,7 @@ import type { AmountBasis } from "@/lib/amountBasis";
 import { confirmationOpensOn, paydayWindowEnd } from "@/lib/recurringSchedule";
 import { paymentPayee, type PaymentPayee } from "@/lib/accountOptions";
 import { expandOccurrences, type ProjectionSchedule } from "@/lib/safeToSpendProjection";
+import { needsAnchorAnswer } from "@/lib/anchorAnswer";
 
 /** How far ahead an occurrence shows as coming up. */
 export const COMING_UP_DAYS = 5;
@@ -249,23 +250,41 @@ export function confirmationCountLabel(count: number): string {
   return `${count} to confirm`;
 }
 
-export type BulkConfirmResult = { confirmed: number; errors: string[] };
+export type BulkConfirmResult = {
+  confirmed: number;
+  /**
+   * Items left as they were because they're dated before a balance date
+   * and need the "already included?" answer (migration 62). Not errors:
+   * the person answers each one in its own sheet.
+   */
+  needsAnswer: number;
+  errors: string[];
+};
 
 /**
  * Bulk confirm's loop, kept here so it's tested without a database: each
  * item answered once, in order, independently -- a failure is reported and
  * the rest still go through. "Already answered" (another tab got there
- * first) is neither a confirmation nor an error.
+ * first) is neither a confirmation nor an error. An item that needs the
+ * pre-anchor answer is counted apart, so Confirm all can say it skipped
+ * them rather than silently doing less than it claims.
  */
 export async function confirmEach<T>(
   items: T[],
   confirmOne: (item: T) => Promise<{ data: "answered" | "already_answered" | null; error: string | null }>,
 ): Promise<BulkConfirmResult> {
-  const result: BulkConfirmResult = { confirmed: 0, errors: [] };
+  const result: BulkConfirmResult = { confirmed: 0, needsAnswer: 0, errors: [] };
   for (const item of items) {
     const res = await confirmOne(item);
-    if (res.error !== null) result.errors.push(res.error);
-    else if (res.data === "answered") result.confirmed += 1;
+    if (res.error !== null) {
+      if (needsAnchorAnswer(res.error)) result.needsAnswer += 1;
+      else result.errors.push(res.error);
+    } else if (res.data === "answered") result.confirmed += 1;
   }
   return result;
+}
+
+/** What Confirm all says about the items it left for an answer. */
+export function needsAnswerLabel(count: number): string {
+  return count === 1 ? "1 item needs an answer" : `${count} items need an answer`;
 }

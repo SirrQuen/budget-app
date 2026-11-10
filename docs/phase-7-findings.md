@@ -2155,3 +2155,47 @@ nothing for as long as it loops. The leaflets are SVG children, which
 composite in current Chrome (see "animation-delay costs a layout pass per
 frame" above, which is also why the fold's stagger is held keyframes, not
 delays).
+
+## Pre-anchor question: an older transaction can be answered by choice (2026-11-10)
+
+**Status: included in 62 (2026-11-10), not a follow-up.** Found while
+drafting 62's tester note, before 62 reached production; folded in the
+same day.
+
+Migration 62 asks "Was it already included in that balance?" on insert,
+and on an edit only when the date, amount or account changes -- a new
+description must never re-open the question (the trigger and both edit
+forms follow the same three). As first built, that left a transaction
+already dated before its account's anchor, never asked, with no direct
+way to answer "No, add it to my balance": its edit page said "Dated
+before your balance of $X on <date>, so it isn't counted in that balance"
+and offered nothing.
+
+Scale on production, read-only before the push (2026-11-10): 177 of 313
+transactions, 4 of 5 users, are dated before their account's anchor.
+
+Why it went into 62 rather than after it:
+
+- From day one of 62, opening most of those testers' transactions would
+  have shown an "isn't counted" line with no way to act on it. The line
+  renders only on the edit screens (the transaction form and the transfer
+  editor), never in the transaction list, so it's met one transaction at
+  a time rather than as a wall of labels -- but most of the ones a person
+  opened would carry it. Unactionable alarm on most of what someone looks
+  at is the opposite of the tone rule, and "set your balance again" asks
+  for an unrelated action to clear a label they never chose.
+- It isn't a migration-era backlog. Every new user sets an opening
+  balance and then enters history, so every new user lands where those
+  four testers are. The answer link is the missing half of the feature.
+- It needs no migration and reuses the trigger: a day and one
+  re-verification, against a second cycle, deploy and tester note on the
+  same subject.
+
+What shipped: the "isn't counted" line (StoredAnchorAnswer) carries "Was
+this in your balance?" -- or "Change your answer" beside a stored answer
+-- which opens the question for that transaction alone, with "Never mind"
+to close it. Saving writes only the answer columns; the trigger fires on
+that change and checks the answer against the current anchor (SRA02 if a
+newer balance was set). A transfer opens it per leg, and update_transfer()
+keeps the other leg's answer. docs/balance-anchor-test.sql section 3
+covers answering, changing the answer, and a stale anchor.
