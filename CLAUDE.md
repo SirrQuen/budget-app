@@ -519,6 +519,22 @@ note, never two on the same day, so a moved number traces to a cause.
 Matt sends it; draft it with the change, and fill in the merge commit
 when it merges. Format: `docs/tester-notes/README.md`.
 
+## Findings and the queue
+
+**Anything raised twice goes in `docs/phase-7-findings.md`, whether or not
+it's acted on.** That covers a gap, a recommendation, a doubt about a
+screen or a deferred idea, whether it came up in conversation, a review or
+a tester's message. Give it a dated entry with a status line and each date
+it was raised. A recommendation that's never written down can't build
+into a case: "safe to spend doesn't say why" was raised three times and
+lost each time, and only stuck the fourth time because it caught Matt
+rather than a tester.
+
+`docs/queue.md` is the one written order of work: what's next, what's
+held, and what's deferred, with dates. "Do this next" or "ahead of the
+queue" means an edit there. An item's detail stays in its findings entry
+or spec; the queue only points to it.
+
 ## Privacy policy notice
 
 The privacy policy (`docs/legal/privacy-and-terms.md`) promises testers an

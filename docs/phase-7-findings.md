@@ -2265,3 +2265,69 @@ month lands in this month's budget.
 Production carried 12 future-dated rows (one user, 6 of them transfer
 legs, 8 on Checking or Cash, the furthest 22 days ahead) when counted on
 2026-11-10 (`docs/future-dated-audit.sql`, read-only).
+
+## Not a defect: safe to spend's low point "in the past" (2026-11-10)
+
+**Status: no change. The projection is correct. Recorded so it isn't
+looked into again.**
+
+Reported as a production bug on Tuesday 10 November: the low point read
+Wednesday 11 November, which looked like a past date; "36 days left" to
+15 December looked like it started on 9 November; and a $300 expense on
+checking dated 18 November didn't change safe to spend.
+
+None of the three was a bug:
+
+- **11 November was tomorrow.** The current date was taken from a
+  tester-note filename planned for the 13th, not from the calendar.
+- **36 days counts both ends: 10 November to 15 December.**
+  `daysRemaining = daysBetweenInclusive(today, horizonEnd)`, and the
+  `minimum` horizon is today + 35, so 35 + 1 = 36. Counting 36 days back
+  from 15 December gives 9 November only if one end is counted twice.
+- **The $300 on the 18th can't lower a minimum that comes before it.**
+  The low point was $4,420.23 cash − $2,071.80 Active Cash Visa payment
+  = $2,348.43, on the 11th. A $2,020.79 paycheck landed the same day after
+  the payment, so the 18th stayed well above the low point even with the
+  $300 subtracted. Safe to spend measures the lowest point, so an expense
+  after that point leaves it unchanged until the expense is big enough to
+  set a new, later low point.
+
+The answers to the four questions asked, for reference:
+
+1. The walk starts at the user's today, from `getToday()`
+   (`lib/safeToSpendProjection.ts`, `for (let day = today; ...)`).
+2. An overdue obligation is moved to today, not counted on its original
+   date: `const date = early < today ? today : early`. The same goes for
+   a past-dated one-off.
+3. The low point can't fall before today: `troughDate` starts at `today`
+   and only moves to a day inside the walk.
+4. "Days left" and the projection share `today` and `horizonEnd`. Both
+   come from `projectSafeToSpend()`, and the hero only formats them.
+
+What it did show was real: the screen doesn't explain why the figure is
+what it is. Its own builder expected it to move. That's specced in
+docs/Safe-to-Spend-Why.md.
+
+## Safe to spend doesn't say why it's the number it is (2026-11-10)
+
+**Status: specced 2026-11-10 (docs/Safe-to-Spend-Why.md), next in
+docs/queue.md.** Recorded late. It was raised three times in
+conversation and never written down, so each time it came up it looked
+like the first. That is why CLAUDE.md now says anything raised twice gets
+a findings entry.
+
+The gap: the breakdown names the low point, its date and the payment that
+causes it, but never connects them to the figure. Nothing says the
+figure is set by one day, or that a bill dated after that day leaves it
+unchanged up to a stated amount. "No tight days in the next five weeks"
+sits apart from the number above it.
+
+Raised:
+
+1. _date needed from Matt_: (in conversation)
+2. _date needed from Matt_: (in conversation)
+3. _date needed from Matt_: (in conversation)
+4. **2026-11-10**: it caught the builder. A $300 expense dated 18
+   November didn't move the figure, and that was reported as a production
+   bug ("Not a defect: safe to spend's low point 'in the past'", above).
+   First time it was written down.
