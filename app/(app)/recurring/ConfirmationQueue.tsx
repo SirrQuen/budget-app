@@ -5,15 +5,17 @@ import type { ConfirmationQueueItem } from "@/lib/db/dashboard";
 import {
   confirmAllAsExpectedAction,
   confirmAsExpectedAction,
+  dismissComingUpAction,
   notYetAction,
   skipOccurrenceAction,
   type OneTapState,
 } from "@/lib/actions/recurring";
-import { confirmationCountLabel, needsAnswerLabel } from "@/lib/confirmationQueue";
+import { confirmationCountLabel, confirmQuestion, needsAnswerLabel, toConfirmItems } from "@/lib/confirmationQueue";
 import { callAction } from "@/components/useActionForm";
 import { Amount } from "@/components/ui/Amount";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
-import { formatDateWithWeekday } from "@/lib/format";
+import { formatDateWithWeekday, formatWeekday } from "@/lib/format";
+import { CalendarIcon } from "@/components/ui/icons";
 import { ConfirmOccurrenceSheet } from "./ConfirmOccurrenceSheet";
 import { PaymentNote } from "@/components/PaymentNote";
 import { AmountBasisTag } from "@/components/AmountBasisTag";
@@ -44,6 +46,11 @@ export function ConfirmationQueue({ items }: { items: ConfirmationQueueItem[] })
   // 62). They stay in the list for their own sheet.
   const [bulkSkipped, setBulkSkipped] = useState(0);
 
+  // One list, two states (lib/confirmationQueue.ts). Only the to-confirm
+  // items are counted or confirmed in bulk; coming-up ones are reminders.
+  const toConfirm = toConfirmItems(items);
+  const comingUp = items.filter((i) => i.state === "coming-up");
+
   if (items.length === 0) return null;
 
   const confirmAll = () => {
@@ -51,7 +58,7 @@ export function ConfirmationQueue({ items }: { items: ConfirmationQueueItem[] })
     setBulkSkipped(0);
     startBulk(async () => {
       const result = await callAction(() =>
-        confirmAllAsExpectedAction(items.map((i) => ({ id: i.recurringId, dueDate: i.dueDate }))),
+        confirmAllAsExpectedAction(toConfirm.map((i) => ({ id: i.recurringId, dueDate: i.dueDate }))),
       );
       if (result.error) setBulkError(result.error);
       setBulkSkipped("needsAnswer" in result ? result.needsAnswer : 0);
@@ -66,12 +73,17 @@ export function ConfirmationQueue({ items }: { items: ConfirmationQueueItem[] })
     >
       <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
         <div>
+          {/* A heading in words, never a number in a circle. */}
           <h2 id={headingId} className="text-sm font-medium text-ink">
-            {confirmationCountLabel(items.length)}
+            {toConfirm.length > 0 ? confirmationCountLabel(toConfirm.length) : "Coming up"}
           </h2>
-          <p className="text-xs text-ink-muted">Tell us what happened and it goes in your transactions.</p>
+          <p className="text-xs text-ink-muted">
+            {toConfirm.length > 0
+              ? "Tell us what happened and it goes in your transactions."
+              : "Nothing to do yet. We'll ask about each one on the day."}
+          </p>
         </div>
-        {items.length > 1 ? (
+        {toConfirm.length > 1 ? (
           <button type="button" onClick={confirmAll} disabled={bulkPending} className={CHIP}>
             {bulkPending ? "Confirming…" : "Confirm all as expected"}
           </button>
@@ -79,8 +91,8 @@ export function ConfirmationQueue({ items }: { items: ConfirmationQueueItem[] })
       </div>
 
       {/* Confirm all records every card and loan payment in the list too. */}
-      {items.length > 1 ? (
-        <PaymentNote payees={items.flatMap((i) => (i.payee ? [i.payee] : []))} className="mb-2" />
+      {toConfirm.length > 1 ? (
+        <PaymentNote payees={toConfirm.flatMap((i) => (i.payee ? [i.payee] : []))} className="mb-2" />
       ) : null}
 
       {bulkError ? <ErrorMessage message={bulkError} /> : null}
@@ -93,12 +105,61 @@ export function ConfirmationQueue({ items }: { items: ConfirmationQueueItem[] })
         </p>
       ) : null}
 
-      <ul className="divide-y divide-hairline">
-        {items.map((item) => (
-          <QueueRow key={item.key} item={item} disabled={bulkPending} />
-        ))}
-      </ul>
+      {toConfirm.length > 0 ? (
+        <ul className="divide-y divide-hairline">
+          {toConfirm.map((item) => (
+            <QueueRow key={item.key} item={item} disabled={bulkPending} />
+          ))}
+        </ul>
+      ) : null}
+
+      {comingUp.length > 0 ? (
+        <>
+          {toConfirm.length > 0 ? (
+            <h3 className="mt-3 border-t border-hairline pt-3 text-xs font-medium text-ink-secondary">Coming up</h3>
+          ) : null}
+          <ul className="divide-y divide-hairline">
+            {comingUp.map((item) => (
+              <ComingUpRow key={item.key} item={item} />
+            ))}
+          </ul>
+        </>
+      ) : null}
     </section>
+  );
+}
+
+// "Rent · $1,850 · Friday". A reminder, not a task: neutral ink, a calendar
+// icon, the day's name -- never "in 5 days", "due soon" or "overdue". No
+// answers yet; "Got it" hides it until the day, when the same item asks.
+function ComingUpRow({ item }: { item: ConfirmationQueueItem }) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const dismiss = () => {
+    setError(null);
+    startTransition(async () => {
+      const result = await callAction(() => dismissComingUpAction(item.recurringId, item.dueDate));
+      if (result?.error) setError(result.error);
+    });
+  };
+
+  return (
+    <li className="flex flex-col gap-1 py-3 text-sm">
+      <div className="flex items-center gap-3">
+        <CalendarIcon className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
+        <p className="min-w-0 flex-1 break-words text-ink-secondary">
+          <span className="text-ink">{item.name}</span> ·{" "}
+          <Amount amount={item.amount} type={item.kind === "Income" ? "Income" : "Expense"} /> ·{" "}
+          {item.approximate ? "around " : ""}
+          {formatWeekday(item.dueDate)}
+        </p>
+        <button type="button" onClick={dismiss} disabled={pending} className={QUIET}>
+          {pending ? "Hiding…" : "Got it"}
+        </button>
+      </div>
+      {error ? <ErrorMessage message={error} /> : null}
+    </li>
   );
 }
 
@@ -123,7 +184,7 @@ function QueueRow({ item, disabled }: { item: ConfirmationQueueItem; disabled: b
   return (
     <li className="flex flex-col gap-2 py-3 text-sm">
       <div className="flex items-baseline gap-3">
-        <span className="min-w-0 flex-1 break-words text-ink sm:truncate">{item.name}</span>
+        <span className="min-w-0 flex-1 break-words text-ink sm:truncate">{confirmQuestion(item)}</span>
         <span className="flex shrink-0 items-baseline gap-1.5">
           <Amount amount={item.amount} type={item.kind === "Income" ? "Income" : "Expense"} column />
           <AmountBasisTag basis={item.basis} />

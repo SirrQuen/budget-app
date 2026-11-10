@@ -8,6 +8,10 @@ import {
   alreadyRecorded,
   buildConfirmationQueue,
   confirmEach,
+  toConfirmItems,
+  isComingUp,
+  confirmQuestion,
+  COMING_UP_DAYS,
   needsAnswerLabel,
   confirmationCountLabel,
   confirmationKey,
@@ -74,8 +78,10 @@ function advanced(s: ProjectionSchedule): ProjectionSchedule {
 
 test("a fixed-date schedule enters the queue on its expected date, not before", () => {
   const rent = schedule({ kind: "Expense", name: "Rent", amount: 1850, nextDueDate: day(0) });
-  assert.equal(queue([rent], day(-1)).length, 0);
-  assert.equal(queue([rent], day(0)).length, 1);
+  // The day before, it is the same item coming up -- not yet to confirm.
+  assert.deepEqual(queue([rent], day(-1)).map((i) => i.state), ["coming-up"]);
+  assert.equal(toConfirmItems(queue([rent], day(-1))).length, 0);
+  assert.deepEqual(queue([rent], day(0)).map((i) => i.state), ["to-confirm"]);
 });
 
 test("an approximate schedule enters the queue on its early edge (expected date minus tolerance)", () => {
@@ -88,7 +94,8 @@ test("an approximate schedule enters the queue on its early edge (expected date 
     nextDueDate: day(3),
     dateToleranceDays: 3,
   });
-  assert.equal(queue([statement], day(-1)).length, 0);
+  // Tolerance 3 < 5: coming up the day before its window opens.
+  assert.deepEqual(queue([statement], day(-1)).map((i) => i.state), ["coming-up"]);
   const [item] = queue([statement], day(0));
   assert.equal(item.dueDate, day(3));
   assert.equal(item.approximate, true);
@@ -327,4 +334,67 @@ test("alreadyRecorded: on a tie, the earlier one", () => {
 test("the queue carries each schedule's tolerance for the window", () => {
   const items = buildConfirmationQueue([schedule({ kind: "Expense", amount: 20, nextDueDate: TODAY, dateToleranceDays: 3 })], TODAY, NO_HOLIDAYS);
   assert.equal(items[0].dateToleranceDays, 3);
+});
+
+// ---------------------------------------------------------------------
+// Coming up: the same item, five days ahead (docs/Budgets-Reminders-and-
+// Pending.md, item 1)
+// ---------------------------------------------------------------------
+
+test("a schedule due in 5 days is coming up, and on the day it's to confirm -- the same item", () => {
+  const rent = schedule({ recurringId: "rent", kind: "Expense", name: "Rent", amount: 1850, nextDueDate: day(0) });
+  assert.equal(COMING_UP_DAYS, 5);
+  assert.deepEqual(queue([rent], day(-6)), []);
+  const monday = queue([rent], day(-5));
+  const friday = queue([rent], day(0));
+  assert.deepEqual(monday.map((i) => i.state), ["coming-up"]);
+  assert.deepEqual(friday.map((i) => i.state), ["to-confirm"]);
+  // Same occurrence, same key: what was seen Monday is what's confirmed Friday.
+  assert.equal(monday[0].key, friday[0].key);
+  assert.equal(monday[0].dueDate, friday[0].dueDate);
+});
+
+// When the confirm window opens early, it is the reminder.
+test("coming up runs only until the confirm window opens", () => {
+  // Tolerance 2: window opens day(-2), so coming up is day(-5)..day(-3).
+  assert.equal(isComingUp(day(0), 2, day(-5)), true);
+  assert.equal(isComingUp(day(0), 2, day(-3)), true);
+  assert.equal(isComingUp(day(0), 2, day(-2)), false);
+});
+
+test("with a tolerance of 5 or more there is no coming-up span at all", () => {
+  for (const tolerance of [5, 7]) {
+    for (let n = -10; n <= 0; n += 1) {
+      assert.equal(isComingUp(day(0), tolerance, day(n)), false, `tolerance ${tolerance}, day ${n}`);
+    }
+  }
+  const paycheck = schedule({ kind: "Income", name: "Paycheck", amount: 2400, nextDueDate: day(7), dateToleranceDays: 7 });
+  // Its window opens day(0) (due day 7, tolerance 7): nothing before, to confirm from then.
+  assert.deepEqual(queue([paycheck], day(-1)), []);
+  assert.deepEqual(queue([paycheck], day(0)).map((i) => i.state), ["to-confirm"]);
+});
+
+test("dismissing hides only the coming-up state; the day it opens, it asks", () => {
+  const rent = schedule({ recurringId: "rent", kind: "Expense", name: "Rent", amount: 1850, nextDueDate: day(0) });
+  const key = confirmationKey("rent", day(0));
+  const dismissed = new Set([key]);
+  assert.deepEqual(buildConfirmationQueue([rent], day(-3), NO_HOLIDAYS, new Set(), dismissed), []);
+  assert.deepEqual(
+    buildConfirmationQueue([rent], day(0), NO_HOLIDAYS, new Set(), dismissed).map((i) => i.state),
+    ["to-confirm"],
+  );
+});
+
+test("coming-up items are never counted or confirmed in bulk, and sort after to-confirm", () => {
+  const rent = schedule({ recurringId: "rent", kind: "Expense", name: "Rent", amount: 1850, nextDueDate: day(3) });
+  const netflix = schedule({ recurringId: "nf", kind: "Expense", name: "Netflix", amount: 22.99, nextDueDate: day(-1) });
+  const items = queue([rent, netflix]);
+  assert.deepEqual(items.map((i) => [i.name, i.state]), [["Netflix", "to-confirm"], ["Rent", "coming-up"]]);
+  assert.deepEqual(toConfirmItems(items).map((i) => i.name), ["Netflix"]);
+});
+
+test("the to-confirm question is plain -- never overdue, never due soon", () => {
+  assert.equal(confirmQuestion({ name: "Rent", kind: "Expense" }), "Did Rent come out?");
+  assert.equal(confirmQuestion({ name: "Paycheck", kind: "Income" }), "Did Paycheck land?");
+  assert.equal(confirmQuestion({ name: "Transfer to Savings", kind: "Transfer" }), "Did Transfer to Savings go through?");
 });

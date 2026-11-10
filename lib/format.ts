@@ -133,6 +133,15 @@ export function formatDateWithWeekday(date: string | Date): string {
 }
 
 /**
+ * "Friday" -- the weekday alone. For a date inside the coming week, where
+ * the day's name is what someone plans around ("Rent · $1,850 · Friday"),
+ * never "in 5 days". Same never-throws contract as formatDate.
+ */
+export function formatWeekday(date: string | Date): string {
+  return formatOrBlank(date, (d) => weekdayLong.format(d), "formatWeekday");
+}
+
+/**
  * "30 September" -- day + month, no weekday, no year. The safe-to-spend
  * hero's end-of-month fallback ("through 30 September") deliberately drops
  * the weekday formatDateWithWeekday adds for a real payday -- the month

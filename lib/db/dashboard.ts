@@ -27,6 +27,7 @@ import {
   type RecordedOccurrence,
 } from "@/lib/confirmationQueue";
 import { getNotYetKeys } from "@/lib/confirmationLater";
+import { getDismissedComingUpKeys } from "@/lib/comingUpDismissed";
 import { deriveLoggingStreak, type LoggingStreakSummary } from "@/lib/streak";
 
 type NetWorthRow = Database["public"]["Views"]["v_net_worth"]["Row"];
@@ -966,10 +967,11 @@ export async function getConfirmationQueue(): Promise<DbResult<ConfirmationQueue
   }
   const today = await getToday();
 
-  const [schedulesRes, holidaysRes, notYet, accountsRes] = await Promise.all([
+  const [schedulesRes, holidaysRes, notYet, dismissed, accountsRes] = await Promise.all([
     getProjectionSchedules(),
     getBankHolidays(),
     getNotYetKeys(today),
+    getDismissedComingUpKeys(today),
     supabase.from("accounts").select("id, account_name, opening_date"),
   ]);
 
@@ -981,7 +983,13 @@ export async function getConfirmationQueue(): Promise<DbResult<ConfirmationQueue
   }
 
   const accountById = new Map(accountsRes.data.map((a) => [a.id, a]));
-  const items = buildConfirmationQueue(schedulesRes.data, today, holidaysRes.data ?? new Set<string>(), notYet);
+  const items = buildConfirmationQueue(
+    schedulesRes.data,
+    today,
+    holidaysRes.data ?? new Set<string>(),
+    notYet,
+    dismissed,
+  );
 
   const recordedRes = await listRecordedOccurrences(
     supabase,
