@@ -759,7 +759,9 @@ export type Database = {
         Row: {
           accountid: string
           amount: number
+          anchor_answer_set_at: string | null
           categoryid: string | null
+          counts_despite_anchor: boolean | null
           created_at: string
           description: string
           goalid: string | null
@@ -779,7 +781,9 @@ export type Database = {
         Insert: {
           accountid: string
           amount?: number
+          anchor_answer_set_at?: string | null
           categoryid?: string | null
+          counts_despite_anchor?: boolean | null
           created_at?: string
           description: string
           goalid?: string | null
@@ -799,7 +803,9 @@ export type Database = {
         Update: {
           accountid?: string
           amount?: number
+          anchor_answer_set_at?: string | null
           categoryid?: string | null
+          counts_despite_anchor?: boolean | null
           created_at?: string
           description?: string
           goalid?: string | null
@@ -1387,12 +1393,28 @@ export type Database = {
         Args: {
           p_anchor_date: string
           p_anchor_set_at: string
+          p_answer_set_at: string
+          p_counts_despite_anchor: boolean
           p_recorded_at: string
           p_transaction_date: string
         }
         Returns: boolean
       }
       apply_user_timezone: { Args: never; Returns: undefined }
+      balance_anchor_preview: {
+        Args: {
+          p_accountid: string
+          p_transaction_date: string
+          p_transaction_id?: string
+        }
+        Returns: {
+          account_type: string
+          anchor_balance: number
+          anchor_date: string
+          anchor_set_at: string
+          counts_by_date: boolean
+        }[]
+      }
       budget_pct_used: {
         Args: { p_budget: number; p_spend: number }
         Returns: number
@@ -1441,14 +1463,6 @@ export type Database = {
       }
       counts_toward_balance: {
         Args: { t: Database["public"]["Tables"]["transactions"]["Row"] }
-        Returns: boolean
-      }
-      counts_toward_balance_preview: {
-        Args: {
-          p_accountid: string
-          p_transaction_date: string
-          p_transaction_id?: string
-        }
         Returns: boolean
       }
       delete_own_account: { Args: never; Returns: undefined }
@@ -1520,8 +1534,12 @@ export type Database = {
           p_amount: number
           p_description: string
           p_from_accountid: string
+          p_from_anchor_answer_set_at?: string
+          p_from_counts_despite_anchor?: boolean
           p_notes?: string
           p_to_accountid: string
+          p_to_anchor_answer_set_at?: string
+          p_to_counts_despite_anchor?: boolean
           p_transaction_date: string
           p_transfer_group_id: string
           p_update_schedule?: boolean

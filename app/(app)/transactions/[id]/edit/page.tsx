@@ -207,7 +207,10 @@ export default async function EditTransactionPage({
           merchant: tx.merchant,
           notes: tx.notes,
           payment_method: tx.payment_method,
-          counts_toward_balance: tx.counts_toward_balance,
+          anchorAnswer: {
+            counts_despite_anchor: tx.counts_despite_anchor,
+            anchor_answer_set_at: tx.anchor_answer_set_at,
+          },
           schedule: scheduleResult.data
             ? { description: scheduleResult.data.description, amountIsVariable: scheduleResult.data.amountIsVariable }
             : null,
