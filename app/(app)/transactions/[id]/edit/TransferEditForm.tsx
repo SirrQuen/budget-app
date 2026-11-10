@@ -46,6 +46,8 @@ export function TransferEditForm({
   const [toAccountId, setToAccountId] = useState(transfer.toLeg.accountId);
   const [amount, setAmount] = useState(String(transfer.amount));
   const [date, setDate] = useState(transfer.date);
+  // Legs whose question the person opened on an edit that didn't require it.
+  const [answeringLegs, setAnsweringLegs] = useState<string[]>([]);
 
   const from = accounts.find((a) => a.id === fromAccountId);
   const to = accounts.find((a) => a.id === toAccountId);
@@ -202,7 +204,11 @@ export function TransferEditForm({
         : legs.map((l) => {
             const preview = l.account ? anchorPreviews[l.account.id] : undefined;
             if (!l.account || !asksAnchorQuestion(preview)) return null;
-            if (!l.asks) {
+            // Untouched leg: say what's stored, with a link to answer by
+            // choice. update_transfer() writes only that leg's answer; the
+            // other leg keeps its own.
+            const opened = answeringLegs.includes(l.legId);
+            if (!l.asks && !opened) {
               return (
                 <StoredAnchorAnswer
                   key={l.legId}
@@ -210,6 +216,7 @@ export function TransferEditForm({
                   preview={preview}
                   stored={l.stored}
                   nameAccount
+                  onAnswer={() => setAnsweringLegs((ids) => [...ids, l.legId])}
                 />
               );
             }
@@ -222,6 +229,9 @@ export function TransferEditForm({
                 preview={preview}
                 stored={l.stored}
                 nameAccount
+                onDismiss={
+                  l.asks ? undefined : () => setAnsweringLegs((ids) => ids.filter((id) => id !== l.legId))
+                }
               />
             );
           })}

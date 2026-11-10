@@ -212,6 +212,8 @@ export function AddTransactionForm({
   const questionAccountIds = type === "Transfer" ? [fromAccountId, toAccountId] : [accountid];
   const editingId = initialValues?.id ?? null;
   const anchorPreviews = useAnchorPreviews(questionAccountIds, transactionDate, editingId);
+  // The person opened the question on an edit that didn't require it.
+  const [answeringAnchor, setAnsweringAnchor] = useState(false);
   const anchorInputsChanged =
     initialValues !== undefined &&
     (accountid !== initialValues.accountid ||
@@ -232,15 +234,19 @@ export function AddTransactionForm({
         : undefined;
 
     // An edit asks only when the date, amount or account changed -- the
-    // same three the database asks about. Otherwise it says what's stored
-    // and asks nothing: a new description never re-opens the question.
-    if (initialValues && !anchorInputsChanged) {
+    // same three the database asks about. Otherwise it says what's stored,
+    // with a link that opens the question by choice: a new description
+    // never re-opens it, but the person can always answer it. Saving then
+    // writes only the answer (the database checks it against the current
+    // balance); "Never mind" closes it and the stored answer stands.
+    if (initialValues && !anchorInputsChanged && !answeringAnchor) {
       return (
         <StoredAnchorAnswer
           accountName={account.account_name}
           preview={preview}
           stored={stored}
           nameAccount={type === "Transfer"}
+          onAnswer={() => setAnsweringAnchor(true)}
         />
       );
     }
@@ -254,6 +260,7 @@ export function AddTransactionForm({
         preview={preview}
         stored={stored}
         nameAccount={type === "Transfer"}
+        onDismiss={initialValues && !anchorInputsChanged ? () => setAnsweringAnchor(false) : undefined}
       />
     );
   }

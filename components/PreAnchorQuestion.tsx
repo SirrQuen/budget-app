@@ -85,6 +85,7 @@ export function PreAnchorQuestion({
   preview,
   stored,
   nameAccount = false,
+  onDismiss,
 }: {
   /** Unique per form instance, for the radio ids. */
   idPrefix: string;
@@ -95,6 +96,12 @@ export function PreAnchorQuestion({
   stored?: AnchorAnswerColumns;
   /** Say which account -- a transfer asks about each leg. */
   nameAccount?: boolean;
+  /**
+   * Set when the person opened the question themselves ("Was this in your
+   * balance?") on an edit that didn't require it: "Never mind" closes it
+   * again, and the save leaves the stored answer as it was.
+   */
+  onDismiss?: () => void;
 }) {
   // A stored answer applies only to the anchor it answered. After a new
   // balance it's void, so the question asks again from blank -- and says why.
@@ -169,6 +176,15 @@ export function PreAnchorQuestion({
           No, add it to my balance
         </label>
       </div>
+      {onDismiss ? (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="self-start rounded text-xs font-medium text-ink-secondary underline-offset-2 transition-colors duration-150 hover:text-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action"
+        >
+          Never mind
+        </button>
+      ) : null}
     </fieldset>
   );
 }
@@ -185,11 +201,19 @@ export function StoredAnchorAnswer({
   preview,
   stored,
   nameAccount = false,
+  onAnswer,
 }: {
   accountName: string;
   preview: AnchorPreview;
   stored?: AnchorAnswerColumns;
   nameAccount?: boolean;
+  /**
+   * Opens the question for this transaction without changing anything
+   * else -- the other half of the feature. Every new user sets a balance
+   * and then enters history, so most of someone's early transactions sit
+   * here; a line they can't act on is the opposite of the tone rule.
+   */
+  onAnswer?: () => void;
 }) {
   const balance = formatAccountBalance(preview.anchorBalance, preview.accountType);
   const on = formatDayMonth(preview.anchorDate);
@@ -205,6 +229,18 @@ export function StoredAnchorAnswer({
           : choice === "counted"
             ? `Dated before your ${which}balance of ${balance} on ${on}. You said that balance already included it, so it doesn't change the balance.`
             : `Dated before your ${which}balance of ${balance} on ${on}, so it isn't counted in that balance.`}
+        {onAnswer ? (
+          <>
+            {" "}
+            <button
+              type="button"
+              onClick={onAnswer}
+              className="rounded font-medium text-action underline-offset-2 transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised"
+            >
+              {choice ? "Change your answer" : "Was this in your balance?"}
+            </button>
+          </>
+        ) : null}
       </span>
     </p>
   );

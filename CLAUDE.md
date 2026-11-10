@@ -261,7 +261,9 @@ does); so must a one-off service-role fix that moves a pre-anchor row's
 date, amount or account. Never infer it from `created_at` > `opening_set_at`.
 It's stored on the row (`counts_despite_anchor`, `anchor_answer_set_at`)
 and read by THE rule, `anchor_includes()` -- never a second comparison.
-Opening the transaction shows the answer given.
+Opening the transaction shows the answer given, and always offers "Was
+this in your balance?" (or "Change your answer") to answer by choice --
+an "isn't counted" line with no way to act on it is never shipped.
 
 **An override is valid only against the anchor it answered.** Any stored
 exception to a rule keyed on an anchor (or any other re-settable

@@ -140,3 +140,29 @@ test("unchanged edit of a row never asked, or answered for an earlier balance: n
     /so it isn't counted in that balance/,
   );
 });
+
+// The other half of the feature: every new user sets a balance and then
+// enters history, so the "isn't counted" line must always be actionable.
+test("the stored-answer line always offers the question", () => {
+  const ask = () => {};
+  const never = renderToStaticMarkup(
+    React.createElement(StoredAnchorAnswer, { accountName: "Checking", preview: PREVIEW, onAnswer: ask }),
+  );
+  assert.match(text(never), /isn't counted in that balance\. Was this in your balance\?/);
+  assert.match(never, /<button type="button"/);
+
+  const answered = renderToStaticMarkup(
+    React.createElement(StoredAnchorAnswer, {
+      accountName: "Checking",
+      preview: PREVIEW,
+      stored: { counts_despite_anchor: false, anchor_answer_set_at: "2026-11-03T17:00:00Z" },
+      onAnswer: ask,
+    }),
+  );
+  assert.match(text(answered), /doesn't change the balance\. Change your answer/);
+});
+
+test("a question opened by choice can be closed again; a required one can't", () => {
+  assert.match(text(render({ onDismiss: () => {} })), /Never mind/);
+  assert.doesNotMatch(text(render()), /Never mind/);
+});

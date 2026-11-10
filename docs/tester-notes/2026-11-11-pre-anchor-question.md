@@ -42,9 +42,10 @@ amount or account does.
 You may already have transactions dated before your balance date, if you
 filled in past spending when you set up. Open one and you'll see a line
 saying it's dated before your balance, so it isn't counted in it. That's
-how it's always worked; it just says so now. If you think one of them
-wasn't in your balance after all, the simplest fix is to set the balance
-again from your bank, on the account's page.
+how it's always worked; it just says so now. If one of them wasn't in your
+balance after all -- a charge still pending when you set it -- tap "Was
+this in your balance?" on that line and answer. You can change an answer
+the same way any time.
 
 You'll also see it when you confirm a recurring item dated before your
 balance date. "It landed" opens the sheet so you can answer, and

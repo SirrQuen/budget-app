@@ -275,6 +275,28 @@ select pg_temp.rec('3 balances', 'changing its account to the same account: no c
                      set accountid = 'a7c4a7c4-0000-4000-8000-000000000001'
                    where id = 'a7c4a7c4-0000-4000-8000-0000000000b4'$q$), 'null'));
 
+-- "Was this in your balance?" on an older row: the edit page saves only
+-- the answer, resending the account, date and amount unchanged.
+select pg_temp.rec('3 balances', 'answering an older row by choice, "No": accepted, counted once',
+  'null 860.00', coalesce(pg_temp.sqlstate_of($q$update public.transactions
+                     set accountid = accountid, transaction_date = transaction_date, amount = amount,
+                         counts_despite_anchor = true,
+                         anchor_answer_set_at = (select opening_set_at from public.accounts
+                                                  where id = 'a7c4a7c4-0000-4000-8000-000000000001')
+                   where id = 'a7c4a7c4-0000-4000-8000-0000000000b4'$q$), 'null')
+                 || ' ' || (select balance::text from public.v_account_balances
+                             where account_id = 'a7c4a7c4-0000-4000-8000-000000000001'));
+select pg_temp.rec('3 balances', 'changing that answer to "Yes": the balance goes back',
+  'null 940.00', coalesce(pg_temp.sqlstate_of($q$update public.transactions
+                     set counts_despite_anchor = false
+                   where id = 'a7c4a7c4-0000-4000-8000-0000000000b4'$q$), 'null')
+                 || ' ' || (select balance::text from public.v_account_balances
+                             where account_id = 'a7c4a7c4-0000-4000-8000-000000000001'));
+select pg_temp.rec('3 balances', 'answering an older row against an earlier balance: refused as stale',
+  'SRA02', pg_temp.sqlstate_of($q$update public.transactions
+                     set counts_despite_anchor = true, anchor_answer_set_at = timestamptz '2000-01-01Z'
+                   where id = 'a7c4a7c4-0000-4000-8000-0000000000b4'$q$));
+
 -- Re-set the anchor later the same day (21:00Z): b2 (18:00Z) is now in the figure.
 select pg_temp.unbecome();
 alter table public.accounts disable trigger trg_accounts_anchor_1_lock;
