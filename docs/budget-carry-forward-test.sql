@@ -20,7 +20,10 @@
 --                  month; the others keep carrying
 --   3  Unique      a second row for one (userid, month, category) is
 --                  refused by the database
---   4  Same        v_budget_vs_actual is unchanged by the helper refactor
+--   4  Figures     the helpers give the view's figures; a $0 budget is a
+--                  budget (On Track), never "Unbudgeted"
+--   5  Stop        a tombstone stops a category from its month on, carries,
+--                  never shows as a budget, and an amount starts it again
 -- =====================================================================
 
 begin;
@@ -200,8 +203,8 @@ select pg_temp.rec('4 same', 'v_budget_vs_actual: figures for a spent budget',
   (select concat_ws(' ', actual_spend, remaining, pct_used, status, status_rank)
      from public.v_budget_vs_actual
     where category_id = pg_temp.cat('T Groceries') and budget_month = date '2026-10-01'));
-select pg_temp.rec('4 same', 'v_budget_vs_actual: a $0 budget with nothing spent',
-  'Unbudgeted 0 null', (select concat_ws(' ', status, status_rank, coalesce(pct_used::text, 'null'))
+select pg_temp.rec('4 same', 'a $0 budget with nothing spent is on track, not "Unbudgeted"',
+  'On Track 1 null', (select concat_ws(' ', status, status_rank, coalesce(pct_used::text, 'null'))
                          from public.v_budget_vs_actual
                         where category_id = pg_temp.cat('T Dining') and budget_month = date '2026-10-01'));
 select pg_temp.rec('4 same', 'the month function agrees with the view on every own row',
@@ -215,6 +218,54 @@ select pg_temp.rec('4 same', 'a carried budget counts the viewed month''s spend,
   '0.00 650.00 2026-10-01', (select concat_ws(' ', actual_spend, remaining, carried_from)
                                from public.budget_progress_for_month(date '2026-11-01')
                               where category_id = pg_temp.cat('T Groceries')));
+
+-- $8 at the restaurant against October's $0 budget: over, which is the fact.
+insert into public.transactions (userid, accountid, categoryid, description, amount,
+                                 transaction_type, transaction_date)
+select 'b0d6b0d6-b0d6-4b0d-8b0d-b0d6b0d6b0d6', a.id, pg_temp.cat('T Dining'), 'lunch', 8, 'Expense', date '2026-10-20'
+  from public.accounts a where a.account_name = 'T Checking';
+select pg_temp.rec('4 same', 'a $0 budget with spending is over',
+  'Over 3', (select concat_ws(' ', status, status_rank) from public.v_budget_vs_actual
+              where category_id = pg_temp.cat('T Dining') and budget_month = date '2026-10-01'));
+
+
+-- ---------------------------------------------------------------------
+-- 5. Stop: the app's write (stopBudgetingForMonth) is this upsert
+-- ---------------------------------------------------------------------
+insert into public.budgets (userid, categoryid, budget_month, budget_amount, not_budgeted)
+values ('b0d6b0d6-b0d6-4b0d-8b0d-b0d6b0d6b0d6', pg_temp.cat('T Groceries'), date '2027-02-01', 0, true)
+on conflict (userid, budget_month, categoryid)
+do update set budget_amount = excluded.budget_amount, not_budgeted = excluded.not_budgeted;
+
+select pg_temp.rec('5 stop', 'January still carries December''s amount',
+  'T Dining=0.00<2026-10,T Groceries=720.00<2026-12', pg_temp.month_view(date '2027-01-01'));
+select pg_temp.rec('5 stop', 'from February: not budgeted, and no earlier amount comes back',
+  'T Dining=0.00<2026-10', pg_temp.month_view(date '2027-02-01'));
+select pg_temp.rec('5 stop', 'the tombstone carries: still not budgeted in May',
+  'T Dining=0.00<2026-10', pg_temp.month_view(date '2027-05-01'));
+select pg_temp.rec('5 stop', 'a tombstone is never a budget in the view',
+  '0', (select count(*)::text from public.v_budget_vs_actual where budget_month = date '2027-02-01'));
+select pg_temp.rec('5 stop', 'a tombstone with an amount: refused',
+  '23514', pg_temp.sqlstate_of(format(
+    'insert into public.budgets (userid, categoryid, budget_month, budget_amount, not_budgeted) values (%L, %L, %L, 5, true)',
+    'b0d6b0d6-b0d6-4b0d-8b0d-b0d6b0d6b0d6', pg_temp.cat('T Dining'), '2027-03-01')));
+
+-- Setting an amount again in April (setBudgetForMonth) starts it again.
+insert into public.budgets (userid, categoryid, budget_month, budget_amount, not_budgeted)
+values ('b0d6b0d6-b0d6-4b0d-8b0d-b0d6b0d6b0d6', pg_temp.cat('T Groceries'), date '2027-04-01', 610, false)
+on conflict (userid, budget_month, categoryid)
+do update set budget_amount = excluded.budget_amount, not_budgeted = excluded.not_budgeted;
+select pg_temp.rec('5 stop', 'an amount set again starts it from that month',
+  'T Dining=0.00<2026-10,T Groceries=610.00<2027-04', pg_temp.month_view(date '2027-05-01'));
+
+-- Stopping in a month that already has its own row replaces that row.
+insert into public.budgets (userid, categoryid, budget_month, budget_amount, not_budgeted)
+values ('b0d6b0d6-b0d6-4b0d-8b0d-b0d6b0d6b0d6', pg_temp.cat('T Groceries'), date '2027-04-01', 0, true)
+on conflict (userid, budget_month, categoryid)
+do update set budget_amount = excluded.budget_amount, not_budgeted = excluded.not_budgeted;
+select pg_temp.rec('5 stop', 'stopping a month with its own row: one row, now a tombstone',
+  '1 true', (select count(*)::text || ' ' || bool_and(not_budgeted)::text from public.budgets
+              where categoryid = pg_temp.cat('T Groceries') and budget_month = date '2027-04-01'));
 
 select pg_temp.unbecome();
 

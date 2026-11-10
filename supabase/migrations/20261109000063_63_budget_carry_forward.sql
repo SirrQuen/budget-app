@@ -26,10 +26,26 @@
 --    An archived category (is_active = false) doesn't carry; its own rows
 --    in their own months still show, as before.
 --
--- 3. The spent-vs-budgeted figures are shared between v_budget_vs_actual
---    (explicit rows, every month -- history) and the new function (one
---    month, carried rows included) through three helpers, so the two can't
---    drift. v_budget_vs_actual's output is unchanged.
+-- 3. Stopping. A standing amount needs a way to say "stop": deleting the
+--    month's row would only bring the earlier amount back. A row with
+--    not_budgeted = true is a tombstone -- "deliberately not budgeted from
+--    this month on". It carries like any row, so the category stays
+--    unbudgeted until someone sets an amount again (which replaces the
+--    tombstone for that month). A tombstone has no amount to speak of
+--    (budget_amount is held at 0 by a check) and never appears as a
+--    budget: not in v_budget_vs_actual, not in a month's list.
+--
+-- 4. $0 is a budget, not the absence of one. v_budget_vs_actual called a
+--    $0 budget with nothing spent 'Unbudgeted' and ranked it with nothing
+--    at all. It's now 'On Track' (nothing planned, nothing spent); with
+--    spending it stays 'Over', which is the fact. "No budget" is a missing
+--    row or a tombstone, never a status.
+--
+-- 5. The spent-vs-budgeted figures are shared between v_budget_vs_actual
+--    (explicit rows, every month) and the new function (one month,
+--    carried rows included) through three helpers, so the two can't
+--    drift. Apart from 4 and tombstones, v_budget_vs_actual's output is
+--    unchanged.
 -- =====================================================================
 
 
@@ -41,6 +57,13 @@ alter table public.budgets
 
 comment on constraint budgets_one_per_category_month on public.budgets is
   'One budget per category per month. The backstop for the app''s write paths, which upsert on this key (migration 63).';
+
+alter table public.budgets
+  add column not_budgeted boolean not null default false,
+  add constraint budgets_tombstone_has_no_amount check (not not_budgeted or budget_amount = 0);
+
+comment on column public.budgets.not_budgeted is
+  'A tombstone: deliberately not budgeted from this month on. Carries forward like an amount, so the category stays unbudgeted until an amount is set again. Never shown as a budget (migration 63).';
 
 
 -- ---------------------------------------------------------------------
@@ -62,7 +85,7 @@ immutable
 parallel safe
 as $$
   select case
-           when p_budget = 0 and p_spend = 0 then 'Unbudgeted'
+           when p_budget = 0 and p_spend = 0 then 'On Track'
            when p_budget = 0 then 'Over'
            when p_spend / p_budget >= 1.0 then 'Over'
            when p_spend / p_budget >= 0.8 then 'Near Limit'
@@ -77,7 +100,7 @@ immutable
 parallel safe
 as $$
   select case
-           when p_budget = 0 and p_spend = 0 then 0
+           when p_budget = 0 and p_spend = 0 then 1
            when p_budget = 0 then 3
            when p_spend / p_budget >= 1.0 then 3
            when p_spend / p_budget >= 0.8 then 2
@@ -86,9 +109,9 @@ as $$
 $$;
 
 comment on function public.budget_status(numeric, numeric) is
-  'A budget''s status from its amount and the month''s spend. Shared by v_budget_vs_actual and budget_progress_for_month() (migration 63).';
+  'A budget''s status from its amount and the month''s spend: On Track, Near Limit, Over. A $0 budget is a budget -- On Track until something is spent. Shared by v_budget_vs_actual and budget_progress_for_month() (migration 63).';
 comment on function public.budget_status_rank(numeric, numeric) is
-  'Sort rank for budget_status(): 3 over, 2 near, 1 on track, 0 nothing budgeted or spent (migration 63).';
+  'Sort rank for budget_status(): 3 over, 2 near, 1 on track -- a $0 budget with nothing spent included (migration 63).';
 comment on function public.budget_pct_used(numeric, numeric) is
   'Percent of a budget spent, 1 dp; null for a $0 budget (migration 63).';
 
@@ -101,7 +124,7 @@ grant execute on function public.budget_status_rank(numeric, numeric) to authent
 
 
 -- ---------------------------------------------------------------------
--- 3. v_budget_vs_actual: same columns, same values, through the helpers
+-- 3. v_budget_vs_actual: same columns, through the helpers; tombstones out
 -- ---------------------------------------------------------------------
 create or replace view public.v_budget_vs_actual
 with (security_invoker = true) as
@@ -134,7 +157,8 @@ left join lateral (
      and t.transaction_date >= b.budget_month
      and t.transaction_date < b.budget_month + interval '1 month'
      and t.transfer_group_id is null
-) s on true;
+) s on true
+where not b.not_budgeted;
 
 
 -- ---------------------------------------------------------------------
@@ -174,10 +198,11 @@ as $$
   with month as (
     select date_trunc('month', p_month)::date as m
   ),
-  -- Each category's most recent row on or before the month.
+  -- Each category's most recent row on or before the month -- a tombstone
+  -- included, so "stopped" carries too.
   effective as (
     select distinct on (b.categoryid)
-           b.id, b.userid, b.categoryid, b.budget_amount, b.budget_month
+           b.id, b.userid, b.categoryid, b.budget_amount, b.budget_month, b.not_budgeted
       from budgets b, month
      where b.budget_month <= month.m
      order by b.categoryid, b.budget_month desc
@@ -209,12 +234,14 @@ as $$
          and t.transaction_date < month.m + interval '1 month'
          and t.transfer_group_id is null
     ) s on true
-   -- An archived category doesn't carry; a row it has for this month still shows.
-   where e.budget_month = month.m or c.is_active;
+   -- Stopped from this month or earlier: not a budget. An archived
+   -- category doesn't carry; a row it has for this month still shows.
+   where not e.not_budgeted
+     and (e.budget_month = month.m or c.is_active);
 $$;
 
 comment on function public.budget_progress_for_month(date) is
-  'Spent-vs-budgeted for one month, every category with a budget: its own row for the month, else its most recent earlier row (carried_from = that month; budget_id null). Derived, never written. Archived categories don''t carry. security invoker: RLS scopes it to the caller (migration 63).';
+  'Spent-vs-budgeted for one month, every category with a budget: its own row for the month, else its most recent earlier row (carried_from = that month; budget_id null). A tombstone (not_budgeted) as the latest row means no budget. Derived, never written. Archived categories don''t carry. security invoker: RLS scopes it to the caller (migration 63).';
 
 revoke all on function public.budget_progress_for_month(date) from public, anon;
 grant execute on function public.budget_progress_for_month(date) to authenticated;

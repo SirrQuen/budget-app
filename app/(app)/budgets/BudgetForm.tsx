@@ -105,8 +105,9 @@ export function BudgetForm({
         </button>
       </div>
 
-      {/* A new budget picks its category and month. An existing one keeps
-          them -- they're what identifies it -- and changes its amount. */}
+      {/* A new budget picks its category. An existing one keeps its
+          category and month -- they're what identifies it -- and changes
+          its amount. */}
       {isEdit ? (
         budget.carriedFrom ? (
           <p className="text-sm text-ink-secondary">
@@ -140,18 +141,9 @@ export function BudgetForm({
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {isEdit ? null : (
-          <FormField label="Month" htmlFor={fieldId("budget_month")} required>
-            <input
-              id={fieldId("budget_month")}
-              name="budget_month"
-              type="month"
-              required
-              defaultValue={month.slice(0, 7)}
-              className={fieldClassName}
-            />
-          </FormField>
-        )}
+        {/* A new budget starts in the month being viewed and carries from
+            there; the Prev/Next links choose the month. */}
+        {isEdit ? null : <input type="hidden" name="budget_month" value={month} />}
 
         <FormField label="Budgeted amount" htmlFor={fieldId("budget_amount")} required>
           <Input

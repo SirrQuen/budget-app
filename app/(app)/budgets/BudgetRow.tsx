@@ -2,12 +2,11 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { BudgetForm, type EditableBudget } from "./BudgetForm";
-import { deleteBudgetAction } from "@/lib/actions/budgets";
+import { stopBudgetingAction } from "@/lib/actions/budgets";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Meter } from "@/components/ui/Meter";
 import { Celebration } from "@/components/ui/Celebration";
-import { TrashIcon } from "@/components/ui/icons";
 import { formatCurrency } from "@/lib/format";
 import type { MonthBudgetRow } from "@/lib/db/budgets";
 import { carriedFromLabel, formatMonthName } from "@/lib/budgetMonth";
@@ -42,9 +41,9 @@ export function BudgetRow({
   // form's default of the current budgeted amount with the insight's
   // suggestion, still just a starting point the user can change or ignore.
   const [adjustAmount, setAdjustAmount] = useState<number | null>(null);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleteError, setDeleteError] = useState<string>();
-  const [isDeleting, startDelete] = useTransition();
+  const [confirmingStop, setConfirmingStop] = useState(false);
+  const [stopError, setStopError] = useState<string>();
+  const [isStopping, startStop] = useTransition();
   const [showFinishedCelebration, setShowFinishedCelebration] = useState(false);
   const finishedCelebrationTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
   const celebratedRef = useRef(false);
@@ -80,14 +79,17 @@ export function BudgetRow({
 
   useEffect(() => () => clearTimeout(finishedCelebrationTimeout.current), []);
 
-  function handleDelete() {
-    startDelete(async () => {
-      const result = await callAction(() => deleteBudgetAction(budget.budget_id!));
+  // "Stop budgeting" writes a tombstone for this month (migration 63):
+  // the category is unbudgeted from here on, earlier months keep their
+  // amounts. Never a delete -- that would bring an earlier amount back.
+  function handleStop() {
+    startStop(async () => {
+      const result = await callAction(() => stopBudgetingAction(budget.category_id, budget.budget_month));
       if (result?.error) {
-        setDeleteError(result.error);
+        setStopError(result.error);
         return;
       }
-      setConfirmingDelete(false);
+      setConfirmingStop(false);
     });
   }
 
@@ -120,12 +122,16 @@ export function BudgetRow({
   const budgeted = budget.budget_amount ?? 0;
   const spent = budget.actual_spend ?? 0;
   const remaining = budget.remaining ?? 0;
-  const pctUsed = budget.pct_used ?? 0;
   const isOver = budget.is_over_budget ?? false;
+  // A $0 budget is a budget ("not spending on this"), never "unbudgeted".
+  // It has no percentage; the meter reads empty until something is spent,
+  // then full.
+  const isZero = budgeted === 0;
+  const pctUsed = isZero ? (spent > 0 ? 100 : 0) : (budget.pct_used ?? 0);
 
   return (
     <li className="flex flex-col gap-3 px-4 py-4 transition-colors duration-150 hover:bg-surface-raised">
-      {/* Below sm the actions drop onto their own line so "Edit" / "Delete"
+      {/* Below sm the actions drop onto their own line so "Edit" / "Stop budgeting"
           stop competing with the category name for width, and each gets a
           44px tap target; inline from sm up. */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
@@ -141,10 +147,12 @@ export function BudgetRow({
               </span>
             ) : null}
           </span>
-          <span className="shrink-0 text-base font-semibold tabular-nums text-ink">{Math.round(pctUsed)}%</span>
+          <span className="shrink-0 text-base font-semibold tabular-nums text-ink">
+            {isZero ? "$0" : `${Math.round(pctUsed)}%`}
+          </span>
         </div>
         <div className="-mx-2 flex shrink-0 items-center gap-1 sm:mx-0 sm:gap-3">
-          {deleteError ? <span className="px-2 text-sm text-critical sm:px-0">{deleteError}</span> : null}
+          {stopError ? <span className="px-2 text-sm text-critical sm:px-0">{stopError}</span> : null}
           <button
             type="button"
             onClick={() => setEditing(true)}
@@ -152,29 +160,37 @@ export function BudgetRow({
           >
             Edit
           </button>
-          {budget.budget_id === null ? null : (
           <button
             type="button"
-            onClick={() => setConfirmingDelete(true)}
+            onClick={() => setConfirmingStop(true)}
             className="inline-flex min-h-11 items-center rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface sm:px-0"
           >
-            Delete
+            Stop budgeting
           </button>
-          )}
         </div>
       </div>
 
       <Meter value={pctUsed} ariaLabel={`${budget.category_name ?? "Category"} budget used`} />
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-ink-secondary">
-        <span>
-          {formatCurrency(spent)} of {formatCurrency(budgeted)}
-        </span>
-        <span>
-          {isOver
-            ? `${formatCurrency(Math.abs(remaining))} over this month`
-            : `${formatCurrency(remaining)} left this month`}
-        </span>
+        {isZero ? (
+          <span>
+            {spent > 0
+              ? `${formatCurrency(spent)} spent against a $0 budget this month`
+              : "$0 budgeted, nothing spent this month"}
+          </span>
+        ) : (
+          <>
+            <span>
+              {formatCurrency(spent)} of {formatCurrency(budgeted)}
+            </span>
+            <span>
+              {isOver
+                ? `${formatCurrency(Math.abs(remaining))} over this month`
+                : `${formatCurrency(remaining)} left this month`}
+            </span>
+          </>
+        )}
       </div>
 
       {insight ? (
@@ -202,16 +218,16 @@ export function BudgetRow({
         icon="✦"
       />
 
+      {/* Not destructive -- earlier months keep their amounts, and adding a
+          budget again starts it again -- so the default tone, not red. */}
       <ConfirmDialog
-        open={confirmingDelete}
-        title={`Delete budget for "${budget.category_name}"?`}
-        description={`This removes ${formatMonthName(budget.budget_month)}'s amount for this category. If an earlier month has one, that carries in again. Past transactions aren't affected.`}
-        confirmLabel={isDeleting ? "Deleting…" : "Delete"}
-        confirmIcon={<TrashIcon className="h-4 w-4" aria-hidden="true" />}
+        open={confirmingStop}
+        title={`Stop budgeting ${budget.category_name} from ${formatMonthName(budget.budget_month)}?`}
+        description={`${budget.category_name} won't have a budget from ${formatMonthName(budget.budget_month)} on. Earlier months keep theirs, and you can add one again any time.`}
+        confirmLabel={isStopping ? "Stopping…" : "Stop budgeting"}
         cancelLabel="Cancel"
-        tone="critical"
-        onConfirm={handleDelete}
-        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={handleStop}
+        onCancel={() => setConfirmingStop(false)}
       />
     </li>
   );

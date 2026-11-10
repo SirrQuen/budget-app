@@ -639,8 +639,17 @@ recorded in docs/supabase-config.md.
   opening a page. Editing an amount writes ONE row, that category and
   month (`setBudgetForMonth`, an upsert on
   `budgets_one_per_category_month`); the rest keep carrying. $0 is a
-  budget and carries. Archived categories don't carry. An edit never
-  changes a budget's category or month.
+  budget and carries -- never "Unbudgeted"; it's On Track until something
+  is spent. Archived categories don't carry. An edit never changes a
+  budget's category or month.
+- **"Stop budgeting" is a tombstone, never a delete.** A row with
+  `not_budgeted = true` means "deliberately not budgeted from this month
+  on"; it carries like an amount, so deleting a month's row (which would
+  bring an earlier amount back) is not offered at all. Setting an amount
+  again replaces it for that month. Tombstones never appear as budgets.
+  Anything reading budget history counts CARRIED months
+  (`budget_progress_for_month`), never only explicit rows -- under
+  standing amounts most months carry.
 - "First login" is decided when the session starts (`lib/auth/firstSession.ts`),
   never from `lastlogin`, which `record_login()` stamps on every request.
 - Tier is profiles.subscription_plan / subscription_status, via getPlan().

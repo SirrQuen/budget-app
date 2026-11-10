@@ -4,7 +4,6 @@ import type { Database } from "@/lib/database.types";
 import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/errors";
 
 type BudgetRow = Database["public"]["Tables"]["budgets"]["Row"];
-type BudgetInsert = Database["public"]["Tables"]["budgets"]["Insert"];
 export type BudgetProgressRow = Database["public"]["Views"]["v_budget_vs_actual"]["Row"];
 
 export type DbResult<T> = { data: T; error: null } | { data: null; error: string };
@@ -16,11 +15,13 @@ export type DbResult<T> = { data: T; error: null } | { data: null; error: string
 // recent earlier one (getBudgetsForMonth), and nothing is written until
 // the person edits.
 //
-// Write paths: createBudget (a category with no budget yet -- a second
-// row for the same month is refused by the constraint) and
-// setBudgetForMonth (change an amount, carried or not). There is no update
-// that moves a row to another category or month; that was how two rows
-// for one category and month could happen.
+// Two write paths, both one row for one category and month, both upserts
+// on that key: setBudgetForMonth (an amount -- new, changed, or replacing
+// a carried one) and stopBudgetingForMonth (the tombstone, "not budgeted
+// from this month on"). No insert that can collide, no update that moves a
+// row to another category or month -- those were how two rows for one
+// category and month could happen -- and no delete: deleting a month's row
+// would only bring an earlier amount back, so "stop" is a row of its own.
 export type ListBudgetsOptions = {
   budget_month?: string;
   categoryid?: string;
@@ -63,52 +64,6 @@ export async function getBudget(id: string): Promise<DbResult<BudgetRow>> {
 
   if (error) {
     return { data: null, error: describeReadError(error, "budget") };
-  }
-
-  return { data, error: null };
-}
-
-export type CreateBudgetInput = Omit<BudgetInsert, "userid" | "id" | "created_at">;
-
-export async function createBudget(
-  input: CreateBudgetInput,
-): Promise<DbResult<BudgetRow>> {
-  const supabase = await createClient();
-
-  const session = sessionUserId(await supabase.auth.getClaims(), "budget");
-  if (session.userid === null) {
-    return { data: null, error: session.error };
-  }
-  const { userid } = session;
-
-  const { data, error } = await supabase
-    .from("budgets")
-    .insert({ ...input, userid })
-    .select()
-    .single();
-
-  if (error) {
-    return { data: null, error: describeWriteError(error, "budget") };
-  }
-
-  return { data, error: null };
-}
-
-// Unlike accounts/categories, nothing references budgets.id by FK, so a
-// hard delete is safe -- there's no history to preserve the way archived
-// accounts/categories preserve past transactions.
-export async function deleteBudget(id: string): Promise<DbResult<{ id: string }>> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("budgets")
-    .delete()
-    .eq("id", id)
-    .select("id")
-    .single();
-
-  if (error) {
-    return { data: null, error: describeWriteError(error, "budget") };
   }
 
   return { data, error: null };
@@ -189,6 +144,26 @@ export async function setBudgetForMonth(input: {
   budget_month: string;
   budget_amount: number;
 }): Promise<DbResult<BudgetRow>> {
+  return upsertMonthRow({ ...input, not_budgeted: false });
+}
+
+// "Stop budgeting": a tombstone for this category from this month on. It
+// carries like an amount, so later months stay unbudgeted until someone
+// sets an amount again (setBudgetForMonth replaces it for that month).
+// Earlier months keep their amounts.
+export async function stopBudgetingForMonth(input: {
+  categoryid: string;
+  budget_month: string;
+}): Promise<DbResult<BudgetRow>> {
+  return upsertMonthRow({ ...input, budget_amount: 0, not_budgeted: true });
+}
+
+async function upsertMonthRow(row: {
+  categoryid: string;
+  budget_month: string;
+  budget_amount: number;
+  not_budgeted: boolean;
+}): Promise<DbResult<BudgetRow>> {
   const supabase = await createClient();
 
   const session = sessionUserId(await supabase.auth.getClaims(), "budget");
@@ -198,7 +173,7 @@ export async function setBudgetForMonth(input: {
 
   const { data, error } = await supabase
     .from("budgets")
-    .upsert({ ...input, userid: session.userid }, { onConflict: "userid,budget_month,categoryid" })
+    .upsert({ ...row, userid: session.userid }, { onConflict: "userid,budget_month,categoryid" })
     .select()
     .single();
 

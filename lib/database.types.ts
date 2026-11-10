@@ -92,6 +92,7 @@ export type Database = {
           categoryid: string
           created_at: string
           id: string
+          not_budgeted: boolean
           userid: string
         }
         Insert: {
@@ -100,6 +101,7 @@ export type Database = {
           categoryid: string
           created_at?: string
           id?: string
+          not_budgeted?: boolean
           userid: string
         }
         Update: {
@@ -108,6 +110,7 @@ export type Database = {
           categoryid?: string
           created_at?: string
           id?: string
+          not_budgeted?: boolean
           userid?: string
         }
         Relationships: [
