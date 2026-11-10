@@ -2176,11 +2176,14 @@ transactions, 4 of 5 users, are dated before their account's anchor.
 
 Why it went into 62 rather than after it:
 
-- Day one of 62 would have shown an "isn't counted" line on most of
-  those testers' transactions with no way to act on it. Unactionable
-  alarm on most of a person's data is the opposite of the tone rule, and
-  "set your balance again" asks for an unrelated action to clear a label
-  they never chose.
+- From day one of 62, opening most of those testers' transactions would
+  have shown an "isn't counted" line with no way to act on it. The line
+  renders only on the edit screens (the transaction form and the transfer
+  editor), never in the transaction list, so it's met one transaction at
+  a time rather than as a wall of labels -- but most of the ones a person
+  opened would carry it. Unactionable alarm on most of what someone looks
+  at is the opposite of the tone rule, and "set your balance again" asks
+  for an unrelated action to clear a label they never chose.
 - It isn't a migration-era backlog. Every new user sets an opening
   balance and then enters history, so every new user lands where those
   four testers are. The answer link is the missing half of the feature.
