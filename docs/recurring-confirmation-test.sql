@@ -22,7 +22,7 @@
 --   3  The claim: advancing next_run_date guarded on its old value
 --      succeeds once; a second answer to the same occurrence finds 0 rows.
 --   4  A confirmation on a changed date lands on that date and moves the
---      balance -- and counts_toward_balance_preview (what the confirm
+--      balance -- and balance_anchor_preview (what the confirm
 --      sheet's note reads) agreed beforehand.
 --   5  A confirmation dated before the account's balance date is allowed,
 --      leaves the balance alone, and the preview said so (ruling 6).
@@ -147,7 +147,7 @@ begin
 
   -- 4 -----------------------------------------------------------------
   -- Rent was predicted 5 days ago; it landed 2 days ago, for 120.
-  select public.counts_toward_balance_preview(chk, current_date - 2) into preview;
+  select counts_by_date into preview from public.balance_anchor_preview(chk, current_date - 2);
   perform pg_temp.rec('4 preview: a date after the balance date counts', 'true', preview::text);
 
   insert into public.transactions (userid, accountid, categoryid, amount, transaction_type,
@@ -161,16 +161,21 @@ begin
 
   -- 5 -----------------------------------------------------------------
   -- Gym, predicted 25 days ago -- before the balance date.
-  select public.counts_toward_balance_preview(chk, current_date - 25) into preview;
+  select counts_by_date into preview from public.balance_anchor_preview(chk, current_date - 25);
   perform pg_temp.rec('5 preview: a date before the balance date does not count', 'false', preview::text);
 
+  -- Since migration 62 it needs the "already included?" answer. Answered
+  -- "Yes, it's already counted" (the confirm sheet's answer), against the
+  -- account's current anchor.
   insert into public.transactions (userid, accountid, categoryid, amount, transaction_type,
-                                   transaction_date, description, recurringid)
-  values (u, chk, rent_cat, 40, 'Expense', current_date - 25, 'Gym', gym_s);
+                                   transaction_date, description, recurringid,
+                                   counts_despite_anchor, anchor_answer_set_at)
+  values (u, chk, rent_cat, 40, 'Expense', current_date - 25, 'Gym', gym_s,
+          false, (select opening_set_at from public.accounts where id = chk));
   get diagnostics n = row_count;
-  perform pg_temp.rec('5 a pre-balance-date confirmation is allowed', '1', n::text);
+  perform pg_temp.rec('5 a pre-balance-date confirmation is allowed, answered', '1', n::text);
   select balance into bal from public.v_account_balances where account_id = chk;
-  perform pg_temp.rec('5 ...and leaves the balance alone, as the preview said', '880.00', to_char(bal, 'FM999990.00'));
+  perform pg_temp.rec('5 ...answered Yes, it leaves the balance alone', '880.00', to_char(bal, 'FM999990.00'));
 
   -- 6 -----------------------------------------------------------------
   -- Transfer predicted 3 days ago; it went yesterday.

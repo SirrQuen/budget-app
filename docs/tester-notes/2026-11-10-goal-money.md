@@ -1,7 +1,7 @@
 Sent:      not yet (planned 2026-11-10)
 Migration: 57
 Merge:     adc4ad9
-Deployed:  not yet
+Deployed:  2026-11-10
 
 # Safe to spend now sets aside your goal money
 

@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/errors";
+import { NO_ANCHOR_ANSWER, type AnchorAnswerColumns, type AnchorPreview } from "@/lib/anchorAnswer";
 
 type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"];
 type TransactionInsert = Database["public"]["Tables"]["transactions"]["Insert"];
@@ -452,6 +453,9 @@ export type CreateTransferInput = {
   date: string;
   description: string;
   notes?: string | null;
+  /** Each leg's pre-anchor answer (migration 62) -- two accounts, two anchors. */
+  fromAnchorAnswer?: AnchorAnswerColumns;
+  toAnchorAnswer?: AnchorAnswerColumns;
   // Rides on the outgoing leg only: the unique index is (userid,
   // idempotency_key), so both legs can't carry it. One leg is enough -- the
   // two are inserted in one statement, so if that leg exists, so does the
@@ -491,6 +495,7 @@ export async function createTransfer(
     notes: input.notes ?? null,
     transfer_group_id,
     idempotency_key: input.idempotency_key ?? null,
+    ...(input.fromAnchorAnswer ?? NO_ANCHOR_ANSWER),
   };
 
   const legIn: TransactionInsert = {
@@ -503,6 +508,7 @@ export async function createTransfer(
     description: input.description,
     notes: input.notes ?? null,
     transfer_group_id,
+    ...(input.toAnchorAnswer ?? NO_ANCHOR_ANSWER),
   };
 
   const { data, error } = await supabase
@@ -563,6 +569,9 @@ export type UpdateTransferInput = {
   notes: string | null;
   /** "This and future occurrences": also set the schedule's amount. */
   updateSchedule: boolean;
+  /** Each leg's pre-anchor answer (migration 62), following its account. */
+  fromAnchorAnswer: AnchorAnswerColumns;
+  toAnchorAnswer: AnchorAnswerColumns;
 };
 
 // The ONLY write path for an existing transfer: update_transfer()
@@ -582,6 +591,10 @@ export async function updateTransfer(input: UpdateTransferInput): Promise<DbResu
     p_description: input.description,
     p_notes: input.notes ?? undefined,
     p_update_schedule: input.updateSchedule,
+    p_from_counts_despite_anchor: input.fromAnchorAnswer.counts_despite_anchor ?? undefined,
+    p_from_anchor_answer_set_at: input.fromAnchorAnswer.anchor_answer_set_at ?? undefined,
+    p_to_counts_despite_anchor: input.toAnchorAnswer.counts_despite_anchor ?? undefined,
+    p_to_anchor_answer_set_at: input.toAnchorAnswer.anchor_answer_set_at ?? undefined,
   });
 
   if (error) {
@@ -621,9 +634,9 @@ export async function getScheduleSummary(recurringid: string | null): Promise<Db
 export type TransferForEdit = {
   transferGroupId: string;
   /** The Expense leg -- money leaves this account. */
-  fromLeg: { id: string; accountId: string };
+  fromLeg: { id: string; accountId: string; anchorAnswer: AnchorAnswerColumns };
   /** The Income leg -- money lands here. */
-  toLeg: { id: string; accountId: string };
+  toLeg: { id: string; accountId: string; anchorAnswer: AnchorAnswerColumns };
   amount: number;
   date: string;
   description: string;
@@ -639,7 +652,9 @@ export async function getTransferForEdit(groupId: string): Promise<DbResult<Tran
 
   const { data, error } = await supabase
     .from("transactions")
-    .select("id, accountid, transaction_type, amount, transaction_date, description, notes, recurringid")
+    .select(
+      "id, accountid, transaction_type, amount, transaction_date, description, notes, recurringid, counts_despite_anchor, anchor_answer_set_at",
+    )
     .eq("transfer_group_id", groupId);
 
   if (error) {
@@ -661,8 +676,8 @@ export async function getTransferForEdit(groupId: string): Promise<DbResult<Tran
   return {
     data: {
       transferGroupId: groupId,
-      fromLeg: { id: fromLeg.id, accountId: fromLeg.accountid },
-      toLeg: { id: toLeg.id, accountId: toLeg.accountid },
+      fromLeg: { id: fromLeg.id, accountId: fromLeg.accountid, anchorAnswer: legAnswer(fromLeg) },
+      toLeg: { id: toLeg.id, accountId: toLeg.accountid, anchorAnswer: legAnswer(toLeg) },
       amount: Number(fromLeg.amount),
       date: fromLeg.transaction_date,
       description: fromLeg.description,
@@ -747,27 +762,46 @@ export async function getMostRecentTransactionAccountId(): Promise<DbResult<stri
   return { data: data?.accountid ?? null, error: null };
 }
 
-// Would a transaction on this account and date count toward the account's
-// balance? The anchor rule's answer for values the user is still choosing
-// (counts_toward_balance_preview, migration 48). transactionId names the
-// transaction being edited -- its own recorded time decides; null means a
-// new one, recorded now. data is null when the account isn't visible.
-export async function countsTowardBalancePreview(
+// The pre-anchor question's facts for an account and a date the person is
+// still choosing (balance_anchor_preview, migration 62): whether the date
+// rule alone counts it -- false means ask -- and the anchor it would be
+// asked about. transactionId names the transaction being edited (its own
+// recorded time decides); null means a new one, recorded now. data is
+// null when the account isn't visible.
+export async function balanceAnchorPreview(
   accountId: string,
   transactionDate: string,
   transactionId: string | null,
-): Promise<DbResult<boolean | null>> {
+): Promise<DbResult<AnchorPreview | null>> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc("counts_toward_balance_preview", {
-    p_accountid: accountId,
-    p_transaction_date: transactionDate,
-    p_transaction_id: transactionId ?? undefined,
-  });
+  const { data, error } = await supabase
+    .rpc("balance_anchor_preview", {
+      p_accountid: accountId,
+      p_transaction_date: transactionDate,
+      p_transaction_id: transactionId ?? undefined,
+    })
+    .maybeSingle();
 
   if (error) {
     return { data: null, error: describeReadError(error, "transaction") };
   }
+  if (!data) {
+    return { data: null, error: null };
+  }
 
-  return { data, error: null };
+  return {
+    data: {
+      countsByDate: data.counts_by_date,
+      anchorBalance: Number(data.anchor_balance),
+      anchorDate: data.anchor_date,
+      anchorSetAt: data.anchor_set_at,
+      accountType: data.account_type,
+    },
+    error: null,
+  };
+}
+
+function legAnswer(leg: { counts_despite_anchor: boolean | null; anchor_answer_set_at: string | null }): AnchorAnswerColumns {
+  return { counts_despite_anchor: leg.counts_despite_anchor, anchor_answer_set_at: leg.anchor_answer_set_at };
 }
