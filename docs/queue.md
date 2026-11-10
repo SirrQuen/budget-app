@@ -9,11 +9,8 @@ Last updated 2026-11-10.
 
 ## Next
 
-1. **Safe to spend says why it's the number it is.** Spec:
-   docs/Safe-to-Spend-Why.md. Findings: "Safe to spend doesn't say why
-   it's the number it is" (2026-11-10). Moved ahead of everything else
-   2026-11-10. It's copy only: no migration and no number moves, so no
-   tester note.
+Nothing set. Matt picks the next item from Deferred or the launch
+blockers.
 
 ## Launch blockers still open
 
@@ -33,7 +30,7 @@ aren't struck through.
 | Item | Recorded | Decide or do when | Where |
 |---|---|---|---|
 | Budget progress counts future-dated transactions, but the balance doesn't (budget vs balance) | 2026-11-10 | Before commercial launch | Findings, same title |
-| After-save "doesn't change your figure" note on the edit paths | 2026-11-10 | After the create-path note ships | docs/Safe-to-Spend-Why.md, "What it costs" |
+| After-save "doesn't change your figure" note on the edit paths | 2026-11-10 | Unscheduled (the create-path note shipped 2026-11-10) | docs/Safe-to-Spend-Why.md, "What it costs" |
 | Amount window with a lead time (1c): optional update of a variable amount before it's due, in the queue | not dated in the repo | Unscheduled | docs/Recurring-Amounts-and-Transfer-Editing.md, 1c. **No findings entry yet**: needs one with the dates it was raised |
 | A statement date has no tolerance: the "enter the amount" window opens on `statement_day` wherever the statement actually posted | 2026-10-31 | When a tester hits it | Findings, "Recurring dates: what each one means" |
 | Goal money columns are bare `numeric` | 2026-11-03 | After 52 is decided (it touches the views 52 replaces) | Findings, same title |
@@ -45,6 +42,12 @@ aren't struck through.
 
 Listed so they aren't queued again.
 
+- **Safe to spend says why it's the number it is.** Shipped 2026-11-10
+  (`feat/safe-to-spend-why`, `888b7fe`): the cause on the closed card, the
+  room after the tightest day in the breakdown, and the note after a save
+  on the create paths. Spec: docs/Safe-to-Spend-Why.md. The after-save
+  note on the edit paths is still deferred (below). No tester note: copy
+  only, no number moved.
 - **Squeeze points ("What's ahead").** Shipped 2026-10-01 (`8b67f1f`,
   `feat/whats-ahead` merged). The part still missing, tying the low point
   to the figure, is "Next" item 1.

@@ -2310,8 +2310,9 @@ docs/Safe-to-Spend-Why.md.
 
 ## Safe to spend doesn't say why it's the number it is (2026-11-10)
 
-**Status: specced 2026-11-10 (docs/Safe-to-Spend-Why.md), next in
-docs/queue.md.** Recorded late. It was raised three times in
+**Status: shipped 2026-11-10 (`888b7fe`, spec docs/Safe-to-Spend-Why.md).
+The after-save note on the edit paths is deferred (docs/queue.md).**
+Recorded late. It was raised three times in
 conversation and never written down, so each time it came up it looked
 like the first. That is why CLAUDE.md now says anything raised twice gets
 a findings entry.
