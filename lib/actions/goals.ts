@@ -10,6 +10,7 @@ import {
   getContributionGoalId,
   getFirstContributionDate,
   getGoalCompletedAt,
+  isRecurringTransfer,
   updateGoal,
   updateGoalContribution,
 } from "@/lib/db/goals";
@@ -91,12 +92,17 @@ function parseGoalFields(formData: FormData) {
     if (!Number.isFinite(monthly_contribution) || monthly_contribution < 0) {
       return { error: "Monthly contribution can't be negative." };
     }
+    // Asked in the same step as the target (GoalForm), and only kept with
+    // one: with no monthly target there's nothing for a transfer to stand
+    // in for.
+    const funding = String(formData.get("funding_recurringid") ?? "").trim();
     return {
       goal_name,
       goal_type: goal_type as GoalType,
       target_amount,
       target_date: target_date || null,
       monthly_contribution,
+      funding_recurringid: monthly_contribution > 0 && funding ? funding : null,
     };
   }
 
@@ -106,7 +112,18 @@ function parseGoalFields(formData: FormData) {
     target_amount,
     target_date: target_date || null,
     monthly_contribution: null,
+    funding_recurringid: null,
   };
+}
+
+// The picker only offers the user's counted recurring transfers; anything
+// else arriving here is refused rather than stored. Ownership is the
+// composite FK's guarantee too (migration 57) -- this is the readable error.
+async function checkFunding(fundingRecurringId: string | null): Promise<ActionState> {
+  if (fundingRecurringId === null) return undefined;
+  const result = await isRecurringTransfer(fundingRecurringId);
+  if (result.error !== null) return { error: result.error };
+  return result.data ? undefined : { error: "Choose one of your recurring transfers, or No." };
 }
 
 export async function createGoalAction(
@@ -117,6 +134,10 @@ export async function createGoalAction(
   if ("error" in parsed) {
     return parsed;
   }
+  const fundingError = await checkFunding(parsed.funding_recurringid);
+  if (fundingError) {
+    return fundingError;
+  }
 
   const { error } = await createGoal(parsed);
 
@@ -125,6 +146,8 @@ export async function createGoalAction(
   }
 
   revalidatePath("/goals");
+  // A monthly target holds money in safe to spend.
+  revalidatePath("/dashboard");
 }
 
 export async function updateGoalAction(
@@ -138,6 +161,10 @@ export async function updateGoalAction(
   const parsed = parseGoalFields(formData);
   if ("error" in parsed) {
     return parsed;
+  }
+  const fundingError = await checkFunding(parsed.funding_recurringid);
+  if (fundingError) {
+    return fundingError;
   }
 
   // A lowered target can complete the goal; a raised one un-completes it.
@@ -229,6 +256,8 @@ export async function contributeToGoalAction(
   }
 
   revalidatePath("/goals");
+  // A contribution changes this month's goal hold in safe to spend.
+  revalidatePath("/dashboard");
 
   // The contribution that completes the goal gets the completion panel
   // instead of the running-total line -- one celebration, not two.
@@ -278,6 +307,8 @@ export async function updateContributionAction(
   // The page re-reads v_goal_progress, which re-sums the table: the edited
   // amount is the goal's total and percentage from here on.
   revalidatePath("/goals");
+  // A contribution changes this month's goal hold in safe to spend.
+  revalidatePath("/dashboard");
 
   if (goal.error !== null) return undefined;
   const completed = await detectCompletion(goal.data, before);
@@ -299,4 +330,6 @@ export async function deleteContributionAction(id: string): Promise<ActionState>
   }
 
   revalidatePath("/goals");
+  // A contribution changes this month's goal hold in safe to spend.
+  revalidatePath("/dashboard");
 }

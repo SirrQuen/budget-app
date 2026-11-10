@@ -13,6 +13,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DeleteTransactionButton } from "./DeleteTransactionButton";
 import { MakeRecurringButton } from "./MakeRecurringButton";
 import type { TransactionAccountOption } from "./AddTransactionForm";
+import type { GoalOption } from "@/lib/db/goals";
 import { useOptimisticTransactions, type PendingTransaction } from "@/components/quick-add/OptimisticTransactionsContext";
 import { categoryColorVar } from "@/lib/categoryOptions";
 import type { CategoryWithGroup } from "@/lib/db/categories";
@@ -189,6 +190,7 @@ export function TransactionsList({
   accounts,
   incomeCategories,
   expenseCategories,
+  goals,
 }: {
   transactions: TransactionWithRelations[];
   totalCount: number;
@@ -204,6 +206,8 @@ export function TransactionsList({
   accounts: TransactionAccountOption[];
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
+  /** For "Make this recurring" on a transfer -- "Is this for a goal?". */
+  goals: GoalOption[];
 }) {
   const { pending } = useOptimisticTransactions();
 
@@ -530,6 +534,7 @@ export function TransactionsList({
                             incomeCategories={incomeCategories}
                             expenseCategories={expenseCategories}
                             accounts={accounts}
+                            goals={goals}
                           />
                         ) : null}
                         <Link
@@ -601,6 +606,7 @@ export function TransactionsList({
                           incomeCategories={incomeCategories}
                           expenseCategories={expenseCategories}
                           accounts={accounts}
+                          goals={goals}
                         />
                       ) : null}
                       <Link
