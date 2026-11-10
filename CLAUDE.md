@@ -480,6 +480,17 @@ builds `main` to mysorrel.com. One branch per batch, merged when that
 batch's verification passes. Never accumulate more than one batch on a
 branch.
 
+**Every push to `main` is a deploy.** Every commit that reaches main must
+be independently shippable, or be squashed before it gets there; and
+`main` is never called "ready to push" while the batch is still open.
+Vercel builds the pushed head, so the state a push leaves `main` in is
+what testers get, however briefly. On 2026-11-10 `7e651ed` (62 without
+its answer link) was pushed as main's head at 00:09, reported ready
+before the link was folded in, and was live until the next push at
+00:32 -- 23 minutes of a state never meant to ship. See
+docs/phase-7-findings.md, "62 without its answer link was live for 23
+minutes".
+
 A change that moves a number a tester can see (safe to spend, an
 estimate, a balance) gets a dated note in `docs/tester-notes/`: sent
 date, migration, merge commit, then the message as sent. One change per

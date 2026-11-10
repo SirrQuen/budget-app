@@ -2199,3 +2199,40 @@ that change and checks the answer against the current anchor (SRA02 if a
 newer balance was set). A transfer opens it per leg, and update_transfer()
 keeps the other leg's answer. docs/balance-anchor-test.sql section 3
 covers answering, changing the answer, and a stale anchor.
+
+## 62 without its answer link was live for 23 minutes (2026-11-10)
+
+**Status: recorded; nothing to repair.** Nothing for a tester to act on,
+and nothing written wrongly -- this entry exists so a later "I saw a label
+I can't find" has an answer.
+
+Times (origin/main's push log, -05:00):
+
+- **00:09:58** -- `main` pushed with head `7e651ed`: 62 merged (`0336ce9`)
+  WITHOUT the "Was this in your balance?" link. I had reported main ready
+  to push at that commit; the link was folded into 62 afterwards.
+- **00:32:48** -- `main` pushed with head `327a6ac`, which carries the link
+  (`e8f7916`). That is what testers have had since.
+
+What a tester could have seen in between depends on whether migration 62
+was already on production at 00:09 (the push time wasn't recorded; fill
+it in here if known):
+
+- **62 already on production:** a transaction dated before the balance
+  date asked the question as designed. Opening an older one showed "Dated
+  before your balance of $X on <date>, so it isn't counted in that
+  balance" -- with NO link to answer it. That line still exists, now with
+  the link beside it; the link-less version is what someone may remember.
+- **62 not yet on production:** the new app called
+  `balance_anchor_preview()`, which didn't exist yet, so no question and
+  no line appeared; saves worked as before (no trigger to refuse them).
+
+Either way nothing was damaged: no answer can be stored without the
+question, the old app's writes were unchanged, and production showed 0
+rows with an answer when checked after the 00:32 deploy.
+
+Cause, and the rule it produced (CLAUDE.md "Shipping"): main was pushed at
+a commit that was never meant to ship. It wasn't several commits in one
+push each deploying -- Vercel builds the pushed head, and the 00:09 push's
+~20 commits (including 62's earlier states) didn't deploy individually.
+It was a push made at an intermediate state, followed by more work.
