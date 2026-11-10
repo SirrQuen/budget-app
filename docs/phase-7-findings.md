@@ -584,6 +584,12 @@ with scripts disabled in headless Chrome: Enter did nothing.
 
 ## Goal money in safe to spend (2026-10-31)
 
+**Status (2026-11-09): ready to ship as its own deploy, ahead of 62-64,
+with its own tester note (`docs/tester-notes/2026-11-09-goal-money.md`,
+re-dated from the planned 2026-11-04). It has been on sorrel-dev since
+the browser check, which is why dev couldn't take 62-64 until it ships.
+The near-target finding below is fixed (e93eb68).**
+
 **Status (2026-11-03): no longer held; re-derived on top of 58-61 to
 ship as its own deploy, with its own tester note dated 2026-11-04.** The
 hold existed because testers couldn't attribute a moving hero number to
@@ -620,6 +626,9 @@ cautious side, but it's money the goal will never need: safe to spend is
 $150 lower than it should be. Likely rule:
 `least(monthly - contributed this month, target - saved)`, floored at 0.
 Not changed: it's a decision about the number, and 57 hasn't shipped.
+**Fixed 2026-11-03 (e93eb68):** the hold is capped at the goal's
+remaining amount (`v_goal_progress.remaining_amount`, exposed as
+`remaining_to_target`), the rule above.
 
 The original record follows.
 
