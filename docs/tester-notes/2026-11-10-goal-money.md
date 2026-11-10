@@ -1,4 +1,4 @@
-Sent:      not yet (planned 2026-11-10)
+Sent:      2026-11-10
 Migration: 57
 Merge:     adc4ad9
 Deployed:  2026-11-10

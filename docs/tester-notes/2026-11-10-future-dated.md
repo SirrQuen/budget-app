@@ -1,14 +1,9 @@
-Sent:      not yet (planned 2026-11-13 -- the 11th and 12th have notes;
-           send BEFORE the deploy, not after)
+Sent:      2026-11-10 (shares the day with 2026-11-10-goal-money.md, if
+           that went out as planned: a number that moved on the 10th
+           can come from either, so check both)
 Migration: 65
-Merge:     (fill in on merge)
-Deployed:  not yet
-
-Before sending: re-run docs/future-dated-audit-by-user.sql against
-production the day before. On 2026-11-10 one tester had 12 rows (9 items,
-2026-11-11 to 2026-12-02); others may have added some since. The note
-below is written for everyone either way -- anyone can have logged
-something dated ahead.
+Merge:     8df3631
+Deployed:  2026-11-10
 
 # A transaction dated ahead counts on its date
 
