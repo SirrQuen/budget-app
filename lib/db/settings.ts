@@ -3,6 +3,10 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { coerceTheme, type Theme } from "@/lib/theme";
 import { coerceSafeToSpendWindowPref, type SafeToSpendWindowPref } from "@/lib/safeToSpendWindow";
+import {
+  resolveDashboardLayout,
+  type DashboardLayout,
+} from "@/lib/dashboardLayout";
 import type { Database } from "@/lib/database.types";
 import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/errors";
 import { isValidTimeZone, todayInZone } from "@/lib/date";
@@ -212,4 +216,46 @@ export async function updateTheme(theme: Theme): Promise<DbResult<Theme>> {
   }
 
   return { data: coerceTheme(data.theme), error: null };
+}
+
+// The dashboard's stored layout, resolved: unknown names dropped, missing
+// sections appended. Never throws or surfaces an error, same contract as
+// getTheme -- a layout is chrome, and an unreadable one is the default.
+export const getDashboardLayout = cache(async (): Promise<DashboardLayout> => {
+  const result = await getSettings();
+  return resolveDashboardLayout(result.data?.dashboard_order, result.data?.dashboard_hidden);
+});
+
+// Only the explicit Save writes this -- never a page render.
+export async function updateDashboardLayout(
+  layout: DashboardLayout | null,
+): Promise<DbResult<DashboardLayout>> {
+  const supabase = await createClient();
+
+  const session = sessionUserId(await supabase.auth.getClaims(), "settings");
+  if (session.userid === null) {
+    return { data: null, error: session.error };
+  }
+  const { userid } = session;
+
+  // null clears both: back to the default, including for sections added later.
+  const { data, error } = await supabase
+    .from("settings")
+    .update({
+      dashboard_order: layout?.order ?? null,
+      dashboard_hidden: layout && layout.hidden.length > 0 ? layout.hidden : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("userid", userid)
+    .select("dashboard_order, dashboard_hidden")
+    .single();
+
+  if (error) {
+    return { data: null, error: describeWriteError(error, "settings") };
+  }
+
+  return {
+    data: resolveDashboardLayout(data.dashboard_order, data.dashboard_hidden),
+    error: null,
+  };
 }

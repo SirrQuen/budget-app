@@ -754,6 +754,8 @@ export type Database = {
         Row: {
           created_at: string
           currency: string
+          dashboard_hidden: string[] | null
+          dashboard_order: string[] | null
           date_format: string
           default_budget_month: number | null
           id: string
@@ -769,6 +771,8 @@ export type Database = {
         Insert: {
           created_at?: string
           currency?: string
+          dashboard_hidden?: string[] | null
+          dashboard_order?: string[] | null
           date_format?: string
           default_budget_month?: number | null
           id?: string
@@ -784,6 +788,8 @@ export type Database = {
         Update: {
           created_at?: string
           currency?: string
+          dashboard_hidden?: string[] | null
+          dashboard_order?: string[] | null
           date_format?: string
           default_budget_month?: number | null
           id?: string

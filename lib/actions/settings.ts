@@ -6,7 +6,9 @@ import {
   updateSafeToSpendWindowPref,
   updateSafeToSpendCushion,
   updateTimeZone,
+  updateDashboardLayout,
 } from "@/lib/db/settings";
+import { resolveDashboardLayout } from "@/lib/dashboardLayout";
 import { isTheme } from "@/lib/theme";
 import { isSafeToSpendWindowPref } from "@/lib/safeToSpendWindow";
 import { mustReachUserUnchanged } from "@/lib/db/errors";
@@ -124,5 +126,36 @@ export async function setSafeToSpendCushionAction(
 
   // The dashboard's getSafeToSpend() subtracts this.
   revalidatePath("/", "layout");
+  return { saved: true };
+}
+
+export type DashboardLayoutActionState = { error?: string; saved?: boolean } | undefined;
+
+// The explicit Save (or "Reset to default", `layout` null) in the
+// dashboard's edit mode. The submitted lists are resolved, not trusted:
+// unknown names fall away and missing sections are appended, so what's
+// stored is always a complete, valid layout. The hero has no name, so no
+// input can hide or move it.
+export async function saveDashboardLayoutAction(
+  input: unknown,
+): Promise<DashboardLayoutActionState> {
+  let layout = null;
+  if (input !== null) {
+    if (typeof input !== "object" || input === undefined) {
+      return { error: "That layout isn't one we recognise." };
+    }
+    const { order, hidden } = input as { order?: unknown; hidden?: unknown };
+    if (!Array.isArray(order) || !Array.isArray(hidden)) {
+      return { error: "That layout isn't one we recognise." };
+    }
+    layout = resolveDashboardLayout(order, hidden);
+  }
+
+  const result = await updateDashboardLayout(layout);
+  if (result.error) {
+    return { error: result.error };
+  }
+
+  revalidatePath("/dashboard");
   return { saved: true };
 }

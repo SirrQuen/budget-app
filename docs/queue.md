@@ -25,8 +25,12 @@ wait on Matt's ruling, in this order.
 5. ~~#5 export~~ -- deployed 2026-11-14 (see Done).
 6. **#5 import** -- its own spec first, which Matt is writing (ruled
    2026-11-14: no spec exists yet). Not built until then.
-7. **#6 — dashboard layout**, scoped down: reorder and hide, hero
-   pinned. Ask first whether a tester asked for it.
+7. **#6 — dashboard layout**, built on `feat/dashboard-layout` as one
+   release: drag a card by its grip (long-press on touch), a per-card
+   menu (Move up / Move down / Hide) as the non-drag route, save on drop
+   with Undo, hero pinned. Migration 67 is on sorrel-dev and production.
+   Not merged to main. Testers asked for direct dragging, so the
+   edit-mode and up/down version was never shipped. Library: see Deferred.
 
 ## Launch blockers still open
 
@@ -45,6 +49,7 @@ aren't struck through.
 
 | Item | Recorded | Decide or do when | Where |
 |---|---|---|---|
+| Drag-and-drop library: classic `@dnd-kit/core` 6.3.1 + `@dnd-kit/sortable` 10.0.0, pinned exactly (chosen 2026-11-14: stable over active, one sortable list, small footprint; the new `@dnd-kit/react` line is 0.x). Revisit: move to the new line if classic breaks on a React upgrade, or when the new line reaches 1.0 | 2026-11-14 | On a React upgrade, or `@dnd-kit/react` 1.0 | `package.json`; `app/(app)/dashboard/DashboardSections.tsx` |
 | "Every number is a door", the rest: an upcoming line opens its schedule; "(average of last 3)" opens the three confirmations it averaged; a goal's progress opens its contributions. The first three (budget spent, a category, the low-point item) shipped with #1 + #2 | 2026-11-14 | After #5 export | docs/Views-Search-Import-Layout.md, "Suggest other views" |
 | Quick add on an account's page doesn't start on that account (the full Add transaction form does) | 2026-11-14 | Unscheduled | docs/Views-Search-Import-Layout.md, "The account page" |
 | Occurrences "filled" by a linked row, derived on read: the projection, Upcoming and the queue each treat an occurrence as filled while a linked row sits in its window, and the queue walks past filled cycles. The eventual shape for #4's "Yes"; v1 links and advances the cursor in one SQL function instead (ruled 2026-11-14: the derived form rewrites three readers and the queue cursor mid-beta) | 2026-11-14 | After the beta | docs/Views-Search-Import-Layout.md, item 4 |
