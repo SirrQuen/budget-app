@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { buttonClass } from "@/components/ui/Button";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { getAccountDeletionSummary, getProfile } from "@/lib/db/profile";
 import { requireUser } from "@/lib/auth/dal";
@@ -19,7 +21,10 @@ const INLINE_LINK =
 const LEGAL_LINK =
   "rounded transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
+  // Set by the export route when its read failed (app/(app)/settings/export).
+  const exportFailed = (await searchParams).export === "failed";
+
   // The breakdown of what deletion removes -- null when the count query
   // fails. The section renders either way (see DeleteAccountSection): a
   // failed SELECT must not block someone from erasing their own data.
@@ -151,6 +156,35 @@ export default async function SettingsPage() {
           held={paycheck === "tracked"}
           className="mt-4"
         />
+      </section>
+
+      <section
+        aria-labelledby="your-data-heading"
+        className="rounded-2xl border border-hairline bg-surface p-5"
+      >
+        <h2 id="your-data-heading" className="text-base font-semibold text-ink">
+          Your data
+        </h2>
+        <p className="mt-1 max-w-prose text-sm text-ink-secondary">
+          Download every transaction as a CSV file. It opens in Excel, Numbers or Google Sheets,
+          and it&apos;s yours to keep.
+        </p>
+        {exportFailed ? (
+          <div className="mt-4">
+            <ErrorMessage
+              severity="critical"
+              message="We couldn't make your export just now. Your data is fine. Try the button again."
+            />
+          </div>
+        ) : null}
+        {/* A plain link, not a form: it reads, so a GET is right, and it
+            works before JavaScript loads. No `download` attribute: the
+            route's Content-Disposition makes the file, and on a failure its
+            redirect has to navigate back here -- with `download`, the
+            browser would save the Settings page as the file instead. */}
+        <a href="/settings/export" className={buttonClass("primary", "mt-4")}>
+          Download transactions
+        </a>
       </section>
 
       <section

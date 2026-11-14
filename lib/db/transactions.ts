@@ -4,6 +4,7 @@ import type { Database } from "@/lib/database.types";
 import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/errors";
 import { buildSearchOr, escapeLike, MAX_SEARCH_LENGTH } from "@/lib/transactionFilters";
 import { NO_ANCHOR_ANSWER, type AnchorAnswerColumns, type AnchorPreview } from "@/lib/anchorAnswer";
+import type { ExportRow } from "@/lib/transactionExport";
 
 type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"];
 type TransactionInsert = Database["public"]["Tables"]["transactions"]["Insert"];
@@ -853,6 +854,76 @@ export async function balanceAnchorPreview(
   };
 }
 
-function legAnswer(leg: { counts_despite_anchor: boolean | null; anchor_answer_set_at: string | null }): AnchorAnswerColumns {
+// Every transaction, for the CSV export (lib/transactionExport.ts), oldest
+// first. A read only -- the export writes nothing.
+//
+// PostgREST caps an unranged read at the project's max-rows and answers 206
+// rather than an error, so one select would quietly drop the oldest rows of
+// a long history. This pages with range() and advances by what each page
+// actually returned, so it's right whatever max-rows is set to. The total
+// from the first page is checked at the end: a file that's short (or long,
+// if rows were added in another tab mid-export) is an error, never a
+// download that silently misses rows.
+//
+// amount comes as text (amount::text): the exact numeric(12,2) value,
+// never through a JavaScript number.
+const EXPORT_PAGE_SIZE = 1000;
+
+const EXPORT_SELECT =
+  "id, transaction_date, accountid, transaction_type, categoryid, description, amount_text:amount::text, notes, merchant, payment_method, transfer_group_id, is_estimated, counts_despite_anchor, anchor_answer_set_at, category:categories(category_name), account:accounts(account_name)";
+
+type RawExportRow = Omit<ExportRow, "amount" | "account_name" | "category_name"> & {
+  amount_text: string;
+  category: { category_name: string } | null;
+  account: { account_name: string } | null;
+};
+
+export async function exportTransactions(): Promise<DbResult<ExportRow[]>> {
+  const supabase = await createClient();
+
+  const rows: ExportRow[] = [];
+  let expected: number | null = null;
+
+  for (;;) {
+    // Counted once, on the first page.
+    const countMode: "exact" | undefined = rows.length === 0 ? "exact" : undefined;
+    const { data, error, count } = await supabase
+      .from("transactions")
+      .select(EXPORT_SELECT, { count: countMode })
+      .order("transaction_date", { ascending: true })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(rows.length, rows.length + EXPORT_PAGE_SIZE - 1)
+      .returns<RawExportRow[]>();
+
+    if (error) {
+      return { data: null, error: describeReadError(error, "transactions") };
+    }
+    if (expected === null) expected = count ?? 0;
+    if (data.length === 0) break;
+
+    for (const { amount_text, category, account, ...rest } of data) {
+      rows.push({
+        ...rest,
+        amount: amount_text,
+        account_name: account?.account_name ?? null,
+        category_name: category?.category_name ?? null,
+      });
+    }
+    if (rows.length >= expected) break;
+  }
+
+  if (rows.length !== expected) {
+    console.error(`[export] read ${rows.length} of ${expected} transactions`);
+    return {
+      data: null,
+      error: "Your transactions changed while the export was being made. Try again.",
+    };
+  }
+
+  return { data: rows, error: null };
+}
+
+function legAnswer(leg:{ counts_despite_anchor: boolean | null; anchor_answer_set_at: string | null }): AnchorAnswerColumns {
   return { counts_despite_anchor: leg.counts_despite_anchor, anchor_answer_set_at: leg.anchor_answer_set_at };
 }

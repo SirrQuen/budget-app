@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated: October 27, 2026**
+**Last updated: November 14, 2026**
 
 Sorrel is a personal budgeting app operated by **MW Cyber Architects LLC**. This policy explains what we collect, where it lives, who can see it, and what happens when you leave.
 
@@ -94,7 +94,7 @@ We mention this because a policy claiming everything is erased when it isn't wou
 
 - **See your data** — it's all visible in the app
 - **Correct it** — edit or delete anything, any time
-- **Take it with you** — email us and we'll send you an export
+- **Take it with you** — download every transaction as a CSV file from Settings, any time. For anything else, such as your budgets, goals or recurring schedules, email us and we'll send it
 - **Delete everything** — Settings, as above
 
 ## Children
@@ -114,7 +114,7 @@ hello@mysorrel.com
 
 # Terms of Service
 
-**Last updated: October 12, 2026**
+**Last updated: November 14, 2026**
 
 These terms govern your use of Sorrel, operated by **MW Cyber Architects LLC**. By creating an account you agree to them.
 
@@ -154,7 +154,7 @@ Sorrel does not know about anything you haven't told it. It cannot know whether 
 
 You own what you put into Sorrel. We don't claim any rights to it beyond what's needed to run the service for you — storing it, displaying it back to you, and backing it up.
 
-You can export it or delete it whenever you like.
+You can export it or delete it whenever you like. Your transactions download from Settings; email us for anything else and we'll send it.
 
 ## What you may not do
 

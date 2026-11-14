@@ -22,9 +22,9 @@ wait on Matt's ruling, in this order.
 4. ~~#1 + #2 — account pages (`/accounts/[id]`) and search~~ -- merged
    2026-11-14, not yet pushed (see Done). The rest of "every number is a
    door" is under Deferred.
-5. **#5 export** -- CSV from Settings, formula-injection guard, terms
-   and privacy wording.
-6. **#5 import** -- its own spec first. Not built until then.
+5. ~~#5 export~~ -- merged 2026-11-14, not yet pushed (see Done).
+6. **#5 import** -- its own spec first, which Matt is writing (ruled
+   2026-11-14: no spec exists yet). Not built until then.
 7. **#6 — dashboard layout**, scoped down: reorder and hide, hero
    pinned. Ask first whether a tester asked for it.
 
@@ -60,6 +60,16 @@ aren't struck through.
 ## Done, still named in conversation
 
 Listed so they aren't queued again.
+
+- **Transaction export (#5 export).** Merged to main 2026-11-14
+  (`feat/export-csv`); not pushed yet, so not deployed. "Download
+  transactions" in Settings: a CSV of every transaction, UTF-8 with BOM,
+  formula-injection guard. The column layout is import's first format
+  (`lib/transactionExport.ts`): columns are only ever added at the end.
+  Privacy and terms now point to the button, with email kept for
+  everything else. Downloaded and checked on dev by Matt. Read only: no
+  migration, no number moves. Tester note:
+  docs/tester-notes/2026-11-15-export.md.
 
 - **Account name on Coming up lines (#3).** Merged to main 2026-11-14
   (`2b40ead`, `feat/coming-up-account-name`); not pushed yet, so not
