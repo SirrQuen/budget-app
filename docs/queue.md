@@ -5,7 +5,7 @@ lives in its findings entry (docs/phase-7-findings.md) or spec. "Do this
 next" means editing this file. Launch blockers live in the findings'
 authoritative list, not here.
 
-Last updated 2026-11-13.
+Last updated 2026-11-14.
 
 ## Next
 
@@ -17,7 +17,8 @@ wait on Matt's ruling, in this order.
 2. **Safe-to-Spend-Why** -- shipped 2026-11-10 (see Done). Only its
    edit-path after-save note remains, and it stays deferred (below); it is
    still ahead of every feature from 3 on if Matt pulls it forward.
-3. **#3 — account name on Coming up lines**, both ends for a transfer.
+3. ~~#3 — account name on Coming up lines~~ -- built 2026-11-14 on
+   `feat/coming-up-account-name`, not yet merged (see Done).
 4. **#1 + #2 — account pages (`/accounts/[id]`) and search**: one
    filterable transaction list, filters in the URL. "Every number is a
    door": the first three links ship with it, the rest are queued under
@@ -58,6 +59,14 @@ aren't struck through.
 ## Done, still named in conversation
 
 Listed so they aren't queued again.
+
+- **Account name on Coming up lines (#3).** Built 2026-11-14
+  (`feat/coming-up-account-name`, `77ee61e`); NOT yet merged to main, so
+  not deployed. Each Coming up line ends with the account, a transfer
+  with both ends ("Checking → Visa"), in neutral ink. UI only: no
+  migration, no number moves, so no tester note. Render tests in
+  `app/(app)/recurring/ConfirmationQueue.test.tsx`. Update this entry
+  with the merge commit when it merges.
 
 - **"Is this the same bill?" (#4).** Merged 2026-11-14 (`e7d348e`,
   `feat/same-bill-pair`), migration 66 on sorrel-dev and production the
