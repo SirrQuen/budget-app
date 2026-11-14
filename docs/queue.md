@@ -20,8 +20,9 @@ Phase 1 report given 2026-11-13; Phase 2 waits on Matt's ruling.
    double count -- it sets recurringid but doesn't advance the schedule,
    and v_future_transactions doesn't exclude linked rows. "Yes" must also
    settle that occurrence. **Built 2026-11-14 on `feat/same-bill-pair`
-   (migration 66)**; waiting on Matt's dev push, `npm run types:dev`,
-   docs/same-bill-test.sql and docs/rls-isolation-test.sql.
+   (migration 66, `d00dc79`)**. On sorrel-dev 2026-11-14, with
+   docs/same-bill-test.sql and docs/rls-isolation-test.sql passing
+   every row. Production push and merge not yet.
 2. **Safe-to-Spend-Why** -- shipped 2026-11-10 (see Done). Only its
    edit-path after-save note remains, and it stays deferred (below); it is
    still ahead of every feature from 3 on if Matt pulls it forward.
