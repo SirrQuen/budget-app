@@ -10,19 +10,10 @@ Last updated 2026-11-13.
 ## Next
 
 In this order. Spec for all six: docs/Views-Search-Import-Layout.md.
-Phase 1 report given 2026-11-13; Phase 2 waits on Matt's ruling.
+Phase 1 report given 2026-11-13. #4 is shipped (see Done); the rest
+wait on Matt's ruling, in this order.
 
-1. **#4 — one bill shown twice, "(fixed)" and "(as entered)".**
-   Confirmed 2026-11-13: a schedule occurrence and an unlinked
-   future-dated transaction for the same bill, both subtracted in the
-   projection. 5 pairs, one user, production. The pair question ("Is this
-   the same bill?"). Note: linking alone (migration 60) does not stop the
-   double count -- it sets recurringid but doesn't advance the schedule,
-   and v_future_transactions doesn't exclude linked rows. "Yes" must also
-   settle that occurrence. **Built 2026-11-14 on `feat/same-bill-pair`
-   (migration 66, `d00dc79`)**. On sorrel-dev 2026-11-14, with
-   docs/same-bill-test.sql and docs/rls-isolation-test.sql passing
-   every row. Production push and merge not yet.
+1. ~~#4 — one bill shown twice~~ -- shipped 2026-11-14 (see Done).
 2. **Safe-to-Spend-Why** -- shipped 2026-11-10 (see Done). Only its
    edit-path after-save note remains, and it stays deferred (below); it is
    still ahead of every feature from 3 on if Matt pulls it forward.
@@ -67,6 +58,17 @@ aren't struck through.
 ## Done, still named in conversation
 
 Listed so they aren't queued again.
+
+- **"Is this the same bill?" (#4).** Merged 2026-11-14 (`e7d348e`,
+  `feat/same-bill-pair`), migration 66 on sorrel-dev and production the
+  same day. A schedule's next occurrence and a future-dated entry for
+  the same bill were both counted (5 pairs, one user, on 2026-11-13);
+  Sorrel now asks. "Yes" links the entry and steps the schedule past
+  the occurrence; deleting it puts the occurrence back, or the delete
+  confirmation says it won't. docs/same-bill-test.sql and
+  docs/rls-isolation-test.sql passed every row on dev. Tester note:
+  docs/tester-notes/2026-11-14-same-bill.md. The derived-on-read
+  version is deferred (below).
 
 - **Safe to spend says why it's the number it is.** Shipped 2026-11-10
   (`feat/safe-to-spend-why`, `888b7fe`): the cause on the closed card, the
