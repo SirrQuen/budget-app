@@ -2,25 +2,32 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { lastLoggedLabel } from "./lastLogged";
 
-test("states the fact in days", () => {
-  assert.equal(lastLoggedLabel("2026-11-09", "2026-11-09"), "Last logged today");
-  assert.equal(lastLoggedLabel("2026-11-08", "2026-11-09"), "Last logged yesterday");
-  assert.equal(lastLoggedLabel("2026-10-28", "2026-11-09"), "Last logged 12 days ago");
+test("states the fact as a date", () => {
+  assert.equal(lastLoggedLabel("2026-11-09", "2026-11-09"), "Last logged Nov 9");
+  assert.equal(lastLoggedLabel("2026-11-12", "2026-11-14"), "Last logged Nov 12");
+  assert.equal(lastLoggedLabel("2026-01-01", "2026-11-14"), "Last logged Jan 1");
+});
+
+test("the year appears only when it isn't the current year", () => {
+  assert.equal(lastLoggedLabel("2025-11-12", "2026-11-14"), "Last logged Nov 12, 2025");
+  assert.equal(lastLoggedLabel("2025-12-31", "2026-01-01"), "Last logged Dec 31, 2025");
+  assert.equal(lastLoggedLabel("2026-01-01", "2026-01-01"), "Last logged Jan 1");
 });
 
 // No threshold: a long gap reads exactly like a short one.
 test("no threshold changes the wording", () => {
-  assert.equal(lastLoggedLabel("2025-11-09", "2026-11-09"), "Last logged 365 days ago");
+  assert.equal(lastLoggedLabel("2024-02-29", "2026-11-14"), "Last logged Feb 29, 2024");
 });
 
 test("never a scolding, never a nudge", () => {
-  for (const d of ["2026-11-09", "2026-11-01", "2026-01-01", null]) {
+  for (const d of ["2026-11-09", "2026-11-01", "2026-01-01", "2020-06-15", null]) {
     const label = lastLoggedLabel(d, "2026-11-09");
-    assert.doesNotMatch(label, /you haven't|you have not|!|overdue|behind|stale/i, label);
+    assert.doesNotMatch(label, /you haven't|you have not|!|overdue|behind|stale|ago/i, label);
   }
   assert.equal(lastLoggedLabel(null, "2026-11-09"), "Nothing logged yet");
 });
 
-test("a day ahead (clock skew) still reads today", () => {
-  assert.equal(lastLoggedLabel("2026-11-10", "2026-11-09"), "Last logged today");
+test("a day ahead (clock skew) reads as today's date", () => {
+  assert.equal(lastLoggedLabel("2026-11-10", "2026-11-09"), "Last logged Nov 9");
+  assert.equal(lastLoggedLabel("2027-01-01", "2026-12-31"), "Last logged Dec 31");
 });
