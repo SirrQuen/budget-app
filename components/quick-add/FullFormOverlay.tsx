@@ -1,5 +1,6 @@
 "use client";
 
+import type { SameBillPair } from "@/lib/sameBill";
 import { useEffect, useId, useRef } from "react";
 import {
   AddTransactionForm,
@@ -24,7 +25,7 @@ export function FullFormOverlay({
   expenseCategories: CategoryWithGroup[];
   prefill?: AddTransactionPrefill;
   onClose: () => void;
-  onSaved: (note: string | null) => void;
+  onSaved: (note: string | null, sameBill?: SameBillPair) => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const labelId = useId();

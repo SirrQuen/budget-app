@@ -21,6 +21,7 @@ export function DeleteTransactionButton({
   transactionDate,
   transferGroupId = null,
   transferAccounts,
+  forecastNote,
   redirectToList,
   className = "inline-flex min-h-11 items-center rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-critical focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
   label = "Delete",
@@ -34,6 +35,12 @@ export function DeleteTransactionButton({
   /** Transfer only: names both accounts in the confirmation, e.g. "from
    *  Checking to Savings". Omitted when a leg's account can't be resolved. */
   transferAccounts?: { from: string; to: string };
+  /**
+   * What deleting does to a "same bill" answer (sameBillDeleteNote,
+   * migration 66): the occurrence goes back on the schedule, or -- when it
+   * can't -- that the bill leaves the forecast. Said before anything goes.
+   */
+  forecastNote?: string;
   redirectToList: boolean;
   className?: string;
   label?: string;
@@ -75,11 +82,11 @@ export function DeleteTransactionButton({
       <ConfirmDialog
         open={confirming}
         title={title}
-        description={
+        description={`${
           isTransfer
             ? "This can't be undone -- both legs of this transfer will be permanently removed."
             : "This can't be undone -- the transaction will be permanently removed."
-        }
+        }${forecastNote ? ` ${forecastNote}` : ""}`}
         confirmLabel={isDeleting ? "Deleting…" : "Delete"}
         confirmIcon={<TrashIcon className="h-4 w-4" />}
         cancelLabel="Cancel"

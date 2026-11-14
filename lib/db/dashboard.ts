@@ -768,8 +768,8 @@ function toProjectionSchedule(row: UpcomingProjectionRow): ProjectionSchedule | 
 // Every active schedule as the projection reads it. cache()d: the
 // safe-to-spend figure and the confirmation queue are two uses of the same
 // rows, read once per request, so the two can never be built from
-// different data.
-const getProjectionSchedules = cache(async (): Promise<DbResult<ProjectionSchedule[]>> => {
+// different data. The same-bill question (lib/db/sameBill.ts) reads them too.
+export const getProjectionSchedules = cache(async (): Promise<DbResult<ProjectionSchedule[]>> => {
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -789,8 +789,15 @@ const getProjectionSchedules = cache(async (): Promise<DbResult<ProjectionSchedu
   };
 });
 
-/** A future-dated transaction as the projection reads it, plus its row icon. */
-export type FutureTransaction = ProjectionTransaction & { categoryIcon: string | null };
+/**
+ * A future-dated transaction as the projection reads it, plus its row icon
+ * and its accounts (the same-bill match, lib/sameBill.ts).
+ */
+export type FutureTransaction = ProjectionTransaction & {
+  categoryIcon: string | null;
+  accountId: string;
+  toAccountId: string | null;
+};
 
 // Transactions dated after today that the balance doesn't count yet
 // (v_future_transactions, migration 65) -- the projection counts them on
@@ -800,7 +807,7 @@ export const getFutureTransactions = cache(async (): Promise<DbResult<FutureTran
   const { data, error } = await supabase
     .from("v_future_transactions")
     .select(
-      "transaction_id, kind, description, amount, transaction_date, account_type, to_account_type, counts_later, to_counts_later, category_icon",
+      "transaction_id, kind, description, amount, transaction_date, accountid, account_type, to_accountid, to_account_type, counts_later, to_counts_later, category_icon",
     )
     .order("transaction_date");
   if (error) {
@@ -810,6 +817,7 @@ export const getFutureTransactions = cache(async (): Promise<DbResult<FutureTran
     data: data.flatMap((r): FutureTransaction[] =>
       r.transaction_id !== null &&
       r.transaction_date !== null &&
+      r.accountid !== null &&
       r.account_type !== null &&
       (r.kind === "Income" || r.kind === "Expense" || r.kind === "Transfer")
         ? [
@@ -824,6 +832,8 @@ export const getFutureTransactions = cache(async (): Promise<DbResult<FutureTran
               amount: Number(r.amount ?? 0),
               date: r.transaction_date,
               categoryIcon: r.category_icon,
+              accountId: r.accountid,
+              toAccountId: r.to_accountid,
             },
           ]
         : [],

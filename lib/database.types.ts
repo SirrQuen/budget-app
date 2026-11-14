@@ -665,6 +665,91 @@ export type Database = {
           },
         ]
       }
+      same_bill_answers: {
+        Row: {
+          advanced_to_run_date: string | null
+          answer: string
+          created_at: string
+          id: string
+          occurrence_due_date: string
+          occurrence_run_date: string | null
+          prior_next_amount: number | null
+          prior_next_amount_confirmed_at: string | null
+          recurringid: string
+          transactionid: string
+          userid: string
+        }
+        Insert: {
+          advanced_to_run_date?: string | null
+          answer: string
+          created_at?: string
+          id?: string
+          occurrence_due_date: string
+          occurrence_run_date?: string | null
+          prior_next_amount?: number | null
+          prior_next_amount_confirmed_at?: string | null
+          recurringid: string
+          transactionid: string
+          userid: string
+        }
+        Update: {
+          advanced_to_run_date?: string | null
+          answer?: string
+          created_at?: string
+          id?: string
+          occurrence_due_date?: string
+          occurrence_run_date?: string | null
+          prior_next_amount?: number | null
+          prior_next_amount_confirmed_at?: string | null
+          recurringid?: string
+          transactionid?: string
+          userid?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "same_bill_answers_recurringid_fkey"
+            columns: ["userid", "recurringid"]
+            isOneToOne: false
+            referencedRelation: "recurring_transactions"
+            referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "same_bill_answers_recurringid_fkey"
+            columns: ["userid", "recurringid"]
+            isOneToOne: false
+            referencedRelation: "v_recurring_amounts"
+            referencedColumns: ["userid", "recurring_id"]
+          },
+          {
+            foreignKeyName: "same_bill_answers_recurringid_fkey"
+            columns: ["userid", "recurringid"]
+            isOneToOne: false
+            referencedRelation: "v_upcoming_recurring"
+            referencedColumns: ["userid", "recurring_id"]
+          },
+          {
+            foreignKeyName: "same_bill_answers_transactionid_fkey"
+            columns: ["userid", "transactionid"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "same_bill_answers_transactionid_fkey"
+            columns: ["userid", "transactionid"]
+            isOneToOne: false
+            referencedRelation: "v_future_transactions"
+            referencedColumns: ["userid", "transaction_id"]
+          },
+          {
+            foreignKeyName: "same_bill_answers_userid_fkey"
+            columns: ["userid"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       settings: {
         Row: {
           created_at: string
@@ -1532,6 +1617,20 @@ export type Database = {
           total_spend: number
         }[]
       }
+      clear_different_bill: {
+        Args: { p_recurring_id: string; p_transaction_id: string }
+        Returns: undefined
+      }
+      confirm_same_bill: {
+        Args: {
+          p_from_run_date: string
+          p_recurring_id: string
+          p_to_due_date: string
+          p_to_run_date: string
+          p_transaction_id: string
+        }
+        Returns: string
+      }
       counts_in_balance: {
         Args: {
           p_anchor_date: string
@@ -1585,6 +1684,14 @@ export type Database = {
         Args: { p_recurring_id: string; p_transaction_id: string }
         Returns: boolean
       }
+      record_different_bill: {
+        Args: {
+          p_occurrence_due_date: string
+          p_recurring_id: string
+          p_transaction_id: string
+        }
+        Returns: undefined
+      }
       record_login: {
         Args: never
         Returns: {
@@ -1597,6 +1704,21 @@ export type Database = {
       resolve_recurring_due_date: {
         Args: { anchor: string; offset_days: number; rule: string }
         Returns: string
+      }
+      same_bill_delete_preview: {
+        Args: { p_transaction_ids: string[] }
+        Returns: {
+          occurrence_due_date: string
+          restores: boolean
+          resumes_on: string
+          schedule_name: string
+          transaction_id: string
+          transfer_group_id: string
+        }[]
+      }
+      same_bill_restores: {
+        Args: { p_advanced_to_run_date: string; p_recurring_id: string }
+        Returns: boolean
       }
       seed_default_categories: {
         Args: { p_userid: string }

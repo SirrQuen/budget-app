@@ -15,6 +15,44 @@ import { WalletIcon } from "@/components/ui/icons";
 import { AddTransactionForm, type TransactionAccountOption } from "../../AddTransactionForm";
 import { TransferEditForm } from "./TransferEditForm";
 import { DeleteTransactionButton } from "../../DeleteTransactionButton";
+import { getDifferentBillAnswers, getSameBillDeletePreviews, getSameBillPairs } from "@/lib/db/sameBill";
+import { sameBillDeleteNote } from "@/lib/sameBill";
+import { DifferentBillNote, SameBillQuestion } from "@/components/SameBillQuestion";
+
+// "Is this the same bill?" on the entry's own screen (migration 66): the
+// open question if this entry pairs with a schedule's next occurrence,
+// every "No, keep both" read back with a way to change it, and what a
+// delete will do to a "Yes". `entryId` is the row answers are stored on
+// (a transfer's Expense leg); `ids` every leg. A failed read loses only
+// the question or the note -- the delete trigger still restores when it
+// can.
+async function loadSameBill(entryId: string, ids: string[]) {
+  const [pairs, differents, previews] = await Promise.all([
+    getSameBillPairs(),
+    getDifferentBillAnswers(ids),
+    getSameBillDeletePreviews(ids),
+  ]);
+  const pair = (pairs.data ?? []).find((p) => p.transactionId === entryId) ?? null;
+  const preview = previews.data?.[0];
+  return {
+    section:
+      pair || (differents.data ?? []).length > 0 ? (
+        <div className="flex flex-col gap-2">
+          {pair ? <SameBillQuestion pair={pair} /> : null}
+          {(differents.data ?? []).map((d) => (
+            <DifferentBillNote
+              key={d.recurringId}
+              recurringId={d.recurringId}
+              transactionId={entryId}
+              scheduleName={d.scheduleName}
+              occurrenceDueDate={d.occurrenceDueDate}
+            />
+          ))}
+        </div>
+      ) : null,
+    deleteNote: preview ? sameBillDeleteNote(preview) : undefined,
+  };
+}
 
 // transactions_category_required (see 07_transfers.sql) guarantees categoryid
 // is non-null whenever transfer_group_id is null. Narrowing on that basis
@@ -108,6 +146,7 @@ export default async function EditTransactionPage({
     }
     const fromName = transferAccounts.find((a) => a.id === transfer.fromLeg.accountId)?.account_name;
     const toName = transferAccounts.find((a) => a.id === transfer.toLeg.accountId)?.account_name;
+    const sameBill = await loadSameBill(transfer.fromLeg.id, [transfer.fromLeg.id, transfer.toLeg.id]);
 
     return (
       <div className="flex flex-col gap-6">
@@ -115,6 +154,7 @@ export default async function EditTransactionPage({
           title="Edit transfer"
           description="A transfer moves money between two of your accounts. Both sides change together."
         />
+        {sameBill.section}
         <TransferEditForm transfer={transfer} accounts={transferAccounts} />
         <div className="self-start">
           <DeleteTransactionButton
@@ -125,6 +165,7 @@ export default async function EditTransactionPage({
             transactionDate={tx.transaction_date}
             transferGroupId={transferGroupId}
             transferAccounts={fromName && toName ? { from: fromName, to: toName } : undefined}
+            forecastNote={sameBill.deleteNote}
             redirectToList={true}
             label="Delete this transfer"
           />
@@ -133,11 +174,12 @@ export default async function EditTransactionPage({
     );
   }
 
-  const [incomeCategoriesResult, expenseCategoriesResult, accountsResult, scheduleResult] = await Promise.all([
+  const [incomeCategoriesResult, expenseCategoriesResult, accountsResult, scheduleResult, sameBill] = await Promise.all([
     listCategoriesForType("Income"),
     listCategoriesForType("Expense"),
     listAccounts({ is_active: true }),
     getScheduleSummary(tx.recurringid),
+    loadSameBill(tx.id, [tx.id]),
   ]);
 
   if (
@@ -194,6 +236,7 @@ export default async function EditTransactionPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Edit transaction" description="Update the details of this transaction." />
+      {sameBill.section}
       <AddTransactionForm
         mode="edit"
         initialValues={{
@@ -227,6 +270,7 @@ export default async function EditTransactionPage({
           amount={tx.amount}
           transactionType={tx.transaction_type as TransactionType}
           transactionDate={tx.transaction_date}
+          forecastNote={sameBill.deleteNote}
           redirectToList={true}
           label="Delete transaction"
         />

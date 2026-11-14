@@ -13,6 +13,8 @@ import { InfoIcon } from "@/components/ui/icons";
 import { AddTransactionForm } from "./AddTransactionForm";
 import { TransactionsList } from "./TransactionsList";
 import { FIELD_EDGE } from "@/components/ui/Input";
+import { getSameBillDeletePreviews } from "@/lib/db/sameBill";
+import { sameBillDeleteNotes } from "@/lib/sameBill";
 
 // max-w-full: a <select> sizes to its longest option, so one long category
 // or account name otherwise pushes the card past a 320px viewport.
@@ -86,6 +88,12 @@ export default async function TransactionsPage({
   }
 
   const { transactions, totalCount, truncation } = transactionsResult.data;
+  // Only a linked row can carry a "same bill" answer. A failed read loses
+  // only the note; the delete trigger still restores when it can.
+  const previewsResult = await getSameBillDeletePreviews(
+    transactions.filter((t) => t.recurringid !== null).map((t) => t.id),
+  );
+  const deleteNotes = sameBillDeleteNotes(previewsResult.data ?? []);
   const categories = categoriesResult.data;
   const accounts = accountsResult.data;
   const activeAccounts = accounts.filter((a) => a.is_active);
@@ -261,6 +269,7 @@ export default async function TransactionsPage({
         incomeCategories={incomeCategoriesResult.data}
         expenseCategories={expenseCategoriesResult.data}
         goals={goalsResult.data}
+        deleteNotes={deleteNotes}
       />
     </div>
   );

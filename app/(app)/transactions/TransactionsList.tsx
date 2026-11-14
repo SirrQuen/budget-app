@@ -248,6 +248,7 @@ export function TransactionsList({
   incomeCategories,
   expenseCategories,
   goals,
+  deleteNotes = {},
 }: {
   transactions: TransactionWithRelations[];
   totalCount: number;
@@ -265,6 +266,12 @@ export function TransactionsList({
   expenseCategories: CategoryWithGroup[];
   /** For "Make this recurring" on a transfer -- "Is this for a goal?". */
   goals: GoalOption[];
+  /**
+   * What deleting a row does to a "same bill" answer, keyed by transfer
+   * group or id (sameBillDeleteNotes, lib/sameBill.ts). Said in the delete
+   * confirmation, single or bulk, before anything goes.
+   */
+  deleteNotes?: Record<string, string>;
 }) {
   const { pending } = useOptimisticTransactions();
 
@@ -317,6 +324,9 @@ export function TransactionsList({
   const selectedTotal =
     selectedInfos.reduce((cents, info) => cents + Math.round(info.amount * 100), 0) / 100;
   const selectedTransferCount = selectedInfos.filter((info) => info.transferGroupId !== null).length;
+  const selectedForecastNotes = selectedInfos
+    .map((info) => deleteNotes[info.transferGroupId ?? info.transactionId!])
+    .filter((note): note is string => note !== undefined);
 
   function toggleAll(checked: boolean) {
     setSelected(checked ? new Set(selectableKeys) : new Set());
@@ -621,6 +631,7 @@ export function TransactionsList({
                           transactionType="Expense"
                           transactionDate={row.transaction_date}
                           transferGroupId={row.transferGroupId}
+                          forecastNote={deleteNotes[row.transferGroupId]}
                           redirectToList={false}
                         />
                       </div>
@@ -694,6 +705,7 @@ export function TransactionsList({
                         transactionType={tx.transaction_type as TransactionType}
                         transactionDate={tx.transaction_date}
                         transferGroupId={tx.transfer_group_id}
+                        forecastNote={deleteNotes[tx.transfer_group_id ?? tx.id]}
                         redirectToList={false}
                       />
                     </div>
@@ -708,7 +720,7 @@ export function TransactionsList({
       <ConfirmDialog
         open={confirmOpen}
         title={`Delete ${selected.size} transaction${selected.size === 1 ? "" : "s"} totalling ${formatCurrency(selectedTotal)}?`}
-        description={
+        description={`${
           selectedTransferCount === 0
             ? "This can't be undone -- these transactions will be permanently removed."
             : `This can't be undone -- these transactions will be permanently removed. ${
@@ -716,7 +728,7 @@ export function TransactionsList({
                   ? "1 of these is a transfer"
                   : `${selectedTransferCount} of these are transfers`
               } — ${selectedTransferCount === 1 ? "its matching leg" : "their matching legs"} will also be deleted.`
-        }
+        }${selectedForecastNotes.map((note) => ` ${note}`).join("")}`}
         confirmLabel={isBulkDeleting ? "Deleting…" : "Delete"}
         confirmIcon={<TrashIcon className="h-4 w-4" />}
         cancelLabel="Cancel"

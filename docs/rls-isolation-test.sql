@@ -57,6 +57,10 @@
 --                 link_transaction_to_schedule() (migration 60): B can't
 --                 link A's transaction, link to A's schedule, or learn
 --                 either exists; A can link A's own (the control)
+--   2g Same-bill answers (migration 66)
+--                 confirm_same_bill() and record_different_bill() refuse
+--                 B on A's rows like a made-up id; clear_different_bill()
+--                 as B leaves A's answer; A can answer A's own (the control)
 --
 -- Every "must be 0" read carries a positive control: A must see the
 -- same row the table owner sees. Without it, a 0 from B proves nothing
@@ -194,7 +198,7 @@ select u.k || '_' || v.k,
   from rls_fx u
  cross join (values ('acct','01'), ('invacct','02'), ('txn','03'), ('budget','04'),
                     ('goal','05'), ('contrib','06'), ('invest','07'), ('notif','08'),
-                    ('recur','09'), ('sub','0a')) as v(k, n)
+                    ('recur','09'), ('sub','0a'), ('sba','0b')) as v(k, n)
  where u.k in ('A', 'B');
 
 do $$
@@ -245,6 +249,12 @@ begin
     values (pg_temp.fx(u || '_recur'), uid, pg_temp.fx(u || '_acct'), pg_temp.fx(u || '_rent'),
             'RLS ' || u || ' rent', 1200, 'Monthly', current_date - 3, current_date - 3);
 
+    -- A "No, keep both" (migration 66), written as the table owner: the
+    -- app can only write it through record_different_bill().
+    insert into public.same_bill_answers (id, userid, recurringid, transactionid, answer, occurrence_due_date)
+    values (pg_temp.fx(u || '_sba'), uid, pg_temp.fx(u || '_recur'), pg_temp.fx(u || '_txn'),
+            'different', current_date - 3);
+
     insert into public.subscriptions (id, userid, stripe_customer_id, stripe_subscription_id,
                                       plan, status, renewal_date)
     values (pg_temp.fx(u || '_sub'), uid, 'cus_rls_' || u, 'sub_rls_' || u, 'Pro', 'Active',
@@ -285,6 +295,7 @@ begin
       ('1 reads', 'notifications',          format('userid = %L', a),                            format('userid <> %L', b)),
       ('1 reads', 'profiles',               format('id = %L', a),                                format('id <> %L', b)),
       ('1 reads', 'recurring_transactions', format('userid = %L', a),                            format('userid <> %L', b)),
+      ('1 reads', 'same_bill_answers',      format('userid = %L', a),                            format('userid <> %L', b)),
       ('1 reads', 'settings',               format('userid = %L', a),                            format('userid <> %L', b)),
       ('1 reads', 'subscriptions',          format('userid = %L', a),                            format('userid <> %L', b)),
       ('1 reads', 'transactions',           format('userid = %L', a),                            format('userid <> %L', b)),
@@ -352,6 +363,7 @@ begin
       ('notifications',          'id', pg_temp.fx('A_notif'),    pg_temp.fx('B_notif'),    'userid', 'is_read = true'),
       ('profiles',               'id', a,                        b,                        'id',     'first_name = ''rls-b-was-here'''),
       ('recurring_transactions', 'id', pg_temp.fx('A_recur'),    pg_temp.fx('B_recur'),    'userid', 'description = ''rls-b-was-here'''),
+      ('same_bill_answers',      'id', pg_temp.fx('A_sba'),      pg_temp.fx('B_sba'),      'userid', 'occurrence_due_date = current_date'),
       ('settings',               'id', pg_temp.fx('A_settings'), pg_temp.fx('B_settings'), 'userid', 'currency = ''XXX'''),
       ('subscriptions',          'id', pg_temp.fx('A_sub'),      pg_temp.fx('B_sub'),      'userid', 'plan = ''Premium'''),
       ('transactions',           'id', pg_temp.fx('A_txn'),      pg_temp.fx('B_txn'),      'userid', 'description = ''rls-b-was-here''')
@@ -406,6 +418,7 @@ begin
       ('notifications',          format('insert into public.notifications (userid, title, message, notification_type) values (%L, ''rls'', ''rls'', ''info'')', a)),
       ('profiles',               format('insert into public.profiles (id, first_name, last_name) values (%L, ''rls'', ''rls'')', a)),
       ('recurring_transactions', format('insert into public.recurring_transactions (userid, accountid, categoryid, description, amount, frequency, next_run_date, next_due_date) values (%L, %L, %L, ''rls'', 1, ''Monthly'', current_date + 5, current_date + 5)', a, pg_temp.fx('B_acct'), pg_temp.fx('B_rent'))),
+      ('same_bill_answers',      format('insert into public.same_bill_answers (userid, recurringid, transactionid, answer, occurrence_due_date) values (%L, %L, %L, ''different'', current_date)', a, pg_temp.fx('B_recur'), pg_temp.fx('B_txn'))),
       ('settings',               format('insert into public.settings (userid) values (%L)', a)),
       ('subscriptions',          format('insert into public.subscriptions (userid, stripe_customer_id, stripe_subscription_id, renewal_date) values (%L, ''cus_x'', ''sub_x'', current_date)', a)),
       ('transactions',           format('insert into public.transactions (userid, accountid, categoryid, description, amount, transaction_type, transaction_date) values (%L, %L, %L, ''rls'', 1, ''Expense'', current_date)', a, pg_temp.fx('B_acct'), pg_temp.fx('B_groceries')))
@@ -722,7 +735,12 @@ begin
         format('update public.goal_contributions set goalid = %L where id = %L', pg_temp.fx('A_goal'), pg_temp.fx('B_contrib'))),
       -- Migration 57: a goal's funding transfer must be its own user's.
       ('goals_funding_recurringid_fkey',
-        format('update public.goals set funding_recurringid = %L where id = %L', pg_temp.fx('A_recur'), pg_temp.fx('B_goal')))
+        format('update public.goals set funding_recurringid = %L where id = %L', pg_temp.fx('A_recur'), pg_temp.fx('B_goal'))),
+      -- Migration 66: an answer is about its own user's schedule and entry.
+      ('same_bill_answers_recurringid_fkey',
+        format('insert into public.same_bill_answers (userid, recurringid, transactionid, answer, occurrence_due_date) values (%L, %L, %L, ''different'', current_date)', b, pg_temp.fx('A_recur'), pg_temp.fx('B_txn'))),
+      ('same_bill_answers_transactionid_fkey',
+        format('insert into public.same_bill_answers (userid, recurringid, transactionid, answer, occurrence_due_date) values (%L, %L, %L, ''different'', current_date)', b, pg_temp.fx('B_recur'), pg_temp.fx('A_txn')))
     ) as t(fk, sql)
   loop
     select * into w from pg_temp.try_as(null, r.sql);
@@ -1046,7 +1064,21 @@ begin
       ('public.link_transaction_to_schedule(uuid,uuid)',         'authenticated', true),
       -- The recurring form's side of a goal's funding link (migration 57).
       ('public.set_goal_funding(uuid,uuid)',                     'anon',          false),
-      ('public.set_goal_funding(uuid,uuid)',                     'authenticated', true)
+      ('public.set_goal_funding(uuid,uuid)',                     'authenticated', true),
+      -- "Is this the same bill?" (migration 66). Signed-in only; the
+      -- delete trigger's function is closed like every trigger function.
+      ('public.confirm_same_bill(uuid,uuid,date,date,date)',     'anon',          false),
+      ('public.confirm_same_bill(uuid,uuid,date,date,date)',     'authenticated', true),
+      ('public.record_different_bill(uuid,uuid,date)',           'anon',          false),
+      ('public.record_different_bill(uuid,uuid,date)',           'authenticated', true),
+      ('public.clear_different_bill(uuid,uuid)',                 'anon',          false),
+      ('public.clear_different_bill(uuid,uuid)',                 'authenticated', true),
+      ('public.same_bill_restores(uuid,date)',                   'anon',          false),
+      ('public.same_bill_restores(uuid,date)',                   'authenticated', true),
+      ('public.same_bill_delete_preview(uuid[])',                'anon',          false),
+      ('public.same_bill_delete_preview(uuid[])',                'authenticated', true),
+      ('public.restore_same_bill_occurrence()',                  'anon',          false),
+      ('public.restore_same_bill_occurrence()',                  'authenticated', false)
     ) as t(fn, role, expected)
   loop
     v_actual := has_function_privilege(v_check.role, v_check.fn::regprocedure, 'execute');
@@ -1123,6 +1155,88 @@ begin
   perform pg_temp.rec('2f definer writes', 'link_transaction_to_schedule()',
     'control: A links A''s own transaction to A''s schedule', 'linked',
     coalesce(v_try.state || ': ' || v_try.msg, 'linked: ' || coalesce((select recurringid::text from public.transactions where id = a_tx), 'null')),
+    v_pass);
+end
+$$;
+
+
+-- ---------------------------------------------------------------------
+-- 2g -- Same-bill answers (migration 66)
+--
+-- The three write functions are SECURITY DEFINER, scoped by their own
+-- auth.uid() checks. B aims each at A's schedule and A's entry: confirm
+-- and record must refuse with the made-up id's P0002 and write nothing,
+-- and clear must leave A's "No" where it is. Own rows, made here as the
+-- table owner: a schedule and an entry dated ahead, so a "Yes" is
+-- possible at all. The control (A answers A's own) runs last.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  a uuid := pg_temp.fx('A');
+  b uuid := pg_temp.fx('B');
+  a_tx uuid := gen_random_uuid();
+  a_sched uuid := gen_random_uuid();
+  v_case record;
+  v_try record;
+  v_before_tx text;
+  v_before_sched text;
+  v_before_answers bigint;
+  v_pass boolean;
+begin
+  insert into public.recurring_transactions (id, userid, accountid, categoryid, description,
+                                             amount, frequency, next_run_date, start_date, next_due_date)
+  values (a_sched, a, pg_temp.fx('A_acct'), pg_temp.fx('A_rent'), 'rls same bill', 700, 'Monthly',
+          current_date + 20, current_date + 20, current_date + 20);
+  insert into public.transactions (id, userid, accountid, categoryid, description, amount,
+                                   transaction_type, transaction_date)
+  values (a_tx, a, pg_temp.fx('A_acct'), pg_temp.fx('A_rent'), 'rls same bill', 700, 'Expense', current_date + 20);
+
+  v_before_tx := pg_temp.row_hash('transactions', 'id', a_tx);
+  v_before_sched := pg_temp.row_hash('recurring_transactions', 'id', a_sched);
+  v_before_answers := (select count(*) from public.same_bill_answers where userid = a);
+
+  for v_case in
+    select * from (values
+      ('B: "Yes" on A''s entry and A''s schedule',
+       format('select public.confirm_same_bill(%L, %L, %L, %L, %L)', a_tx, a_sched, current_date + 20, current_date + 50, current_date + 50)),
+      ('B: "No" on A''s entry and A''s schedule',
+       format('select public.record_different_bill(%L, %L, %L)', a_tx, a_sched, current_date + 20)),
+      ('B: "Yes" on a made-up schedule (the oracle baseline)',
+       format('select public.confirm_same_bill(%L, %L, %L, %L, %L)', pg_temp.fx('B_txn'), gen_random_uuid(), current_date, current_date + 30, current_date + 30))
+    ) as t(what, sql)
+  loop
+    select * into v_try from pg_temp.try_as(b, v_case.sql);
+    v_pass := v_try.state = 'P0002'
+      and pg_temp.row_hash('transactions', 'id', a_tx) is not distinct from v_before_tx
+      and pg_temp.row_hash('recurring_transactions', 'id', a_sched) is not distinct from v_before_sched
+      and (select count(*) from public.same_bill_answers where userid = a) = v_before_answers;
+    perform pg_temp.rec('2g same-bill answers', 'confirm_same_bill() / record_different_bill()', v_case.what,
+      'P0002; A''s rows intact', coalesce(v_try.state, 'no error') || coalesce(': ' || v_try.msg, ''), v_pass);
+  end loop;
+
+  -- clear_different_bill() raises nothing for anyone; it must just not reach A's row.
+  select * into v_try from pg_temp.try_as(b, format('select public.clear_different_bill(%L, %L)',
+    pg_temp.fx('A_txn'), pg_temp.fx('A_recur')));
+  v_pass := v_try.state is null
+    and exists (select 1 from public.same_bill_answers where id = pg_temp.fx('A_sba'));
+  perform pg_temp.rec('2g same-bill answers', 'clear_different_bill()', 'B clears A''s "No"',
+    'no error; A''s answer still there',
+    coalesce(v_try.state || ': ' || v_try.msg, 'no error')
+      || case when exists (select 1 from public.same_bill_answers where id = pg_temp.fx('A_sba'))
+              then '; A answer intact' else '; A ANSWER GONE' end,
+    v_pass);
+
+  -- Control: A answers A's own pair -- the refusals above mean something.
+  select * into v_try from pg_temp.try_as(a, format('select public.confirm_same_bill(%L, %L, %L, %L, %L)',
+    a_tx, a_sched, current_date + 20, current_date + 50, current_date + 50));
+  v_pass := v_try.state is null
+    and (select recurringid from public.transactions where id = a_tx) = a_sched
+    and (select answer from public.same_bill_answers where transactionid = a_tx) = 'same';
+  perform pg_temp.rec('2g same-bill answers', 'confirm_same_bill()',
+    'control: A says "Yes" to A''s own pair', 'linked and answered',
+    coalesce(v_try.state || ': ' || v_try.msg,
+             'recurringid ' || coalesce((select recurringid::text from public.transactions where id = a_tx), 'null')
+             || ', answer ' || coalesce((select answer from public.same_bill_answers where transactionid = a_tx), 'none')),
     v_pass);
 end
 $$;

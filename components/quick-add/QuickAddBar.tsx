@@ -23,6 +23,8 @@ import { Amount } from "@/components/ui/Amount";
 import { Button } from "@/components/ui/Button";
 import { Celebration } from "@/components/ui/Celebration";
 import { SaveNote, useSaveNote } from "@/components/ui/SaveNote";
+import { SameBillQuestion } from "@/components/SameBillQuestion";
+import type { SameBillPair } from "@/lib/sameBill";
 import { useConfirmPulse } from "@/components/ui/ConfirmPulse";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { FullFormOverlay } from "@/components/quick-add/FullFormOverlay";
@@ -68,6 +70,9 @@ export function QuickAddBar({
   const celebrateTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const pendingClientIdRef = useRef<string | null>(null);
   const [saveNote, showSaveNote] = useSaveNote();
+  // "Is this the same bill?" after a save that matches a schedule's next
+  // occurrence (lib/sameBill.ts) -- until answered or put off.
+  const [sameBillPair, setSameBillPair] = useState<SameBillPair | null>(null);
   // Guards against a second Enter-triggered submit landing before React has
   // re-rendered with pending=true -- useActionState's `pending` is only
   // current as of the last commit, so a same-tick double Enter can race it.
@@ -187,6 +192,7 @@ export function QuickAddBar({
       setCelebrateIcon(icon);
       setCelebrate(true);
       showSaveNote(state?.note ?? null);
+      setSameBillPair(state?.sameBill ?? null);
       // Fires only on user-initiated create. A recurring confirmation has
       // its own sheet and its own pulse, never this one.
       pulse(isIncome ? "income" : "default");
@@ -256,8 +262,9 @@ export function QuickAddBar({
     setFullFormOpen(true);
   }
 
-  function handleFullFormSaved(note: string | null) {
+  function handleFullFormSaved(note: string | null, sameBill?: SameBillPair) {
     showSaveNote(note);
+    setSameBillPair(sameBill ?? null);
     setFullFormOpen(false);
     setText("");
     setSheetOpen(false);
@@ -468,6 +475,14 @@ export function QuickAddBar({
       <div className="pointer-events-none fixed inset-x-4 bottom-24 z-50 flex flex-col items-center gap-2 md:bottom-6">
         <Celebration show={celebrate} message={celebrateMessage} icon={celebrateIcon} />
         <SaveNote message={saveNote} />
+        {sameBillPair ? (
+          <SameBillQuestion
+            key={sameBillPair.transactionId}
+            pair={sameBillPair}
+            onDismiss={() => setSameBillPair(null)}
+            className="pointer-events-auto w-full max-w-md bg-surface shadow-lg"
+          />
+        ) : null}
       </div>
 
       {fullFormOpen ? (
