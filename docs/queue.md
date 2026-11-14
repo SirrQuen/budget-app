@@ -23,13 +23,7 @@ wait on Matt's ruling, in this order.
    2026-11-14 (see Done). The rest of "every number is a door" is under
    Deferred.
 5. ~~#5 export~~ -- deployed 2026-11-14 (see Done).
-6. **#5 import** -- built 2026-11-14, merged to local `main` as `a3f507a`, NOT pushed (spec
-   docs/Import-CSV.md, migration 68 on sorrel-dev). **Not deployed.**
-   Waiting on: Matt running `docs/import-test.sql` and
-   `docs/rls-isolation-test.sql` on dev, a walk-through of the flow, the
-   merge, then the tester email (the privacy policy changes with it --
-   draft: docs/tester-notes/2026-11-16-import.md). Never push to production
-   before that email is sent.
+6. ~~#5 import~~ -- deployed 2026-11-14 (see Done).
 7. ~~#6 — dashboard layout~~ -- deployed 2026-11-14 (see Done).
 
 ## Launch blockers still open
@@ -76,6 +70,22 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 ## Done, still named in conversation
 
 Listed so they aren't queued again.
+
+- **Transaction import (#5 import).** Merged to main 2026-11-14 (`a3f507a`,
+  `feat/import-csv`); migration 68 on sorrel-dev and production;
+  deployed 2026-11-14. CSV only, parsed in the browser (PapaParse 5.7.1,
+  pinned exactly; 5 MB and 5,000-row caps); the file is never uploaded and
+  its name never kept. The preview shows the balance change from the
+  database's rule (`import_preview` -> `counts_in_balance`); one atomic
+  function writes the confirmed rows, one atomic function undoes the batch
+  (Settings > Import). Required, no-default answers: money-out sign,
+  ambiguous dates, the pre-anchor question, a category for each group of
+  unmatched rows (the schema needs one), and "Is this the same bill?" for
+  each row that matches a queue occurrence. Tester note:
+  docs/tester-notes/2026-11-16-import.md (the privacy policy changed with
+  it). Checked on production by `docs/import-production-check.sql`
+  (read-only). Not built: the same-bill question for hand-entered past
+  rows, and `.xlsx` (both under Deferred).
 
 - **Dashboard layout (#6).** Fast-forwarded to main 2026-11-14
   (`0a40d65`, `feat/dashboard-layout`); deployed 2026-11-14. Testers
