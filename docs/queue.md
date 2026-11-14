@@ -23,7 +23,7 @@ wait on Matt's ruling, in this order.
    2026-11-14 (see Done). The rest of "every number is a door" is under
    Deferred.
 5. ~~#5 export~~ -- deployed 2026-11-14 (see Done).
-6. **#5 import** -- built 2026-11-14 on `feat/import-csv` (spec
+6. **#5 import** -- built 2026-11-14, merged to local `main` as `a3f507a`, NOT pushed (spec
    docs/Import-CSV.md, migration 68 on sorrel-dev). **Not deployed.**
    Waiting on: Matt running `docs/import-test.sql` and
    `docs/rls-isolation-test.sql` on dev, a walk-through of the flow, the
