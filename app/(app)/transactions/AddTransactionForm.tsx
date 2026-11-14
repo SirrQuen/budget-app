@@ -26,6 +26,8 @@ import { PaymentNote } from "@/components/PaymentNote";
 import { paymentPayee } from "@/lib/accountOptions";
 import { Celebration } from "@/components/ui/Celebration";
 import { SaveNote, useSaveNote } from "@/components/ui/SaveNote";
+import { SameBillQuestion } from "@/components/SameBillQuestion";
+import type { SameBillPair } from "@/lib/sameBill";
 import { useConfirmPulse } from "@/components/ui/ConfirmPulse";
 import {
   PreAnchorQuestion,
@@ -149,7 +151,7 @@ export function AddTransactionForm({
   /** Embedded mode only: called once the create-success celebration
    * finishes, with the save's note (lib/whatsAhead.ts figureUnchangedNote)
    * for the caller to show -- this form unmounts with its overlay. */
-  onSaved?: (note: string | null) => void;
+  onSaved?: (note: string | null, sameBill?: SameBillPair) => void;
 }) {
   const isEdit = mode === "edit";
   const today = useToday();
@@ -193,6 +195,10 @@ export function AddTransactionForm({
   const [celebrateMessage, setCelebrateMessage] = useState("Logged");
   const [celebrateIcon, setCelebrateIcon] = useState<React.ReactNode>("✓");
   const [saveNote, showSaveNote] = useSaveNote();
+  // "Is this the same bill?" after saving an entry that matches a
+  // schedule's next occurrence (lib/sameBill.ts). Stays until answered or
+  // put off; the next save replaces it.
+  const [sameBillPair, setSameBillPair] = useState<SameBillPair | null>(null);
   const pulse = useConfirmPulse();
   const formRef = useRef<HTMLFormElement>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
@@ -322,14 +328,18 @@ export function AddTransactionForm({
       setCelebrate(true);
       // In an overlay the note goes to the caller, which outlives it.
       const note = state?.note ?? null;
-      if (!onSaved) showSaveNote(note);
+      const sameBill = state?.sameBill;
+      if (!onSaved) {
+        showSaveNote(note);
+        setSameBillPair(sameBill ?? null);
+      }
       // Fires only on user-initiated create. A recurring confirmation has
       // its own sheet and its own pulse, never this one.
       pulse(loggedType === "Income" ? "income" : "default");
       clearTimeout(celebrateTimeout.current);
       celebrateTimeout.current = setTimeout(() => {
         setCelebrate(false);
-        onSaved?.(note);
+        onSaved?.(note, sameBill);
       }, 1600);
     }
     wasPending.current = pending;
@@ -672,6 +682,10 @@ export function AddTransactionForm({
           {pending ? "Saving…" : isEdit ? "Save changes" : "Add transaction"}
         </Button>
       </form>
+
+      {!isEdit && sameBillPair ? (
+        <SameBillQuestion key={sameBillPair.transactionId} pair={sameBillPair} onDismiss={() => setSameBillPair(null)} />
+      ) : null}
 
       {isEdit ? null : (
         <div className="pointer-events-none fixed inset-x-4 bottom-6 z-50 flex flex-col items-center gap-2">

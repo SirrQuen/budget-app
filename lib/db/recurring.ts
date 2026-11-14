@@ -715,6 +715,75 @@ export async function skipOccurrence(
   return { data: claim.data ? "answered" : "already_answered", error: null };
 }
 
+// "Is this the same bill?" -- Yes (migration 66). The entry becomes this
+// occurrence: linked, and the schedule steps past it in the same call, so
+// the bill counts once and the queue doesn't ask on the day. The next
+// cycle is computed here, by the same cadence and business-day code as
+// "Not happening" (advanceOneCycle) -- one implementation of schedule
+// math; confirm_same_bill() only claims and writes. The pair itself is
+// checked by the caller against lib/sameBill.ts before this runs.
+export type SameBillOutcome = "answered" | "already_answered" | "not_ahead" | "not_linkable";
+
+export async function confirmSameBill(
+  recurringId: string,
+  transactionId: string,
+  dueDate: string,
+): Promise<DbResult<SameBillOutcome>> {
+  const supabase = await createClient();
+
+  const read = await readOpenOccurrence(supabase, recurringId, dueDate);
+  if (read.error !== null) return read;
+  if (read.data === null) return { data: "already_answered", error: null };
+  const s = read.data;
+
+  const toRunDate = nextOccurrenceISO(s.next_run_date, s.frequency, s.interval_count, s.start_date ?? s.next_run_date);
+  const toDueDate = await computeNextDueDate(toRunDate, s.business_day_offset, s.non_business_day_rule);
+
+  const { data, error } = await supabase.rpc("confirm_same_bill", {
+    p_transaction_id: transactionId,
+    p_recurring_id: recurringId,
+    p_from_run_date: s.next_run_date,
+    p_to_run_date: toRunDate,
+    p_to_due_date: toDueDate,
+  });
+  if (error) {
+    return { data: null, error: describeWriteError(error, "recurring") };
+  }
+  const outcome = data as SameBillOutcome;
+  return { data: outcome, error: null };
+}
+
+// "No, keep both": remembered, so the pair is never asked again.
+export async function recordDifferentBill(
+  recurringId: string,
+  transactionId: string,
+  dueDate: string,
+): Promise<DbResult<null>> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("record_different_bill", {
+    p_transaction_id: transactionId,
+    p_recurring_id: recurringId,
+    p_occurrence_due_date: dueDate,
+  });
+  if (error) {
+    return { data: null, error: describeWriteError(error, "recurring") };
+  }
+  return { data: null, error: null };
+}
+
+// "Change your answer" on a "No": the pair is asked again if it still matches.
+export async function clearDifferentBill(recurringId: string, transactionId: string): Promise<DbResult<null>> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("clear_different_bill", {
+    p_transaction_id: transactionId,
+    p_recurring_id: recurringId,
+  });
+  if (error) {
+    return { data: null, error: describeWriteError(error, "recurring") };
+  }
+  return { data: null, error: null };
+}
+
 // "Confirm all as expected": exactly the items the user was shown, each
 // confirmed once at its predicted date and amount -- one cycle per
 // schedule per press, never a catch-up. Sequential and independent: one

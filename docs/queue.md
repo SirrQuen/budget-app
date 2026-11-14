@@ -5,12 +5,36 @@ lives in its findings entry (docs/phase-7-findings.md) or spec. "Do this
 next" means editing this file. Launch blockers live in the findings'
 authoritative list, not here.
 
-Last updated 2026-11-10.
+Last updated 2026-11-13.
 
 ## Next
 
-Nothing set. Matt picks the next item from Deferred or the launch
-blockers.
+In this order. Spec for all six: docs/Views-Search-Import-Layout.md.
+Phase 1 report given 2026-11-13; Phase 2 waits on Matt's ruling.
+
+1. **#4 — one bill shown twice, "(fixed)" and "(as entered)".**
+   Confirmed 2026-11-13: a schedule occurrence and an unlinked
+   future-dated transaction for the same bill, both subtracted in the
+   projection. 5 pairs, one user, production. The pair question ("Is this
+   the same bill?"). Note: linking alone (migration 60) does not stop the
+   double count -- it sets recurringid but doesn't advance the schedule,
+   and v_future_transactions doesn't exclude linked rows. "Yes" must also
+   settle that occurrence. **Built 2026-11-14 on `feat/same-bill-pair`
+   (migration 66)**; waiting on Matt's dev push, `npm run types:dev`,
+   docs/same-bill-test.sql and docs/rls-isolation-test.sql.
+2. **Safe-to-Spend-Why** -- shipped 2026-11-10 (see Done). Only its
+   edit-path after-save note remains, and it stays deferred (below); it is
+   still ahead of every feature from 3 on if Matt pulls it forward.
+3. **#3 — account name on Coming up lines**, both ends for a transfer.
+4. **#1 + #2 — account pages (`/accounts/[id]`) and search**: one
+   filterable transaction list, filters in the URL. "Every number is a
+   door": the first three links ship with it, the rest are queued under
+   Deferred once it lands.
+5. **#5 export** -- CSV from Settings, formula-injection guard, terms
+   and privacy wording.
+6. **#5 import** -- its own spec first. Not built until then.
+7. **#6 — dashboard layout**, scoped down: reorder and hide, hero
+   pinned. Ask first whether a tester asked for it.
 
 ## Launch blockers still open
 
@@ -29,6 +53,7 @@ aren't struck through.
 
 | Item | Recorded | Decide or do when | Where |
 |---|---|---|---|
+| Occurrences "filled" by a linked row, derived on read: the projection, Upcoming and the queue each treat an occurrence as filled while a linked row sits in its window, and the queue walks past filled cycles. The eventual shape for #4's "Yes"; v1 links and advances the cursor in one SQL function instead (ruled 2026-11-14: the derived form rewrites three readers and the queue cursor mid-beta) | 2026-11-14 | After the beta | docs/Views-Search-Import-Layout.md, item 4 |
 | Budget progress counts future-dated transactions, but the balance doesn't (budget vs balance) | 2026-11-10 | Before commercial launch | Findings, same title |
 | After-save "doesn't change your figure" note on the edit paths | 2026-11-10 | Unscheduled (the create-path note shipped 2026-11-10) | docs/Safe-to-Spend-Why.md, "What it costs" |
 | Amount window with a lead time (1c): optional update of a variable amount before it's due, in the queue | not dated in the repo | Unscheduled | docs/Recurring-Amounts-and-Transfer-Editing.md, 1c. **No findings entry yet**: needs one with the dates it was raised |

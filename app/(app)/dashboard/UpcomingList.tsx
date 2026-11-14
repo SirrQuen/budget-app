@@ -15,6 +15,8 @@ import {
 import { ConfirmVariableAmountSheet, type VariableAmountTarget } from "../recurring/ConfirmVariableAmountSheet";
 import { INLINE_ACTION, UnconfirmedIncomeNote } from "./UnconfirmedIncomeNote";
 import { AmountBasisTag } from "@/components/AmountBasisTag";
+import { SameBillQuestion } from "@/components/SameBillQuestion";
+import type { SameBillPair } from "@/lib/sameBill";
 
 /** Per-schedule display details the projection doesn't carry. */
 export type UpcomingScheduleMeta = {
@@ -39,6 +41,7 @@ export function UpcomingList({
   unconfirmedIncome,
   schedules,
   futureTransactions,
+  sameBillPairs = [],
 }: {
   data: UpcomingOccurrences;
   /** The projection's missed paychecks -- what a "missed" row describes. */
@@ -46,6 +49,11 @@ export function UpcomingList({
   schedules: Record<string, UpcomingScheduleMeta>;
   /** Per one-off future transaction, by id -- never a confirm action. */
   futureTransactions: Record<string, UpcomingScheduleMeta>;
+  /**
+   * A schedule's occurrence and an entry for the same bill (lib/sameBill.ts):
+   * shown together, once, with the question -- never as two unrelated rows.
+   */
+  sameBillPairs?: SameBillPair[];
 }) {
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
@@ -53,6 +61,43 @@ export function UpcomingList({
   const inWindow = data.items.filter((i) => i.date <= data.windowEnd);
   const later = data.items.length - inWindow.length;
   const shown = expanded ? data.items : inWindow;
+
+  // Either half of a pair, by the item it is: a schedule's occurrence by
+  // schedule and due date, an entry by its id.
+  const pairOf = (item: UpcomingOccurrence): SameBillPair | undefined =>
+    sameBillPairs.find((p) =>
+      item.recurringId !== null
+        ? p.recurringId === item.recurringId && p.dueDate === item.dueDate
+        : p.transactionId === item.transactionId,
+    );
+  const metaOf = (item: UpcomingOccurrence) =>
+    item.recurringId !== null
+      ? schedules[item.recurringId]
+      : item.transactionId !== null
+        ? futureTransactions[item.transactionId]
+        : undefined;
+  // The pair sits where its first half would; the second half is skipped.
+  const placed = new Set<SameBillPair>();
+  const rows = shown.flatMap((item) => {
+    if (item.status === "missed") {
+      return [<MissedRow key={item.key} item={item} unconfirmedIncome={unconfirmedIncome} />];
+    }
+    const pair = pairOf(item);
+    if (pair === undefined) {
+      return [<OccurrenceRow key={item.key} item={item} meta={metaOf(item)} />];
+    }
+    if (placed.has(pair)) return [];
+    placed.add(pair);
+    const halves = data.items.filter((i) => i.status !== "missed" && pairOf(i) === pair);
+    return [
+      <li key={`pair-${pair.recurringId}-${pair.transactionId}`} className="flex flex-col gap-1 py-2.5 text-sm">
+        {halves.map((half) => (
+          <OccurrenceBody key={half.key} item={half} meta={metaOf(half)} />
+        ))}
+        <SameBillQuestion pair={pair} className="mt-1" />
+      </li>,
+    ];
+  });
 
   return (
     <section className="rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
@@ -79,25 +124,7 @@ export function UpcomingList({
             Nothing due in the next {UPCOMING_DEFAULT_DAYS} days.
           </p>
         ) : (
-          <ul className="divide-y divide-hairline">
-            {shown.map((item) =>
-              item.status === "missed" ? (
-                <MissedRow key={item.key} item={item} unconfirmedIncome={unconfirmedIncome} />
-              ) : (
-                <OccurrenceRow
-                  key={item.key}
-                  item={item}
-                  meta={
-                    item.recurringId !== null
-                      ? schedules[item.recurringId]
-                      : item.transactionId !== null
-                        ? futureTransactions[item.transactionId]
-                        : undefined
-                  }
-                />
-              ),
-            )}
-          </ul>
+          <ul className="divide-y divide-hairline">{rows}</ul>
         )}
       </div>
 
@@ -135,10 +162,18 @@ function MissedRow({
 }
 
 function OccurrenceRow({ item, meta }: { item: UpcomingOccurrence; meta: UpcomingScheduleMeta | undefined }) {
+  return (
+    <li className="flex flex-col gap-1 py-2.5 text-sm">
+      <OccurrenceBody item={item} meta={meta} />
+    </li>
+  );
+}
+
+function OccurrenceBody({ item, meta }: { item: UpcomingOccurrence; meta: UpcomingScheduleMeta | undefined }) {
   const confirm = meta?.confirm && meta.confirm.dueDate === item.dueDate ? meta.confirm : null;
 
   return (
-    <li className="flex flex-col gap-1 py-2.5 text-sm">
+    <>
       <div className="flex items-center gap-3">
         {meta?.isTransfer ? (
           <TransferIcon className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
@@ -184,6 +219,6 @@ function OccurrenceRow({ item, meta }: { item: UpcomingOccurrence; meta: Upcomin
           />
         </div>
       ) : null}
-    </li>
+    </>
   );
 }

@@ -1,5 +1,7 @@
 "use server";
 
+import { getSameBillPairs } from "@/lib/db/sameBill";
+import type { SameBillPair } from "@/lib/sameBill";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -49,6 +51,12 @@ export type ActionState =
        * (figureUnchangedNote, lib/whatsAhead.ts) -- says so, and why.
        */
       note?: string;
+      /**
+       * Set when a future-dated entry just saved matches a schedule's next
+       * occurrence (lib/sameBill.ts): the cheapest moment to ask "Is this
+       * the same bill?". Nothing has been linked -- the form asks.
+       */
+      sameBill?: SameBillPair;
     }
   | undefined;
 
@@ -181,8 +189,30 @@ async function afterTransactionCreated(saved: { id: string; transaction_date: st
   // reflect it without a manual refresh.
   revalidatePath("/accounts");
   const [milestone, note] = await Promise.all([detectTransactionMilestone(), figureNote(saved)]);
-  if (!milestone && !note) return undefined;
-  return { ...(milestone ? { milestone } : {}), ...(note ? { note } : {}) };
+  // After figureNote: both read the same cache()d schedules and future rows.
+  const sameBill = await sameBillAfterSave(saved);
+  if (!milestone && !note && !sameBill) return undefined;
+  return {
+    ...(milestone ? { milestone } : {}),
+    ...(note ? { note } : {}),
+    ...(sameBill ? { sameBill } : {}),
+  };
+}
+
+// "Is this the same bill?" at entry time (migration 66). Only a row dated
+// after today can pair with an occurrence. The save has already succeeded:
+// a failure here is silence -- Upcoming still asks.
+async function sameBillAfterSave(saved: { id: string; transaction_date: string }[]): Promise<SameBillPair | undefined> {
+  try {
+    const today = await getToday();
+    if (!saved.some((r) => r.transaction_date > today)) return undefined;
+    const pairs = await getSameBillPairs();
+    if (pairs.error !== null) return undefined;
+    const ids = new Set(saved.map((r) => r.id));
+    return pairs.data.find((p) => ids.has(p.transactionId));
+  } catch {
+    return undefined;
+  }
 }
 
 // docs/Safe-to-Spend-Why.md, "After a save". Only a row dated after today

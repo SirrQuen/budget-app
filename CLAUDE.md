@@ -903,6 +903,22 @@ the sheet instead; Confirm all leaves those items and says how many
   rows only -- never a same-amount, same-day match on unlinked rows: two
   $5 coffees on a Tuesday aren't a duplicate, and a warning that cries
   wolf gets dismissed by reflex.
+- **"Is this the same bill?" is the one exception, and it asks.** A
+  schedule's NEXT occurrence and an unlinked entry dated after today,
+  same account (both ends for a transfer), direction and exact amount,
+  dated within the schedule's tolerance, are both counted by the forecast
+  (migration 65) -- one bill twice. `lib/sameBill.ts` is THE match;
+  Upcoming, the after-save question and the answer's server check all
+  read it. Never auto-merge. "Yes" is `confirm_same_bill()` (migration
+  66): links the entry AND steps the schedule past the occurrence in one
+  call -- linking alone counts it twice and asks on the day. "No" is a
+  row in `same_bill_answers`, never asked again, always reversible
+  ("Change your answer" on the entry). Deleting a "Yes" entry puts the
+  occurrence back (`trg_transactions_restore_same_bill`) while
+  `same_bill_restores()` holds; otherwise the delete confirmation says
+  the bill leaves the forecast and when the schedule picks up. Checked by
+  `docs/same-bill-test.sql`. The eventual shape -- "filled" derived on
+  read, no cursor step -- is deferred in `docs/queue.md`.
 - `recurring_tx_no_double_post`, unique on
   `(recurringid, transaction_date, transaction_type)` (migration 19), still
   stands: a schedule can't have two transactions of one type on one date.

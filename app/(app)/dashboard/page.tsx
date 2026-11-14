@@ -38,6 +38,7 @@ import { AccountActivity } from "./AccountActivity";
 import { GoalMeters } from "./GoalMeters";
 import { UpcomingList, type UpcomingScheduleMeta } from "./UpcomingList";
 import { buildUpcomingOccurrences } from "@/lib/upcomingOccurrences";
+import { getSameBillPairs } from "@/lib/db/sameBill";
 import { SectionError } from "./SectionError";
 import { LoadError } from "@/components/ui/LoadError";
 import { NoAccountsView, NoTransactionsView } from "./DashboardOnboarding";
@@ -84,6 +85,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     netWorthResult,
     lastLoggedResult,
     futureResult,
+    sameBillResult,
   ] = await Promise.all([
     greetingPromise,
     // Decided when the session started -- see lib/auth/firstSession.ts.
@@ -104,6 +106,9 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     getAccountLastLogged(),
     // cache()d -- the same rows getSafeToSpend counted, for their icons.
     getFutureTransactions(),
+    // A schedule's occurrence and an entry for the same bill: asked, in
+    // Upcoming, where both would otherwise be listed (lib/sameBill.ts).
+    getSameBillPairs(),
   ]);
 
   // A failed profile read just means no name -- "Welcome back" alone.
@@ -400,6 +405,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
                 unconfirmedIncome={safeToSpendResult.data?.unconfirmedIncome ?? []}
                 schedules={upcomingSchedules}
                 futureTransactions={upcomingFuture}
+                // A failed read only loses the question; both rows still show.
+                sameBillPairs={sameBillResult.data ?? []}
               />
             ) : null}
             {/* "Last logged 12 days ago", per account -- a fact, never a nudge. */}
