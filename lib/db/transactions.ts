@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/errors";
+import { buildSearchOr, escapeLike, MAX_SEARCH_LENGTH } from "@/lib/transactionFilters";
 import { NO_ANCHOR_ANSWER, type AnchorAnswerColumns, type AnchorPreview } from "@/lib/anchorAnswer";
 
 type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"];
@@ -36,6 +37,11 @@ export type ListTransactionsOptions = {
   transfersOnly?: boolean;
   /** Only rows that don't belong to a transfer group. */
   excludeTransfers?: boolean;
+  /**
+   * Free-text search: description, notes, category name, account name, or an
+   * exact amount. Composes with every other filter. Server-side.
+   */
+  q?: string;
   /** 1-indexed. Defaults to 1. */
   page?: number;
 };
@@ -143,6 +149,30 @@ export async function listTransactions(
   if (opts.transaction_type) {
     keyQuery = keyQuery.eq("transaction_type", opts.transaction_type);
   }
+  const q = opts.q?.trim().slice(0, MAX_SEARCH_LENGTH);
+  if (q) {
+    // Category and account names live in other tables: find which ones
+    // matched, then filter this table by their ids alongside its own
+    // columns. Both lookups are RLS-scoped to the person's own rows.
+    const pattern = `%${escapeLike(q)}%`;
+    const [categoriesRes, accountsRes] = await Promise.all([
+      supabase.from("categories").select("id").ilike("category_name", pattern),
+      supabase.from("accounts").select("id").ilike("account_name", pattern),
+    ]);
+    if (categoriesRes.error) {
+      return { data: null, error: describeReadError(categoriesRes.error, "transactions") };
+    }
+    if (accountsRes.error) {
+      return { data: null, error: describeReadError(accountsRes.error, "transactions") };
+    }
+    keyQuery = keyQuery.or(
+      buildSearchOr(
+        q,
+        categoriesRes.data.map((c) => c.id),
+        accountsRes.data.map((a) => a.id),
+      ),
+    );
+  }
   if (opts.transfersOnly) {
     keyQuery = keyQuery.not("transfer_group_id", "is", null);
   }
@@ -176,7 +206,28 @@ export async function listTransactions(
   const totalCount = unitKeys.length;
 
   const from = (page - 1) * TRANSACTIONS_PAGE_SIZE;
-  const pageIds = unitKeys.slice(from, from + TRANSACTIONS_PAGE_SIZE).flatMap((key) => idsByUnit.get(key)!);
+  const pageUnitKeys = unitKeys.slice(from, from + TRANSACTIONS_PAGE_SIZE);
+  const pageIds = pageUnitKeys.flatMap((key) => idsByUnit.get(key)!);
+
+  // A filter on account, category or text can match only ONE leg of a
+  // transfer (the Expense leg sits on the source account, the Income leg on
+  // the destination). A transfer is one thing with two legs, so a unit on
+  // this page brings both -- the list shows "Checking -> Visa", never half.
+  const transferGroupIds = new Set(
+    keyRows.flatMap((r) => (r.transfer_group_id ? [r.transfer_group_id] : [])),
+  );
+  const pageGroupIds = pageUnitKeys.filter((key) => transferGroupIds.has(key));
+  if (pageGroupIds.length > 0) {
+    const { data: legRows, error: legError } = await supabase
+      .from("transactions")
+      .select("id")
+      .in("transfer_group_id", pageGroupIds);
+    if (legError) {
+      return { data: null, error: describeReadError(legError, "transactions") };
+    }
+    const have = new Set(pageIds);
+    for (const leg of legRows) if (!have.has(leg.id)) pageIds.push(leg.id);
+  }
 
   // Past the last page (a stale bookmark, or rows deleted since) -- nothing
   // to fetch, but still a real totalCount rather than a DB error.

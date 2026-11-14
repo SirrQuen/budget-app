@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { AccountForm } from "./AccountForm";
 import { archiveAccountAction } from "@/lib/actions/accounts";
@@ -99,7 +100,12 @@ export function AccountRow({
         <div className="flex min-w-0 flex-1 flex-col items-start gap-1 sm:contents">
           <div className="min-w-0 max-w-full">
             <div className="flex items-center gap-2">
-              <span className="min-w-0 break-words text-sm font-medium text-ink sm:truncate">{account.account_name}</span>
+              <Link
+                href={`/accounts/${account.account_id}`}
+                className="min-w-0 break-words text-sm font-medium text-ink sm:truncate rounded underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+              >
+                {account.account_name}
+              </Link>
               {!account.is_active ? (
                 <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
                   Archived

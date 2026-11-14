@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { CategoryForm } from "./CategoryForm";
 import { archiveCategoryAction } from "@/lib/actions/categories";
@@ -9,6 +10,7 @@ import type { CategoryActivity, CategoryWithGroup } from "@/lib/db/categories";
 import { categoryColorVar } from "@/lib/categoryOptions";
 import { formatCurrency } from "@/lib/format";
 import { callAction } from "@/components/useActionForm";
+import { buildListHref } from "@/lib/transactionFilters";
 
 export function CategoryRow({
   category,
@@ -74,7 +76,12 @@ export function CategoryRow({
               aria-hidden="true"
             />
             <CategoryIcon icon={category.icon} className="h-4 w-4 shrink-0 text-ink-secondary" />
-            <span className="min-w-0 break-words text-sm font-medium text-ink sm:truncate">{category.category_name}</span>
+            <Link
+              href={buildListHref("/transactions", { categoryid: category.id })}
+              className="min-w-0 break-words text-sm font-medium text-ink sm:truncate rounded underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            >
+              {category.category_name}
+            </Link>
             {!category.is_active ? (
               <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
                 Archived

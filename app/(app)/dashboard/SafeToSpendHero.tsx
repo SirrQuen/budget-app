@@ -78,11 +78,20 @@ function subline(data: SafeToSpend): string {
   )} sits inside your ${formatCurrency(data.cushion)} cushion.`;
 }
 
+// "Every number is a door": an item in the breakdown opens what it is -- its
+// schedule on the recurring page, or the one-off transaction itself.
+function sourceHref(c: SafeToSpendCommitment): string {
+  return c.recurringId !== null ? `/recurring#schedule-${c.recurringId}` : `/transactions/${c.transactionId}/edit`;
+}
+
 function ObligationRow({ c, indent = false }: { c: SafeToSpendCommitment; indent?: boolean }) {
   return (
     <div className={`flex items-baseline justify-between gap-4 ${indent ? "pl-4 text-xs" : ""}`}>
       <dt className="min-w-0 break-words text-ink-secondary sm:truncate">
-        {c.name} <span className="text-ink-muted">· {formatDateShort(c.date)}</span>{" "}
+        <Link href={sourceHref(c)} className="rounded underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
+          {c.name}
+        </Link>{" "}
+        <span className="text-ink-muted">· {formatDateShort(c.date)}</span>{" "}
         <AmountBasisTag basis={c.basis} />
       </dt>
       <dd className="shrink-0 font-medium tabular-nums text-ink">{formatCurrency(c.amount)}</dd>
@@ -242,7 +251,11 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
                 reads as wrong. Facts only, in ink. */}
             {data.drawnFrom.map((a) => (
               <div key={a.id} className="flex items-baseline justify-between gap-4 pl-4 text-xs">
-                <dt className="min-w-0 break-words text-ink-secondary sm:truncate">{a.name}</dt>
+                <dt className="min-w-0 break-words text-ink-secondary sm:truncate">
+                  <Link href={`/accounts/${a.id}`} className="rounded underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
+                    {a.name}
+                  </Link>
+                </dt>
                 <dd className="shrink-0 font-medium tabular-nums text-ink">{formatCurrency(a.balance)}</dd>
               </div>
             ))}
@@ -250,7 +263,14 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
               <div className="flex items-baseline justify-between gap-4 pl-4 text-xs">
                 <dt className="shrink-0 text-ink-muted">Not counted</dt>
                 <dd className="min-w-0 break-words text-right text-ink-muted">
-                  {data.notCounted.map((a) => a.name).join(", ")}
+                  {data.notCounted.map((a, i) => (
+                    <span key={a.id}>
+                      {i > 0 ? ", " : ""}
+                      <Link href={`/accounts/${a.id}`} className="rounded underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
+                        {a.name}
+                      </Link>
+                    </span>
+                  ))}
                 </dd>
               </div>
             ) : null}

@@ -239,3 +239,24 @@ export async function getAccountLastLogged(): Promise<DbResult<Map<string, strin
 
   return { data: new Map(data.map((r) => [r.account_id, r.last_logged_on])), error: null };
 }
+
+// One account's balance, from the same view as the list -- never a sum of
+// the transactions on screen. null data means no such account (or not
+// yours): a normal answer for a stale link, not an error.
+export async function getAccountBalance(
+  id: string,
+): Promise<DbResult<AccountBalanceRow | null>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("v_account_balances")
+    .select("*")
+    .eq("account_id", id)
+    .maybeSingle();
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "accounts") };
+  }
+
+  return { data, error: null };
+}
