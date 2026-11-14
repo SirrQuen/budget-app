@@ -2332,3 +2332,56 @@ Raised:
    November didn't move the figure, and that was reported as a production
    bug ("Not a defect: safe to spend's low point 'in the past'", above).
    First time it was written down.
+
+## Import: findings and accepted risks (2026-11-14)
+
+**Status: import is built on `feat/import-csv` and not deployed. These are
+what building it turned up.** Spec: docs/Import-CSV.md.
+
+### Accepted risk: a person can set `import_id` on their own rows
+
+`transactions.import_id` is writable by `authenticated` the way every
+other column of the table is, so someone calling the API directly could
+attach their own transaction to their own import (or clear it). The
+composite foreign key (`transactions_import_fkey`, `ON DELETE RESTRICT`)
+means the import has to be theirs, so another user's import can never be
+touched (checked by `docs/rls-isolation-test.sql`, section 8).
+
+**Accepted, 2026-11-14 (Matt): it only ever affects the person's own data.**
+The cost is a wrong "Imported 14 Nov" label on a row of theirs, or "Undo
+this import" removing a row of theirs they had attached to it -- both their
+own doing. Guarding it would mean either a trigger gated on a session
+setting (as `sorrel.transfer_edit` does) or column-level grants on
+`transactions`, which would also change every other write path. Revisit if
+`import_id` ever drives something other than a label and an undo.
+
+### The category rule beat the spec
+
+docs/Import-CSV.md, step 9, says unmatched rows "come in uncategorised".
+The schema doesn't allow that: `transactions_category_required` (baseline)
+requires a category on every non-transfer row, and the edit form and
+budgets assume one. Ruled 2026-11-14: each group of unmatched rows gets a
+category the person chooses, required, with no default and nothing created
+for them. A name that matches more than one category counts as unmatched.
+If uncategorised transactions are ever wanted, that is a schema change of
+its own (the constraint, the edit form, budgets, the category views), not
+an import detail.
+
+### Same-bill at import uses a wider window than the queue
+
+An imported row is matched to a queue occurrence within the schedule's
+tolerance **or 3 days, whichever is wider** (`IMPORT_SAME_BILL_DAYS`,
+`lib/sameBill.ts`). The queue's own window is unchanged. Reason: a bank
+dates a charge when it posts, so a fixed (tolerance 0) bill shows a day or
+two late, and a missed match lets the queue ask "Did rent come out?" about
+a bill just imported -- a double count if they tap yes. It only asks, never
+links, so widening is safe. Hand-entered past rows meeting a queue item is
+deferred (docs/queue.md).
+
+### A float sum in `lib/budgetInsights.ts` (noticed 2026-11-14)
+
+`avgSpend = priorMonths.reduce((sum, row) => sum + (row.actual_spend ?? 0), 0) / n`
+sums dollars as JavaScript floats, against "Never aggregate money in
+JavaScript". It feeds an average shown as a hint, so the error is a
+fraction of a cent, but it is the one place found that adds floats rather
+than integer cents. Raised once so far (this entry); not acted on.

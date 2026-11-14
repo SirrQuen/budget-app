@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getAccount, getAccountBalance, getAccountLastLogged } from "@/lib/db/accounts";
 import { getToday } from "@/lib/db/settings";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { buttonClass } from "@/components/ui/Button";
 import { LoadError } from "@/components/ui/LoadError";
 import { StatTile } from "@/components/ui/StatTile";
 import { formatDate } from "@/lib/format";
@@ -60,12 +61,20 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
         title={name}
         description={[type, account.institution, account.is_active ? null : "Archived"].filter(Boolean).join(" · ")}
         action={
-          <Link
-            href="/accounts"
-            className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-          >
-            All accounts
-          </Link>
+          <div className="flex flex-wrap items-center gap-4">
+            <Link
+              href="/accounts"
+              className="rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            >
+              All accounts
+            </Link>
+            {/* Import into this account, preselected (docs/Import-CSV.md, step 1). */}
+            {account.is_active ? (
+              <Link href={`/import?account=${id}`} className={buttonClass("primary")}>
+                Import
+              </Link>
+            ) : null}
+          </div>
         }
       />
 

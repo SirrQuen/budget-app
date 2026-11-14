@@ -722,7 +722,37 @@ export async function skipOccurrence(
 // "Not happening" (advanceOneCycle) -- one implementation of schedule
 // math; confirm_same_bill() only claims and writes. The pair itself is
 // checked by the caller against lib/sameBill.ts before this runs.
-export type SameBillOutcome = "answered" | "already_answered" | "not_ahead" | "not_linkable";
+// The cycle a "same bill" Yes steps a schedule to: where its cursor is now
+// (the claim) and the next one. One implementation of schedule math, shared
+// by the hand-entered answer below and the import's -- the database only
+// claims and writes, it never recomputes a cadence.
+export type SameBillCycle = { fromRunDate: string; toRunDate: string; toDueDate: string };
+
+async function nextCycleFor(s: ConfirmScheduleRow): Promise<SameBillCycle> {
+  const toRunDate = nextOccurrenceISO(s.next_run_date, s.frequency, s.interval_count, s.start_date ?? s.next_run_date);
+  return {
+    fromRunDate: s.next_run_date,
+    toRunDate,
+    toDueDate: await computeNextDueDate(toRunDate, s.business_day_offset, s.non_business_day_rule),
+  };
+}
+
+/**
+ * The cycle for the occurrence a schedule is asking about on `dueDate`, or
+ * null when it isn't asking about that one any more (answered meanwhile).
+ */
+export async function getSameBillCycle(
+  recurringId: string,
+  dueDate: string,
+): Promise<DbResult<SameBillCycle | null>> {
+  const supabase = await createClient();
+  const read = await readOpenOccurrence(supabase, recurringId, dueDate);
+  if (read.error !== null) return read;
+  if (read.data === null) return { data: null, error: null };
+  return { data: await nextCycleFor(read.data), error: null };
+}
+
+export type SameBillOutcome ="answered" | "already_answered" | "not_ahead" | "not_linkable";
 
 export async function confirmSameBill(
   recurringId: string,
@@ -736,15 +766,14 @@ export async function confirmSameBill(
   if (read.data === null) return { data: "already_answered", error: null };
   const s = read.data;
 
-  const toRunDate = nextOccurrenceISO(s.next_run_date, s.frequency, s.interval_count, s.start_date ?? s.next_run_date);
-  const toDueDate = await computeNextDueDate(toRunDate, s.business_day_offset, s.non_business_day_rule);
+  const cycle = await nextCycleFor(s);
 
   const { data, error } = await supabase.rpc("confirm_same_bill", {
     p_transaction_id: transactionId,
     p_recurring_id: recurringId,
-    p_from_run_date: s.next_run_date,
-    p_to_run_date: toRunDate,
-    p_to_due_date: toDueDate,
+    p_from_run_date: cycle.fromRunDate,
+    p_to_run_date: cycle.toRunDate,
+    p_to_due_date: cycle.toDueDate,
   });
   if (error) {
     return { data: null, error: describeWriteError(error, "recurring") };

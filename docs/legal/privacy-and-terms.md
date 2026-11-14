@@ -17,11 +17,11 @@ Sorrel is currently in beta testing. This policy describes what we do today, not
 **Financial information you enter**
 
 - Accounts you set up, including their names, types and balances
-- Transactions you record, including amounts, dates, descriptions and categories
+- Transactions you record or import, including amounts, dates, descriptions and categories
 - Budgets, savings goals, recurring schedules and investment holdings
 - Any notes or labels you add
 
-**Sorrel does not connect to your bank.** Everything financial in Sorrel is information you typed in yourself. We have no access to your bank accounts, cards or credentials, and Sorrel never asks for them.
+**Sorrel does not connect to your bank.** Everything financial in Sorrel is information you typed in or imported from a file yourself. If you import a CSV file, it is read on your device and never uploaded: we receive only the transactions you confirm in the preview, and we do not keep the file or its name. We have no access to your bank accounts, cards or credentials, and Sorrel never asks for them.
 
 **Technical information**
 

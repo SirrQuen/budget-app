@@ -393,6 +393,55 @@ export type Database = {
           },
         ]
       }
+      imports: {
+        Row: {
+          accountid: string
+          created_at: string
+          id: string
+          idempotency_key: string | null
+          row_count: number
+          userid: string
+        }
+        Insert: {
+          accountid: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          row_count: number
+          userid: string
+        }
+        Update: {
+          accountid?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          row_count?: number
+          userid?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "imports_accountid_fkey"
+            columns: ["userid", "accountid"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "imports_accountid_fkey"
+            columns: ["userid", "accountid"]
+            isOneToOne: false
+            referencedRelation: "v_account_balances"
+            referencedColumns: ["userid", "account_id"]
+          },
+          {
+            foreignKeyName: "imports_userid_fkey"
+            columns: ["userid"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       investments: {
         Row: {
           accountid: string
@@ -865,6 +914,7 @@ export type Database = {
           goalid: string | null
           id: string
           idempotency_key: string | null
+          import_id: string | null
           is_estimated: boolean
           merchant: string | null
           notes: string | null
@@ -887,6 +937,7 @@ export type Database = {
           goalid?: string | null
           id?: string
           idempotency_key?: string | null
+          import_id?: string | null
           is_estimated?: boolean
           merchant?: string | null
           notes?: string | null
@@ -909,6 +960,7 @@ export type Database = {
           goalid?: string | null
           id?: string
           idempotency_key?: string | null
+          import_id?: string | null
           is_estimated?: boolean
           merchant?: string | null
           notes?: string | null
@@ -969,6 +1021,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_goal_progress"
             referencedColumns: ["userid", "goal_id"]
+          },
+          {
+            foreignKeyName: "transactions_import_fkey"
+            columns: ["userid", "import_id"]
+            isOneToOne: false
+            referencedRelation: "imports"
+            referencedColumns: ["userid", "id"]
           },
           {
             foreignKeyName: "transactions_recurringid_fkey"
@@ -1679,6 +1738,27 @@ export type Database = {
         Args: { p_recurring_id: string; p_type: string }
         Returns: boolean
       }
+      import_preview: {
+        Args: { p_accountid: string; p_dates: string[] }
+        Returns: {
+          counts_if_added: boolean
+          counts_if_included: boolean
+          transaction_date: string
+          treatment: string
+        }[]
+      }
+      import_transactions: {
+        Args: {
+          p_accountid: string
+          p_counts_despite_anchor?: boolean
+          p_idempotency_key?: string
+          p_rows: Json
+        }
+        Returns: {
+          out_import_id: string
+          out_row_count: number
+        }[]
+      }
       is_business_day: { Args: { d: string }; Returns: boolean }
       is_spendable_account_type: { Args: { p_type: string }; Returns: boolean }
       join_waitlist: { Args: { p_email: string }; Returns: undefined }
@@ -1689,6 +1769,18 @@ export type Database = {
       link_transaction_to_schedule: {
         Args: { p_recurring_id: string; p_transaction_id: string }
         Returns: boolean
+      }
+      list_imports: {
+        Args: never
+        Returns: {
+          account_name: string
+          accountid: string
+          created_at: string
+          edited_count: number
+          import_id: string
+          remaining_count: number
+          row_count: number
+        }[]
       }
       record_different_bill: {
         Args: {
@@ -1709,6 +1801,17 @@ export type Database = {
       }
       resolve_recurring_due_date: {
         Args: { anchor: string; offset_days: number; rule: string }
+        Returns: string
+      }
+      same_bill_answer: {
+        Args: {
+          p_from_run_date: string
+          p_recurring_id: string
+          p_require_ahead: boolean
+          p_to_due_date: string
+          p_to_run_date: string
+          p_transaction_id: string
+        }
         Returns: string
       }
       same_bill_delete_preview: {
@@ -1740,6 +1843,12 @@ export type Database = {
       }
       spendable_cash_balance: { Args: never; Returns: number }
       suggested_safe_to_spend_cushion: { Args: never; Returns: number }
+      undo_import: {
+        Args: { p_import_id: string }
+        Returns: {
+          out_deleted: number
+        }[]
+      }
       update_transfer: {
         Args: {
           p_amount: number

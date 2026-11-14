@@ -18,6 +18,11 @@ import { DeleteTransactionButton } from "../../DeleteTransactionButton";
 import { getDifferentBillAnswers, getSameBillDeletePreviews, getSameBillPairs } from "@/lib/db/sameBill";
 import { sameBillDeleteNote } from "@/lib/sameBill";
 import { DifferentBillNote, SameBillQuestion } from "@/components/SameBillQuestion";
+import { getImportedAt } from "@/lib/db/imports";
+import { getTimeZone } from "@/lib/db/settings";
+import { todayInZone } from "@/lib/date";
+import { formatDayMonth } from "@/lib/format";
+import { InfoIcon } from "@/components/ui/icons";
 
 // "Is this the same bill?" on the entry's own screen (migration 66): the
 // open question if this entry pairs with a schedule's next occurrence,
@@ -174,12 +179,14 @@ export default async function EditTransactionPage({
     );
   }
 
-  const [incomeCategoriesResult, expenseCategoriesResult, accountsResult, scheduleResult, sameBill] = await Promise.all([
+  const [incomeCategoriesResult, expenseCategoriesResult, accountsResult, scheduleResult, sameBill, importedAt, timeZone] = await Promise.all([
     listCategoriesForType("Income"),
     listCategoriesForType("Expense"),
     listAccounts({ is_active: true }),
     getScheduleSummary(tx.recurringid),
     loadSameBill(tx.id, [tx.id]),
+    getImportedAt(tx.id),
+    getTimeZone(),
   ]);
 
   if (
@@ -236,6 +243,14 @@ export default async function EditTransactionPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Edit transaction" description="Update the details of this transaction." />
+      {/* Where this came from, said quietly (docs/Import-CSV.md, step 13). A
+          failed read just leaves the line out. */}
+      {importedAt.data ? (
+        <p className="flex items-center gap-2 text-sm text-ink-secondary">
+          <InfoIcon className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
+          Imported {formatDayMonth(todayInZone(timeZone, new Date(importedAt.data)))}
+        </p>
+      ) : null}
       {sameBill.section}
       <AddTransactionForm
         mode="edit"
