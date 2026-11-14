@@ -15,7 +15,14 @@ export default async function ImportPage({ searchParams }: PageProps<"/import">)
 
   const [accountsResult, today] = await Promise.all([listAccounts({ is_active: true }), getToday()]);
 
-  const back = requested ? { href: `/accounts/${requested}`, label: "Back to the account" } : { href: "/settings", label: "Back to Settings" };
+  // Where "Back" goes: the Transactions screen if that's where it started
+  // (with its account filter, if it had one), else the account, else Settings.
+  const back =
+    query.from === "transactions"
+      ? { href: requested ? `/transactions?accountid=${requested}` : "/transactions", label: "Back to Transactions" }
+      : requested
+        ? { href: `/accounts/${requested}`, label: "Back to the account" }
+        : { href: "/settings", label: "Back to Settings" };
 
   return (
     <div className="flex flex-col gap-6">

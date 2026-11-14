@@ -353,6 +353,7 @@ export function ImportFlow({
             paymentMethod: r.paymentMethod,
             categoryId: categories.byRow.get(r.row) ?? "",
             isEstimated: r.isEstimated,
+            includeDuplicate: dupes.has(r.row) && includeDup[r.row] === true,
             sameBill: m && answer ? { answer, recurringId: m.recurringId, dueDate: m.dueDate } : null,
           };
         }),

@@ -17,6 +17,7 @@ import {
 } from "@/lib/importCsv";
 import {
   DUPLICATE_WINDOW_DAYS,
+  unincludedDuplicates,
   type CategoryOption,
   type DateTreatment,
   type ExistingTransaction,
@@ -58,6 +59,8 @@ const OWN_MESSAGE = [
 
 const IMPORT_STALE =
   "A bill you matched has changed since you started, so nothing was imported. Go back and review the preview again.";
+const IMPORT_DUPLICATES =
+  "Some rows look like transactions you already have and weren't ticked to include, so nothing was imported. Go back and review the preview again.";
 const IMPORT_GENERIC = "That didn't import, and nothing was saved. It's not something you did. Try again in a moment.";
 
 function describeImportError(error: DbError, what: string): string {
@@ -107,6 +110,40 @@ export type ImportContext = {
 const PAGE = 1000;
 const MAX_PAGES = 50;
 
+/** The account's transactions from `from` to `to`, for the duplicate check -- the preview's and the server's re-run. */
+async function readExisting(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  accountId: string,
+  from: string,
+  to: string,
+): Promise<DbResult<ExistingTransaction[]>> {
+  const existing: ExistingTransaction[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("id, transaction_date, amount, description, transaction_type")
+      .eq("accountid", accountId)
+      .gte("transaction_date", from)
+      .lte("transaction_date", to)
+      .order("transaction_date")
+      .order("id")
+      .range(page * PAGE, page * PAGE + PAGE - 1);
+    if (error) return { data: null, error: describeReadError(error, "transactions") };
+    for (const t of data) {
+      existing.push({
+        id: t.id,
+        date: t.transaction_date,
+        // One conversion of a two-decimal figure, not a sum.
+        cents: Math.round(Number(t.amount) * 100),
+        description: t.description,
+        type: t.transaction_type as ImportType,
+      });
+    }
+    if (data.length < PAGE) break;
+  }
+  return { data: existing, error: null };
+}
+
 export async function getImportContext(
   accountId: string,
   dates: readonly string[],
@@ -140,30 +177,9 @@ export async function getImportContext(
   const account = accountRes.data;
   if (!account.is_active) return { data: null, error: "This account is archived, so nothing can be imported into it." };
 
-  const existing: ExistingTransaction[] = [];
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const { data, error } = await supabase
-      .from("transactions")
-      .select("id, transaction_date, amount, description, transaction_type")
-      .eq("accountid", accountId)
-      .gte("transaction_date", from)
-      .lte("transaction_date", to)
-      .order("transaction_date")
-      .order("id")
-      .range(page * PAGE, page * PAGE + PAGE - 1);
-    if (error) return { data: null, error: describeReadError(error, "transactions") };
-    for (const t of data) {
-      existing.push({
-        id: t.id,
-        date: t.transaction_date,
-        // One conversion of a two-decimal figure, not a sum.
-        cents: Math.round(Number(t.amount) * 100),
-        description: t.description,
-        type: t.transaction_type as ImportType,
-      });
-    }
-    if (data.length < PAGE) break;
-  }
+  const existingRes = await readExisting(supabase, accountId, from, to);
+  if (existingRes.error !== null) return { data: null, error: existingRes.error };
+  const existing = existingRes.data;
 
   return {
     data: {
@@ -236,6 +252,11 @@ export type ImportRowInput = {
   paymentMethod: string | null;
   categoryId: string;
   isEstimated: boolean;
+  /**
+   * true only where the person ticked "Include" on a possible duplicate. The
+   * server re-runs the duplicate check and refuses a flagged row without it.
+   */
+  includeDuplicate: boolean;
   /** The answer to "Is this the same bill?" -- required where a row matches. */
   sameBill: { answer: "same" | "different"; recurringId: string; dueDate: string } | null;
 };
@@ -273,6 +294,7 @@ function validShape(input: ImportInput): boolean {
       textOk(r.paymentMethod, MAX_PAYMENT_METHOD) &&
       UUID.test(r.categoryId) &&
       typeof r.isEstimated === "boolean" &&
+      typeof r.includeDuplicate === "boolean" &&
       (r.sameBill === null ||
         ((r.sameBill.answer === "same" || r.sameBill.answer === "different") &&
           UUID.test(r.sameBill.recurringId) &&
@@ -292,6 +314,24 @@ export type ImportOutcome = { importId: string; rowCount: number };
  */
 export async function importTransactions(input: ImportInput): Promise<DbResult<ImportOutcome>> {
   if (!validShape(input)) return { data: null, error: BAD_SHAPE };
+
+  // Possible duplicates, re-run here against what the account holds now. The
+  // browser says which flagged rows the person ticked; it isn't trusted to
+  // have flagged them. A flagged row without its tick refuses the import.
+  const supabase = await createClient();
+  const dates = input.rows.map((r) => r.date).sort();
+  const existingRes = await readExisting(
+    supabase,
+    input.accountId,
+    addDaysISO(dates[0], -DUPLICATE_WINDOW_DAYS),
+    addDaysISO(dates[dates.length - 1], DUPLICATE_WINDOW_DAYS),
+  );
+  if (existingRes.error !== null) return { data: null, error: existingRes.error };
+  const refused = unincludedDuplicates(
+    input.rows.map((r) => ({ row: r.row, date: r.date, cents: r.cents, includeDuplicate: r.includeDuplicate })),
+    existingRes.data,
+  );
+  if (refused.length > 0) return { data: null, error: IMPORT_DUPLICATES };
 
   const queueRes = await getConfirmationQueue();
   if (queueRes.error !== null) return { data: null, error: queueRes.error };
@@ -341,7 +381,6 @@ export async function importTransactions(input: ImportInput): Promise<DbResult<I
     rows.push(base);
   }
 
-  const supabase = await createClient();
   const { data, error } = await supabase.rpc("import_transactions", {
     p_accountid: input.accountId,
     p_rows: rows as never,

@@ -73,6 +73,25 @@ export function findDuplicates(
   return found;
 }
 
+/**
+ * The server's re-run of the duplicate check (docs/Import-CSV.md, step 8).
+ * The browser decides which flagged rows to include, but the browser is not
+ * trusted: the server runs findDuplicates() itself against what the account
+ * holds NOW and returns the rows that are flagged and weren't explicitly
+ * marked as included. A non-empty answer refuses the whole import.
+ *
+ * Not a hard block: a row the person ticked ("Include") carries
+ * includeDuplicate and passes, so two identical real purchases stay
+ * possible. A row marked included that isn't flagged is harmless and passes.
+ */
+export function unincludedDuplicates(
+  rows: readonly { row: number; date: string; cents: number; includeDuplicate: boolean }[],
+  existing: readonly ExistingTransaction[],
+): number[] {
+  const flagged = findDuplicates(rows, existing);
+  return rows.filter((r) => flagged.has(r.row) && !r.includeDuplicate).map((r) => r.row);
+}
+
 // ---------------------------------------------------------------------
 // Categories (step 9)
 // ---------------------------------------------------------------------
