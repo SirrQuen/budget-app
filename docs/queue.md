@@ -25,12 +25,7 @@ wait on Matt's ruling, in this order.
 5. ~~#5 export~~ -- deployed 2026-11-14 (see Done).
 6. **#5 import** -- its own spec first, which Matt is writing (ruled
    2026-11-14: no spec exists yet). Not built until then.
-7. **#6 — dashboard layout**, built on `feat/dashboard-layout` as one
-   release: drag a card by its grip (long-press on touch), a per-card
-   menu (Move up / Move down / Hide) as the non-drag route, save on drop
-   with Undo, hero pinned. Migration 67 is on sorrel-dev and production.
-   Not merged to main. Testers asked for direct dragging, so the
-   edit-mode and up/down version was never shipped. Library: see Deferred.
+7. ~~#6 — dashboard layout~~ -- deployed 2026-11-14 (see Done).
 
 ## Launch blockers still open
 
@@ -38,6 +33,15 @@ See docs/phase-7-findings.md, "Launch blockers". As of 2026-11-10, 3
 (WCAG; its repo-state notes say fixed, but it isn't struck through), 5
 (custom SMTP) and 8 (verify the error-handling pass in a production build)
 aren't struck through.
+
+## For the next tester note
+
+Lines waiting to go into the next note Matt sends (format:
+docs/tester-notes/README.md). Move a line out when it's sent.
+
+- Dashboard layout, deployed 2026-11-14: "You can now rearrange your
+  dashboard: hold the grip on any card and drag it, or use the card's
+  menu." Status: not yet sent.
 
 ## Held
 
@@ -65,6 +69,23 @@ aren't struck through.
 ## Done, still named in conversation
 
 Listed so they aren't queued again.
+
+- **Dashboard layout (#6).** Fast-forwarded to main 2026-11-14
+  (`0a40d65`, `feat/dashboard-layout`); deployed 2026-11-14. Testers
+  asked to drag cards directly, so the planned edit-mode and up/down
+  version was never shipped. Each card has a grip (long-press on touch)
+  and a menu (Move earlier / Move later / Hide); a drop saves with an
+  Undo toast; the Safe to Spend hero is pinned and can't be hidden.
+  Cards have a fixed size in code (small, wide, full) and flow in saved
+  order: 4 columns from 1280px, 2 on a tablet, 1 on a phone. Income and
+  Spending are two small sections. Stored as ordered section names
+  (migration 67, on sorrel-dev and production before the merge; no
+  saved layouts existed on production). Library choice and revisit
+  trigger: Deferred. Not built, by choice: dense packing (it would
+  break visual vs keyboard order). Tester note: no standalone note (no
+  number moves). Include in the NEXT tester note: "You can now rearrange
+  your dashboard: hold the grip on any card and drag it, or use the
+  card's menu." Status: not yet sent.
 
 - **Transaction export (#5 export).** Merged to main 2026-11-14
   (`d4c2dd9`, `feat/export-csv`); deployed 2026-11-14. "Download
