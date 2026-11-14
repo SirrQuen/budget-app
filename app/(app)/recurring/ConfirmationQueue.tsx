@@ -153,6 +153,12 @@ function ComingUpRow({ item }: { item: ConfirmationQueueItem }) {
           <Amount amount={item.amount} type={item.kind === "Income" ? "Income" : "Expense"} /> ·{" "}
           {item.approximate ? "around " : ""}
           {formatWeekday(item.dueDate)}
+          {item.accounts.length > 0 ? (
+            <>
+              {" "}
+              · <span>{item.accounts.map((a) => a.name).join(" → ")}</span>
+            </>
+          ) : null}
         </p>
         <button type="button" onClick={dismiss} disabled={pending} className={QUIET}>
           {pending ? "Hiding…" : "Got it"}
