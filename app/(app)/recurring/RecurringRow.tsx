@@ -107,7 +107,7 @@ export function RecurringRow({
       non_business_day_rule: recurring.non_business_day_rule,
     };
     return (
-      <li className="p-4 @4xl:col-span-5">
+      <li id={`schedule-${recurring.id}`} className="scroll-mt-4 p-4 @4xl:col-span-5">
         <RecurringForm
           recurring={editable}
           incomeCategories={incomeCategories}
@@ -129,7 +129,8 @@ export function RecurringRow({
 
   return (
     <li
-      className={`flex flex-col gap-3 px-4 py-4 transition-colors duration-150 hover:bg-surface-raised @4xl:col-span-5 @4xl:grid @4xl:grid-cols-subgrid @4xl:grid-flow-row-dense @4xl:items-center @4xl:gap-y-0 @4xl:px-0 @4xl:py-0 @4xl:min-h-[52px] ${recurring.is_active ? "" : "opacity-60"}`}
+      id={`schedule-${recurring.id}`}
+      className={`scroll-mt-4 flex flex-col gap-3 px-4 py-4 transition-colors duration-150 hover:bg-surface-raised @4xl:col-span-5 @4xl:grid @4xl:grid-cols-subgrid @4xl:grid-flow-row-dense @4xl:items-center @4xl:gap-y-0 @4xl:px-0 @4xl:py-0 @4xl:min-h-[52px] ${recurring.is_active ? "" : "opacity-60"}`}
     >
       {/* Keyed to the LIST's width (@container in recurring/page.tsx), not
           the viewport: five columns need ~56rem, and at sm the sidebar

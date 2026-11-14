@@ -20,6 +20,7 @@ import { useOptimisticTransactions, type PendingTransaction } from "@/components
 import { categoryColorVar } from "@/lib/categoryOptions";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import { callAction } from "@/components/useActionForm";
+import { buildListHref, parseSearchAmount, type TransactionFilters } from "@/lib/transactionFilters";
 
 const checkboxClassName =
   "h-4 w-4 cursor-pointer rounded border-hairline bg-surface-raised accent-action outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
@@ -32,45 +33,26 @@ const checkboxClassName =
 const AMOUNT_CELL =
   "sticky right-0 bg-surface transition-colors duration-150 group-hover:bg-surface-raised";
 
-type SearchParams = Record<string, string | string[] | undefined>;
-
-function first(value: string | string[] | undefined): string {
-  return typeof value === "string" ? value : "";
-}
-
-// Builds a /transactions?... href from the current filters plus overrides
-// (e.g. a new page number) -- every filtered, paginated view is just a URL,
-// so this stays the only place query strings get assembled.
-function buildHref(params: SearchParams, overrides: Record<string, string>) {
-  const usp = new URLSearchParams();
-  const merged = {
-    dateFrom: first(params.dateFrom),
-    dateTo: first(params.dateTo),
-    categoryid: first(params.categoryid),
-    accountid: first(params.accountid),
-    type: first(params.type),
-    page: first(params.page),
-    ...overrides,
-  };
-  for (const [key, value] of Object.entries(merged)) {
-    if (value) usp.set(key, value);
-  }
-  const qs = usp.toString();
-  return `/transactions${qs ? `?${qs}` : ""}`;
-}
-
 // A quick-add ghost only belongs on this exact filtered/paginated view if it
 // would actually match the filters producing the real list underneath it --
-// otherwise it'd show up somewhere the real row never will.
-function matchesFilters(
-  tx: PendingTransaction,
-  filters: { dateFrom: string; dateTo: string; categoryid: string; accountid: string; type: string },
-) {
+// otherwise it'd show up somewhere the real row never will. Text search
+// matches what a ghost carries (description, category, account, amount); a
+// term that only the saved row's notes would match drops the ghost, and the
+// real row appears once it saves.
+function matchesFilters(tx: PendingTransaction, filters: TransactionFilters) {
   if (filters.categoryid && tx.categoryid !== filters.categoryid) return false;
   if (filters.accountid && tx.accountid !== filters.accountid) return false;
   if (filters.type && tx.transaction_type !== filters.type) return false;
   if (filters.dateFrom && tx.transaction_date < filters.dateFrom) return false;
   if (filters.dateTo && tx.transaction_date > filters.dateTo) return false;
+  if (filters.q) {
+    const needle = filters.q.toLowerCase();
+    const haystack = [tx.description, tx.category_name ?? "", tx.account_name ?? ""];
+    const amount = parseSearchAmount(filters.q);
+    const textMatch = haystack.some((h) => h.toLowerCase().includes(needle));
+    const amountMatch = amount !== null && Number(amount) === tx.amount;
+    if (!textMatch && !amountMatch) return false;
+  }
   return true;
 }
 
@@ -241,7 +223,9 @@ export function TransactionsList({
   page,
   totalPages,
   pageSize,
-  params,
+  filters,
+  basePath,
+  lockedAccountId,
   hasFilters,
   canLog,
   accounts,
@@ -255,7 +239,12 @@ export function TransactionsList({
   page: number;
   totalPages: number;
   pageSize: number;
-  params: SearchParams;
+  /** The filters in the URL (parseTransactionFilters). */
+  filters: TransactionFilters;
+  /** The page this list sits on -- "/transactions" or "/accounts/<id>". Links keep to it. */
+  basePath: string;
+  /** Set on an account page: the account is the page, so it's not a filter to clear. */
+  lockedAccountId?: string;
   hasFilters: boolean;
   /** False when there's no active account yet -- the add-transaction form
    * isn't shown above, so the empty state has to point at /accounts. */
@@ -288,17 +277,15 @@ export function TransactionsList({
   const [bulkError, setBulkError] = useState<string>();
   const [isBulkDeleting, startBulkDelete] = useTransition();
 
-  const filters = {
-    dateFrom: first(params.dateFrom),
-    dateTo: first(params.dateTo),
-    categoryid: first(params.categoryid),
-    accountid: first(params.accountid),
-    type: first(params.type),
-  };
+  // The account page's own account is part of the page: a ghost for it
+  // matches without the URL carrying an accountid.
+  const effectiveFilters = lockedAccountId ? { ...filters, accountid: lockedAccountId } : filters;
+  const listHref = (overrides: Parameters<typeof buildListHref>[2] = {}) =>
+    buildListHref(basePath, filters, overrides);
 
   // Ghosts only ever belong on page 1 (newest-first) -- a row that hasn't
   // been saved yet has no real position on page 2+.
-  const ghosts = page === 1 ? pending.filter((tx) => matchesFilters(tx, filters)) : [];
+  const ghosts = page === 1 ? pending.filter((tx) => matchesFilters(tx, effectiveFilters)) : [];
 
   // Computed unconditionally (before the empty-state early returns below) so
   // the hooks above stay unconditional too -- this is just array shaping,
@@ -387,7 +374,7 @@ export function TransactionsList({
         message={`These filters only match ${totalCount} transaction${totalCount === 1 ? "" : "s"}.`}
         action={
           <Link
-            href={buildHref(params, { page: "1" })}
+            href={listHref({ page: "1" })}
             className="rounded text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
           >
             Back to page 1
@@ -402,11 +389,15 @@ export function TransactionsList({
       return (
         <EmptyState
           icon={<ListIcon className="h-10 w-10" />}
-          heading="Nothing matches these filters"
-          message="Try a wider date range, or clear a filter to see more."
+          heading={filters.q ? `Nothing matches "${filters.q}"` : "Nothing matches these filters"}
+          message={
+            filters.q
+              ? "We looked at descriptions, notes, categories, accounts and exact amounts. Try fewer letters, or clear a filter."
+              : "Try a wider date range, or clear a filter to see more."
+          }
           action={
             <Link
-              href="/transactions"
+              href={basePath}
               className="rounded text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
             >
               Clear filters
@@ -747,7 +738,7 @@ export function TransactionsList({
               marked a disabled link so it reads as unavailable, not as text. */}
           {page > 1 ? (
             <Link
-              href={buildHref(params, { page: String(page - 1) })}
+              href={listHref({ page: String(page - 1) })}
               className="rounded font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page"
             >
               Previous
@@ -760,7 +751,7 @@ export function TransactionsList({
           </span>
           {page < totalPages ? (
             <Link
-              href={buildHref(params, { page: String(page + 1) })}
+              href={listHref({ page: String(page + 1) })}
               className="rounded font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page"
             >
               Next

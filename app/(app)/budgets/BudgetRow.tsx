@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { BudgetForm, type EditableBudget } from "./BudgetForm";
 import { stopBudgetingAction } from "@/lib/actions/budgets";
@@ -13,6 +14,7 @@ import { carriedFromLabel, formatMonthName } from "@/lib/budgetMonth";
 import type { ChronicOverBudget } from "@/lib/budgetInsights";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import { callAction } from "@/components/useActionForm";
+import { buildListHref, monthRange } from "@/lib/transactionFilters";
 
 // True once the month after monthISO has started -- the viewed month is
 // fully in the books, not still accumulating spend.
@@ -121,6 +123,12 @@ export function BudgetRow({
 
   const budgeted = budget.budget_amount ?? 0;
   const spent = budget.actual_spend ?? 0;
+  // "Every number is a door": the spent figure opens the rows behind it --
+  // this category, this month.
+  const spentHref = buildListHref("/transactions", {
+    categoryid: budget.category_id,
+    ...monthRange(budget.budget_month),
+  });
   const remaining = budget.remaining ?? 0;
   const isOver = budget.is_over_budget ?? false;
   // A $0 budget is a budget ("not spending on this"), never "unbudgeted".
@@ -175,14 +183,21 @@ export function BudgetRow({
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-ink-secondary">
         {isZero ? (
           <span>
-            {spent > 0
-              ? `${formatCurrency(spent)} spent against a $0 budget this month`
-              : "$0 budgeted, nothing spent this month"}
+            {spent > 0 ? (
+              <Link href={spentHref} className="rounded underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
+                {formatCurrency(spent)} spent against a $0 budget this month
+              </Link>
+            ) : (
+              "$0 budgeted, nothing spent this month"
+            )}
           </span>
         ) : (
           <>
             <span>
-              {formatCurrency(spent)} of {formatCurrency(budgeted)}
+              <Link href={spentHref} className="rounded underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
+                {formatCurrency(spent)}
+              </Link>{" "}
+              of {formatCurrency(budgeted)}
             </span>
             <span>
               {isOver

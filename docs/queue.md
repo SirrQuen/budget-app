@@ -17,12 +17,11 @@ wait on Matt's ruling, in this order.
 2. **Safe-to-Spend-Why** -- shipped 2026-11-10 (see Done). Only its
    edit-path after-save note remains, and it stays deferred (below); it is
    still ahead of every feature from 3 on if Matt pulls it forward.
-3. ~~#3 — account name on Coming up lines~~ -- built 2026-11-14 on
-   `feat/coming-up-account-name`, not yet merged (see Done).
-4. **#1 + #2 — account pages (`/accounts/[id]`) and search**: one
-   filterable transaction list, filters in the URL. "Every number is a
-   door": the first three links ship with it, the rest are queued under
-   Deferred once it lands.
+3. ~~#3 — account name on Coming up lines~~ -- merged 2026-11-14, not
+   yet pushed (see Done).
+4. ~~#1 + #2 — account pages (`/accounts/[id]`) and search~~ -- merged
+   2026-11-14, not yet pushed (see Done). The rest of "every number is a
+   door" is under Deferred.
 5. **#5 export** -- CSV from Settings, formula-injection guard, terms
    and privacy wording.
 6. **#5 import** -- its own spec first. Not built until then.
@@ -46,6 +45,8 @@ aren't struck through.
 
 | Item | Recorded | Decide or do when | Where |
 |---|---|---|---|
+| "Every number is a door", the rest: an upcoming line opens its schedule; "(average of last 3)" opens the three confirmations it averaged; a goal's progress opens its contributions. The first three (budget spent, a category, the low-point item) shipped with #1 + #2 | 2026-11-14 | After #5 export | docs/Views-Search-Import-Layout.md, "Suggest other views" |
+| Quick add on an account's page doesn't start on that account (the full Add transaction form does) | 2026-11-14 | Unscheduled | docs/Views-Search-Import-Layout.md, "The account page" |
 | Occurrences "filled" by a linked row, derived on read: the projection, Upcoming and the queue each treat an occurrence as filled while a linked row sits in its window, and the queue walks past filled cycles. The eventual shape for #4's "Yes"; v1 links and advances the cursor in one SQL function instead (ruled 2026-11-14: the derived form rewrites three readers and the queue cursor mid-beta) | 2026-11-14 | After the beta | docs/Views-Search-Import-Layout.md, item 4 |
 | Budget progress counts future-dated transactions, but the balance doesn't (budget vs balance) | 2026-11-10 | Before commercial launch | Findings, same title |
 | After-save "doesn't change your figure" note on the edit paths | 2026-11-10 | Unscheduled (the create-path note shipped 2026-11-10) | docs/Safe-to-Spend-Why.md, "What it costs" |
@@ -60,13 +61,23 @@ aren't struck through.
 
 Listed so they aren't queued again.
 
-- **Account name on Coming up lines (#3).** Built 2026-11-14
-  (`feat/coming-up-account-name`, `77ee61e`); NOT yet merged to main, so
-  not deployed. Each Coming up line ends with the account, a transfer
-  with both ends ("Checking → Visa"), in neutral ink. UI only: no
-  migration, no number moves, so no tester note. Render tests in
-  `app/(app)/recurring/ConfirmationQueue.test.tsx`. Update this entry
-  with the merge commit when it merges.
+- **Account name on Coming up lines (#3).** Merged to main 2026-11-14
+  (`2b40ead`, `feat/coming-up-account-name`); not pushed yet, so not
+  deployed. Each Coming up line ends with the account, a transfer with
+  both ends ("Checking → Visa"), in neutral ink. UI only: no migration,
+  no number moves, so no tester note. Render tests in
+  `app/(app)/recurring/ConfirmationQueue.test.tsx`.
+
+- **Account pages and search (#1 + #2).** Merged to main 2026-11-14
+  (`feat/transaction-list-filters`); not pushed yet, so not deployed.
+  One filterable list (`TransactionsView`) behind both `/transactions`
+  and `/accounts/[id]`; filters in the URL (account, category, type,
+  dates, text; `lib/transactionFilters.ts`). Search covers description,
+  notes, category, account and an exact amount, server-side. A filter
+  that matches one leg of a transfer now shows the whole transfer.
+  Doors: accounts (list, dashboard, Safe to Spend breakdown), budget
+  spent, category name, the low-point items. UI and reads only: no
+  migration, no number moves, so no tester note.
 
 - **"Is this the same bill?" (#4).** Merged 2026-11-14 (`e7d348e`,
   `feat/same-bill-pair`), migration 66 on sorrel-dev and production the
