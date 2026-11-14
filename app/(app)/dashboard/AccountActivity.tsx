@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AccountLink } from "@/components/AccountLink";
 import { lastLoggedLabel } from "@/lib/lastLogged";
 
 // One line per account: when something was last logged there (created_at,
@@ -32,12 +33,7 @@ export function AccountActivity({
       <ul className="divide-y divide-hairline">
         {rows.map((a) => (
           <li key={a.account_id} className="flex items-baseline justify-between gap-3 py-2 text-sm">
-            <Link
-              href={`/accounts/${a.account_id}`}
-              className="min-w-0 truncate rounded underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface text-ink"
-            >
-              {a.account_name ?? "Account"}
-            </Link>
+            <AccountLink accountId={a.account_id}>{a.account_name ?? "Account"}</AccountLink>
             <span className="shrink-0 text-ink-secondary">
               {lastLoggedLabel(lastLogged.get(a.account_id) ?? null, today)}
             </span>

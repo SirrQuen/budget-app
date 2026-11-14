@@ -4,11 +4,14 @@ import { listCategories, listCategoriesForType } from "@/lib/db/categories";
 import { listAccounts } from "@/lib/db/accounts";
 import { listGoalOptions } from "@/lib/db/goals";
 import { LoadError } from "@/components/ui/LoadError";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { InfoIcon } from "@/components/ui/icons";
 import { FIELD_EDGE } from "@/components/ui/Input";
 import { getSameBillDeletePreviews } from "@/lib/db/sameBill";
 import { sameBillDeleteNotes } from "@/lib/sameBill";
+import { exportLabel } from "@/lib/transactionExport";
 import {
+  buildListHref,
   hasActiveFilters,
   MAX_SEARCH_LENGTH,
   parsePage,
@@ -104,6 +107,9 @@ export async function TransactionsView({
   const activeAccounts = accounts.filter((a) => a.is_active);
   const totalPages = Math.max(1, Math.ceil(totalCount / TRANSACTIONS_PAGE_SIZE));
   const hasFilters = hasActiveFilters(filters);
+  // The list's own count: its units (a transfer is one), or, when the read
+  // hit the project's row ceiling, the matching rows it couldn't reach.
+  const exportCount = truncation ? truncation.transactionsTotal : totalCount;
 
   const incomeCategories = categories.filter((c) => c.category_type === "Income");
   const expenseCategories = categories.filter((c) => c.category_type === "Expense");
@@ -264,6 +270,28 @@ export async function TransactionsView({
           </Link>
         ) : null}
       </form>
+
+      {/* Exactly what the filters above select -- every matching row, not
+          just this page. A plain link, not a form: it only reads, and the
+          route's Content-Disposition makes the file (no `download`
+          attribute: on a failure the route redirects back here). The count
+          is the list's own. Not on an account's page, whose list is fixed. */}
+      {lockedAccountId || exportCount === 0 ? null : (
+        <div className="flex flex-wrap items-center gap-3">
+          <a
+            href={buildListHref("/transactions/export", filters)}
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-field-border px-4 py-2 text-sm font-semibold text-ink transition-colors duration-150 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          >
+            {exportLabel(hasFilters, exportCount)}
+          </a>
+          {searchParams.export === "failed" ? (
+            <ErrorMessage
+              severity="critical"
+              message="We couldn't make that export just now. Your data is fine. Try the button again."
+            />
+          ) : null}
+        </div>
+      )}
 
       {truncation ? (
         <p

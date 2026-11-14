@@ -10,6 +10,7 @@ import { formatCurrency, formatDate, formatDayMonthShort } from "@/lib/format";
 import { useToday } from "@/components/TodayProvider";
 import { DATED_AHEAD_STORAGE_KEY, isDatedAhead, readRemembered, settleRows } from "@/lib/datedAhead";
 import { Amount } from "@/components/ui/Amount";
+import { AccountLink } from "@/components/AccountLink";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DeleteTransactionButton } from "./DeleteTransactionButton";
@@ -578,7 +579,24 @@ export function TransactionsList({
                       </span>
                     </td>
                     <td className="px-4 py-3 text-ink-secondary">
-                      {row.fromAccountName ?? "…"} → {row.toAccountName ?? "…"}
+                      <span className="inline-flex flex-wrap items-center gap-x-1.5">
+                        {row.fromAccountId ? (
+                          <AccountLink accountId={row.fromAccountId} className="text-ink-secondary">
+                            {row.fromAccountName ?? "…"}
+                          </AccountLink>
+                        ) : (
+                          (row.fromAccountName ?? "…")
+                        )}
+                        <span aria-hidden="true">→</span>
+                        <span className="sr-only">to</span>
+                        {row.toAccountId ? (
+                          <AccountLink accountId={row.toAccountId} className="text-ink-secondary">
+                            {row.toAccountName ?? "…"}
+                          </AccountLink>
+                        ) : (
+                          (row.toAccountName ?? "…")
+                        )}
+                      </span>
                     </td>
                     <td className={`px-4 py-3 text-right ${AMOUNT_CELL}`}>
                       <span className="font-medium tabular-nums text-ink">{formatCurrency(row.amount)}</span>
@@ -656,7 +674,15 @@ export function TransactionsList({
                       {tx.category_name ?? "Uncategorized"}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-ink-secondary">{tx.account_name ?? "—"}</td>
+                  <td className="px-4 py-3 text-ink-secondary">
+                    {tx.account_name ? (
+                      <AccountLink accountId={tx.accountid} className="text-ink-secondary">
+                        {tx.account_name}
+                      </AccountLink>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className={`px-4 py-3 text-right ${AMOUNT_CELL}`}>
                     <Amount amount={Number(tx.amount)} type={tx.transaction_type as TransactionType} column />
                   </td>

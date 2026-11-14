@@ -125,7 +125,76 @@ export function buildTransactionsCsv(rows: ExportRow[]): string {
   return BOM + lines.join(EOL) + EOL;
 }
 
-/** sorrel-transactions-2026-11-14.csv, dated by the user's today. */
-export function exportFileName(today: string): string {
-  return `sorrel-transactions-${today}.csv`;
+
+// ---------------------------------------------------------------------
+// Filtered export: the filename and the button's label
+// ---------------------------------------------------------------------
+
+/**
+ * What a filtered export is about, in words -- the file NAME carries it, never
+ * a row inside the file (a metadata row would break import's recognition of
+ * Sorrel's header). Names, not ids, for account and category.
+ */
+export type ExportScope = {
+  accountName?: string | null;
+  categoryName?: string | null;
+  type?: "" | "Income" | "Expense";
+  dateFrom?: string;
+  dateTo?: string;
+  q?: string;
+  /** Some filter is set, even if its name couldn't be read -- never named like the full export. */
+  filtered?: boolean;
+};
+
+const MAX_SLUG = 40;
+
+/** "Chase Checking ••1234" -> "chase-checking-1234": ASCII letters and digits only, so a header and a file system can't choke on it. */
+export function slugForFileName(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, MAX_SLUG)
+    .replace(/-+$/g, "");
+}
+
+export function hasExportScope(scope: ExportScope): boolean {
+  return Boolean(scope.filtered || scope.accountName || scope.categoryName || scope.type || scope.dateFrom || scope.dateTo || scope.q);
+}
+
+/**
+ * No filters: sorrel-transactions-2026-11-14.csv (dated by today, as
+ * Settings has always named it). Filtered, the filters name the file:
+ * sorrel-checking-2026-11-01-to-2026-11-30.csv -- account, category, type,
+ * the date range, then search text, each only when set.
+ */
+export function exportFileName(today: string, scope: ExportScope = {}): string {
+  if (!hasExportScope(scope)) return `sorrel-transactions-${today}.csv`;
+  const parts: string[] = [];
+  const add = (v: string | null | undefined) => {
+    const slug = v ? slugForFileName(v) : "";
+    if (slug) parts.push(slug);
+  };
+  add(scope.accountName);
+  add(scope.categoryName);
+  if (scope.type) parts.push(scope.type.toLowerCase());
+  if (scope.dateFrom && scope.dateTo) parts.push(`${scope.dateFrom}-to-${scope.dateTo}`);
+  else if (scope.dateFrom) parts.push(`from-${scope.dateFrom}`);
+  else if (scope.dateTo) parts.push(`to-${scope.dateTo}`);
+  if (scope.q) {
+    const slug = slugForFileName(scope.q);
+    if (slug) parts.push(`search-${slug}`);
+  }
+  // Every filter was set but none survived slugging (a search of "???"):
+  // still a filtered file, still dated, so it can't pose as the full export.
+  if (parts.length === 0) parts.push("filtered", today);
+  return `sorrel-${parts.join("-")}.csv`;
+}
+
+/** "Export all transactions" with no filters, else "Export 42 transactions" -- the count the list shows. */
+export function exportLabel(filtered: boolean, count: number): string {
+  if (!filtered) return "Export all transactions";
+  return `Export ${count.toLocaleString("en-US")} ${count === 1 ? "transaction" : "transactions"}`;
 }
