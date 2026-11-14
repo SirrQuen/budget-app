@@ -17,12 +17,12 @@ wait on Matt's ruling, in this order.
 2. **Safe-to-Spend-Why** -- shipped 2026-11-10 (see Done). Only its
    edit-path after-save note remains, and it stays deferred (below); it is
    still ahead of every feature from 3 on if Matt pulls it forward.
-3. ~~#3 — account name on Coming up lines~~ -- merged 2026-11-14, not
-   yet pushed (see Done).
-4. ~~#1 + #2 — account pages (`/accounts/[id]`) and search~~ -- merged
-   2026-11-14, not yet pushed (see Done). The rest of "every number is a
-   door" is under Deferred.
-5. ~~#5 export~~ -- merged 2026-11-14, not yet pushed (see Done).
+3. ~~#3 — account name on Coming up lines~~ -- deployed 2026-11-14
+   (see Done).
+4. ~~#1 + #2 — account pages (`/accounts/[id]`) and search~~ -- deployed
+   2026-11-14 (see Done). The rest of "every number is a door" is under
+   Deferred.
+5. ~~#5 export~~ -- deployed 2026-11-14 (see Done).
 6. **#5 import** -- its own spec first, which Matt is writing (ruled
    2026-11-14: no spec exists yet). Not built until then.
 7. **#6 — dashboard layout**, scoped down: reorder and hide, hero
@@ -62,7 +62,7 @@ aren't struck through.
 Listed so they aren't queued again.
 
 - **Transaction export (#5 export).** Merged to main 2026-11-14
-  (`d4c2dd9`, `feat/export-csv`); not pushed yet, so not deployed. "Download
+  (`d4c2dd9`, `feat/export-csv`); deployed 2026-11-14. "Download
   transactions" in Settings: a CSV of every transaction, UTF-8 with BOM,
   formula-injection guard. The column layout is import's first format
   (`lib/transactionExport.ts`): columns are only ever added at the end.
@@ -72,14 +72,14 @@ Listed so they aren't queued again.
   docs/tester-notes/2026-11-15-export.md.
 
 - **Account name on Coming up lines (#3).** Merged to main 2026-11-14
-  (`2b40ead`, `feat/coming-up-account-name`); not pushed yet, so not
-  deployed. Each Coming up line ends with the account, a transfer with
+  (`2b40ead`, `feat/coming-up-account-name`); deployed 2026-11-14.
+  Each Coming up line ends with the account, a transfer with
   both ends ("Checking → Visa"), in neutral ink. UI only: no migration,
   no number moves, so no tester note. Render tests in
   `app/(app)/recurring/ConfirmationQueue.test.tsx`.
 
 - **Account pages and search (#1 + #2).** Merged to main 2026-11-14
-  (`feat/transaction-list-filters`); not pushed yet, so not deployed.
+  (`455ba15`, `feat/transaction-list-filters`); deployed 2026-11-14.
   One filterable list (`TransactionsView`) behind both `/transactions`
   and `/accounts/[id]`; filters in the URL (account, category, type,
   dates, text; `lib/transactionFilters.ts`). Search covers description,
