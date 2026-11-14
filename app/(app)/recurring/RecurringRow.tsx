@@ -13,6 +13,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { PauseIcon, PlayIcon, TransferIcon, TrashIcon, InfoIcon } from "@/components/ui/icons";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { formatSchedule, formatEndCondition } from "@/lib/recurringSchedule";
+import { AccountLink } from "@/components/AccountLink";
 import type { RecurringWithRelations } from "@/lib/db/recurring";
 import type { TransactionType } from "@/lib/db/transactions";
 import type { CategoryWithGroup } from "@/lib/db/categories";
@@ -123,9 +124,16 @@ export function RecurringRow({
   }
 
   const endCondition = formatEndCondition(recurring.occurrence_limit, recurring.end_date);
-  const subtitle = isTransfer
-    ? `${recurring.account_name ?? "…"} → ${recurring.to_account_name ?? "…"}`
-    : `${recurring.category_name ?? "Uncategorized"} · ${recurring.account_name ?? "—"}`;
+  // The row is a list item holding buttons, not a link itself, so the
+  // account NAMES can be links. An unreadable name stays plain text.
+  const accountLink = (id: string | null, name: string | null, fallback: string) =>
+    id && name ? (
+      <AccountLink accountId={id} className="text-ink-muted" nameClassName="">
+        {name}
+      </AccountLink>
+    ) : (
+      fallback
+    );
 
   return (
     <li
@@ -161,8 +169,21 @@ export function RecurringRow({
                   </span>
                 ) : null}
               </div>
-              <p title={subtitle} className="mt-0.5 break-words text-sm text-ink-muted @4xl:truncate">
-                {subtitle}
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 break-words text-sm text-ink-muted">
+                {isTransfer ? (
+                  <>
+                    {accountLink(recurring.accountid, recurring.account_name, "…")}
+                    <span aria-hidden="true">→</span>
+                    <span className="sr-only">to</span>
+                    {accountLink(recurring.to_accountid, recurring.to_account_name, "…")}
+                  </>
+                ) : (
+                  <>
+                    <span>{recurring.category_name ?? "Uncategorized"}</span>
+                    <span aria-hidden="true">·</span>
+                    {accountLink(recurring.accountid, recurring.account_name, "—")}
+                  </>
+                )}
               </p>
             </div>
           </div>

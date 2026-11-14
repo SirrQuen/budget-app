@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionError } from "./SectionError";
+import { AccountLink } from "@/components/AccountLink";
 import { SorrelMark } from "@/components/SorrelMark";
 import { PlusIcon } from "@/components/ui/icons";
 import { formatAccountBalance, formatCompactNumber } from "@/lib/format";
@@ -102,7 +103,7 @@ export function NoTransactionsView({
                 key={a.account_id}
                 className="flex items-center justify-between gap-3 py-2.5 text-sm"
               >
-                <span className="min-w-0 truncate text-ink">{a.account_name}</span>
+                {a.account_id ? <AccountLink accountId={a.account_id}>{a.account_name}</AccountLink> : <span className="min-w-0 truncate text-ink">{a.account_name}</span>}
                 <span className="shrink-0 font-medium tabular-nums text-ink">
                   {formatAccountBalance(a.balance ?? 0, a.account_type ?? "")}
                 </span>
