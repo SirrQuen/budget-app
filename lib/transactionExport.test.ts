@@ -4,6 +4,7 @@ import {
   buildTransactionsCsv,
   EXPORT_COLUMNS,
   exportFileName,
+  exportLabel,
   guardFormula,
   quoteField,
   type ExportRow,
@@ -186,4 +187,39 @@ test("accented text is written as-is (the BOM tells Excel it's UTF-8)", () => {
 
 test("the file name carries the user's day", () => {
   assert.equal(exportFileName("2026-11-14"), "sorrel-transactions-2026-11-14.csv");
+});
+
+// ---- filtered export: filename and label ---------------------------
+
+test("a filtered export is named by its filters", () => {
+  assert.equal(
+    exportFileName("2026-11-14", { accountName: "Checking", dateFrom: "2026-11-01", dateTo: "2026-11-30" }),
+    "sorrel-checking-2026-11-01-to-2026-11-30.csv",
+  );
+  assert.equal(
+    exportFileName("2026-11-14", { accountName: "Visa", categoryName: "Dining & Bars", type: "Expense", q: "Joe's" }),
+    "sorrel-visa-dining-bars-expense-search-joe-s.csv",
+  );
+  assert.equal(exportFileName("2026-11-14", { dateFrom: "2026-11-01" }), "sorrel-from-2026-11-01.csv");
+  assert.equal(exportFileName("2026-11-14", { dateTo: "2026-11-30" }), "sorrel-to-2026-11-30.csv");
+});
+
+test("no filters keeps the Settings name", () => {
+  assert.equal(exportFileName("2026-11-14", {}), "sorrel-transactions-2026-11-14.csv");
+});
+
+test("a filename is ASCII and can't carry a path, quote or header break", () => {
+  const name = exportFileName("2026-11-14", { accountName: 'Café "Zoë"/../\r\nX-Evil: 1', q: "…" });
+  assert.match(name, /^sorrel-[a-z0-9-]+\.csv$/);
+});
+
+test("a search that slugs to nothing still can't pose as the full export", () => {
+  assert.equal(exportFileName("2026-11-14", { q: "???" }), "sorrel-filtered-2026-11-14.csv");
+});
+
+test("the label states the scope", () => {
+  assert.equal(exportLabel(false, 5000), "Export all transactions");
+  assert.equal(exportLabel(true, 42), "Export 42 transactions");
+  assert.equal(exportLabel(true, 1), "Export 1 transaction");
+  assert.equal(exportLabel(true, 1234), "Export 1,234 transactions");
 });

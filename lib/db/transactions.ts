@@ -108,6 +108,75 @@ function groupIntoUnits(rows: UnitKeyRow[]): { unitKeys: string[]; idsByUnit: Ma
   return { unitKeys, idsByUnit };
 }
 
+/** The filters a transaction read can carry -- the list's, and the export's. */
+export type TransactionFilterOptions = Pick<
+  ListTransactionsOptions,
+  "dateFrom" | "dateTo" | "categoryid" | "accountid" | "transaction_type" | "transfersOnly" | "excludeTransfers" | "q"
+>;
+
+/**
+ * THE filter query: `select(columns)` on transactions with every filter
+ * applied -- account, category, type, date range, text. The list and the CSV
+ * export both read through it, so what the export holds is exactly what the
+ * list's filters select; there is no second implementation to drift. The
+ * caller adds order and range. Errors come back as text, never thrown.
+ */
+async function selectFiltered(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  opts: TransactionFilterOptions,
+  columns: string,
+  count?: "exact",
+) {
+  let query = supabase.from("transactions").select(columns, count ? { count } : undefined);
+
+  if (opts.dateFrom) {
+    query = query.gte("transaction_date", opts.dateFrom);
+  }
+  if (opts.dateTo) {
+    query = query.lte("transaction_date", opts.dateTo);
+  }
+  if (opts.categoryid) {
+    query = query.eq("categoryid", opts.categoryid);
+  }
+  if (opts.accountid) {
+    query = query.eq("accountid", opts.accountid);
+  }
+  if (opts.transaction_type) {
+    query = query.eq("transaction_type", opts.transaction_type);
+  }
+  const q = opts.q?.trim().slice(0, MAX_SEARCH_LENGTH);
+  if (q) {
+    // Category and account names live in other tables: find which ones
+    // matched, then filter this table by their ids alongside its own
+    // columns. Both lookups are RLS-scoped to the person's own rows.
+    const pattern = `%${escapeLike(q)}%`;
+    const [categoriesRes, accountsRes] = await Promise.all([
+      supabase.from("categories").select("id").ilike("category_name", pattern),
+      supabase.from("accounts").select("id").ilike("account_name", pattern),
+    ]);
+    if (categoriesRes.error) {
+      return { query: null, error: describeReadError(categoriesRes.error, "transactions") };
+    }
+    if (accountsRes.error) {
+      return { query: null, error: describeReadError(accountsRes.error, "transactions") };
+    }
+    query = query.or(
+      buildSearchOr(
+        q,
+        categoriesRes.data.map((c) => c.id),
+        accountsRes.data.map((a) => a.id),
+      ),
+    );
+  }
+  if (opts.transfersOnly) {
+    query = query.not("transfer_group_id", "is", null);
+  }
+  if (opts.excludeTransfers) {
+    query = query.is("transfer_group_id", null);
+  }
+  return { query, error: null };
+}
+
 // Filters live in the caller's URL search params (see the transactions
 // page), not component state -- this stays a plain data-layer read with no
 // notion of "current" filters, so every filtered view is a linkable,
@@ -129,57 +198,16 @@ export async function listTransactions(
   // detected below, with no magic threshold: whatever the project's
   // max-rows ceiling is, keyRows.length lands exactly on it and count runs
   // past it.
-  let keyQuery = supabase
-    .from("transactions")
-    .select("id, transaction_date, created_at, transfer_group_id", { count: "exact" })
+  const filtered = await selectFiltered(
+    supabase,
+    opts,
+    "id, transaction_date, created_at, transfer_group_id",
+    "exact",
+  );
+  if (filtered.error !== null) return { data: null, error: filtered.error };
+  const keyQuery = filtered.query
     .order("transaction_date", { ascending: false })
     .order("created_at", { ascending: false });
-
-  if (opts.dateFrom) {
-    keyQuery = keyQuery.gte("transaction_date", opts.dateFrom);
-  }
-  if (opts.dateTo) {
-    keyQuery = keyQuery.lte("transaction_date", opts.dateTo);
-  }
-  if (opts.categoryid) {
-    keyQuery = keyQuery.eq("categoryid", opts.categoryid);
-  }
-  if (opts.accountid) {
-    keyQuery = keyQuery.eq("accountid", opts.accountid);
-  }
-  if (opts.transaction_type) {
-    keyQuery = keyQuery.eq("transaction_type", opts.transaction_type);
-  }
-  const q = opts.q?.trim().slice(0, MAX_SEARCH_LENGTH);
-  if (q) {
-    // Category and account names live in other tables: find which ones
-    // matched, then filter this table by their ids alongside its own
-    // columns. Both lookups are RLS-scoped to the person's own rows.
-    const pattern = `%${escapeLike(q)}%`;
-    const [categoriesRes, accountsRes] = await Promise.all([
-      supabase.from("categories").select("id").ilike("category_name", pattern),
-      supabase.from("accounts").select("id").ilike("account_name", pattern),
-    ]);
-    if (categoriesRes.error) {
-      return { data: null, error: describeReadError(categoriesRes.error, "transactions") };
-    }
-    if (accountsRes.error) {
-      return { data: null, error: describeReadError(accountsRes.error, "transactions") };
-    }
-    keyQuery = keyQuery.or(
-      buildSearchOr(
-        q,
-        categoriesRes.data.map((c) => c.id),
-        accountsRes.data.map((a) => a.id),
-      ),
-    );
-  }
-  if (opts.transfersOnly) {
-    keyQuery = keyQuery.not("transfer_group_id", "is", null);
-  }
-  if (opts.excludeTransfers) {
-    keyQuery = keyQuery.is("transfer_group_id", null);
-  }
 
   const {
     data: keyRows,
@@ -854,8 +882,8 @@ export async function balanceAnchorPreview(
   };
 }
 
-// Every transaction, for the CSV export (lib/transactionExport.ts), oldest
-// first. A read only -- the export writes nothing.
+// The transactions the given filters select (none = every one), for the CSV
+// export (lib/transactionExport.ts), oldest first. A read only -- the export writes nothing.
 //
 // PostgREST caps an unranged read at the project's max-rows and answers 206
 // rather than an error, so one select would quietly drop the oldest rows of
@@ -870,26 +898,33 @@ export async function balanceAnchorPreview(
 const EXPORT_PAGE_SIZE = 1000;
 
 const EXPORT_SELECT =
-  "id, transaction_date, accountid, transaction_type, categoryid, description, amount_text:amount::text, notes, merchant, payment_method, transfer_group_id, is_estimated, counts_despite_anchor, anchor_answer_set_at, category:categories(category_name), account:accounts(account_name)";
+  "id, created_at, transaction_date, accountid, transaction_type, categoryid, description, amount_text:amount::text, notes, merchant, payment_method, transfer_group_id, is_estimated, counts_despite_anchor, anchor_answer_set_at, category:categories(category_name), account:accounts(account_name)";
 
 type RawExportRow = Omit<ExportRow, "amount" | "account_name" | "category_name"> & {
+  created_at: string;
   amount_text: string;
   category: { category_name: string } | null;
   account: { account_name: string } | null;
 };
 
-export async function exportTransactions(): Promise<DbResult<ExportRow[]>> {
+export async function exportTransactions(opts: TransactionFilterOptions = {}): Promise<DbResult<ExportRow[]>> {
   const supabase = await createClient();
 
   const rows: ExportRow[] = [];
+  const sortKeys = new Map<string, string>();
   let expected: number | null = null;
 
   for (;;) {
-    // Counted once, on the first page.
-    const countMode: "exact" | undefined = rows.length === 0 ? "exact" : undefined;
-    const { data, error, count } = await supabase
-      .from("transactions")
-      .select(EXPORT_SELECT, { count: countMode })
+    // Counted once, on the first page. Read through selectFiltered(): the
+    // same filter query as the list, so the file holds what the list shows.
+    const filtered = await selectFiltered(
+      supabase,
+      opts,
+      EXPORT_SELECT,
+      rows.length === 0 ? "exact" : undefined,
+    );
+    if (filtered.error !== null) return { data: null, error: filtered.error };
+    const { data, error, count } = await filtered.query
       .order("transaction_date", { ascending: true })
       .order("created_at", { ascending: true })
       .order("id", { ascending: true })
@@ -902,7 +937,8 @@ export async function exportTransactions(): Promise<DbResult<ExportRow[]>> {
     if (expected === null) expected = count ?? 0;
     if (data.length === 0) break;
 
-    for (const { amount_text, category, account, ...rest } of data) {
+    for (const { amount_text, category, account, created_at, ...rest } of data) {
+      sortKeys.set(rest.id, created_at);
       rows.push({
         ...rest,
         amount: amount_text,
@@ -919,6 +955,42 @@ export async function exportTransactions(): Promise<DbResult<ExportRow[]>> {
       data: null,
       error: "Your transactions changed while the export was being made. Try again.",
     };
+  }
+
+  // A filter on account, category or text can match only ONE leg of a
+  // transfer. A transfer is one thing with two legs (the list brings both),
+  // so the file carries both too -- a half transfer would import as a
+  // one-sided movement of money. With no filters every leg already matched
+  // and nothing is added.
+  const have = new Set(rows.map((r) => r.id));
+  const groups = [...new Set(rows.flatMap((r) => (r.transfer_group_id ? [r.transfer_group_id] : [])))];
+  let added = false;
+  for (let i = 0; i < groups.length; i += 100) {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select(EXPORT_SELECT)
+      .in("transfer_group_id", groups.slice(i, i + 100))
+      .returns<RawExportRow[]>();
+    if (error) return { data: null, error: describeReadError(error, "transactions") };
+    for (const { amount_text, category, account, created_at, ...rest } of data) {
+      if (have.has(rest.id)) continue;
+      have.add(rest.id);
+      added = true;
+      sortKeys.set(rest.id, created_at);
+      rows.push({
+        ...rest,
+        amount: amount_text,
+        account_name: account?.account_name ?? null,
+        category_name: category?.category_name ?? null,
+      });
+    }
+  }
+  if (added) {
+    const at = (id: string) => Date.parse(sortKeys.get(id) ?? "");
+    rows.sort(
+      (x, y) =>
+        x.transaction_date.localeCompare(y.transaction_date) || at(x.id) - at(y.id) || x.id.localeCompare(y.id),
+    );
   }
 
   return { data: rows, error: null };

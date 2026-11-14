@@ -5,6 +5,7 @@ import { getTimeZone } from "@/lib/db/settings";
 import { todayInZone } from "@/lib/date";
 import { formatDayMonth } from "@/lib/format";
 import Link from "next/link";
+import { AccountLink } from "@/components/AccountLink";
 import { UndoImportButton } from "../import/UndoImportButton";
 
 // Settings > Import: where an import starts, and where an old one can be
@@ -38,7 +39,11 @@ export async function ImportsSection() {
           {imports.data.map((i) => (
             <li key={i.importId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
               <p className="text-sm text-ink">
-                Imported {formatDayMonth(todayInZone(timeZone, new Date(i.createdAt)))} · {i.accountName} ·{" "}
+                Imported {formatDayMonth(todayInZone(timeZone, new Date(i.createdAt)))} ·{" "}
+                <AccountLink accountId={i.accountId} nameClassName="">
+                  {i.accountName}
+                </AccountLink>{" "}
+                ·{" "}
                 {i.rowCount.toLocaleString("en-US")} {i.rowCount === 1 ? "transaction" : "transactions"}
                 {i.remainingCount < i.rowCount ? (
                   <span className="text-ink-secondary"> ({i.remainingCount.toLocaleString("en-US")} left)</span>

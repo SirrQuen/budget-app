@@ -253,3 +253,11 @@ export function PlayIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function ChevronRightIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M9.5 6 15.5 12 9.5 18" />
+    </svg>
+  );
+}
