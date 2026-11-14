@@ -87,6 +87,26 @@ Listed so they aren't queued again.
   (read-only). Not built: the same-bill question for hand-entered past
   rows, and `.xlsx` (both under Deferred).
 
+- **Export from the Transactions screen, import entry and duplicate
+  check, account links (#5 follow-ons).** Merged to main 2026-11-14
+  (`db782c4` `feat/transactions-export-and-account-links`, `6675cbc`
+  `feat/import-dupe-check-and-entry`); deployed 2026-11-14. No migration;
+  no tester-visible number moves, so no tester note. Export on the
+  Transactions screen exports exactly the list's filters, every matching
+  row, through the list's own filter query (`selectFiltered`); Settings'
+  download is the same function with no filters; the filters name the file
+  and the button states its scope. A transfer's two legs always travel
+  together, so a file holds the list's count plus one row per transfer.
+  The Transactions screen opens the same import flow (an account filter
+  preselects it), and the server now re-runs the duplicate check and
+  refuses any flagged row the request doesn't mark as included. Account
+  names link to `/accounts/[id]` (`components/AccountLink.tsx`) on the
+  Accounts screen, the dashboard card and onboarding list, the Transactions
+  table, recurring rows and Settings > Past imports. Not yet checked by
+  hand: filtered-export counts against the list, the import second pass,
+  and a refused unticked duplicate. Not linked, by decision: goals'
+  suggested transfers, form and picker options, prose mentions.
+
 - **Dashboard layout (#6).** Fast-forwarded to main 2026-11-14
   (`0a40d65`, `feat/dashboard-layout`); deployed 2026-11-14. Testers
   asked to drag cards directly, so the planned edit-mode and up/down
