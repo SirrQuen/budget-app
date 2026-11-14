@@ -62,7 +62,7 @@ aren't struck through.
 Listed so they aren't queued again.
 
 - **Transaction export (#5 export).** Merged to main 2026-11-14
-  (`feat/export-csv`); not pushed yet, so not deployed. "Download
+  (`d4c2dd9`, `feat/export-csv`); not pushed yet, so not deployed. "Download
   transactions" in Settings: a CSV of every transaction, UTF-8 with BOM,
   formula-injection guard. The column layout is import's first format
   (`lib/transactionExport.ts`): columns are only ever added at the end.
