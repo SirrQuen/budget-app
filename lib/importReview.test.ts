@@ -6,6 +6,7 @@ import {
   findDuplicates,
   matchCategories,
   summarizeImport,
+  unincludedDuplicates,
   type DateTreatment,
   type ExistingTransaction,
 } from "./importReview";
@@ -193,4 +194,43 @@ test("the answer reaches the database as it expects it", () => {
   assert.equal(choiceToCountsDespiteAnchor("added"), true);
   assert.equal(choiceToCountsDespiteAnchor("included"), false);
   assert.equal(choiceToCountsDespiteAnchor(null), null);
+});
+
+// ---- the server's duplicate re-run ---------------------------------
+
+test("the server refuses a flagged row the request doesn't mark as included", () => {
+  const rows = [
+    { row: 2, date: "2026-11-05", cents: 575, includeDuplicate: false },
+    { row: 3, date: "2026-11-20", cents: 575, includeDuplicate: false }, // no match
+  ];
+  assert.deepEqual(unincludedDuplicates(rows, [existing("a", "2026-11-06", 575)]), [2]);
+});
+
+test("a flagged row the person ticked passes -- two identical purchases stay possible", () => {
+  const rows = [{ row: 2, date: "2026-11-05", cents: 575, includeDuplicate: true }];
+  assert.deepEqual(unincludedDuplicates(rows, [existing("a", "2026-11-05", 575)]), []);
+});
+
+test("a row marked included that matches nothing is harmless", () => {
+  assert.deepEqual(unincludedDuplicates([{ row: 2, date: "2026-11-05", cents: 575, includeDuplicate: true }], []), []);
+});
+
+test("rows in the same file never refuse each other", () => {
+  const rows = [
+    { row: 2, date: "2026-11-05", cents: 575, includeDuplicate: false },
+    { row: 3, date: "2026-11-05", cents: 575, includeDuplicate: false },
+  ];
+  assert.deepEqual(unincludedDuplicates(rows, []), []);
+});
+
+test("the second pass of the same file: every row is refused with defaults, none with every tick", () => {
+  const rows = Array.from({ length: 140 }, (_, i) => ({
+    row: i + 2,
+    date: `2026-10-${String((i % 28) + 1).padStart(2, "0")}`,
+    cents: 100 + i,
+    includeDuplicate: false,
+  }));
+  const afterFirst = rows.map((r, i) => existing(`e${i}`, r.date, r.cents));
+  assert.equal(unincludedDuplicates(rows, afterFirst).length, 140);
+  assert.equal(unincludedDuplicates(rows.map((r) => ({ ...r, includeDuplicate: true })), afterFirst).length, 0);
 });

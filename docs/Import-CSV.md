@@ -108,6 +108,8 @@ A row is flagged if an existing transaction on **the same account** has **the sa
 - Rows within the file are never flagged against each other. Two $5.75 coffees on one day are two coffees.
 - Each flagged row shows the existing transaction it matched. The user can include it.
 - This matcher is acceptable where the fuzzy duplicate detector was ruled out because it **only flags in a preview the user controls**. Nothing is merged or deleted.
+- **The server re-runs it.** `importTransactions()` runs the same `findDuplicates()` against what the account holds when the request arrives (`unincludedDuplicates()`, `lib/importReview.ts`) and refuses the whole import if any flagged row isn't marked `includeDuplicate` -- the same shape as the same-bill check. The browser's tick is the only thing that lets a flagged row through; its flagging is not trusted. A row in the same request is never compared with another.
+- **Where it starts.** Settings > Import, an account's page, and the Transactions screen are one flow (`/import`). From Transactions, an account filter preselects that account (`?account=`); `?from=transactions` only decides where Back goes.
 
 ### 9. Categories
 
