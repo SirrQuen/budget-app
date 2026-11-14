@@ -191,6 +191,10 @@ export function isAwaitingStatementAmount(todayISO: string, cycle: StatementCycl
 // Never swap these -- paydayWindowEnd(anchor, N) must never land before
 // confirmationOpensOn(anchor, N) for the same inputs. Pinned by
 // lib/recurringSchedule.test.ts.
+// The queue's own window, exactly the schedule's tolerance. Import asks about
+// a bank row over a WIDER one (lib/sameBill.ts, IMPORT_SAME_BILL_DAYS):
+// banks post a day or two after the due date, and this window stays as it
+// is. Never widen this one for import's sake.
 export function confirmationOpensOn(anchorISO: string, toleranceDays: number): string {
   return addDaysISO(anchorISO, -toleranceDays);
 }

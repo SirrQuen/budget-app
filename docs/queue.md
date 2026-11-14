@@ -23,8 +23,13 @@ wait on Matt's ruling, in this order.
    2026-11-14 (see Done). The rest of "every number is a door" is under
    Deferred.
 5. ~~#5 export~~ -- deployed 2026-11-14 (see Done).
-6. **#5 import** -- its own spec first, which Matt is writing (ruled
-   2026-11-14: no spec exists yet). Not built until then.
+6. **#5 import** -- built 2026-11-14 on `feat/import-csv` (spec
+   docs/Import-CSV.md, migration 68 on sorrel-dev). **Not deployed.**
+   Waiting on: Matt running `docs/import-test.sql` and
+   `docs/rls-isolation-test.sql` on dev, a walk-through of the flow, the
+   merge, then the tester email (the privacy policy changes with it --
+   draft: docs/tester-notes/2026-11-16-import.md). Never push to production
+   before that email is sent.
 7. ~~#6 — dashboard layout~~ -- deployed 2026-11-14 (see Done).
 
 ## Launch blockers still open
@@ -55,6 +60,8 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 |---|---|---|---|
 | Drag-and-drop library: classic `@dnd-kit/core` 6.3.1 + `@dnd-kit/sortable` 10.0.0, pinned exactly (chosen 2026-11-14: stable over active, one sortable list, small footprint; the new `@dnd-kit/react` line is 0.x). Revisit: move to the new line if classic breaks on a React upgrade, or when the new line reaches 1.0 | 2026-11-14 | On a React upgrade, or `@dnd-kit/react` 1.0 | `package.json`; `app/(app)/dashboard/DashboardSections.tsx` |
 | "Every number is a door", the rest: an upcoming line opens its schedule; "(average of last 3)" opens the three confirmations it averaged; a goal's progress opens its contributions. The first three (budget spent, a category, the low-point item) shipped with #1 + #2 | 2026-11-14 | After #5 export | docs/Views-Search-Import-Layout.md, "Suggest other views" |
+| Same-bill question for HAND-ENTERED past rows: a past-dated unlinked entry meeting an occurrence still waiting in the confirmation queue (today the queue asks "Did rent come out?" and "It landed" writes it twice). Import asks this for its own rows only (`findImportSameBill`, `lib/sameBill.ts`); the same match for existing rows is not built | 2026-11-14 | After import is deployed | docs/Import-CSV.md, step 12; `lib/sameBill.ts` |
+| Excel (`.xlsx`) import. Audit `read-excel-file` first (SheetJS is not on npm past 0.18.5 and has two read-time vulnerabilities). v1 says "Save As CSV UTF-8" | 2026-11-14 | Two or more testers ask for `.xlsx` | docs/Import-CSV.md, "The library" |
 | Quick add on an account's page doesn't start on that account (the full Add transaction form does) | 2026-11-14 | Unscheduled | docs/Views-Search-Import-Layout.md, "The account page" |
 | Occurrences "filled" by a linked row, derived on read: the projection, Upcoming and the queue each treat an occurrence as filled while a linked row sits in its window, and the queue walks past filled cycles. The eventual shape for #4's "Yes"; v1 links and advances the cursor in one SQL function instead (ruled 2026-11-14: the derived form rewrites three readers and the queue cursor mid-beta) | 2026-11-14 | After the beta | docs/Views-Search-Import-Layout.md, item 4 |
 | Budget progress counts future-dated transactions, but the balance doesn't (budget vs balance) | 2026-11-10 | Before commercial launch | Findings, same title |

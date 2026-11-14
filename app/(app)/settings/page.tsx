@@ -11,6 +11,7 @@ import { DeleteAccountSection } from "./DeleteAccountSection";
 import { SafeToSpendWindowToggle } from "./SafeToSpendWindowToggle";
 import { SafeToSpendCushionForm } from "./SafeToSpendCushionForm";
 import { ProfileForm } from "./ProfileForm";
+import { ImportsSection } from "./ImportsSection";
 import { Wordmark } from "@/components/Wordmark";
 import { PRIVACY_PATH, TERMS_PATH } from "@/lib/legal";
 import pkg from "@/package.json";
@@ -186,6 +187,8 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
           Download transactions
         </a>
       </section>
+
+      <ImportsSection />
 
       <section
         aria-labelledby="about-heading"

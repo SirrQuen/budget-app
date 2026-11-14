@@ -58,6 +58,10 @@
 --                 link A's transaction, link to A's schedule, or learn
 --                 either exists; A can link A's own (the control)
 --   2g Same-bill answers (migration 66)
+--   2h Import (migration 68): import_transactions(), import_preview() and
+--                 undo_import() refuse another user's account and import;
+--                 list_imports() shows only your own; the control (A imports
+--                 into A's account and undoes it) works
 --                 confirm_same_bill() and record_different_bill() refuse
 --                 B on A's rows like a made-up id; clear_different_bill()
 --                 as B leaves A's answer; A can answer A's own (the control)
@@ -198,7 +202,7 @@ select u.k || '_' || v.k,
   from rls_fx u
  cross join (values ('acct','01'), ('invacct','02'), ('txn','03'), ('budget','04'),
                     ('goal','05'), ('contrib','06'), ('invest','07'), ('notif','08'),
-                    ('recur','09'), ('sub','0a'), ('sba','0b')) as v(k, n)
+                    ('recur','09'), ('sub','0a'), ('sba','0b'), ('imp','0c')) as v(k, n)
  where u.k in ('A', 'B');
 
 do $$
@@ -255,6 +259,11 @@ begin
     values (pg_temp.fx(u || '_sba'), uid, pg_temp.fx(u || '_recur'), pg_temp.fx(u || '_txn'),
             'different', current_date - 3);
 
+    -- An import (migration 68), written as the table owner: the app can only
+    -- write it through import_transactions().
+    insert into public.imports (id, userid, accountid, row_count)
+    values (pg_temp.fx(u || '_imp'), uid, pg_temp.fx(u || '_acct'), 1);
+
     insert into public.subscriptions (id, userid, stripe_customer_id, stripe_subscription_id,
                                       plan, status, renewal_date)
     values (pg_temp.fx(u || '_sub'), uid, 'cus_rls_' || u, 'sub_rls_' || u, 'Pro', 'Active',
@@ -294,6 +303,7 @@ begin
       ('1 reads', 'investments',            format('userid = %L', a),                            format('userid <> %L', b)),
       ('1 reads', 'notifications',          format('userid = %L', a),                            format('userid <> %L', b)),
       ('1 reads', 'profiles',               format('id = %L', a),                                format('id <> %L', b)),
+      ('1 reads', 'imports',                format('userid = %L', a),                            format('userid <> %L', b)),
       ('1 reads', 'recurring_transactions', format('userid = %L', a),                            format('userid <> %L', b)),
       ('1 reads', 'same_bill_answers',      format('userid = %L', a),                            format('userid <> %L', b)),
       ('1 reads', 'settings',               format('userid = %L', a),                            format('userid <> %L', b)),
@@ -359,6 +369,7 @@ begin
       ('category_groups',        'id', pg_temp.fx('A_group'),    pg_temp.fx('B_group'),    'userid', 'name = ''rls-b-was-here'''),
       ('goal_contributions',     'id', pg_temp.fx('A_contrib'),  pg_temp.fx('B_contrib'),  'goalid', 'amount = 999'),
       ('goals',                  'id', pg_temp.fx('A_goal'),     pg_temp.fx('B_goal'),     'userid', 'goal_name = ''rls-b-was-here'''),
+      ('imports',                'id', pg_temp.fx('A_imp'),      pg_temp.fx('B_imp'),      'userid', 'row_count = 999'),
       ('investments',            'id', pg_temp.fx('A_invest'),   pg_temp.fx('B_invest'),   'userid', 'ticker = ''HACK'''),
       ('notifications',          'id', pg_temp.fx('A_notif'),    pg_temp.fx('B_notif'),    'userid', 'is_read = true'),
       ('profiles',               'id', a,                        b,                        'id',     'first_name = ''rls-b-was-here'''),
@@ -414,6 +425,7 @@ begin
       ('category_groups',        format('insert into public.category_groups (userid, name) values (%L, ''rls'')', a)),
       ('goal_contributions',     format('insert into public.goal_contributions (userid, goalid, amount, date, funding_method) values (%L, %L, 1, current_date, ''manual'')', a, pg_temp.fx('A_goal'))),
       ('goals',                  format('insert into public.goals (userid, goal_name, goal_type, target_amount) values (%L, ''rls'', ''Custom'', 1)', a)),
+      ('imports',                format('insert into public.imports (userid, accountid, row_count) values (%L, %L, 1)', a, pg_temp.fx('B_acct'))),
       ('investments',            format('insert into public.investments (userid, accountid, ticker, shares, average_cost, asset_type) values (%L, %L, ''RLS2'', 1, 1, ''Stock'')', a, pg_temp.fx('B_invacct'))),
       ('notifications',          format('insert into public.notifications (userid, title, message, notification_type) values (%L, ''rls'', ''rls'', ''info'')', a)),
       ('profiles',               format('insert into public.profiles (id, first_name, last_name) values (%L, ''rls'', ''rls'')', a)),
@@ -736,6 +748,12 @@ begin
       -- Migration 57: a goal's funding transfer must be its own user's.
       ('goals_funding_recurringid_fkey',
         format('update public.goals set funding_recurringid = %L where id = %L', pg_temp.fx('A_recur'), pg_temp.fx('B_goal'))),
+      -- Migration 68: an import is about its own user's account, and a
+      -- transaction can only belong to its own user's import.
+      ('imports_accountid_fkey',
+        format('insert into public.imports (userid, accountid, row_count) values (%L, %L, 1)', b, pg_temp.fx('A_acct'))),
+      ('transactions_import_fkey',
+        format('update public.transactions set import_id = %L where id = %L', pg_temp.fx('A_imp'), pg_temp.fx('B_txn'))),
       -- Migration 66: an answer is about its own user's schedule and entry.
       ('same_bill_answers_recurringid_fkey',
         format('insert into public.same_bill_answers (userid, recurringid, transactionid, answer, occurrence_due_date) values (%L, %L, %L, ''different'', current_date)', b, pg_temp.fx('A_recur'), pg_temp.fx('B_txn'))),
@@ -1078,7 +1096,20 @@ begin
       ('public.same_bill_delete_preview(uuid[])',                'anon',          false),
       ('public.same_bill_delete_preview(uuid[])',                'authenticated', true),
       ('public.restore_same_bill_occurrence()',                  'anon',          false),
-      ('public.restore_same_bill_occurrence()',                  'authenticated', false)
+      ('public.restore_same_bill_occurrence()',                  'authenticated', false),
+      -- Import (migration 68). Signed-in only. same_bill_answer() is the
+      -- core both "Yes" paths share: closed to everyone but the definer
+      -- functions that call it.
+      ('public.import_preview(uuid,date[])',                     'anon',          false),
+      ('public.import_preview(uuid,date[])',                     'authenticated', true),
+      ('public.import_transactions(uuid,jsonb,boolean,uuid)',    'anon',          false),
+      ('public.import_transactions(uuid,jsonb,boolean,uuid)',    'authenticated', true),
+      ('public.undo_import(uuid)',                               'anon',          false),
+      ('public.undo_import(uuid)',                               'authenticated', true),
+      ('public.list_imports()',                                  'anon',          false),
+      ('public.list_imports()',                                  'authenticated', true),
+      ('public.same_bill_answer(uuid,uuid,date,date,date,boolean)', 'anon',          false),
+      ('public.same_bill_answer(uuid,uuid,date,date,date,boolean)', 'authenticated', false)
     ) as t(fn, role, expected)
   loop
     v_actual := has_function_privilege(v_check.role, v_check.fn::regprocedure, 'execute');
@@ -1238,6 +1269,84 @@ begin
              'recurringid ' || coalesce((select recurringid::text from public.transactions where id = a_tx), 'null')
              || ', answer ' || coalesce((select answer from public.same_bill_answers where transactionid = a_tx), 'none')),
     v_pass);
+end
+$$;
+
+
+-- ---------------------------------------------------------------------
+-- 2h -- Import (migration 68)
+--
+-- import_transactions() and undo_import() are SECURITY DEFINER, scoped by
+-- their own auth.uid() checks; import_preview() is security invoker, so
+-- RLS scopes its account lookup. B aims each at A's account and A's
+-- import: every one must refuse with the made-up id's P0002 and leave A's
+-- rows exactly as they were. list_imports() must show B nothing of A's.
+-- The control runs last: A imports into A's own account and undoes it, so
+-- the refusals above mean something. The date is tomorrow, after A's
+-- balance date, so no pre-balance answer is in play.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  a uuid := pg_temp.fx('A');
+  b uuid := pg_temp.fx('B');
+  v_rows jsonb;
+  v_case record;
+  v_try record;
+  v_before_txns bigint;
+  v_before_imports bigint;
+  v_pass boolean;
+  v_import uuid;
+  v_seen bigint;
+begin
+  v_rows := jsonb_build_array(jsonb_build_object(
+    'row', 2, 'date', (current_date + 1)::text, 'cents', 100, 'type', 'Expense',
+    'description', 'rls import', 'categoryid', pg_temp.fx('A_rent')));
+  v_before_txns := (select count(*) from public.transactions where userid = a);
+  v_before_imports := (select count(*) from public.imports where userid = a);
+
+  for v_case in
+    select * from (values
+      ('B imports into A''s account',
+       format('select * from public.import_transactions(%L, %L::jsonb, null, null)', pg_temp.fx('A_acct'), v_rows::text)),
+      ('B imports into a made-up account (the oracle baseline)',
+       format('select * from public.import_transactions(%L, %L::jsonb, null, null)', gen_random_uuid(), v_rows::text)),
+      ('B previews against A''s account',
+       format('select * from public.import_preview(%L, array[current_date])', pg_temp.fx('A_acct'))),
+      ('B undoes A''s import',
+       format('select * from public.undo_import(%L)', pg_temp.fx('A_imp')))
+    ) as t(what, sql)
+  loop
+    select * into v_try from pg_temp.try_as(b, v_case.sql);
+    v_pass := v_try.state = 'P0002'
+      and (select count(*) from public.transactions where userid = a) = v_before_txns
+      and (select count(*) from public.imports where userid = a) = v_before_imports
+      and exists (select 1 from public.imports where id = pg_temp.fx('A_imp'));
+    perform pg_temp.rec('2h import', 'import_transactions() / import_preview() / undo_import()', v_case.what,
+      'P0002; A''s rows and import intact',
+      coalesce(v_try.state, 'no error') || coalesce(': ' || v_try.msg, ''), v_pass);
+  end loop;
+
+  -- list_imports(): B sees none of A's.
+  v_seen := pg_temp.count_as(b, format('select count(*) from public.list_imports() where accountid = %L', pg_temp.fx('A_acct')));
+  perform pg_temp.rec('2h import', 'list_imports()', 'B lists imports', '0 of A''s',
+    v_seen::text || ' of A''s', v_seen = 0);
+
+  -- Control: A imports into A's own account, then undoes it.
+  select * into v_try from pg_temp.try_as(a, format('select * from public.import_transactions(%L, %L::jsonb, null, null)',
+    pg_temp.fx('A_acct'), v_rows::text));
+  select i.id into v_import from public.imports i where i.userid = a and i.id <> pg_temp.fx('A_imp');
+  v_pass := v_try.state is null
+    and (select count(*) from public.transactions where userid = a) = v_before_txns + 1
+    and (select count(*) from public.transactions where import_id = v_import) = 1;
+  perform pg_temp.rec('2h import', 'import_transactions()', 'control: A imports into A''s own account',
+    'one transaction, carrying the import', coalesce(v_try.state || ': ' || v_try.msg, 'no error'), v_pass);
+
+  select * into v_try from pg_temp.try_as(a, format('select * from public.undo_import(%L)', v_import));
+  v_pass := v_try.state is null
+    and (select count(*) from public.transactions where userid = a) = v_before_txns
+    and not exists (select 1 from public.imports where id = v_import);
+  perform pg_temp.rec('2h import', 'undo_import()', 'control: A undoes it',
+    'the transaction and the import are gone', coalesce(v_try.state || ': ' || v_try.msg, 'no error'), v_pass);
 end
 $$;
 
