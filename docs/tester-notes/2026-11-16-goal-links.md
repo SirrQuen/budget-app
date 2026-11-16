@@ -1,7 +1,7 @@
 Sent:      not yet
 Migration: 69
-Merge:     8570469 (feat/transaction-goal-links; merged locally 2026-11-16, not yet pushed)
-Deployed:  not yet
+Merge:     8570469 (feat/transaction-goal-links)
+Deployed:  2026-11-16
 
 ---
 

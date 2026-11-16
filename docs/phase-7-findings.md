@@ -2414,8 +2414,7 @@ held for the next policy-change email (docs/queue.md, Held).
 
 ## A transfer for a goal came off safe to spend twice (2026-11-16)
 
-**Status: fixed on `feat/transaction-goal-links` (migration 69), not
-merged.** Raised 2026-11-16 (docs/Log-Again-and-Goal-Links.md, section 3);
+**Status: fixed, deployed 2026-11-16 (migration 69, merge `8570469`).** Raised 2026-11-16 (docs/Log-Again-and-Goal-Links.md, section 3);
 confirmed 2026-11-16 (goals Phase 1 report); ruled 2026-11-16.
 
 The goal hold (v_goal_monthly_holds, 57) measured "contributed this month"

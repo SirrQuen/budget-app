@@ -29,19 +29,15 @@ wait on Matt's ruling, in this order.
 Spec for the next four: docs/Log-Again-and-Goal-Links.md, in this order,
 after import (deployed 2026-11-14). Raised 2026-11-16.
 
-8. ~~Log it again~~ -- deployed 2026-11-16 (see Done). Its goal link
-   joins the copied fields when item 10 lands.
+8. ~~Log it again~~ -- deployed 2026-11-16 (see Done). It copies the goal
+   link since item 10 (deployed 2026-11-16).
 9. ~~Goals, Phase 1 -- report only~~ -- reported 2026-11-16; ruled the
    same day. Order reversed by the ruling: transaction goal links first
    (they fix a confirmed double count), debt goals second.
-10. **"Is this for a goal?" on one-time transactions -- migration 69.**
-    Merged to local main 2026-11-16 (`8570469`); on sorrel-dev. Not yet on
-    production or pushed: 69 goes to production BEFORE main is pushed. Moves safe to spend: tester note
-    docs/tester-notes/2026-11-16-goal-links.md. Findings, "A transfer for
-    a goal came off safe to spend twice". Log again copies the goal link
-    (built with it).
+10. ~~"Is this for a goal?" on one-time transactions -- migration 69~~ --
+    deployed 2026-11-16 (see Done).
 11. **Debt payoff goals that follow the card's balance -- migration 70.**
-    After 69 merges, on its own branch. Held 52 is reference only:
+    Next: 69 is deployed. On its own branch. Held 52 is reference only:
     re-derive, don't rebase. Liability = Credit Card or Loan through a new
     SQL twin, is_liability_account_type(), with a parity-test case.
     Completion is sticky: activity dated after it never reopens the goal.
@@ -62,7 +58,7 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 - Dashboard layout, deployed 2026-11-14: "You can now rearrange your
   dashboard: hold the grip on any card and drag it, or use the card's
   menu." Status: not yet sent.
-- Goal links (migration 69, merged `8570469`, not deployed): draft in
+- Goal links (migration 69, deployed 2026-11-16): draft in
   docs/tester-notes/2026-11-16-goal-links.md. Moves safe to spend. Next
   What's new card, with debt goals that follow a card. Not before-deploy.
 - Log again (deployed 2026-11-16): draft in
@@ -99,6 +95,24 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 ## Done, still named in conversation
 
 Listed so they aren't queued again.
+
+- **A transaction can be for a goal (migration 69).** Merged to main
+  2026-11-16 (`8570469`, `feat/transaction-goal-links`); 69 on sorrel-dev
+  and production before the push; deployed 2026-11-16. transactions.goalid
+  links an expense or a transfer's Expense leg (never income); v_goal_money
+  is the one source of goal money for progress, the monthly holds and
+  completion. Fixes the double count: a $200 transfer to savings linked to
+  its goal leaves safe to spend as it was. Optional Goal field ("Is this for
+  a goal?" for a transfer leaving the spendable set), "Is this the same
+  money?" after a save that links, goal named in delete confirmations, Log
+  again copies the link. Checked: goal-monthly-holds-test.sql,
+  rls-isolation-test.sql and test:parity on dev (Matt); view-acl-check on
+  dev and production (17 views, 0 failed); the browser run on dev, all
+  test rows deleted. Not checked by hand: "No, keep both", the question
+  after an edit, completion by a linked transaction (the SQL test covers
+  it). No bloom when a transaction completes a goal -- it arrives with 70's
+  shared helper. Tester note: docs/tester-notes/2026-11-16-goal-links.md
+  (Sent: not yet, next What's new card).
 
 - **Log it again.** Merged to main 2026-11-16 (`86fb9dd`, `feat/log-again`); deployed 2026-11-16.
   "Log again" on a transaction's row (Transactions and account pages) and edit screen
