@@ -32,7 +32,7 @@ after import (deployed 2026-11-14). Raised 2026-11-16.
 8. **Log it again** -- "Log again" on a transaction's row and edit screen,
    and a "Recent" strip in quick add. Opens the add form pre-filled; never
    saves in one tap. No migration, changes no number. Built on
-   `feat/log-again`, not merged (2026-11-16). Its goal link joins the
+   `feat/log-again`, merged to local main 2026-11-16 (`86fb9dd`), not yet pushed or deployed. Its goal link joins the
    copied fields when item 11 lands.
 9. **Goals, Phase 1 -- report only** (items 10 and 11 together): where
    migration 52 lives, how contributions and completion are stored, whether
@@ -63,7 +63,7 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 - Dashboard layout, deployed 2026-11-14: "You can now rearrange your
   dashboard: hold the grip on any card and drag it, or use the card's
   menu." Status: not yet sent.
-- Log again (on `feat/log-again`, not deployed): draft in
+- Log again (merged `86fb9dd`, not deployed): draft in
   docs/tester-notes/2026-11-16-log-again.md. Goes in the next What's new
   card with a new dated cookie, beside the goal features. Not before-deploy.
 
