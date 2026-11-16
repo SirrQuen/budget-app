@@ -87,7 +87,6 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
       <div className="flex flex-col gap-2">
         {/* Liability balances are stored negative; shown as the amount owed. */}
         <StatTile
-          id={`account-balance-${id}`}
           label={owed ? "Owed" : "Balance"}
           value={owed ? Math.abs(balance.balance ?? 0) : (balance.balance ?? 0)}
           format="currency"

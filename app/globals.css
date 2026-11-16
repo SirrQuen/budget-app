@@ -1428,3 +1428,329 @@ body {
     }
   }
 }
+
+/* =====================================================================
+   MOTION AND DELIGHT (docs/Motion-and-Delight.md, batch A)
+   =====================================================================
+
+   The ten rules, as they bind this block: motion celebrates and never
+   warns (no red, no shake); nothing runs on page load -- every effect
+   below is applied by a component only when a value CHANGES while it is
+   on screen; only transform and opacity animate; the end state is always
+   reachable without the motion (the global reduced-motion block above
+   collapses every duration, and components that render extra elements for
+   an effect -- leaves, glow, rolling digits -- don't render them at all).
+
+   --ease-out is the nav icon verbs' curve under its Brand Kit name: one
+   curve, never two. --ease-spring is the slight overshoot. */
+:root {
+  --motion-fast: 160ms; /* page arrival, small fades */
+  --motion-base: 220ms; /* toggles, slides */
+  --motion-roll: 500ms; /* number rolls */
+  --motion-celebrate: 900ms; /* glows, blooms, leaves */
+  --ease-out: var(--icon-anim-ease);
+  --ease-spring: cubic-bezier(0.34, 1.25, 0.5, 1);
+}
+
+/* Page changes: a fade and an 8px rise, applied to the page wrapper only
+   after a client navigation (components/PageArrival.tsx). Two names for
+   one keyframe so a second navigation restarts the animation without
+   remounting the page. */
+@keyframes page-arrive-a {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes page-arrive-b {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.page-arrive-a {
+  animation: page-arrive-a var(--motion-fast) var(--ease-out) both;
+}
+.page-arrive-b {
+  animation: page-arrive-b var(--motion-fast) var(--ease-out) both;
+}
+
+/* Loading placeholders: one slow pulse. Opacity only. */
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+.skeleton-pulse {
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* A loading state is the one loop allowed -- but reduced motion gets it
+     still, dimmed. */
+  .skeleton-pulse {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* A balance after a save: the new figure comes in over 300ms. Opacity and
+   a hair of scale (rule 8 allows no blur), the same in either direction.
+   Two names, as with page-arrive. */
+@keyframes sharpen-a {
+  from {
+    opacity: 0.35;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes sharpen-b {
+  from {
+    opacity: 0.35;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.value-sharpen-a {
+  display: inline-block;
+  animation: sharpen-a 300ms var(--ease-out) both;
+}
+.value-sharpen-b {
+  display: inline-block;
+  animation: sharpen-b 300ms var(--ease-out) both;
+}
+
+/* The ripple on a primary button: white at 35%, from the tap point,
+   fading to nothing in 400ms. The element is added and removed by
+   components/RippleHost.tsx. */
+@keyframes button-ripple {
+  from {
+    opacity: 0.35;
+    transform: scale(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+.button-ripple {
+  position: absolute;
+  border-radius: 9999px;
+  background: #fff;
+  pointer-events: none;
+  animation: button-ripple 400ms var(--ease-out) both;
+}
+
+/* A check that draws itself in 250ms: the check is masked by a bar that
+   grows left to right (a scaleX, so it stays a transform). */
+@keyframes check-reveal {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.drawn-check-bar {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: check-reveal 250ms var(--ease-out) both;
+}
+
+/* Safe to Spend: digits roll a line up (a rise) or down (a fall), and a
+   rise gets a glow behind the figure. A fall gets neither a glow nor a
+   colour. Each rolling digit is a two-line column; the track moves by
+   half its own height. */
+.roll-digit {
+  display: inline-block;
+  height: 1.15em;
+  overflow: hidden;
+  vertical-align: top;
+}
+.roll-track {
+  display: flex;
+  flex-direction: column;
+}
+.roll-track > span {
+  display: block;
+  height: 1.15em;
+}
+@keyframes roll-up {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+@keyframes roll-down {
+  from {
+    transform: translateY(-50%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.roll-track--up {
+  animation: roll-up var(--motion-roll) var(--ease-spring) both;
+}
+.roll-track--down {
+  animation: roll-down var(--motion-roll) var(--ease-spring) both;
+}
+@keyframes figure-glow {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+/* Theme accent (gold in dark, navy in light) at 28%: chrome behind the
+   figure, never on it, never a data colour. */
+.figure-glow {
+  position: absolute;
+  inset: -0.35em -0.8em;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 9999px;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--action) 28%, transparent), transparent);
+  opacity: 0;
+  animation: figure-glow var(--motion-celebrate) var(--ease-out) both;
+}
+
+/* After a save: one or two leaves float up from the Save button and fade.
+   Brand gold, chrome only. They are not rendered at all under reduced
+   motion. */
+@keyframes leaf-float-1 {
+  from {
+    opacity: 0.95;
+    transform: translate(0, 0) rotate(-10deg) scale(0.8);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-14px, -38px) rotate(-38deg) scale(1);
+  }
+}
+@keyframes leaf-float-2 {
+  from {
+    opacity: 0.95;
+    transform: translate(0, 0) rotate(10deg) scale(0.8);
+  }
+  to {
+    opacity: 0;
+    transform: translate(16px, -46px) rotate(42deg) scale(1);
+  }
+}
+.save-leaf {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  pointer-events: none;
+  color: var(--gold);
+  opacity: 0;
+}
+.save-leaf--1 {
+  animation: leaf-float-1 var(--motion-celebrate) var(--ease-out) both;
+}
+.save-leaf--2 {
+  animation: leaf-float-2 var(--motion-celebrate) var(--ease-out) 90ms both;
+}
+
+/* The save toast arrives; it does not blink. */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.toast-in {
+  animation: toast-in var(--motion-base) var(--ease-out) both;
+}
+
+/* Empty-state drawings sway gently: +-4deg over 6s. Still under reduced
+   motion (a loop at the edge of the eye is not allowed there). */
+@keyframes empty-sway {
+  0%,
+  100% {
+    transform: rotate(-4deg);
+  }
+  50% {
+    transform: rotate(4deg);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .empty-sway {
+    transform-origin: 50% 90%;
+    animation: empty-sway 6s ease-in-out infinite;
+  }
+}
+
+/* Dashboard drag. The lifted card scales to 1.03 and tilts -1deg (the
+   individual scale/rotate properties, so dnd-kit's own transform is left
+   alone); its deeper shadow and gold ring are pseudo-elements that fade in
+   by opacity -- never a box-shadow transition. */
+.card-lift::before,
+.card-lift::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 1rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms var(--ease-out);
+}
+.card-lift::before {
+  z-index: -1;
+  box-shadow: 0 18px 40px -8px rgb(0 0 0 / 0.55);
+}
+.card-lift::after {
+  z-index: 1;
+  border: 1px solid var(--gold);
+}
+.card-lift--on {
+  scale: 1.03;
+  rotate: -1deg;
+}
+.card-lift--on::before,
+.card-lift--on::after {
+  opacity: 1;
+}
+/* Where the card will land. */
+.drag-landing {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  border: 2px dashed var(--gold);
+  border-radius: 1rem;
+  transition: transform 200ms var(--ease-out);
+}

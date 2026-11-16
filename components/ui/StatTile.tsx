@@ -3,10 +3,10 @@
 import { formatCompactNumber, formatDelta, type Tone } from "@/lib/format";
 import { toneClassName } from "@/components/ui/Amount";
 import { Sparkline } from "@/components/ui/Sparkline";
-import { useCountUp } from "@/components/ui/useCountUp";
+import { RollingFigure } from "@/components/ui/RollingFigure";
+import { useValueChange } from "@/components/ui/useValueChange";
 
 export function StatTile({
-  id,
   label,
   value,
   format = "number",
@@ -15,8 +15,6 @@ export function StatTile({
   trend,
   size = "default",
 }: {
-  /** Unique across the page -- keys this tile's last-seen value in localStorage. */
-  id: string;
   /** Sentence case, e.g. "Current monthly balance". */
   label: string;
   value: number;
@@ -51,9 +49,12 @@ export function StatTile({
    */
   size?: "default" | "hero";
 }) {
-  const { display, animating } = useCountUp(value, id);
-
-  const displayText = formatCompactNumber(display, { currency: format === "currency" });
+  // Rolls only when `value` changes while on screen -- never on load
+  // (docs/Motion-and-Delight.md, rules 6 and 10); same as the hero.
+  const change = useValueChange(value);
+  const compact = (n: number) => formatCompactNumber(n, { currency: format === "currency" });
+  const displayText = compact(value);
+  const previousText = change.previous === null ? null : compact(change.previous);
   const deltaParts = delta ? formatDelta(delta.value, { format: delta.format }) : null;
 
   // Colour by direction x whether that direction is good -- never by the
@@ -72,9 +73,9 @@ export function StatTile({
     <div className="rounded-2xl border border-hairline bg-surface p-4">
       <p className="text-sm font-medium text-ink-secondary">{label}</p>
       <p
-        className={`mt-1 font-semibold text-ink ${size === "hero" ? "text-5xl" : "text-2xl"} ${animating ? "tabular-nums" : ""}`}
+        className={`mt-1 font-semibold text-ink ${size === "hero" ? "text-5xl" : "text-2xl"}`}
       >
-        {displayText}
+        <RollingFigure text={displayText} previousText={previousText} change={change} glow={false} />
       </p>
       {deltaParts ? (
         // flex-wrap: in a narrow tile the comparison label drops to its own

@@ -11,11 +11,13 @@ import type { OverdueOccurrence } from "@/lib/safeToSpendProjection";
 import { occurrenceKey } from "@/lib/upcomingOccurrences";
 import { UnconfirmedIncomeNote, UnconfirmedObligationNote } from "./UnconfirmedIncomeNote";
 import type { HorizonReason } from "@/lib/safeToSpendProjection";
-import { Amount } from "@/components/ui/Amount";
-import { useCountUp } from "@/components/ui/useCountUp";
+import { toneClassName } from "@/components/ui/Amount";
+import { RollingFigure } from "@/components/ui/RollingFigure";
+import { useValueChange } from "@/components/ui/useValueChange";
 import { cautionLine, whatsAhead, whyThisNumber } from "@/lib/whatsAhead";
 import {
   formatCurrency,
+  formatSignedAmount,
   formatDateShort,
   formatDateWithWeekday,
   formatDayMonth,
@@ -154,6 +156,12 @@ function WhatsAheadBlock({ data }: { data: SafeToSpend }) {
   );
 }
 
+// The hero as text: positive reads as income ("+$1,240.00"), zero as a plain
+// "$0.00" -- a trough below zero never turns red or grows a warning icon.
+function figureText(value: number): string {
+  return value > 0 ? formatSignedAmount(value, "Income").text : formatCurrency(0);
+}
+
 // The one hero figure on the dashboard (design language: >=48px, exactly one
 // per view, proportional figures, same sans as everything else). Positive
 // renders through <Amount> as income-toned; $0 is plain ink -- a trough
@@ -162,10 +170,15 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
 
-  // The hero figure counts up on load (tabular-nums while it moves,
-  // proportional at rest); reduced motion lands it instantly.
-  const { display, animating } = useCountUp(data.safeToSpend, "safe-to-spend");
-  const figureClass = `mt-1 block text-5xl ${animating ? "tabular-nums" : ""}`;
+  // The figure rolls only when it CHANGES while on screen (a paycheck
+  // confirmed, an expense added): up for a rise, with a glow behind it; down
+  // for a fall, with nothing. On load it is still. The rolling digits are
+  // aria-hidden and the real figure sits in a polite live region
+  // (RollingFigure). docs/Motion-and-Delight.md, step 2.
+  const change = useValueChange(data.safeToSpend);
+  const figure = figureText(data.safeToSpend);
+  const previousFigure = change.previous === null ? null : figureText(change.previous);
+  const figureClass = `mt-1 block text-5xl ${data.safeToSpend > 0 ? "font-medium " + toneClassName("good") : "font-medium text-ink"}`;
 
   const projection = data.mode === "projection";
   const why = whyThisNumber(data);
@@ -181,11 +194,9 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
       >
         <div>
           <p className="text-sm font-medium text-ink-secondary">{title(data)}</p>
-          {data.safeToSpend > 0 ? (
-            <Amount amount={display} type="Income" className={figureClass} />
-          ) : (
-            <span className={`font-medium text-ink ${figureClass}`}>{formatCurrency(0)}</span>
-          )}
+          <span className={figureClass}>
+            <RollingFigure text={figure} previousText={previousFigure} change={change} />
+          </span>
           <p className="mt-2 text-sm text-ink-secondary">{subline(data)}</p>
           {/* The cause sits with the number (docs/Safe-to-Spend-Why.md): a
               figure on its own reads as a verdict. Inside the button, so

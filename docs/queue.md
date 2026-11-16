@@ -43,6 +43,28 @@ after import (deployed 2026-11-14). Raised 2026-11-16.
     Completion is sticky: activity dated after it never reopens the goal.
     The bloom only in the response of the action that caused it.
 
+Spec for the next five: docs/Motion-and-Delight.md, in this order. All
+user-visible: each adds lines to the next What's new card with a new dated
+cookie. Raised 2026-11-16.
+
+12. **Motion batch A -- steps 0, 1, 2, 3, 4, 6** (foundation, small
+    touches, Safe to Spend rolls, logging feels good, empty states, the
+    dashboard drag). Sonnet. Built on `feat/motion-and-delight-a`; not
+    merged. Also removed StatTile's count-up on mount (it now rolls on a
+    change only, like the hero). Tester note: docs/tester-notes/2026-11-16-motion-and-delight.md.
+13. **Batch B -- step 7**, the mark alive (launch bloom, app icons, home
+    screen). Sonnet. After A.
+14. **Batch C -- step 5**, goals that grow. Sonnet. After debt goals (70)
+    merges: it changes the goal cards 70 touches. Its gold meter fill
+    conflicts with CLAUDE.md ("gold never a meter fill"). Ruled 2026-11-16:
+    CLAUDE.md wins over the doc -- the glow in A uses `--action`, and C's
+    meters and leaves must follow the same rule (theme accent, never gold as
+    a data colour).
+15. **Batch D -- step 8**, seasons and time of day. Sonnet. After C. Note a
+    hemisphere setting in Deferred when it lands.
+16. **Batch E -- step 9**, your month as a story. **Opus**: it computes
+    money figures and has privacy rules. After D.
+
 ## Launch blockers still open
 
 See docs/phase-7-findings.md, "Launch blockers". As of 2026-11-10, 3
@@ -61,6 +83,9 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 - Goal links (migration 69, deployed 2026-11-16): draft in
   docs/tester-notes/2026-11-16-goal-links.md. Moves safe to spend. Next
   What's new card, with debt goals that follow a card. Not before-deploy.
+- Motion batch A (not merged): draft in
+  docs/tester-notes/2026-11-16-motion-and-delight.md. No number moves. Next
+  What's new card. Not before-deploy.
 - Log again (deployed 2026-11-16): draft in
   docs/tester-notes/2026-11-16-log-again.md. Goes in the next What's new
   card with a new dated cookie, beside the goal features. Not before-deploy.

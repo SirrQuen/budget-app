@@ -17,11 +17,12 @@ import { createTransactionAction, suggestCategoryAction, type ActionState } from
 import { useOptimisticTransactions } from "@/components/quick-add/OptimisticTransactionsContext";
 import { parseQuickAdd } from "@/lib/quickAdd/parseQuickAdd";
 import { useToday } from "@/components/TodayProvider";
-import { formatCurrency } from "@/lib/format";
-import { PlusIcon, FlameIcon } from "@/components/ui/icons";
+import { PlusIcon } from "@/components/ui/icons";
 import { Amount } from "@/components/ui/Amount";
 import { Button } from "@/components/ui/Button";
-import { Celebration } from "@/components/ui/Celebration";
+import { SaveLeaves, SaveToast, SavedLabel, useSaveToast } from "@/components/ui/SaveToast";
+import { savedSummary, type SavedSummary } from "@/lib/savedSummary";
+import { tick } from "@/lib/haptics";
 import { SaveNote, useSaveNote } from "@/components/ui/SaveNote";
 import { SameBillQuestion } from "@/components/SameBillQuestion";
 import type { SameBillPair } from "@/lib/sameBill";
@@ -30,7 +31,7 @@ import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { FullFormOverlay } from "@/components/quick-add/FullFormOverlay";
 import { needsAnchorAnswer } from "@/lib/anchorAnswer";
 import { FIELD_CLASS, FIELD_EDGE } from "@/components/ui/Input";
-import { recentCombinations, recentPrefill, type RecentRow } from "@/lib/logAgain";
+import { logAgainPrefill, recentCombinations, recentPrefill, type RecentRow } from "@/lib/logAgain";
 import type { GoalOption } from "@/lib/db/goals";
 import type { SameMoneyPair } from "@/lib/goalLinks";
 import { SameMoneyQuestion } from "@/components/SameMoneyQuestion";
@@ -66,9 +67,10 @@ export function QuickAddBar({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [fullFormOpen, setFullFormOpen] = useState(false);
   const [fullFormPrefill, setFullFormPrefill] = useState<AddTransactionPrefill>();
-  const [celebrate, setCelebrate] = useState(false);
-  const [celebrateMessage, setCelebrateMessage] = useState("Logged");
-  const [celebrateIcon, setCelebrateIcon] = useState<React.ReactNode>("✓");
+  // The save reaction (docs/Motion-and-Delight.md, step 3).
+  const [justSaved, setJustSaved] = useState(false);
+  const [saveSeq, setSaveSeq] = useState(0);
+  const [toast, showToast] = useSaveToast();
   const pulse = useConfirmPulse();
 
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -78,7 +80,7 @@ export function QuickAddBar({
   const categoryTouchedRef = useRef(false);
   const requestTokenRef = useRef(0);
   const wasPendingRef = useRef(false);
-  const celebrateTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const savedLabelTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const pendingClientIdRef = useRef<string | null>(null);
   const [saveNote, showSaveNote] = useSaveNote();
   // "Is this the same bill?" after a save that matches a schedule's next
@@ -189,20 +191,29 @@ export function QuickAddBar({
       pendingClientIdRef.current = null;
       if (clientId) settlePending(clientId);
 
-      const milestone = state?.milestone;
       // Read off `parsed` here, before setText("") below clears it -- the
       // next render's `parsed` is a failed parse of an empty string.
       const isIncome = parsed.ok && parsed.transaction_type === "Income";
-      const verb = isIncome ? "from" : "at";
-      const message = milestone
-        ? milestone.message
-        : parsed.ok
-          ? `Logged ${formatCurrency(parsed.amount)} ${verb} ${parsed.merchant}`
-          : "Logged";
-      const icon = milestone?.kind === "streak" ? <FlameIcon className="h-4 w-4" /> : "✓";
-      setCelebrateMessage(message);
-      setCelebrateIcon(icon);
-      setCelebrate(true);
+      if (parsed.ok) {
+        showToast(
+          savedSummary(
+            {
+              kind: "single",
+              description: parsed.merchant,
+              amount: parsed.amount,
+              transaction_type: parsed.transaction_type,
+              categoryid,
+              accountid,
+            },
+            state,
+          ),
+        );
+      }
+      setSaveSeq((n) => n + 1);
+      setJustSaved(true);
+      clearTimeout(savedLabelTimeoutRef.current);
+      savedLabelTimeoutRef.current = setTimeout(() => setJustSaved(false), 900);
+      tick();
       showSaveNote(state?.note ?? null);
       setSameBillPair(state?.sameBill ?? null);
       // Fires only on user-initiated create. A recurring confirmation has
@@ -210,8 +221,6 @@ export function QuickAddBar({
       pulse(isIncome ? "income" : "default");
       setText("");
       setSheetOpen(false);
-      clearTimeout(celebrateTimeoutRef.current);
-      celebrateTimeoutRef.current = setTimeout(() => setCelebrate(false), 1600);
     }
     wasPendingRef.current = pending;
     // parsed is read at the moment success is detected -- see body above.
@@ -219,7 +228,7 @@ export function QuickAddBar({
   }, [pending, state]);
 
   useEffect(() => {
-    return () => clearTimeout(celebrateTimeoutRef.current);
+    return () => clearTimeout(savedLabelTimeoutRef.current);
   }, []);
 
   // The same DOM node is an off-screen bottom sheet on mobile and an
@@ -294,7 +303,28 @@ export function QuickAddBar({
     setFullFormOpen(true);
   }
 
-  function handleFullFormSaved(note: string | null, sameBill?: SameBillPair, sameMoney?: SameMoneyPair) {
+  // "Log again" on the toast: the full form, refilled from what was just
+  // logged, dated today. Never saves.
+  function logAgainFromToast(summary: SavedSummary) {
+    showToast(null);
+    setFullFormPrefill(
+      logAgainPrefill(summary.source, {
+        accountIds: new Set(accounts.map((a) => a.id)),
+        incomeCategoryIds: new Set(incomeCategories.map((c) => c.id)),
+        expenseCategoryIds: new Set(expenseCategories.map((c) => c.id)),
+        goalIds: new Set(goals.map((g) => g.id)),
+      }),
+    );
+    setFullFormOpen(true);
+  }
+
+  function handleFullFormSaved(
+    note: string | null,
+    sameBill?: SameBillPair,
+    sameMoney?: SameMoneyPair,
+    saved?: SavedSummary,
+  ) {
+    showToast(saved ?? null);
     showSaveNote(note);
     setSameBillPair(sameBill ?? null);
     setSameMoneyPair(sameMoney ?? null);
@@ -398,9 +428,12 @@ export function QuickAddBar({
         >
           Full form
         </button>
-        <Button type="submit" disabled={pending} className="shrink-0 px-4 py-2 text-sm">
-          {pending ? "Saving…" : "Add"}
-        </Button>
+        <span className="relative shrink-0">
+          <Button type="submit" disabled={pending} className="px-4 py-2 text-sm">
+            {pending ? "Saving…" : justSaved ? <SavedLabel /> : "Add"}
+          </Button>
+          <SaveLeaves seq={saveSeq} />
+        </span>
       </div>
 
       {text.trim() ? (
@@ -523,7 +556,7 @@ export function QuickAddBar({
       ) : null}
 
       <div className="pointer-events-none fixed inset-x-4 bottom-24 z-50 flex flex-col items-center gap-2 md:bottom-6">
-        <Celebration show={celebrate} message={celebrateMessage} icon={celebrateIcon} />
+        <SaveToast summary={toast} onLogAgain={logAgainFromToast} />
         <SaveNote message={saveNote} />
         {sameBillPair ? (
           <SameBillQuestion

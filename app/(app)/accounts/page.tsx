@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadError } from "@/components/ui/LoadError";
 import { StatTile } from "@/components/ui/StatTile";
-import { WalletIcon } from "@/components/ui/icons";
+import { SproutIllustration } from "@/components/ui/EmptyIllustrations";
 import { formatAccountBalance } from "@/lib/format";
 import { getToday } from "@/lib/db/settings";
 import { ACCOUNT_TYPE_GROUP_ORDER, isLiabilityAccountType } from "@/lib/accountOptions";
@@ -128,7 +128,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
       <div className="flex flex-col gap-6">
         <PageHeader title="Accounts" description="Every place your money lives, in one list." />
         <EmptyState
-          icon={<WalletIcon className="h-10 w-10" />}
+          icon={<SproutIllustration />}
           heading="Add your first account"
           message="Checking, savings, a credit card, cash in your pocket -- add whatever you track and we'll start building your picture from there."
           action={<CreateAccountForm label="Add your first account" />}
@@ -210,7 +210,6 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
       <PageHeader title="Accounts" description="Every place your money lives, in one list." />
 
       <StatTile
-        id="accounts-net-worth"
         label="Total across accounts"
         value={netWorthResult.data?.net_worth ?? 0}
         format="currency"
@@ -235,7 +234,7 @@ export default async function AccountsPage({ searchParams }: PageProps<"/account
 
       {visibleAccounts.length === 0 ? (
         <EmptyState
-          icon={<WalletIcon className="h-10 w-10" />}
+          icon={<SproutIllustration />}
           heading="Everything here is archived"
           message="Bring an old account back, or start fresh with a new one -- either way, you're a click from having something to track."
           action={

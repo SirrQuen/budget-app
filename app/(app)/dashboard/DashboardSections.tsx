@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -13,6 +13,7 @@ import {
   useSensors,
   type Announcements,
   type DragEndEvent,
+  type DragOverEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -30,6 +31,8 @@ import {
   type DashboardSectionId,
 } from "@/lib/dashboardLayout";
 import { useDashboardLayout } from "./DashboardLayoutProvider";
+import { useReducedMotion } from "@/components/ui/useReducedMotion";
+import { tick } from "@/lib/haptics";
 
 // One region of the dashboard as a sortable list of cards. ORDER, not free
 // placement: a card lands where it's dropped in the sequence, and a two-
@@ -64,19 +67,6 @@ const collision: CollisionDetection = (args) => {
   return underPointer.length > 0 ? underPointer : rectIntersection(args);
 };
 
-const noMotionQuery = "(prefers-reduced-motion: reduce)";
-function useReducedMotion() {
-  return useSyncExternalStore(
-    (notify) => {
-      const query = window.matchMedia(noMotionQuery);
-      query.addEventListener("change", notify);
-      return () => query.removeEventListener("change", notify);
-    },
-    () => window.matchMedia(noMotionQuery).matches,
-    () => false,
-  );
-}
-
 export function DashboardSections({
   region,
   items,
@@ -87,6 +77,11 @@ export function DashboardSections({
   const { layout, reorder, step, hide } = useDashboardLayout();
   const reducedMotion = useReducedMotion();
   const dndId = useId();
+  // Where the dragged card will land: the slot of the card it is over,
+  // relative to the grid (docs/Motion-and-Delight.md, step 6). A dashed
+  // gold outline, in every motion setting.
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [landing, setLanding] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
   const present = new Map(items.map((item) => [item.id, item.node]));
   const hidden = new Set(layout.hidden);
@@ -128,7 +123,27 @@ export function DashboardSections({
       `Move cancelled. ${labelOf(active.id as DashboardSectionId)} is back at ${position(active.id)}.`,
   };
 
+  function showLanding(over: DragOverEvent["over"]) {
+    const grid = gridRef.current?.getBoundingClientRect();
+    if (!over || !grid) {
+      setLanding(null);
+      return;
+    }
+    setLanding({
+      x: over.rect.left - grid.left,
+      y: over.rect.top - grid.top,
+      width: over.rect.width,
+      height: over.rect.height,
+    });
+  }
+
+  function onDragStart() {
+    tick();
+  }
+
   function onDragEnd({ active, over }: DragEndEvent) {
+    setLanding(null);
+    tick();
     if (!over || active.id === over.id) {
       return;
     }
@@ -145,7 +160,10 @@ export function DashboardSections({
       id={dndId}
       sensors={sensors}
       collisionDetection={collision}
+      onDragStart={onDragStart}
+      onDragOver={({ over }) => showLanding(over)}
       onDragEnd={onDragEnd}
+      onDragCancel={() => setLanding(null)}
       accessibility={{
         announcements,
         screenReaderInstructions: {
@@ -161,7 +179,18 @@ export function DashboardSections({
             keyboard or screen reader walks them. A gap beside a small tile
             is the price; dragging fills it. items-start: a card is exactly
             its own tile, never stretched to its row. */}
-        <div className="grid grid-cols-1 items-start gap-x-4 gap-y-6 md:grid-cols-2 xl:grid-cols-4">
+        <div ref={gridRef} className="relative grid grid-cols-1 items-start gap-x-4 gap-y-6 md:grid-cols-2 xl:grid-cols-4">
+          {landing ? (
+            <div
+              aria-hidden="true"
+              className="drag-landing"
+              style={{
+                width: landing.width,
+                height: landing.height,
+                transform: `translate(${landing.x}px, ${landing.y}px)`,
+              }}
+            />
+          ) : null}
           {visible.map((id, index) => (
             <SortableCard
               key={id}
@@ -204,8 +233,9 @@ function SortableCard({
   onHide: () => void;
   children: React.ReactNode;
 }) {
+  // The other cards slide aside over 200ms on the shared curve.
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
-    useSortable({ id, transition: reducedMotion ? null : undefined });
+    useSortable({ id, transition: reducedMotion ? null : { duration: 200, easing: "var(--ease-out)" } });
 
   const label = labelOf(id);
 
@@ -216,10 +246,22 @@ function SortableCard({
         // Translate only: the sorting strategy also offers a scale for cards
         // of different sizes, which would squash a card's content mid-drag.
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-        transition: reducedMotion ? undefined : transition,
+        // The lift (120ms) and the settle (180ms, a slight overshoot) ride
+        // beside dnd-kit's own transform transition on the scale and rotate
+        // properties, which leave its transform alone.
+        transition: reducedMotion
+          ? undefined
+          : [
+              transition,
+              isDragging
+                ? "scale 120ms var(--ease-out), rotate 120ms var(--ease-out)"
+                : "scale 180ms var(--ease-spring), rotate 180ms var(--ease-spring)",
+            ]
+              .filter(Boolean)
+              .join(", "),
       }}
-      className={`group relative min-w-0 ${SPAN[sizeOf(id)]} ${
-        isDragging ? "z-20 opacity-90 shadow-2xl" : ""
+      className={`card-lift group relative min-w-0 ${SPAN[sizeOf(id)]} ${
+        isDragging ? (reducedMotion ? "z-20 opacity-90" : "card-lift--on z-20") : ""
       }`}
     >
       <div

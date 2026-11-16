@@ -8,7 +8,7 @@ import { getConfirmationQueue } from "@/lib/db/dashboard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadError } from "@/components/ui/LoadError";
-import { RepeatIcon } from "@/components/ui/icons";
+import { SeedIllustration } from "@/components/ui/EmptyIllustrations";
 import { CreateRecurringForm } from "./CreateRecurringForm";
 import { RecurringRow } from "./RecurringRow";
 import { ConfirmationQueue } from "./ConfirmationQueue";
@@ -122,7 +122,7 @@ export default async function RecurringPage() {
           description="Bills and paychecks that repeat. When one comes due, you confirm what happened."
         />
         <EmptyState
-          icon={<RepeatIcon className="h-10 w-10" />}
+          icon={<SeedIllustration />}
           heading="Set up a repeating bill or paycheck"
           message="Rent, a subscription, your paycheck -- set it up once. When its date comes, one tap confirms it and it goes in your transactions."
           action={

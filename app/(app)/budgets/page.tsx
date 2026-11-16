@@ -7,7 +7,7 @@ import { getChronicOverBudgetInsight, LOOKBACK_MONTHS } from "@/lib/budgetInsigh
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadError } from "@/components/ui/LoadError";
-import { PieIcon } from "@/components/ui/icons";
+import { SeedIllustration } from "@/components/ui/EmptyIllustrations";
 import { CreateBudgetForm } from "./CreateBudgetForm";
 import { BudgetRow } from "./BudgetRow";
 
@@ -112,7 +112,7 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
 
       {budgets.length === 0 ? (
         <EmptyState
-          icon={<PieIcon className="h-10 w-10" />}
+          icon={<SeedIllustration />}
           heading={`Nothing budgeted for ${formatMonthLabel(month)}`}
           message="Pick a category above and give it a number -- that's the whole system. The meter fills in as you spend."
         />

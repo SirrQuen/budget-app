@@ -10,7 +10,7 @@ export function LoadingSkeleton({
     <div
       aria-hidden="true"
       {...props}
-      className={`animate-pulse rounded-lg bg-surface motion-reduce:animate-none motion-reduce:opacity-60 ${className}`}
+      className={`skeleton-pulse rounded-lg bg-surface ${className}`}
     />
   );
 }

@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import { FullFormOverlay } from "@/components/quick-add/FullFormOverlay";
 import { SaveNote, useSaveNote } from "@/components/ui/SaveNote";
+import { SaveToast, useSaveToast } from "@/components/ui/SaveToast";
+import type { SavedSummary } from "@/lib/savedSummary";
 import { SameBillQuestion } from "@/components/SameBillQuestion";
 import type { SameBillPair } from "@/lib/sameBill";
 import { logAgainPrefill, type LogAgainSource } from "@/lib/logAgain";
@@ -35,6 +37,9 @@ export function LogAgainButton({
 }) {
   const [open, setOpen] = useState(false);
   const [saveNote, showSaveNote] = useSaveNote();
+  const [toast, showToast] = useSaveToast();
+  // Set when reopened from the toast's own "Log again": the form starts from what was just logged.
+  const [reopenFrom, setReopenFrom] = useState<SavedSummary | null>(null);
   const [sameBillPair, setSameBillPair] = useState<SameBillPair | null>(null);
   const [sameMoneyPair, setSameMoneyPair] = useState<SameMoneyPair | null>(null);
 
@@ -42,20 +47,23 @@ export function LogAgainButton({
   // which copied fields still apply. Active accounts and categories only.
   const prefill = useMemo(
     () =>
-      logAgainPrefill(source, {
+      logAgainPrefill(reopenFrom ? reopenFrom.source : source, {
         accountIds: new Set(accounts.filter((a) => a.is_active).map((a) => a.id)),
         incomeCategoryIds: new Set(incomeCategories.filter((c) => c.is_active).map((c) => c.id)),
         expenseCategoryIds: new Set(expenseCategories.filter((c) => c.is_active).map((c) => c.id)),
         goalIds: new Set(goals.map((g) => g.id)),
       }),
-    [source, accounts, incomeCategories, expenseCategories, goals],
+    [source, reopenFrom, accounts, incomeCategories, expenseCategories, goals],
   );
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setReopenFrom(null);
+          setOpen(true);
+        }}
         aria-label={`Log again: ${source.description}`}
         className={
           className ??
@@ -73,7 +81,8 @@ export function LogAgainButton({
           goals={goals}
           prefill={prefill}
           onClose={() => setOpen(false)}
-          onSaved={(note, sameBill, sameMoney) => {
+          onSaved={(note, sameBill, sameMoney, saved) => {
+            showToast(saved ?? null);
             showSaveNote(note);
             setSameBillPair(sameBill ?? null);
             setSameMoneyPair(sameMoney ?? null);
@@ -85,6 +94,14 @@ export function LogAgainButton({
       {/* text-left: this sits inside the list row's right-aligned actions
           cell, and position:fixed doesn't stop text-align inheriting. */}
       <div className="pointer-events-none fixed inset-x-4 bottom-24 z-50 flex flex-col items-center gap-2 text-left md:bottom-6">
+        <SaveToast
+          summary={toast}
+          onLogAgain={(summary) => {
+            showToast(null);
+            setReopenFrom(summary);
+            setOpen(true);
+          }}
+        />
         <SaveNote message={saveNote} />
         {sameBillPair ? (
           <SameBillQuestion

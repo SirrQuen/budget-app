@@ -18,14 +18,17 @@ import {
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { TransactionType } from "@/lib/db/transactions";
 import { useToday } from "@/components/TodayProvider";
-import { formatCurrency } from "@/lib/format";
 import { FormField, useFieldId } from "@/components/ui/FormField";
 import { Input, FIELD_CLASS } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { PaymentNote } from "@/components/PaymentNote";
 import { paymentPayee } from "@/lib/accountOptions";
-import { Celebration } from "@/components/ui/Celebration";
+import { SaveLeaves, SaveToast, SavedLabel, useSaveToast } from "@/components/ui/SaveToast";
+import { savedSummary, type SavedSummary } from "@/lib/savedSummary";
+import { logAgainPrefill, type LogAgainSource } from "@/lib/logAgain";
+import { tick } from "@/lib/haptics";
+import { prefersReducedMotion } from "@/components/ui/useReducedMotion";
 import { SaveNote, useSaveNote } from "@/components/ui/SaveNote";
 import { SameBillQuestion } from "@/components/SameBillQuestion";
 import type { SameBillPair } from "@/lib/sameBill";
@@ -39,7 +42,7 @@ import {
 import type { AnchorAnswerColumns } from "@/lib/anchorAnswer";
 import { EditScopeChoice } from "@/components/EditScopeChoice";
 import { amountChanged } from "@/lib/recurringEditScope";
-import { ChevronDownIcon, FlameIcon } from "@/components/ui/icons";
+import { ChevronDownIcon } from "@/components/ui/icons";
 import { GoalField } from "@/components/GoalField";
 import { SameMoneyQuestion } from "@/components/SameMoneyQuestion";
 import type { GoalOption } from "@/lib/db/goals";
@@ -165,7 +168,12 @@ export function AddTransactionForm({
   /** Embedded mode only: called once the create-success celebration
    * finishes, with the save's note (lib/whatsAhead.ts figureUnchangedNote)
    * for the caller to show -- this form unmounts with its overlay. */
-  onSaved?: (note: string | null, sameBill?: SameBillPair, sameMoney?: SameMoneyPair) => void;
+  onSaved?: (
+    note: string | null,
+    sameBill?: SameBillPair,
+    sameMoney?: SameMoneyPair,
+    saved?: SavedSummary,
+  ) => void;
 }) {
   const router = useRouter();
   const isEdit = mode === "edit";
@@ -210,9 +218,12 @@ export function AddTransactionForm({
   // overlay) beside the filter bar's own Category/Account -- see useFieldId.
   const fieldId = useFieldId();
   const [clientError, setClientError] = useState<string>();
-  const [celebrate, setCelebrate] = useState(false);
-  const [celebrateMessage, setCelebrateMessage] = useState("Logged");
-  const [celebrateIcon, setCelebrateIcon] = useState<React.ReactNode>("✓");
+  // The save reaction (docs/Motion-and-Delight.md, step 3): the button says
+  // "Saved" for a moment, leaves float up from it, and the toast offers
+  // Log again. `saveSeq` restarts the leaves for each save.
+  const [justSaved, setJustSaved] = useState(false);
+  const [saveSeq, setSaveSeq] = useState(0);
+  const [toast, showToast] = useSaveToast();
   const [saveNote, showSaveNote] = useSaveNote();
   // "Is this the same bill?" after saving an entry that matches a
   // schedule's next occurrence (lib/sameBill.ts). Stays until answered or
@@ -225,6 +236,7 @@ export function AddTransactionForm({
   const amountInputRef = useRef<HTMLInputElement>(null);
   const wasPending = useRef(false);
   const celebrateTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const savedLabelTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
   // Create only. The last submission's key and fields: an identical retry
   // reuses the key, an edited one gets a new key (lib/idempotency.ts).
   // Minted in handleSubmit and written into the hidden input, never during
@@ -318,6 +330,26 @@ export function AddTransactionForm({
       // Capture the submitted direction before setType("Expense") below --
       // the pulse variant must reflect what was logged, not the reset value.
       const loggedType = type;
+      // What Log again refills, captured with the rest before the reset.
+      const loggedSource: LogAgainSource =
+        loggedType === "Transfer"
+          ? {
+              kind: "transfer",
+              description: loggedDescription,
+              amount: loggedAmount,
+              fromAccountId,
+              toAccountId,
+              goalid: goalid || null,
+            }
+          : {
+              kind: "single",
+              description: loggedDescription,
+              amount: loggedAmount,
+              transaction_type: loggedType,
+              categoryid,
+              accountid,
+              goalid: loggedType === "Expense" ? goalid || null : null,
+            };
       // Saved: the next entry is a new transaction, whatever its fields.
       lastAttempt.current = null;
       formRef.current?.reset();
@@ -338,33 +370,41 @@ export function AddTransactionForm({
       // immediately, without the browser scrolling to bring the field into
       // view (it's already on screen).
       amountInputRef.current?.focus({ preventScroll: true });
-      const milestone = state?.milestone;
-      const loggedMessage =
-        Number.isFinite(loggedAmount) && loggedAmount > 0
-          ? loggedDescription
-            ? `Logged ${formatCurrency(loggedAmount)} · ${loggedDescription}`
-            : `Logged ${formatCurrency(loggedAmount)}`
-          : "Logged";
-      setCelebrateMessage(milestone?.message ?? loggedMessage);
-      setCelebrateIcon(milestone?.kind === "streak" ? <FlameIcon className="h-4 w-4" /> : "✓");
-      setCelebrate(true);
+      const saved = savedSummary(loggedSource, state);
+      const reduced = prefersReducedMotion();
+      setSaveSeq((n) => n + 1);
+      setJustSaved(true);
+      clearTimeout(savedLabelTimeout.current);
+      savedLabelTimeout.current = setTimeout(() => setJustSaved(false), 900);
+      tick();
       // In an overlay the note goes to the caller, which outlives it.
       const note = state?.note ?? null;
       const sameBill = state?.sameBill;
       const sameMoney = state?.sameMoney;
       if (!onSaved) {
+        showToast(saved);
         showSaveNote(note);
+        // This whole effect is "the create action just finished": useActionState
+        // hands the result back as state, so the form's reset and follow-up
+        // questions can only happen here (the old code did the same). The
+        // rule began flagging this line after the save-reaction edit even
+        // though the effect already set state synchronously before it; why
+        // it was silent before is not established. Moving the work into the
+        // submit handler would change when the form resets, which is not a
+        // small or safe change in this batch.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSameBillPair(sameBill ?? null);
         setSameMoneyPair(sameMoney ?? null);
       }
       // Fires only on user-initiated create. A recurring confirmation has
       // its own sheet and its own pulse, never this one.
       pulse(loggedType === "Income" ? "income" : "default");
+      // In an overlay, the leaves and "Saved" get their moment before it
+      // closes and hands the toast to its caller.
       clearTimeout(celebrateTimeout.current);
-      celebrateTimeout.current = setTimeout(() => {
-        setCelebrate(false);
-        onSaved?.(note, sameBill, sameMoney);
-      }, 1600);
+      if (onSaved) {
+        celebrateTimeout.current = setTimeout(() => onSaved(note, sameBill, sameMoney, saved), reduced ? 0 : 900);
+      }
     }
     wasPending.current = pending;
     // `amount`, `type` and `today` are read only at the pending->done
@@ -374,8 +414,37 @@ export function AddTransactionForm({
   }, [pending, state, isEdit, onSaved]);
 
   useEffect(() => {
-    return () => clearTimeout(celebrateTimeout.current);
+    return () => {
+      clearTimeout(celebrateTimeout.current);
+      clearTimeout(savedLabelTimeout.current);
+    };
   }, []);
+
+  // "Log again" on the toast: refill this form from what was just logged,
+  // dated today, amount selected. Never saves -- Save is its own tap.
+  function applyLogAgain(summary: SavedSummary) {
+    const refill = logAgainPrefill(summary.source, {
+      accountIds: new Set(accounts.filter((a) => a.is_active).map((a) => a.id)),
+      incomeCategoryIds: new Set(incomeCategories.filter((c) => c.is_active).map((c) => c.id)),
+      expenseCategoryIds: new Set(expenseCategories.filter((c) => c.is_active).map((c) => c.id)),
+      goalIds: new Set(goals.map((g) => g.id)),
+    });
+    showToast(null);
+    setType(refill.transaction_type ?? "Expense");
+    setCategoryid(refill.categoryid ?? "");
+    setAccountid(refill.accountid ?? "");
+    setFromAccountId(refill.fromAccountId ?? "");
+    setToAccountId(refill.toAccountId ?? "");
+    setAmount(refill.amount ?? "");
+    setGoalid(refill.goalid ?? "");
+    setTransactionDate(today);
+    requestAnimationFrame(() => {
+      const description = formRef.current?.elements.namedItem("description");
+      if (description instanceof HTMLInputElement) description.value = refill.description ?? "";
+      amountInputRef.current?.focus();
+      amountInputRef.current?.select();
+    });
+  }
 
   // Log again: the amount is the one field a repeat usually changes, so it
   // opens selected. Mount only -- the form is only ever remounted for a new
@@ -728,9 +797,12 @@ export function AddTransactionForm({
           />
         ) : null}
 
-        <Button type="submit" disabled={pending} className="self-start">
-          {pending ? "Saving…" : isEdit ? "Save changes" : "Add transaction"}
-        </Button>
+        <span className="relative self-start">
+          <Button type="submit" disabled={pending}>
+            {pending ? "Saving…" : isEdit ? "Save changes" : justSaved ? <SavedLabel /> : "Add transaction"}
+          </Button>
+          {isEdit ? null : <SaveLeaves seq={saveSeq} />}
+        </span>
       </form>
 
       {!isEdit && sameBillPair ? (
@@ -753,7 +825,7 @@ export function AddTransactionForm({
 
       {isEdit ? null : (
         <div className="pointer-events-none fixed inset-x-4 bottom-6 z-50 flex flex-col items-center gap-2">
-          <Celebration show={celebrate} message={celebrateMessage} icon={celebrateIcon} />
+          <SaveToast summary={toast} onLogAgain={applyLogAgain} />
           <SaveNote message={saveNote} />
         </div>
       )}
