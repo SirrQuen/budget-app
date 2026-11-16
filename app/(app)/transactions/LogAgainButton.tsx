@@ -7,6 +7,9 @@ import { SaveNote, useSaveNote } from "@/components/ui/SaveNote";
 import { SameBillQuestion } from "@/components/SameBillQuestion";
 import type { SameBillPair } from "@/lib/sameBill";
 import { logAgainPrefill, type LogAgainSource } from "@/lib/logAgain";
+import type { GoalOption } from "@/lib/db/goals";
+import type { SameMoneyPair } from "@/lib/goalLinks";
+import { SameMoneyQuestion } from "@/components/SameMoneyQuestion";
 import type { TransactionAccountOption } from "./AddTransactionForm";
 
 // "Log again": opens the add form pre-filled from a past transaction
@@ -19,9 +22,12 @@ export function LogAgainButton({
   accounts,
   incomeCategories,
   expenseCategories,
+  goals = [],
   className,
 }: {
   source: LogAgainSource;
+  /** Goals a transaction can be for -- the copied goal comes along only if listed. */
+  goals?: GoalOption[];
   accounts: TransactionAccountOption[];
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
@@ -30,6 +36,7 @@ export function LogAgainButton({
   const [open, setOpen] = useState(false);
   const [saveNote, showSaveNote] = useSaveNote();
   const [sameBillPair, setSameBillPair] = useState<SameBillPair | null>(null);
+  const [sameMoneyPair, setSameMoneyPair] = useState<SameMoneyPair | null>(null);
 
   // Opening reads the lists as they are now: what the pickers offer decides
   // which copied fields still apply. Active accounts and categories only.
@@ -39,8 +46,9 @@ export function LogAgainButton({
         accountIds: new Set(accounts.filter((a) => a.is_active).map((a) => a.id)),
         incomeCategoryIds: new Set(incomeCategories.filter((c) => c.is_active).map((c) => c.id)),
         expenseCategoryIds: new Set(expenseCategories.filter((c) => c.is_active).map((c) => c.id)),
+        goalIds: new Set(goals.map((g) => g.id)),
       }),
-    [source, accounts, incomeCategories, expenseCategories],
+    [source, accounts, incomeCategories, expenseCategories, goals],
   );
 
   return (
@@ -62,23 +70,35 @@ export function LogAgainButton({
           accounts={accounts}
           incomeCategories={incomeCategories}
           expenseCategories={expenseCategories}
+          goals={goals}
           prefill={prefill}
           onClose={() => setOpen(false)}
-          onSaved={(note, sameBill) => {
+          onSaved={(note, sameBill, sameMoney) => {
             showSaveNote(note);
             setSameBillPair(sameBill ?? null);
+            setSameMoneyPair(sameMoney ?? null);
             setOpen(false);
           }}
         />
       ) : null}
 
-      <div className="pointer-events-none fixed inset-x-4 bottom-24 z-50 flex flex-col items-center gap-2 md:bottom-6">
+      {/* text-left: this sits inside the list row's right-aligned actions
+          cell, and position:fixed doesn't stop text-align inheriting. */}
+      <div className="pointer-events-none fixed inset-x-4 bottom-24 z-50 flex flex-col items-center gap-2 text-left md:bottom-6">
         <SaveNote message={saveNote} />
         {sameBillPair ? (
           <SameBillQuestion
             key={sameBillPair.transactionId}
             pair={sameBillPair}
             onDismiss={() => setSameBillPair(null)}
+            className="pointer-events-auto w-full max-w-md bg-surface shadow-lg"
+          />
+        ) : null}
+        {sameMoneyPair ? (
+          <SameMoneyQuestion
+            key={sameMoneyPair.contributionId}
+            pair={sameMoneyPair}
+            onDone={() => setSameMoneyPair(null)}
             className="pointer-events-auto w-full max-w-md bg-surface shadow-lg"
           />
         ) : null}

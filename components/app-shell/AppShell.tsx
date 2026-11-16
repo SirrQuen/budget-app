@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { QuickAddBar } from "@/components/quick-add/QuickAddBar";
 import { showsQuickAdd } from "@/lib/quickAdd/visibility";
 import type { RecentRow } from "@/lib/logAgain";
+import type { GoalOption } from "@/lib/db/goals";
 import { OptimisticTransactionsProvider } from "@/components/quick-add/OptimisticTransactionsContext";
 import { ConfirmPulseProvider } from "@/components/ui/ConfirmPulse";
 import { SorrelMark } from "@/components/SorrelMark";
@@ -23,6 +24,8 @@ export type QuickAddData = {
   defaultAccountId: string | null;
   /** Newest first; quick add's "Recent" strip picks its five from these. */
   recentTransactions: RecentRow[];
+  /** Goals a transaction can be for, for the full form's Goal field. */
+  goals: GoalOption[];
 };
 
 type NavItem = {
@@ -149,6 +152,7 @@ export function AppShell({
                   expenseCategories={quickAdd.expenseCategories}
                   defaultAccountId={quickAdd.defaultAccountId}
                   recentTransactions={quickAdd.recentTransactions}
+                  goals={quickAdd.goals}
                   navOpen={open}
                 />
               ) : null}

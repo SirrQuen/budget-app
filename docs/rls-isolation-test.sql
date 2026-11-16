@@ -58,6 +58,10 @@
 --                 link A's transaction, link to A's schedule, or learn
 --                 either exists; A can link A's own (the control)
 --   2g Same-bill answers (migration 66)
+--   2i Goal links (migration 69)
+--                 same_goal_money() shows B nothing of A's;
+--                 replace_contribution_with_link() can't delete A's
+--                 contribution; A's own pair is the control
 --   2h Import (migration 68): import_transactions(), import_preview() and
 --                 undo_import() refuse another user's account and import;
 --                 list_imports() shows only your own; the control (A imports
@@ -240,6 +244,11 @@ begin
     insert into public.goal_contributions (id, userid, goalid, amount, date, funding_method)
     values (pg_temp.fx(u || '_contrib'), uid, pg_temp.fx(u || '_goal'), 50, current_date, 'manual');
 
+    -- The groceries row counts toward the goal: gives v_goal_money
+    -- (migration 69) a transaction row for each user, beside the
+    -- contribution row.
+    update public.transactions set goalid = pg_temp.fx(u || '_goal') where id = pg_temp.fx(u || '_txn');
+
     -- current_price null: also gives v_integrity_issues a missing_price row.
     insert into public.investments (id, userid, accountid, ticker, shares, average_cost, asset_type)
     values (pg_temp.fx(u || '_invest'), uid, pg_temp.fx(u || '_invacct'), 'RLS', 1, 10, 'Stock');
@@ -315,6 +324,7 @@ begin
       ('2 views', 'v_category_spending',    format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_daily_cashflow',       format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_future_transactions',  format('userid = %L', a),                            format('userid <> %L', b)),
+      ('2 views', 'v_goal_money',           format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_goal_monthly_holds',   format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_goal_progress',        format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_goals_summary',        format('userid = %L', a),                            format('userid <> %L', b)),
@@ -1109,7 +1119,17 @@ begin
       ('public.list_imports()',                                  'anon',          false),
       ('public.list_imports()',                                  'authenticated', true),
       ('public.same_bill_answer(uuid,uuid,date,date,date,boolean)', 'anon',          false),
-      ('public.same_bill_answer(uuid,uuid,date,date,date,boolean)', 'authenticated', false)
+      ('public.same_bill_answer(uuid,uuid,date,date,date,boolean)', 'authenticated', false),
+      -- Goal links (migration 69). Signed-in only; the completion trigger's
+      -- function is closed like every trigger function.
+      ('public.same_goal_money(uuid)',                           'anon',          false),
+      ('public.same_goal_money(uuid)',                           'authenticated', true),
+      ('public.replace_contribution_with_link(uuid,uuid)',       'anon',          false),
+      ('public.replace_contribution_with_link(uuid,uuid)',       'authenticated', true),
+      ('public.transactions_sync_goal_completed_at()',           'anon',          false),
+      ('public.transactions_sync_goal_completed_at()',           'authenticated', false),
+      ('public.update_transfer(uuid,uuid,uuid,numeric,date,text,text,boolean,boolean,timestamptz,boolean,timestamptz,boolean,uuid)', 'anon', false),
+      ('public.update_transfer(uuid,uuid,uuid,numeric,date,text,text,boolean,boolean,timestamptz,boolean,timestamptz,boolean,uuid)', 'authenticated', true)
     ) as t(fn, role, expected)
   loop
     v_actual := has_function_privilege(v_check.role, v_check.fn::regprocedure, 'execute');
@@ -1347,6 +1367,64 @@ begin
     and not exists (select 1 from public.imports where id = v_import);
   perform pg_temp.rec('2h import', 'undo_import()', 'control: A undoes it',
     'the transaction and the import are gone', coalesce(v_try.state || ': ' || v_try.msg, 'no error'), v_pass);
+end
+$$;
+
+
+-- ---------------------------------------------------------------------
+-- 2i -- Goal links (migration 69)
+--
+-- same_goal_money() is security invoker: RLS hides A's transaction and
+-- A's contributions from B, so B asking about A's linked transaction gets
+-- nothing. replace_contribution_with_link() deletes only through that
+-- rule, so B can't delete A's contribution -- P0002, the same answer as a
+-- made-up id, and A's contribution is still there. The control: A adds a
+-- hand entry matching A's own linked $25 groceries row, sees it paired,
+-- and replaces it.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  a uuid := pg_temp.fx('A');
+  b uuid := pg_temp.fx('B');
+  v_try record;
+  v_seen bigint;
+  v_pass boolean;
+  v_match uuid := gen_random_uuid();
+begin
+  v_seen := pg_temp.count_as(b, format('select count(*) from public.same_goal_money(%L)', pg_temp.fx('A_txn')));
+  perform pg_temp.rec('2i goal links', 'same_goal_money()', 'B asks about A''s linked transaction', '0 rows',
+    v_seen::text || ' rows', v_seen = 0);
+
+  for v_try in
+    select * from pg_temp.try_as(b, format('select public.replace_contribution_with_link(%L, %L)', pg_temp.fx('A_txn'), pg_temp.fx('A_contrib')))
+  loop
+    v_pass := v_try.state = 'P0002' and exists (select 1 from public.goal_contributions where id = pg_temp.fx('A_contrib'));
+    perform pg_temp.rec('2i goal links', 'replace_contribution_with_link()', 'B deletes A''s contribution through A''s transaction',
+      'P0002; A''s contribution intact', coalesce(v_try.state, 'no error') || coalesce(': ' || v_try.msg, ''), v_pass);
+  end loop;
+
+  -- B links B's own transaction to A's goal: the composite FK refuses it
+  -- (section 4 covers the insert; this is the update).
+  for v_try in
+    select * from pg_temp.try_as(b, format('update public.transactions set goalid = %L where id = %L', pg_temp.fx('A_goal'), pg_temp.fx('B_txn')))
+  loop
+    perform pg_temp.rec('2i goal links', 'transactions.goalid', 'B points B''s own row at A''s goal',
+      '23503', coalesce(v_try.state, 'no error'), v_try.state = '23503');
+  end loop;
+
+  -- Control: A's own pair.
+  insert into public.goal_contributions (id, userid, goalid, amount, date, funding_method)
+  values (v_match, a, pg_temp.fx('A_goal'), 25, current_date - 2, 'manual');
+  v_seen := pg_temp.count_as(a, format('select count(*) from public.same_goal_money(%L) where contribution_id = %L', pg_temp.fx('A_txn'), v_match));
+  perform pg_temp.rec('2i goal links', 'same_goal_money()', 'control: A sees A''s own matching hand entry', '1',
+    v_seen::text, v_seen = 1);
+  for v_try in
+    select * from pg_temp.try_as(a, format('select public.replace_contribution_with_link(%L, %L)', pg_temp.fx('A_txn'), v_match))
+  loop
+    v_pass := v_try.state is null and not exists (select 1 from public.goal_contributions where id = v_match);
+    perform pg_temp.rec('2i goal links', 'replace_contribution_with_link()', 'control: A replaces A''s own hand entry',
+      'the hand entry is gone', coalesce(v_try.state || ': ' || v_try.msg, 'no error'), v_pass);
+  end loop;
 end
 $$;
 

@@ -23,6 +23,8 @@ import {
   type MerchantCategorySuggestion,
 } from "@/lib/db/transactions";
 import { setScheduleAmount } from "@/lib/db/recurring";
+import { getSameGoalMoney, replaceContributionWithLink } from "@/lib/db/goals";
+import { parseGoalId, type SameMoneyPair } from "@/lib/goalLinks";
 import { getSafeToSpend } from "@/lib/db/dashboard";
 import { getToday } from "@/lib/db/settings";
 import { figureUnchangedNote } from "@/lib/whatsAhead";
@@ -57,6 +59,13 @@ export type ActionState =
        * the same bill?". Nothing has been linked -- the form asks.
        */
       sameBill?: SameBillPair;
+      /**
+       * Set when a save that links a transaction to a goal matches a
+       * hand-entered contribution to that goal (same_goal_money, migration
+       * 69): "Is this the same money?". Nothing has been removed -- the
+       * form asks.
+       */
+      sameMoney?: SameMoneyPair;
     }
   | undefined;
 
@@ -124,6 +133,9 @@ function parseTransactionFields(formData: FormData): CreateTransactionInput | { 
     merchant: merchant || null,
     notes: notes || null,
     payment_method: payment_method || null,
+    // The goal (migration 69). Always present, so an edit that clears it
+    // clears it; null for income, which the database refuses to link.
+    goalid: parseGoalId(formData.get("goalid"), transaction_type as TransactionType),
     // The pre-anchor answer, only when the form asked (migration 62).
     // Omitted otherwise, so an edit that didn't ask -- a new description
     // on an old charge -- leaves the stored answer exactly as it was.
@@ -175,6 +187,7 @@ function parseTransferFields(formData: FormData): CreateTransferInput | { error:
     date: transaction_date,
     description,
     notes: notes || null,
+    goalid: parseGoalId(formData.get("goalid"), "Transfer"),
     fromAnchorAnswer: parseAnchorAnswer(formData, fromAccountId),
     toAnchorAnswer: parseAnchorAnswer(formData, toAccountId),
   };
@@ -182,21 +195,46 @@ function parseTransferFields(formData: FormData): CreateTransferInput | { error:
 
 // Shared by both branches of createTransactionAction -- revalidate, then
 // check for a milestone on whatever just got created.
-async function afterTransactionCreated(saved: { id: string; transaction_date: string }[]): Promise<ActionState> {
+type SavedRow = { id: string; transaction_date: string; goalid: string | null };
+
+async function afterTransactionCreated(saved: SavedRow[]): Promise<ActionState> {
   revalidatePath("/transactions");
+  if (saved.some((r) => r.goalid !== null)) revalidateGoals();
   // Every create can move an account balance (a transfer always moves two)
   // -- "Make a payment" opens straight from /accounts, so that page needs to
   // reflect it without a manual refresh.
   revalidatePath("/accounts");
   const [milestone, note] = await Promise.all([detectTransactionMilestone(), figureNote(saved)]);
   // After figureNote: both read the same cache()d schedules and future rows.
-  const sameBill = await sameBillAfterSave(saved);
-  if (!milestone && !note && !sameBill) return undefined;
+  const [sameBill, sameMoney] = await Promise.all([sameBillAfterSave(saved), sameMoneyAfterSave(saved)]);
+  if (!milestone && !note && !sameBill && !sameMoney) return undefined;
   return {
     ...(milestone ? { milestone } : {}),
     ...(note ? { note } : {}),
     ...(sameBill ? { sameBill } : {}),
+    ...(sameMoney ? { sameMoney } : {}),
   };
+}
+
+// A goal's progress and its monthly hold (safe to spend) both read linked
+// transactions (v_goal_money, migration 69).
+function revalidateGoals() {
+  revalidatePath("/goals");
+  revalidatePath("/dashboard");
+}
+
+// "Is this the same money?" (migration 69): the saved row that carries a
+// goal (a transfer's Expense leg) against hand entries to that goal. The
+// save has already succeeded: a failure here is silence, never an error.
+async function sameMoneyAfterSave(saved: SavedRow[]): Promise<SameMoneyPair | undefined> {
+  const linked = saved.find((r) => r.goalid !== null);
+  if (!linked) return undefined;
+  try {
+    const result = await getSameGoalMoney(linked.id);
+    return result.data ?? undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // "Is this the same bill?" at entry time (migration 66). Only a row dated
@@ -342,6 +380,10 @@ export async function updateTransactionAction(
   if (error) {
     return { error };
   }
+  const goalChanged = (parsed.goalid ?? null) !== existing.data.goalid;
+  const goalMoneyMoved =
+    goalChanged || (existing.data.goalid !== null && amountChanged(Number(existing.data.amount), parsed.amount ?? 0));
+  if (goalMoneyMoved) revalidateGoals();
 
   // "This and future occurrences": asked only for a confirmed recurring
   // transaction whose amount changed (lib/recurringEditScope.ts). Never
@@ -368,6 +410,12 @@ export async function updateTransactionAction(
   // An edit can change the amount, type, or account -- any of which moves a
   // balance.
   revalidatePath("/accounts");
+  // An edit that links a goal asks "Is this the same money?" before
+  // leaving, so it answers here rather than redirecting.
+  if (goalChanged && parsed.goalid) {
+    const sameMoney = await sameMoneyAfterSave([{ id, transaction_date: parsed.transaction_date ?? "", goalid: parsed.goalid }]);
+    if (sameMoney) return { sameMoney };
+  }
   redirect("/transactions");
 }
 
@@ -414,10 +462,13 @@ export async function updateTransferAction(
     updateSchedule,
     fromAnchorAnswer: parsed.fromAnchorAnswer ?? NO_ANCHOR_ANSWER,
     toAnchorAnswer: parsed.toAnchorAnswer ?? NO_ANCHOR_ANSWER,
+    goalid: parsed.goalid ?? null,
   });
   if (error) {
     return { error };
   }
+  const goalChanged = (parsed.goalid ?? null) !== existing.data.goalid;
+  if (goalChanged || existing.data.goalid !== null) revalidateGoals();
 
   // A transfer touches two balances, and can move safe to spend when an
   // account crosses the spendable set.
@@ -425,7 +476,31 @@ export async function updateTransferAction(
   revalidatePath("/accounts");
   revalidatePath("/dashboard");
   if (updateSchedule) revalidatePath("/recurring");
+  if (goalChanged && parsed.goalid) {
+    const sameMoney = await sameMoneyAfterSave([
+      { id: existing.data.fromLeg.id, transaction_date: parsed.date, goalid: parsed.goalid },
+    ]);
+    if (sameMoney) return { sameMoney };
+  }
   redirect("/transactions");
+}
+
+// "Yes, it's the same money": the linked transaction replaces the hand
+// entry (replace_contribution_with_link, migration 69). Called directly
+// from the question, never automatically.
+export async function replaceContributionWithLinkAction(
+  transactionId: string,
+  contributionId: string,
+): Promise<ActionState> {
+  if (!UUID_RE.test(transactionId) || !UUID_RE.test(contributionId)) {
+    return { error: "Missing contribution." };
+  }
+  const { error } = await replaceContributionWithLink(transactionId, contributionId);
+  if (error) {
+    return { error };
+  }
+  revalidateGoals();
+  return undefined;
 }
 
 // Hard delete -- nothing references a transaction row, unlike accounts and
@@ -450,6 +525,8 @@ export async function deleteTransactionAction(
   }
 
   revalidatePath("/transactions");
+  // A linked row takes its goal money with it (migration 69).
+  revalidateGoals();
   // Removing a transaction moves whatever balance it was part of.
   revalidatePath("/accounts");
 
@@ -481,6 +558,7 @@ export async function bulkDeleteTransactionsAction(
   }
 
   revalidatePath("/transactions");
+  revalidateGoals();
   // A bulk delete can touch several accounts' balances at once.
   revalidatePath("/accounts");
 }
@@ -503,6 +581,7 @@ export async function deleteTransferAction(
   }
 
   revalidatePath("/transactions");
+  revalidateGoals();
   // A transfer touches two balances -- both need to drop the removed amount.
   revalidatePath("/accounts");
 

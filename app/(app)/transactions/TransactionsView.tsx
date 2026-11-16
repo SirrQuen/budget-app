@@ -138,6 +138,7 @@ export async function TransactionsView({
           incomeCategories={incomeCategoriesResult.data}
           expenseCategories={expenseCategoriesResult.data}
           accounts={activeAccounts}
+          goals={goalsResult.data}
           prefill={lockedAccountId ? { accountid: lockedAccountId } : undefined}
         />
       ) : null}

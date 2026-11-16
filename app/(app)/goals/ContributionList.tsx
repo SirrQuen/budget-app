@@ -14,7 +14,8 @@ import { FormField } from "@/components/ui/FormField";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { TrashIcon } from "@/components/ui/icons";
 import { formatCurrency, formatDate } from "@/lib/format";
-import type { GoalContribution } from "@/lib/db/goals";
+import type { GoalContribution, GoalLinkedTransaction } from "@/lib/db/goals";
+import Link from "next/link";
 import type { GoalCompletion } from "@/lib/goalCompletion";
 
 const fieldClassName = `w-full ${FIELD_EDGE} bg-surface px-3 py-2 text-sm text-ink`;
@@ -23,30 +24,62 @@ const TEXT_BUTTON_BASE =
   "inline-flex min-h-11 items-center rounded px-1 text-sm font-medium text-ink-secondary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 const TEXT_BUTTON = `${TEXT_BUTTON_BASE} hover:text-ink`;
 
-// The goal's contributions, newest first. Editing or deleting one changes
-// the goal's total and percentage because v_goal_progress sums this table
-// on every read -- nothing here adjusts a total itself.
+// The goal's money, newest first: hand-entered contributions and linked
+// transactions (migration 69). Editing or deleting one changes the goal's
+// total and percentage because v_goal_progress reads v_goal_money on every
+// read -- nothing here adjusts a total itself. A linked transaction is the
+// transaction: it's opened and edited there, never here.
 export function ContributionList({
   goalName,
   contributions,
+  linked = [],
   onCompleted,
 }: {
   goalName: string;
   contributions: GoalContribution[];
+  linked?: GoalLinkedTransaction[];
   /** An edit completed the goal: GoalRow shows the panel. */
   onCompleted: (completion: GoalCompletion) => void;
 }) {
+  const items = [
+    ...contributions.map((c) => ({ kind: "contribution" as const, date: c.date, contribution: c })),
+    ...linked.map((t) => ({ kind: "linked" as const, date: t.date, linked: t })),
+  ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   return (
     <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-hairline bg-surface-raised">
-      {contributions.map((contribution) => (
-        <ContributionItem
-          key={contribution.id}
-          goalName={goalName}
-          contribution={contribution}
-          onCompleted={onCompleted}
-        />
-      ))}
+      {items.map((item) =>
+        item.kind === "contribution" ? (
+          <ContributionItem
+            key={item.contribution.id}
+            goalName={goalName}
+            contribution={item.contribution}
+            onCompleted={onCompleted}
+          />
+        ) : (
+          <LinkedItem key={item.linked.id} linked={item.linked} />
+        ),
+      )}
     </ul>
+  );
+}
+
+function LinkedItem({ linked }: { linked: GoalLinkedTransaction }) {
+  const amountText = formatCurrency(linked.amount);
+  const dateText = formatDate(linked.date);
+  return (
+    <li className="flex items-center gap-3 px-3 py-1">
+      <span className="min-w-0 flex-1 text-sm text-ink-secondary">
+        {dateText} · {linked.isTransfer ? "Transfer" : "Transaction"}: {linked.description}
+      </span>
+      <span className="text-sm font-medium tabular-nums text-ink">{amountText}</span>
+      <Link
+        href={`/transactions/${linked.id}/edit`}
+        className={TEXT_BUTTON}
+        aria-label={`Open ${linked.description}, ${amountText} on ${dateText}`}
+      >
+        Open
+      </Link>
+    </li>
   );
 }
 

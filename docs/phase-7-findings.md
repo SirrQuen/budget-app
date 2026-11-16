@@ -2411,3 +2411,26 @@ afterwards.
 **Related, parked:** `fix/policy-notice-by-email-or-app` (`b3fcae6`) would
 change the two notice clauses to "by email or by a notice in the app". It is
 held for the next policy-change email (docs/queue.md, Held).
+
+## A transfer for a goal came off safe to spend twice (2026-11-16)
+
+**Status: fixed on `feat/transaction-goal-links` (migration 69), not
+merged.** Raised 2026-11-16 (docs/Log-Again-and-Goal-Links.md, section 3);
+confirmed 2026-11-16 (goals Phase 1 report); ruled 2026-11-16.
+
+The goal hold (v_goal_monthly_holds, 57) measured "contributed this month"
+from goal_contributions only. A $200 Checking -> Savings transfer made for
+a goal lowered the spendable balance by $200 while the hold stayed at $200:
+safe to spend fell from $2,500 to $2,300 for a move that should leave it
+unchanged. Entering the same $200 again on the goal page was the only way
+around it.
+
+69 makes a transaction count toward a goal (transactions.goalid, Expense
+rows only, a transfer's Expense leg) and puts all goal money behind one
+view, v_goal_money, which progress, the holds and completion all read.
+Linked, the figure stays $2,500. Unlinked transfers behave as before
+($2,300). Tester note: docs/tester-notes/2026-11-16-goal-links.md.
+
+Not built, by ruling: auto-linking a goal-funding schedule's confirmed
+occurrences to its goal (docs/queue.md, Deferred). Until then a confirmed
+funding transfer moves the balance but not the goal's progress.

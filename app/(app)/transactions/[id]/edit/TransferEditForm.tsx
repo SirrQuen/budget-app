@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useActionForm } from "@/components/useActionForm";
 import { updateTransferAction, type ActionState } from "@/lib/actions/transactions";
@@ -21,6 +22,10 @@ import { EditScopeChoice } from "@/components/EditScopeChoice";
 import { paymentPayee } from "@/lib/accountOptions";
 import { amountChanged } from "@/lib/recurringEditScope";
 import { transferEffect, transferEffectLine } from "@/lib/transferEdit";
+import { GoalField } from "@/components/GoalField";
+import { SameMoneyQuestion } from "@/components/SameMoneyQuestion";
+import type { GoalOption } from "@/lib/db/goals";
+import { goalFieldAsks } from "@/lib/goalLinks";
 
 // A transfer is ONE THING WITH TWO LEGS (docs/Recurring-Amounts-and-
 // Transfer-Editing.md, 4). Opening either leg opens this, never a
@@ -36,11 +41,21 @@ import { transferEffect, transferEffectLine } from "@/lib/transferEdit";
 export function TransferEditForm({
   transfer,
   accounts,
+  goals,
+  currentGoal,
 }: {
   transfer: TransferForEdit;
   accounts: TransactionAccountOption[];
+  /** Goals a transfer can be for (listGoalOptions). */
+  goals: GoalOption[];
+  /** The goal this transfer counts toward, named, for when the picker no longer lists it. */
+  currentGoal: { id: string; name: string } | null;
 }) {
   const fieldId = useFieldId();
+  const router = useRouter();
+  // The goal rides on the Expense leg; update_transfer() writes it there
+  // (migration 69).
+  const [goalid, setGoalid] = useState(transfer.goalid ?? "");
   const [state, formAction, pending, submit] = useActionForm<ActionState>(updateTransferAction, undefined);
   const [fromAccountId, setFromAccountId] = useState(transfer.fromLeg.accountId);
   const [toAccountId, setToAccountId] = useState(transfer.toLeg.accountId);
@@ -236,11 +251,29 @@ export function TransferEditForm({
             );
           })}
 
+      <GoalField
+        id={fieldId("goalid")}
+        goals={goals}
+        value={goalid}
+        onChange={setGoalid}
+        currentGoal={currentGoal}
+        asks={goalFieldAsks("Transfer", from?.account_type, to?.account_type)}
+      />
+
       {effectLine ? <p className="text-sm text-ink-secondary">{effectLine}</p> : null}
 
       <PaymentNote payees={[paymentPayee(to?.account_type)].flatMap((p) => (p ? [p] : []))} />
 
       {state?.error ? <ErrorMessage message={state.error} /> : null}
+
+      {/* Saved, and it linked a goal: ask before going back to the list. */}
+      {state?.sameMoney ? (
+        <SameMoneyQuestion
+          key={state.sameMoney.contributionId}
+          pair={state.sameMoney}
+          onDone={() => router.push("/transactions")}
+        />
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" disabled={pending || sameAccount}>

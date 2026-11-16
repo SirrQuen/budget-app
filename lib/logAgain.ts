@@ -6,8 +6,8 @@
 // to, amount and description. NOT copied: notes, merchant, payment method,
 // import_id, the schedule link, the pre-anchor answer (the form asks it
 // afresh for the new date) and the date -- the form starts on today in the
-// user's zone, which is its own default. The goal link joins the copied
-// fields when transaction goal links exist (the spec's item 3).
+// user's zone, which is its own default. The goal link IS copied (migration
+// 69): the form shows it in the Goal field, where it can be removed.
 
 import type { AddTransactionPrefill } from "@/app/(app)/transactions/AddTransactionForm";
 
@@ -19,6 +19,7 @@ export type LogAgainSource =
       transaction_type: "Income" | "Expense";
       categoryid: string;
       accountid: string;
+      goalid?: string | null;
     }
   | {
       kind: "transfer";
@@ -26,6 +27,7 @@ export type LogAgainSource =
       amount: number;
       fromAccountId: string;
       toAccountId: string;
+      goalid?: string | null;
     };
 
 /** What the pickers can currently show -- an archived account or category can't be chosen again. */
@@ -33,7 +35,15 @@ export type LogAgainOptions = {
   accountIds: ReadonlySet<string>;
   incomeCategoryIds: ReadonlySet<string>;
   expenseCategoryIds: ReadonlySet<string>;
+  /** Goals a transaction can be for now (active, uncompleted). Omitted: no goal is copied. */
+  goalIds?: ReadonlySet<string>;
 };
+
+// The goal comes along only while it can still be chosen -- an archived or
+// completed goal isn't offered, so the copy starts with none.
+function copiedGoal(goalid: string | null | undefined, options: LogAgainOptions): { goalid?: string } {
+  return goalid && options.goalIds?.has(goalid) ? { goalid } : {};
+}
 
 /**
  * The add form's starting values for a transaction logged again. A field the
@@ -50,6 +60,7 @@ export function logAgainPrefill(source: LogAgainSource, options: LogAgainOptions
       amount,
       fromAccountId: options.accountIds.has(source.fromAccountId) ? source.fromAccountId : undefined,
       toAccountId: options.accountIds.has(source.toAccountId) ? source.toAccountId : undefined,
+      ...copiedGoal(source.goalid, options),
       selectAmount: true,
     };
   }
@@ -60,6 +71,8 @@ export function logAgainPrefill(source: LogAgainSource, options: LogAgainOptions
     amount,
     categoryid: categoryIds.has(source.categoryid) ? source.categoryid : undefined,
     accountid: options.accountIds.has(source.accountid) ? source.accountid : undefined,
+    // Income can't carry a goal; an expense's comes along.
+    ...(source.transaction_type === "Expense" ? copiedGoal(source.goalid, options) : {}),
     selectAmount: true,
   };
 }

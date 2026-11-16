@@ -1254,6 +1254,18 @@ export type Database = {
           },
         ]
       }
+      v_goal_money: {
+        Row: {
+          amount: number | null
+          contribution_id: string | null
+          date: string | null
+          goalid: string | null
+          source: string | null
+          transaction_id: string | null
+          userid: string | null
+        }
+        Relationships: []
+      }
       v_goal_monthly_holds: {
         Row: {
           contributed_this_month: number | null
@@ -1799,6 +1811,10 @@ export type Database = {
           previous_login_at: string
         }[]
       }
+      replace_contribution_with_link: {
+        Args: { p_contribution_id: string; p_transaction_id: string }
+        Returns: undefined
+      }
       resolve_recurring_due_date: {
         Args: { anchor: string; offset_days: number; rule: string }
         Returns: string
@@ -1829,6 +1845,15 @@ export type Database = {
         Args: { p_advanced_to_run_date: string; p_recurring_id: string }
         Returns: boolean
       }
+      same_goal_money: {
+        Args: { p_transaction_id: string }
+        Returns: {
+          amount: number
+          contribution_date: string
+          contribution_id: string
+          goalid: string
+        }[]
+      }
       seed_default_categories: {
         Args: { p_userid: string }
         Returns: undefined
@@ -1856,7 +1881,9 @@ export type Database = {
           p_from_accountid: string
           p_from_anchor_answer_set_at?: string
           p_from_counts_despite_anchor?: boolean
+          p_goalid?: string
           p_notes?: string
+          p_set_goal?: boolean
           p_to_accountid: string
           p_to_anchor_answer_set_at?: string
           p_to_counts_despite_anchor?: boolean

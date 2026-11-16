@@ -4,6 +4,7 @@ import type { Database } from "@/lib/database.types";
 import type { GoalType } from "@/lib/goalOptions";
 import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/errors";
 import { isSafeToSpendCommitment } from "@/lib/safeToSpend";
+import type { SameMoneyPair } from "@/lib/goalLinks";
 
 type GoalRow = Database["public"]["Tables"]["goals"]["Row"];
 type GoalInsert = Database["public"]["Tables"]["goals"]["Insert"];
@@ -274,12 +275,13 @@ export async function getContributionGoalId(id: string): Promise<DbResult<string
 }
 
 // The goal's first contribution date, for the completion line's "over four
-// months" or "since March". Null when it has none.
+// months" or "since March". Null when it has none. Goal money is
+// v_goal_money (migration 69): hand entries and linked transactions.
 export async function getFirstContributionDate(goalid: string): Promise<DbResult<string | null>> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
-    .from("goal_contributions")
+    .from("v_goal_money")
     .select("date")
     .eq("goalid", goalid)
     .order("date", { ascending: true })
@@ -387,4 +389,103 @@ export async function deleteGoalContribution(id: string): Promise<DbResult<{ id:
   }
 
   return { data, error: null };
+}
+
+// ---------------------------------------------------------------------
+// Transactions linked to a goal (migration 69)
+// ---------------------------------------------------------------------
+
+/** A transaction that counts toward a goal -- shown in the goal's history, edited from the transaction. */
+export type GoalLinkedTransaction = {
+  id: string;
+  goalid: string;
+  amount: number;
+  date: string;
+  description: string;
+  isTransfer: boolean;
+};
+
+// Every linked transaction, newest first, for the per-goal history on
+// /goals. Its amount is the transaction's own (never a copy); editing it
+// happens on the transaction.
+export async function getGoalLinkedTransactions(): Promise<DbResult<GoalLinkedTransaction[]>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("id, goalid, amount, transaction_date, description, transfer_group_id")
+    .not("goalid", "is", null)
+    .order("transaction_date", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (error) {
+    return { data: null, error: describeReadError(error, "goals") };
+  }
+  return {
+    data: data.flatMap((t) =>
+      t.goalid
+        ? [{
+            id: t.id,
+            goalid: t.goalid,
+            amount: Number(t.amount),
+            date: t.transaction_date,
+            description: t.description,
+            isTransfer: t.transfer_group_id !== null,
+          }]
+        : [],
+    ),
+    error: null,
+  };
+}
+
+/** A goal's name, for a transaction linked to a goal the pickers no longer offer (archived or completed). */
+export async function getGoalName(id: string): Promise<DbResult<string | null>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("goals").select("goal_name").eq("id", id).maybeSingle();
+  if (error) {
+    return { data: null, error: describeReadError(error, "goal") };
+  }
+  return { data: data?.goal_name ?? null, error: null };
+}
+
+// "Is this the same money?" after a save that links (same_goal_money,
+// migration 69 -- the one rule). The nearest hand entry, named for the
+// question; null when there's nothing to ask.
+export async function getSameGoalMoney(transactionId: string): Promise<DbResult<SameMoneyPair | null>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("same_goal_money", { p_transaction_id: transactionId });
+  if (error) {
+    return { data: null, error: describeReadError(error, "goal") };
+  }
+  const first = data[0];
+  if (!first) return { data: null, error: null };
+  const name = await getGoalName(first.goalid);
+  if (name.error !== null) return { data: null, error: name.error };
+  return {
+    data: {
+      transactionId,
+      contributionId: first.contribution_id,
+      goalName: name.data ?? "your goal",
+      amount: Number(first.amount),
+      contributionDate: first.contribution_date,
+    },
+    error: null,
+  };
+}
+
+// "Yes": the link replaces the hand entry -- only while they still match.
+export async function replaceContributionWithLink(
+  transactionId: string,
+  contributionId: string,
+): Promise<DbResult<null>> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("replace_contribution_with_link", {
+    p_transaction_id: transactionId,
+    p_contribution_id: contributionId,
+  });
+  if (error) {
+    if (error.code === "P0002") {
+      return { data: null, error: "That contribution has changed since, so nothing was removed." };
+    }
+    return { data: null, error: describeWriteError(error, "contribution") };
+  }
+  return { data: null, error: null };
 }
