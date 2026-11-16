@@ -1,21 +1,22 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { WHATS_NEW_EDITION } from "@/lib/whatsNew";
+import { WHATS_NEW_COOKIE } from "@/lib/whatsNew";
 
 // "Got it" on the What's new card. Like Coming up's "Got it"
 // (lib/comingUpDismissed.ts) it is a cookie, not a column: a note that's
 // been seen isn't data, and a page render must never write.
 
-const COOKIE = "sorrel_whats_new_seen";
+// The cookie's name carries the card's start date (lib/whatsNew.ts), so a
+// future card starts unseen.
 
-/** The edition the person dismissed, if any. Read-only: safe in a render. */
-export async function getWhatsNewSeen(): Promise<string | undefined> {
-  return (await cookies()).get(COOKIE)?.value;
+/** Whether this card was dismissed. Read-only: safe in a render. */
+export async function getWhatsNewSeen(): Promise<boolean> {
+  return (await cookies()).has(WHATS_NEW_COOKIE);
 }
 
 /** Server Function only -- a cookie can't be set once a render streams. */
 export async function markWhatsNewSeen(): Promise<void> {
-  (await cookies()).set(COOKIE, WHATS_NEW_EDITION, {
+  (await cookies()).set(WHATS_NEW_COOKIE, "1", {
     path: "/",
     httpOnly: true,
     sameSite: "lax",

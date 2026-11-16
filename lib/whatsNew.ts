@@ -6,20 +6,23 @@ import { addDaysISO } from "@/lib/date";
 //
 // Shown for 30 days from the deploy date, then never again. The window is
 // calendar dates in the user's day (getToday()), never the process clock.
-// WHATS_NEW_FROM is the day this ships: set it to the real deploy date
-// before merging -- a later deploy than this shortens the window, an
-// earlier one lengthens it.
+// WHATS_NEW_FROM is the day this ships (America/New_York, 2026-11-16): a
+// later deploy than this shortens the window, an earlier one lengthens it.
 
-export const WHATS_NEW_FROM = "2026-11-17";
+export const WHATS_NEW_FROM = "2026-11-16";
 export const WHATS_NEW_DAYS = 30;
-/** Names this card's contents in the "Got it" cookie, so a future card shows again. */
-export const WHATS_NEW_EDITION = "2026-11";
 
 /** Last day the card shows. */
 export const WHATS_NEW_LAST_DAY = addDaysISO(WHATS_NEW_FROM, WHATS_NEW_DAYS - 1);
 
-export function whatsNewVisible(today: string, seenEdition: string | undefined): boolean {
-  if (seenEdition === WHATS_NEW_EDITION) return false;
+/**
+ * The "Got it" cookie is named for this card's start date, so a later
+ * What's new card (a different WHATS_NEW_FROM) is never hidden by this one.
+ */
+export const WHATS_NEW_COOKIE = `sorrel_whats_new_seen_${WHATS_NEW_FROM}`;
+
+export function whatsNewVisible(today: string, seen: boolean): boolean {
+  if (seen) return false;
   return today >= WHATS_NEW_FROM && today <= WHATS_NEW_LAST_DAY;
 }
 
