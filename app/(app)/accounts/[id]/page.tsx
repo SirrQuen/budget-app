@@ -9,6 +9,8 @@ import { StatTile } from "@/components/ui/StatTile";
 import { formatDate } from "@/lib/format";
 import { isLiabilityAccountType } from "@/lib/accountOptions";
 import { lastLoggedLabel } from "@/lib/lastLogged";
+import { getImportedThrough } from "@/lib/db/imports";
+import { importedThroughLabel } from "@/lib/importedThrough";
 import { UUID } from "@/lib/transactionFilters";
 import { TransactionsView } from "../../transactions/TransactionsView";
 
@@ -21,10 +23,11 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
   if (!UUID.test(id)) notFound();
   const query = await searchParams;
 
-  const [balanceResult, accountResult, lastLoggedResult, today] = await Promise.all([
+  const [balanceResult, accountResult, lastLoggedResult, importedThroughResult, today] = await Promise.all([
     getAccountBalance(id),
     getAccount(id),
     getAccountLastLogged(),
+    getImportedThrough([id]),
     getToday(),
   ]);
 
@@ -54,6 +57,9 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
   const owed = isLiabilityAccountType(type);
   // A failed last-logged read loses only that line.
   const lastLogged = lastLoggedResult.error === null ? lastLoggedLabel(lastLoggedResult.data.get(id) ?? null, today) : null;
+  // Hidden for an account never imported into; a failed read loses only this line.
+  const importedThrough =
+    importedThroughResult.error === null ? importedThroughLabel(importedThroughResult.data.get(id) ?? null, today) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -90,6 +96,7 @@ export default async function AccountPage({ params, searchParams }: PageProps<"/
         <p className="text-sm text-ink-secondary">
           Balance set as of {formatDate(account.opening_date)}
           {lastLogged ? ` · ${lastLogged}` : ""}
+          {importedThrough ? ` · ${importedThrough}` : ""}
         </p>
       </div>
 

@@ -479,3 +479,30 @@ export async function getImportedAt(transactionId: string): Promise<DbResult<str
   const createdAt = Array.isArray(imp) ? imp[0]?.created_at : imp?.created_at;
   return { data: createdAt ?? null, error: null };
 }
+
+// "Imported through": the latest TRANSACTION date among each account's
+// imported rows (import_id not null) -- not the import's created_at, because
+// the question is which bank dates are covered. Derived on read: no column,
+// and it recomputes after an Undo. An account never imported into is absent.
+export async function getImportedThrough(accountIds: readonly string[]): Promise<DbResult<Map<string, string>>> {
+  const supabase = await createClient();
+  const found = new Map<string, string>();
+  const results = await Promise.all(
+    accountIds.map((id) =>
+      supabase
+        .from("transactions")
+        .select("transaction_date")
+        .eq("accountid", id)
+        .not("import_id", "is", null)
+        .order("transaction_date", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .then((res) => ({ id, res })),
+    ),
+  );
+  for (const { id, res } of results) {
+    if (res.error) return { data: null, error: describeReadError(res.error, "imports") };
+    if (res.data) found.set(id, res.data.transaction_date);
+  }
+  return { data: found, error: null };
+}

@@ -32,6 +32,7 @@ import {
   type PreAnchorChoice,
 } from "@/lib/importReview";
 import { findImportSameBill } from "@/lib/sameBill";
+import { importedThroughSentence } from "@/lib/importedThrough";
 import { formatAccountBalance, formatCurrency, formatDate, formatDayMonth } from "@/lib/format";
 import { Amount } from "@/components/ui/Amount";
 import { Button, buttonClass } from "@/components/ui/Button";
@@ -111,10 +112,13 @@ export function ImportFlow({
   accounts,
   initialAccountId,
   today,
+  importedThrough,
 }: {
   accounts: ImportAccount[];
   initialAccountId: string | null;
   today: string;
+  /** Account id -> latest transaction date among its imported rows. */
+  importedThrough: Record<string, string>;
 }) {
   const [accountId, setAccountId] = useState(initialAccountId ?? "");
   const [records, setRecords] = useState<Records | null>(null);
@@ -413,6 +417,9 @@ export function ImportFlow({
               ))}
             </select>
             <p className="text-xs text-ink-muted">One account per import. A bank file describes one account.</p>
+            {account && importedThroughSentence(account.name, importedThrough[account.id] ?? null, today) ? (
+              <p className="text-xs text-ink-muted">{importedThroughSentence(account.name, importedThrough[account.id] ?? null, today)}</p>
+            ) : null}
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -432,6 +439,11 @@ export function ImportFlow({
               className={`${FIELD_CLASS} file:mr-3 file:rounded-full file:border-0 file:bg-action file:px-3 file:py-1 file:text-sm file:font-semibold file:text-action-ink`}
             />
             {accountId === "" ? <p className="text-xs text-ink-muted">Choose the account first.</p> : null}
+            <p className="text-xs text-ink-muted">
+              No need to wait for a statement. Most banks let you download recent activity any time. Look for
+              &quot;Download&quot; or &quot;Export&quot; on the account&apos;s activity page. Overlapping dates are
+              fine: Sorrel skips what it already has.
+            </p>
           </div>
         </div>
 

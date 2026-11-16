@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadError } from "@/components/ui/LoadError";
 import { listAccounts } from "@/lib/db/accounts";
+import { getImportedThrough } from "@/lib/db/imports";
 import { getToday } from "@/lib/db/settings";
 import { UUID } from "@/lib/transactionFilters";
 import { ImportFlow } from "./ImportFlow";
@@ -14,6 +15,10 @@ export default async function ImportPage({ searchParams }: PageProps<"/import">)
   const requested = typeof query.account === "string" && UUID.test(query.account) ? query.account : null;
 
   const [accountsResult, today] = await Promise.all([listAccounts({ is_active: true }), getToday()]);
+
+  // A failed read loses only the "ran through" line.
+  const through =
+    accountsResult.error === null ? await getImportedThrough(accountsResult.data.map((a) => a.id)) : null;
 
   // Where "Back" goes: the Transactions screen if that's where it started
   // (with its account filter, if it had one), else the account, else Settings.
@@ -47,6 +52,7 @@ export default async function ImportPage({ searchParams }: PageProps<"/import">)
           accounts={accountsResult.data.map((a) => ({ id: a.id, name: a.account_name, type: a.account_type }))}
           initialAccountId={requested && accountsResult.data.some((a) => a.id === requested) ? requested : null}
           today={today}
+          importedThrough={through && through.error === null ? Object.fromEntries(through.data) : {}}
         />
       )}
     </div>
