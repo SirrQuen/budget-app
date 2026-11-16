@@ -46,6 +46,7 @@ after import (deployed 2026-11-14). Raised 2026-11-16.
 11. **"Is this for a goal?" on one-time transactions.** An optional Goal
     field; transfers and expenses only, never income. Last, because it can
     move Safe to Spend (a tester note if it does). Blocked on item 9.
+    Log again copies the goal link once goal links exist.
 
 ## Launch blockers still open
 
@@ -62,6 +63,9 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 - Dashboard layout, deployed 2026-11-14: "You can now rearrange your
   dashboard: hold the grip on any card and drag it, or use the card's
   menu." Status: not yet sent.
+- Log again (on `feat/log-again`, not deployed): draft in
+  docs/tester-notes/2026-11-16-log-again.md. Goes in the next What's new
+  card with a new dated cookie, beside the goal features. Not before-deploy.
 
 ## Held
 
