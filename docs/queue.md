@@ -26,6 +26,28 @@ wait on Matt's ruling, in this order.
 6. ~~#5 import~~ -- deployed 2026-11-14 (see Done).
 7. ~~#6 — dashboard layout~~ -- deployed 2026-11-14 (see Done).
 
+Spec for the next four: docs/Log-Again-and-Goal-Links.md, in this order,
+after import (deployed 2026-11-14). Raised 2026-11-16.
+
+8. **Log it again** -- "Log again" on a transaction's row and edit screen,
+   and a "Recent" strip in quick add. Opens the add form pre-filled; never
+   saves in one tap. No migration, changes no number. Built on
+   `feat/log-again`, not merged (2026-11-16). Its goal link joins the
+   copied fields when item 11 lands.
+9. **Goals, Phase 1 -- report only** (items 10 and 11 together): where
+   migration 52 lives, how contributions and completion are stored, whether
+   holds reduce Safe to Spend (the possible double count on a transfer to
+   savings), the liability test, and counts on production. Builds nothing;
+   Phase 2 waits for Matt's ruling.
+10. **Debt payoff goals that follow the card's balance.** The held
+    `feat/linked-goals` design (see Held), renumbered and re-derived;
+    debt payoff only, retirement stays held. The goal measures from the
+    balance recorded at linking, never a linked target. Blocked on item 9.
+11. **"Is this for a goal?" on one-time transactions.** An optional Goal
+    field; transfers and expenses only, never income. Last, because it can
+    move Safe to Spend (a tester note if it does). Blocked on item 9.
+    Log again copies the goal link once goal links exist.
+
 ## Launch blockers still open
 
 See docs/phase-7-findings.md, "Launch blockers". As of 2026-11-10, 3
@@ -41,6 +63,9 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 - Dashboard layout, deployed 2026-11-14: "You can now rearrange your
   dashboard: hold the grip on any card and drag it, or use the card's
   menu." Status: not yet sent.
+- Log again (on `feat/log-again`, not deployed): draft in
+  docs/tester-notes/2026-11-16-log-again.md. Goes in the next What's new
+  card with a new dated cookie, beside the goal features. Not before-deploy.
 
 ## Held
 

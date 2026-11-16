@@ -5,6 +5,8 @@ import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/e
 import { buildSearchOr, escapeLike, MAX_SEARCH_LENGTH } from "@/lib/transactionFilters";
 import { NO_ANCHOR_ANSWER, type AnchorAnswerColumns, type AnchorPreview } from "@/lib/anchorAnswer";
 import type { ExportRow } from "@/lib/transactionExport";
+import { RECENT_DAYS, type RecentRow } from "@/lib/logAgain";
+import { addDaysISO } from "@/lib/date";
 
 type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"];
 type TransactionInsert = Database["public"]["Tables"]["transactions"]["Insert"];
@@ -840,6 +842,40 @@ export async function getMostRecentTransactionAccountId(): Promise<DbResult<stri
   }
 
   return { data: data?.accountid ?? null, error: null };
+}
+
+// Quick add's "Recent" strip (docs/Log-Again-and-Goal-Links.md): the
+// single (non-transfer) transactions of the last RECENT_DAYS days, newest
+// first, up to today -- a future-dated entry hasn't happened yet. The
+// distinct-combination pick happens in recentCombinations(), which also
+// drops archived accounts and categories. Derived on read: no table.
+export async function listRecentTransactions(today: string): Promise<DbResult<RecentRow[]>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("description, amount, transaction_type, categoryid, accountid")
+    .is("transfer_group_id", null)
+    .gte("transaction_date", addDaysISO(today, -RECENT_DAYS))
+    .lte("transaction_date", today)
+    .order("transaction_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(300);
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "transactions") };
+  }
+
+  return {
+    data: data.map((r) => ({
+      description: r.description,
+      amount: Number(r.amount),
+      transaction_type: r.transaction_type as "Income" | "Expense",
+      categoryid: r.categoryid as string,
+      accountid: r.accountid,
+    })),
+    error: null,
+  };
 }
 
 // The pre-anchor question's facts for an account and a date the person is
