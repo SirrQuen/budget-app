@@ -82,7 +82,9 @@ export function LogAgainButton({
         />
       ) : null}
 
-      <div className="pointer-events-none fixed inset-x-4 bottom-24 z-50 flex flex-col items-center gap-2 md:bottom-6">
+      {/* text-left: this sits inside the list row's right-aligned actions
+          cell, and position:fixed doesn't stop text-align inheriting. */}
+      <div className="pointer-events-none fixed inset-x-4 bottom-24 z-50 flex flex-col items-center gap-2 text-left md:bottom-6">
         <SaveNote message={saveNote} />
         {sameBillPair ? (
           <SameBillQuestion
