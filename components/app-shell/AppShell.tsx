@@ -14,6 +14,8 @@ import { OptimisticTransactionsProvider } from "@/components/quick-add/Optimisti
 import { ConfirmPulseProvider } from "@/components/ui/ConfirmPulse";
 import { SorrelMark } from "@/components/SorrelMark";
 import { IdleTimeout } from "@/components/IdleTimeout";
+import { PageArrival } from "@/components/PageArrival";
+import { RippleHost } from "@/components/RippleHost";
 import type { TransactionAccountOption } from "@/app/(app)/transactions/AddTransactionForm";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 
@@ -75,6 +77,7 @@ export function AppShell({
   return (
     <ConfirmPulseProvider>
       {sessionId ? <IdleTimeout sessionId={sessionId} /> : null}
+      <RippleHost />
       <div className="min-h-dvh bg-page text-ink md:flex">
         {/* First tab stop on every authenticated page -- jumps past the nav
             straight to the page content. Visually hidden until focused. */}
@@ -156,7 +159,7 @@ export function AppShell({
                   navOpen={open}
                 />
               ) : null}
-              {children}
+              <PageArrival>{children}</PageArrival>
             </OptimisticTransactionsProvider>
           </div>
         </main>

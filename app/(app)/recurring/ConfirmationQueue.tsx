@@ -16,6 +16,7 @@ import { Amount } from "@/components/ui/Amount";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { formatDateWithWeekday, formatWeekday } from "@/lib/format";
 import { CalendarIcon } from "@/components/ui/icons";
+import { DrawnCheck } from "@/components/ui/DrawnCheck";
 import { ConfirmOccurrenceSheet } from "./ConfirmOccurrenceSheet";
 import { PaymentNote } from "@/components/PaymentNote";
 import { AmountBasisTag } from "@/components/AmountBasisTag";
@@ -161,7 +162,8 @@ function ComingUpRow({ item }: { item: ConfirmationQueueItem }) {
           ) : null}
         </p>
         <button type="button" onClick={dismiss} disabled={pending} className={QUIET}>
-          {pending ? "Hiding…" : "Got it"}
+          {pending ? <DrawnCheck className="mr-1 h-3.5 w-3.5" /> : null}
+          Got it
         </button>
       </div>
       {error ? <ErrorMessage message={error} /> : null}
@@ -223,7 +225,14 @@ function QueueRow({ item, disabled }: { item: ConfirmationQueueItem; disabled: b
           onClick={() => answer(() => confirmAsExpectedAction(item.recurringId, item.dueDate))}
           className={CHIP}
         >
-          {pending ? "Saving…" : "It landed"}
+          {pending ? (
+            <span className="inline-flex items-center gap-1.5">
+              <DrawnCheck />
+              Saving…
+            </span>
+          ) : (
+            "It landed"
+          )}
         </button>
         <ConfirmOccurrenceSheet
           openRequest={askRequest}

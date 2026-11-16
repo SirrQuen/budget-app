@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
+import { DrawnCheck } from "@/components/ui/DrawnCheck";
+import { prefersReducedMotion } from "@/components/ui/useReducedMotion";
 import { dismissWhatsNewAction } from "@/lib/actions/whatsNew";
 import { WHATS_NEW_LINES, WHATS_NEW_PRIVACY_LINE } from "@/lib/whatsNew";
 
@@ -9,12 +11,20 @@ import { WHATS_NEW_LINES, WHATS_NEW_PRIVACY_LINE } from "@/lib/whatsNew";
 // the hero. "Got it" sets a cookie; the card is hidden at once.
 export function WhatsNewCard() {
   const [hidden, setHidden] = useState(false);
+  // The check draws for 250ms before the card goes; the cookie is set at
+  // once. Under reduced motion the card goes at once.
+  const [done, setDone] = useState(false);
   const [pending, startTransition] = useTransition();
 
   if (hidden) return null;
 
   const dismiss = () => {
-    setHidden(true);
+    if (prefersReducedMotion()) {
+      setHidden(true);
+    } else {
+      setDone(true);
+      setTimeout(() => setHidden(true), 250);
+    }
     startTransition(async () => {
       await dismissWhatsNewAction();
     });
@@ -29,9 +39,10 @@ export function WhatsNewCard() {
         <button
           type="button"
           onClick={dismiss}
-          disabled={pending}
-          className="inline-flex min-h-9 items-center rounded px-1 text-xs font-medium text-ink-secondary underline-offset-2 transition-colors duration-150 hover:text-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action disabled:opacity-50"
+          disabled={pending || done}
+          className="inline-flex min-h-9 items-center gap-1 rounded px-1 text-xs font-medium text-ink-secondary underline-offset-2 transition-colors duration-150 hover:text-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action disabled:opacity-50"
         >
+          {done ? <DrawnCheck className="h-3.5 w-3.5" /> : null}
           Got it
         </button>
       </div>

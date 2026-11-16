@@ -7,7 +7,11 @@ import { archiveAccountAction } from "@/lib/actions/accounts";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { FullFormOverlay } from "@/components/quick-add/FullFormOverlay";
 import { SaveNote, useSaveNote } from "@/components/ui/SaveNote";
+import { SaveToast, useSaveToast } from "@/components/ui/SaveToast";
+import { logAgainPrefill } from "@/lib/logAgain";
+import type { SavedSummary } from "@/lib/savedSummary";
 import { formatAccountBalance } from "@/lib/format";
+import { ValueSharpen } from "@/components/ui/ValueSharpen";
 import { isLiabilityAccountType } from "@/lib/accountOptions";
 import type { Database } from "@/lib/database.types";
 import type { CategoryWithGroup } from "@/lib/db/categories";
@@ -39,6 +43,8 @@ export function AccountRow({
   const [editing, setEditing] = useState(initiallyEditing);
   const [makingPayment, setMakingPayment] = useState(false);
   const [saveNote, showSaveNote] = useSaveNote();
+  const [toast, showToast] = useSaveToast();
+  const [reopenFrom, setReopenFrom] = useState<SavedSummary | null>(null);
   const [confirmingArchive, setConfirmingArchive] = useState(false);
   const [archiveError, setArchiveError] = useState<string>();
   const [isArchiving, startArchive] = useTransition();
@@ -124,7 +130,9 @@ export function AccountRow({
         </div>
 
         <span className="shrink-0 justify-self-end text-right text-sm font-medium tabular-nums text-ink">
-          {formatAccountBalance(account.balance ?? 0, account.account_type ?? "")}
+          <ValueSharpen value={account.balance ?? 0}>
+            {formatAccountBalance(account.balance ?? 0, account.account_type ?? "")}
+          </ValueSharpen>
         </span>
       </div>
 
@@ -133,7 +141,10 @@ export function AccountRow({
         {canMakePayment ? (
           <button
             type="button"
-            onClick={() => setMakingPayment(true)}
+            onClick={() => {
+              setReopenFrom(null);
+              setMakingPayment(true);
+            }}
             className="inline-flex min-h-11 shrink-0 items-center rounded px-2 text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface sm:px-0"
           >
             Make a payment
@@ -172,9 +183,18 @@ export function AccountRow({
           accounts={transactionAccounts}
           incomeCategories={incomeCategories}
           expenseCategories={expenseCategories}
-          prefill={paymentPrefill}
+          prefill={
+            reopenFrom
+              ? logAgainPrefill(reopenFrom.source, {
+                  accountIds: new Set(transactionAccounts.filter((a) => a.is_active).map((a) => a.id)),
+                  incomeCategoryIds: new Set(),
+                  expenseCategoryIds: new Set(),
+                })
+              : paymentPrefill
+          }
           onClose={() => setMakingPayment(false)}
-          onSaved={(note) => {
+          onSaved={(note, _sameBill, _sameMoney, saved) => {
+            showToast(saved ?? null);
             showSaveNote(note);
             setMakingPayment(false);
           }}
@@ -182,8 +202,16 @@ export function AccountRow({
       ) : null}
 
       {/* The overlay is gone by the time the note shows; it lives here. */}
-      {saveNote ? (
-        <div className="pointer-events-none fixed inset-x-4 bottom-6 z-50 flex justify-center">
+      {saveNote || toast ? (
+        <div className="pointer-events-none fixed inset-x-4 bottom-6 z-50 flex flex-col items-center gap-2 text-left">
+          <SaveToast
+            summary={toast}
+            onLogAgain={(summary) => {
+              showToast(null);
+              setReopenFrom(summary);
+              setMakingPayment(true);
+            }}
+          />
           <SaveNote message={saveNote} />
         </div>
       ) : null}

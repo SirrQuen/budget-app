@@ -5,7 +5,13 @@ import { useLayoutEffect, useState, useTransition } from "react";
 import type { TransactionType, TransactionWithRelations } from "@/lib/db/transactions";
 import { bulkDeleteTransactionsAction } from "@/lib/actions/transactions";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { ListIcon, TransferIcon, TrashIcon } from "@/components/ui/icons";
+import { TransferIcon, TrashIcon } from "@/components/ui/icons";
+import { SearchLeafIllustration, SproutIllustration } from "@/components/ui/EmptyIllustrations";
+import { logAgainPrefill } from "@/lib/logAgain";
+import type { SavedSummary } from "@/lib/savedSummary";
+import { SaveToast, useSaveToast } from "@/components/ui/SaveToast";
+import { FullFormOverlay } from "@/components/quick-add/FullFormOverlay";
+import { buttonClass } from "@/components/ui/Button";
 import { formatCurrency, formatDate, formatDayMonthShort } from "@/lib/format";
 import { useToday } from "@/components/TodayProvider";
 import { DATED_AHEAD_STORAGE_KEY, isDatedAhead, readRemembered, settleRows } from "@/lib/datedAhead";
@@ -272,6 +278,11 @@ export function TransactionsList({
   deleteNotes?: Record<string, string>;
 }) {
   const { pending } = useOptimisticTransactions();
+  // The empty state's "Add" opens the full form from here, with the data this
+  // list already has -- it never depends on the quick-add bar being mounted.
+  const [addOpen, setAddOpen] = useState(false);
+  const [toast, showToast] = useSaveToast();
+  const [addFrom, setAddFrom] = useState<SavedSummary | null>(null);
 
   // Selection state -- keyed by selectionInfoFor's key, not raw ids, so a
   // transfer's single checkbox tracks as one entry regardless of how many
@@ -289,6 +300,8 @@ export function TransactionsList({
   // The account page's own account is part of the page: a ghost for it
   // matches without the URL carrying an accountid.
   const effectiveFilters = lockedAccountId ? { ...filters, accountid: lockedAccountId } : filters;
+  // "Nothing matches "coffee" in Checking": named only when one account is the scope.
+  const scopeAccountName = accounts.find((a) => a.id === (lockedAccountId ?? filters.accountid))?.account_name ?? null;
   const listHref = (overrides: Parameters<typeof buildListHref>[2] = {}) =>
     buildListHref(basePath, filters, overrides);
 
@@ -379,7 +392,7 @@ export function TransactionsList({
   if (transactions.length === 0 && ghosts.length === 0 && page > 1 && totalCount > 0) {
     return (
       <EmptyState
-        icon={<ListIcon className="h-10 w-10" />}
+        icon={<SearchLeafIllustration />}
         heading="You've gone past the last page"
         message={`These filters only match ${totalCount} transaction${totalCount === 1 ? "" : "s"}.`}
         action={
@@ -398,11 +411,15 @@ export function TransactionsList({
     if (hasFilters) {
       return (
         <EmptyState
-          icon={<ListIcon className="h-10 w-10" />}
-          heading={filters.q ? `Nothing matches "${filters.q}"` : "Nothing matches these filters"}
+          icon={<SearchLeafIllustration />}
+          heading={
+            filters.q
+              ? `Nothing matches "${filters.q}"${scopeAccountName ? ` in ${scopeAccountName}` : ""}`
+              : "Nothing matches these filters"
+          }
           message={
             filters.q
-              ? "We looked at descriptions, notes, categories, accounts and exact amounts. Try fewer letters, or clear a filter."
+              ? "Try another word, or clear the filters."
               : "Try a wider date range, or clear a filter to see more."
           }
           action={
@@ -420,7 +437,7 @@ export function TransactionsList({
     if (!canLog) {
       return (
         <EmptyState
-          icon={<ListIcon className="h-10 w-10" />}
+          icon={<SproutIllustration />}
           heading="This is where it all shows up"
           message="Add an account first, then log a transaction against it and this list starts filling in."
           action={
@@ -436,11 +453,65 @@ export function TransactionsList({
     }
 
     return (
+      <>
       <EmptyState
-        icon={<ListIcon className="h-10 w-10" />}
-        heading="This is where it all shows up"
-        message="Log your first transaction above and this list becomes the real story of where your money's going."
+        icon={<SproutIllustration />}
+        heading="Nothing logged yet"
+        message="Add your first one, or import a file from your bank."
+        action={
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setAddFrom(null);
+                setAddOpen(true);
+              }}
+              className={buttonClass("primary")}
+            >
+              Add
+            </button>
+            <Link
+              href={lockedAccountId ? `/import?account=${lockedAccountId}` : "/import?from=transactions"}
+              className="inline-flex min-h-11 items-center justify-center rounded-full border border-hairline bg-surface-raised px-4 py-2 text-sm font-semibold text-ink transition-colors duration-150 hover:bg-page focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            >
+              Import
+            </Link>
+          </div>
+        }
       />
+      {addOpen ? (
+        <FullFormOverlay
+          accounts={accounts.filter((a) => a.is_active)}
+          incomeCategories={incomeCategories}
+          expenseCategories={expenseCategories}
+          goals={goals}
+          prefill={
+            addFrom
+              ? logAgainPrefill(addFrom.source, {
+                  accountIds: new Set(accounts.filter((a) => a.is_active).map((a) => a.id)),
+                  incomeCategoryIds: new Set(incomeCategories.map((c) => c.id)),
+                  expenseCategoryIds: new Set(expenseCategories.map((c) => c.id)),
+                  goalIds: new Set(goals.map((g) => g.id)),
+                })
+              : lockedAccountId
+                ? { accountid: lockedAccountId }
+                : undefined
+          }
+          onClose={() => setAddOpen(false)}
+          onSaved={(_note, _bill, _money, saved) => {
+            showToast(saved ?? null);
+            setAddOpen(false);
+          }}
+        />
+      ) : null}
+      <div className="pointer-events-none fixed inset-x-4 bottom-6 z-50 flex flex-col items-center gap-2">
+        <SaveToast summary={toast} onLogAgain={(summary) => {
+            showToast(null);
+            setAddFrom(summary);
+            setAddOpen(true);
+          }} />
+      </div>
+      </>
     );
   }
 

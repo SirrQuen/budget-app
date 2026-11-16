@@ -13,7 +13,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadError } from "@/components/ui/LoadError";
 import { StatTile } from "@/components/ui/StatTile";
-import { TargetIcon } from "@/components/ui/icons";
+import { SeedIllustration } from "@/components/ui/EmptyIllustrations";
 import { CreateGoalForm } from "./CreateGoalForm";
 import { GoalRow } from "./GoalRow";
 
@@ -86,10 +86,10 @@ export default async function GoalsPage() {
           description="What you're saving toward, and how close you are."
         />
         <EmptyState
-          icon={<TargetIcon className="h-10 w-10" />}
-          heading="Give your savings a destination"
-          message="A trip, a down payment, a cushion for emergencies -- name it, set a target, and every contribution counts toward it."
-          action={<CreateGoalForm label="Set your first goal" fundingTransfers={transfersResult.data} />}
+          icon={<SeedIllustration />}
+          heading="Plant your first goal"
+          message="Something you're saving toward. Sorrel helps it grow a little each month."
+          action={<CreateGoalForm label="New goal" fundingTransfers={transfersResult.data} />}
         />
       </div>
     );
@@ -104,7 +104,6 @@ export default async function GoalsPage() {
 
       {summaryResult.data ? (
         <StatTile
-          id="goals-total-saved"
           label="Saved toward your goals"
           value={summaryResult.data.total_saved ?? 0}
           format="currency"

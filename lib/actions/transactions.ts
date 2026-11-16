@@ -15,6 +15,7 @@ import {
   deleteTransfer,
   bulkDeleteTransactions,
   getTransactionCount,
+  getLatestCreatedAtExcluding,
   suggestCategoryForMerchant,
   balanceAnchorPreview,
   type CreateTransactionInput,
@@ -26,7 +27,8 @@ import { setScheduleAmount } from "@/lib/db/recurring";
 import { getSameGoalMoney, replaceContributionWithLink } from "@/lib/db/goals";
 import { parseGoalId, type SameMoneyPair } from "@/lib/goalLinks";
 import { getSafeToSpend } from "@/lib/db/dashboard";
-import { getToday } from "@/lib/db/settings";
+import { getTimeZone, getToday } from "@/lib/db/settings";
+import { isFirstSaveOfDay } from "@/lib/firstToday";
 import { figureUnchangedNote } from "@/lib/whatsAhead";
 import { amountChanged, parseEditScope } from "@/lib/recurringEditScope";
 import {
@@ -66,6 +68,12 @@ export type ActionState =
        * form asks.
        */
       sameMoney?: SameMoneyPair;
+      /**
+       * True when nothing else was created today (the user's day) before
+       * this save: the "First one today" chip. Derived from this response,
+       * never stored (docs/Motion-and-Delight.md, step 3).
+       */
+      firstToday?: true;
     }
   | undefined;
 
@@ -207,13 +215,29 @@ async function afterTransactionCreated(saved: SavedRow[]): Promise<ActionState> 
   const [milestone, note] = await Promise.all([detectTransactionMilestone(), figureNote(saved)]);
   // After figureNote: both read the same cache()d schedules and future rows.
   const [sameBill, sameMoney] = await Promise.all([sameBillAfterSave(saved), sameMoneyAfterSave(saved)]);
-  if (!milestone && !note && !sameBill && !sameMoney) return undefined;
+  const firstToday = await firstSaveToday(saved);
+  if (!milestone && !note && !sameBill && !sameMoney && !firstToday) return undefined;
   return {
+    ...(firstToday ? { firstToday: true as const } : {}),
     ...(milestone ? { milestone } : {}),
     ...(note ? { note } : {}),
     ...(sameBill ? { sameBill } : {}),
     ...(sameMoney ? { sameMoney } : {}),
   };
+}
+
+// Was anything else created today, in the user's zone, before this save?
+// A read after the write -- the save has already succeeded, so a failure is
+// silence (no chip), never an error.
+async function firstSaveToday(saved: { id: string }[]): Promise<boolean> {
+  try {
+    const [today, timeZone] = await Promise.all([getToday(), getTimeZone()]);
+    const latest = await getLatestCreatedAtExcluding(saved.map((r) => r.id));
+    if (latest.error !== null) return false;
+    return isFirstSaveOfDay(latest.data, today, timeZone);
+  } catch {
+    return false;
+  }
 }
 
 // A goal's progress and its monthly hold (safe to spend) both read linked

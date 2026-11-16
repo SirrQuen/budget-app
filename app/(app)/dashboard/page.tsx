@@ -332,7 +332,6 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         pageLevelError ? null : <SectionError label="Net worth" />
       ) : netWorthStatResult.data ? (
         <StatTile
-          id="dashboard-net-worth"
           label="Net worth"
           value={netWorthStatResult.data.value}
           format="currency"
@@ -389,7 +388,6 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       sectionError("Income and spending")
     ) : rangeStats ? (
       <StatTile
-        id="dashboard-income"
         label="Income"
         value={rangeStats.income.value}
         format="currency"
@@ -405,7 +403,6 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
 
     spending: rangeStatsResult.error ? null : rangeStats ? (
       <StatTile
-        id="dashboard-spending"
         label="Spending"
         value={rangeStats.spending.value}
         format="currency"

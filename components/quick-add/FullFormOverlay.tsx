@@ -10,6 +10,7 @@ import {
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { GoalOption } from "@/lib/db/goals";
 import type { SameMoneyPair } from "@/lib/goalLinks";
+import type { SavedSummary } from "@/lib/savedSummary";
 
 // Quick-add's escape hatch -- the same AddTransactionForm the /transactions
 // page uses, in "embedded" mode (always expanded, Close/save wired to this
@@ -30,7 +31,7 @@ export function FullFormOverlay({
   /** Goals a transaction can be for (migration 69). */
   goals?: GoalOption[];
   onClose: () => void;
-  onSaved: (note: string | null, sameBill?: SameBillPair, sameMoney?: SameMoneyPair) => void;
+  onSaved: (note: string | null, sameBill?: SameBillPair, sameMoney?: SameMoneyPair, saved?: SavedSummary) => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const labelId = useId();

@@ -304,6 +304,24 @@ export async function getTransactionCount(): Promise<DbResult<number>> {
   return { data: count ?? 0, error: null };
 }
 
+// When the newest OTHER transaction was created (every row except `excludeIds`,
+// the ones just saved), or null when there is none. Read-only: it answers
+// "was there anything created today before this?" for the save's response
+// (lib/firstToday.ts) -- the answer is derived, never stored.
+export async function getLatestCreatedAtExcluding(excludeIds: string[]): Promise<DbResult<string | null>> {
+  const supabase = await createClient();
+
+  let query = supabase.from("transactions").select("created_at").order("created_at", { ascending: false }).limit(1);
+  if (excludeIds.length > 0) query = query.not("id", "in", `(${excludeIds.join(",")})`);
+  const { data, error } = await query.maybeSingle();
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "transactions") };
+  }
+
+  return { data: data?.created_at ?? null, error: null };
+}
+
 // null means there's no such transaction for this user: a bad id, a row
 // deleted in another tab, or another user's row (RLS hides it). Absence is
 // legitimate here, so .maybeSingle() -- an error is a real load failure.

@@ -10,7 +10,7 @@ import type { TransactionType } from "@/lib/db/transactions";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadError } from "@/components/ui/LoadError";
-import { TagIcon } from "@/components/ui/icons";
+import { SearchLeafIllustration } from "@/components/ui/EmptyIllustrations";
 import { CreateCategoryForm } from "./CreateCategoryForm";
 import { CategoryRow } from "./CategoryRow";
 
@@ -152,7 +152,7 @@ function CategoryGroups({
   if (visibleGroups.length === 0) {
     return (
       <EmptyState
-        icon={<TagIcon className="h-10 w-10" />}
+        icon={<SearchLeafIllustration />}
         heading="Nothing matches this filter"
         message="Try a different type, or clear filters to see your full set of categories again."
         action={
