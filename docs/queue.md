@@ -52,8 +52,9 @@ cookie. Raised 2026-11-16.
     dashboard drag). Sonnet. Merged to main 2026-11-16 (`571b1f1`,
     `feat/motion-and-delight-a`); deployed 2026-11-16. Also removed StatTile's count-up on mount (it now rolls on a
     change only, like the hero). Tester note: docs/tester-notes/2026-11-16-motion-and-delight.md.
-13. **Batch B -- step 7**, app icons and home screen only. Sonnet. Built on
-    `feat/motion-and-delight-b`; not merged. The launch bloom already exists
+13. **Batch B -- step 7**, app icons and home screen only. Sonnet. Merged to
+    main 2026-11-16 (`03fe606`, `feat/motion-and-delight-b`); not yet pushed, so
+    not deployed. The launch bloom already exists
     (WelcomeBloom, first sign-in of the day, gated -- ruled 2026-11-16): no
     session bloom, no breathing, the mark stays static.
 14. **Batch C -- step 5**, goals that grow. Sonnet. After debt goals (70)
