@@ -35,8 +35,8 @@ after import (deployed 2026-11-14). Raised 2026-11-16.
    same day. Order reversed by the ruling: transaction goal links first
    (they fix a confirmed double count), debt goals second.
 10. **"Is this for a goal?" on one-time transactions -- migration 69.**
-    Built on `feat/transaction-goal-links` (2026-11-16), not merged; Matt
-    pushes 69 to dev. Moves safe to spend: tester note
+    Merged to local main 2026-11-16 (`8570469`); on sorrel-dev. Not yet on
+    production or pushed: 69 goes to production BEFORE main is pushed. Moves safe to spend: tester note
     docs/tester-notes/2026-11-16-goal-links.md. Findings, "A transfer for
     a goal came off safe to spend twice". Log again copies the goal link
     (built with it).
@@ -62,7 +62,7 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 - Dashboard layout, deployed 2026-11-14: "You can now rearrange your
   dashboard: hold the grip on any card and drag it, or use the card's
   menu." Status: not yet sent.
-- Goal links (migration 69, not merged): draft in
+- Goal links (migration 69, merged `8570469`, not deployed): draft in
   docs/tester-notes/2026-11-16-goal-links.md. Moves safe to spend. Next
   What's new card, with debt goals that follow a card. Not before-deploy.
 - Log again (deployed 2026-11-16): draft in
