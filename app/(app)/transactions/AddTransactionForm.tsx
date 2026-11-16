@@ -76,6 +76,8 @@ export type AddTransactionPrefill = {
   accountid?: string;
   fromAccountId?: string;
   toAccountId?: string;
+  /** Log again / Recent: open with the amount selected, so typing replaces it. */
+  selectAmount?: boolean;
 };
 
 export type TransactionInitialValues = {
@@ -351,6 +353,14 @@ export function AddTransactionForm({
 
   useEffect(() => {
     return () => clearTimeout(celebrateTimeout.current);
+  }, []);
+
+  // Log again: the amount is the one field a repeat usually changes, so it
+  // opens selected. Mount only -- the form is only ever remounted for a new
+  // prefill. (FullFormOverlay leaves focus alone when selectAmount is set.)
+  useEffect(() => {
+    if (!isEdit && prefill?.selectAmount) amountInputRef.current?.select();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleTypeChange(next: TransactionType | "Transfer") {

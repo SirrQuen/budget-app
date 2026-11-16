@@ -8,6 +8,7 @@ import { HomeIcon, ListIcon, WalletIcon, TagIcon, PieIcon, TargetIcon, RepeatIco
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { QuickAddBar } from "@/components/quick-add/QuickAddBar";
 import { showsQuickAdd } from "@/lib/quickAdd/visibility";
+import type { RecentRow } from "@/lib/logAgain";
 import { OptimisticTransactionsProvider } from "@/components/quick-add/OptimisticTransactionsContext";
 import { ConfirmPulseProvider } from "@/components/ui/ConfirmPulse";
 import { SorrelMark } from "@/components/SorrelMark";
@@ -20,6 +21,8 @@ export type QuickAddData = {
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
   defaultAccountId: string | null;
+  /** Newest first; quick add's "Recent" strip picks its five from these. */
+  recentTransactions: RecentRow[];
 };
 
 type NavItem = {
@@ -145,6 +148,7 @@ export function AppShell({
                   incomeCategories={quickAdd.incomeCategories}
                   expenseCategories={quickAdd.expenseCategories}
                   defaultAccountId={quickAdd.defaultAccountId}
+                  recentTransactions={quickAdd.recentTransactions}
                   navOpen={open}
                 />
               ) : null}

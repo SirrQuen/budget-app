@@ -30,18 +30,23 @@ import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { FullFormOverlay } from "@/components/quick-add/FullFormOverlay";
 import { needsAnchorAnswer } from "@/lib/anchorAnswer";
 import { FIELD_CLASS, FIELD_EDGE } from "@/components/ui/Input";
+import { recentCombinations, recentPrefill, type RecentRow } from "@/lib/logAgain";
 
 export function QuickAddBar({
   accounts,
   incomeCategories,
   expenseCategories,
   defaultAccountId,
+  recentTransactions = [],
   navOpen = false,
 }: {
   accounts: TransactionAccountOption[];
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
   defaultAccountId: string | null;
+  /** Newest first. The "Recent" strip shows the five most recent distinct
+   * (description, account, category) among them. */
+  recentTransactions?: RecentRow[];
   /** The mobile nav drawer is open -- hide the FAB so it doesn't sit on top
    * of the drawer's footer controls. */
   navOpen?: boolean;
@@ -262,6 +267,26 @@ export function QuickAddBar({
     setFullFormOpen(true);
   }
 
+  // "Recent": derived on read from the last 60 days, hidden when empty.
+  // A tap opens the full form pre-filled, exactly as Log again does -- the
+  // date is today, the amount selected, and Save is its own tap.
+  const recent = recentCombinations(recentTransactions, {
+    accountIds: new Set(accounts.map((a) => a.id)),
+    incomeCategoryIds: new Set(incomeCategories.map((c) => c.id)),
+    expenseCategoryIds: new Set(expenseCategories.map((c) => c.id)),
+  });
+
+  function openRecent(row: RecentRow) {
+    setFullFormPrefill(
+      recentPrefill(row, {
+        accountIds: new Set(accounts.map((a) => a.id)),
+        incomeCategoryIds: new Set(incomeCategories.map((c) => c.id)),
+        expenseCategoryIds: new Set(expenseCategories.map((c) => c.id)),
+      }),
+    );
+    setFullFormOpen(true);
+  }
+
   function handleFullFormSaved(note: string | null, sameBill?: SameBillPair) {
     showSaveNote(note);
     setSameBillPair(sameBill ?? null);
@@ -422,10 +447,27 @@ export function QuickAddBar({
           )}
         </div>
       ) : (
+        <>
+          {recent.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2 px-1">
+              <span className="text-xs text-ink-muted">Recent</span>
+              {recent.map((row) => (
+                <button
+                  key={`${row.description}|${row.accountid}|${row.categoryid}`}
+                  type="button"
+                  onClick={() => openRecent(row)}
+                  className={`${FIELD_EDGE} max-w-[14rem] truncate rounded-full bg-surface-raised px-3 py-1 text-xs text-ink transition-colors duration-150 hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface`}
+                >
+                  {row.description}
+                </button>
+              ))}
+            </div>
+          ) : null}
         <p className="px-1 text-xs text-ink-muted">
           Press <kbd className="rounded border border-hairline px-1">n</kbd> anywhere to jump here ·
           Enter to save
         </p>
+        </>
       )}
 
       {/* A pre-anchor entry went to the full form, which asks; no error here. */}

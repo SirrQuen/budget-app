@@ -4,7 +4,7 @@ import { getSessionId, requireUser } from "@/lib/auth/dal";
 import { recordLogin } from "@/lib/db/profile";
 import { listAccounts } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
-import { getMostRecentTransactionAccountId } from "@/lib/db/transactions";
+import { getMostRecentTransactionAccountId, listRecentTransactions } from "@/lib/db/transactions";
 import { getTheme, getTimeZone, getToday } from "@/lib/db/settings";
 import { AppShell } from "@/components/app-shell/AppShell";
 import { identityName } from "@/lib/displayName";
@@ -37,7 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 }
 
 async function AppFrame({ children }: { children: React.ReactNode }) {
-  const [user, loginResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme, timeZone, today, sessionId] =
+  const [user, loginResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme, timeZone, today, sessionId, recentTransactionsResult] =
     await Promise.all([
       requireUser(),
       // Every authenticated route runs this layout, including the
@@ -60,6 +60,8 @@ async function AppFrame({ children }: { children: React.ReactNode }) {
       // Keys the idle sign-out's shared activity clock (components/
       // IdleTimeout.tsx). Read-only.
       getSessionId(),
+      // Quick add's "Recent" strip. A failed read only hides the strip.
+      getToday().then((day) => listRecentTransactions(day)),
     ]);
 
   // A load failure here just means no quick-add bar for this request, not a
@@ -73,6 +75,7 @@ async function AppFrame({ children }: { children: React.ReactNode }) {
           incomeCategories: incomeCategoriesResult.data,
           expenseCategories: expenseCategoriesResult.data,
           defaultAccountId: recentAccountResult.data ?? null,
+          recentTransactions: recentTransactionsResult.data ?? [],
         }
       : null;
 

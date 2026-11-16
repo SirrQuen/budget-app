@@ -61,11 +61,17 @@ export function FullFormOverlay({
   // the overlay (the quick-add "Full form" button or FAB) on close.
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
-    const firstField = panelRef.current?.querySelector<HTMLElement>(
-      'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])',
-    );
+    // Log again: the amount takes focus, selected (the form selects it).
+    const firstField = prefill?.selectAmount
+      ? panelRef.current?.querySelector<HTMLElement>('input[name="amount"]')
+      : panelRef.current?.querySelector<HTMLElement>(
+          'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])',
+        );
     firstField?.focus();
+    if (prefill?.selectAmount && firstField instanceof HTMLInputElement) firstField.select();
     return () => opener?.focus?.();
+    // Mount only: the overlay opens once per prefill.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

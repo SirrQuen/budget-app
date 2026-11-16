@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DeleteTransactionButton } from "./DeleteTransactionButton";
 import { MakeRecurringButton } from "./MakeRecurringButton";
+import { LogAgainButton } from "./LogAgainButton";
 import type { TransactionAccountOption } from "./AddTransactionForm";
 import type { GoalOption } from "@/lib/db/goals";
 import { useOptimisticTransactions, type PendingTransaction } from "@/components/quick-add/OptimisticTransactionsContext";
@@ -627,6 +628,20 @@ export function TransactionsList({
                             goals={goals}
                           />
                         ) : null}
+                        {row.fromAccountId && row.toAccountId ? (
+                          <LogAgainButton
+                            source={{
+                              kind: "transfer",
+                              description: row.description,
+                              amount: row.amount,
+                              fromAccountId: row.fromAccountId,
+                              toAccountId: row.toAccountId,
+                            }}
+                            accounts={accounts}
+                            incomeCategories={incomeCategories}
+                            expenseCategories={expenseCategories}
+                          />
+                        ) : null}
                         <Link
                           href={`/transactions/${row.id}/edit`}
                           className="inline-flex min-h-11 items-center justify-end rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
@@ -707,6 +722,24 @@ export function TransactionsList({
                           expenseCategories={expenseCategories}
                           accounts={accounts}
                           goals={goals}
+                        />
+                      ) : null}
+                      {/* A non-transfer always has a category
+                          (transactions_category_required); the guard is
+                          for the type, not a case that occurs. */}
+                      {tx.categoryid ? (
+                        <LogAgainButton
+                          source={{
+                            kind: "single",
+                            description: tx.description,
+                            amount: Number(tx.amount),
+                            transaction_type: tx.transaction_type as "Income" | "Expense",
+                            categoryid: tx.categoryid,
+                            accountid: tx.accountid,
+                          }}
+                          accounts={accounts}
+                          incomeCategories={incomeCategories}
+                          expenseCategories={expenseCategories}
                         />
                       ) : null}
                       <Link

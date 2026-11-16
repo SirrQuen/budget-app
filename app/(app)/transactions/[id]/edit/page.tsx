@@ -15,6 +15,7 @@ import { WalletIcon } from "@/components/ui/icons";
 import { AddTransactionForm, type TransactionAccountOption } from "../../AddTransactionForm";
 import { TransferEditForm } from "./TransferEditForm";
 import { DeleteTransactionButton } from "../../DeleteTransactionButton";
+import { LogAgainButton } from "../../LogAgainButton";
 import { getDifferentBillAnswers, getSameBillDeletePreviews, getSameBillPairs } from "@/lib/db/sameBill";
 import { sameBillDeleteNote } from "@/lib/sameBill";
 import { DifferentBillNote, SameBillQuestion } from "@/components/SameBillQuestion";
@@ -100,15 +101,32 @@ export default async function EditTransactionPage({
     // isNonTransfer keyed on transfer_group_id === null, so this branch has a
     // group id -- TS just can't narrow a non-union field through the negation.
     const transferGroupId = tx.transfer_group_id as string;
-    const [transferResult, transferAccountsResult] = await Promise.all([
-      getTransferForEdit(transferGroupId),
-      listAccounts({ is_active: true }),
-    ]);
-    if (transferResult.error !== null || transferAccountsResult.error !== null) {
+    const [transferResult, transferAccountsResult, transferIncomeCategories, transferExpenseCategories] =
+      await Promise.all([
+        getTransferForEdit(transferGroupId),
+        listAccounts({ is_active: true }),
+        // Only for "Log again", whose form can switch type.
+        listCategoriesForType("Income"),
+        listCategoriesForType("Expense"),
+      ]);
+    if (
+      transferResult.error !== null ||
+      transferAccountsResult.error !== null ||
+      transferIncomeCategories.error !== null ||
+      transferExpenseCategories.error !== null
+    ) {
       return (
         <div className="flex flex-col gap-6">
           <PageHeader title="Edit transfer" />
-          <LoadError message={transferResult.error ?? transferAccountsResult.error ?? "We couldn't load this transfer."} />
+          <LoadError
+            message={
+              transferResult.error ??
+              transferAccountsResult.error ??
+              transferIncomeCategories.error ??
+              transferExpenseCategories.error ??
+              "We couldn't load this transfer."
+            }
+          />
         </div>
       );
     }
@@ -161,7 +179,19 @@ export default async function EditTransactionPage({
         />
         {sameBill.section}
         <TransferEditForm transfer={transfer} accounts={transferAccounts} />
-        <div className="self-start">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 self-start">
+          <LogAgainButton
+            source={{
+              kind: "transfer",
+              description: transfer.description,
+              amount: transfer.amount,
+              fromAccountId: transfer.fromLeg.accountId,
+              toAccountId: transfer.toLeg.accountId,
+            }}
+            accounts={transferAccounts}
+            incomeCategories={transferIncomeCategories.data}
+            expenseCategories={transferExpenseCategories.data}
+          />
           <DeleteTransactionButton
             id={tx.id}
             description={tx.description}
@@ -278,7 +308,20 @@ export default async function EditTransactionPage({
         accounts={accountsWithCurrent}
       />
 
-      <div className="self-start">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 self-start">
+        <LogAgainButton
+          source={{
+            kind: "single",
+            description: tx.description,
+            amount: Number(tx.amount),
+            transaction_type: tx.transaction_type as "Income" | "Expense",
+            categoryid: tx.categoryid,
+            accountid: tx.accountid,
+          }}
+          accounts={accountsWithCurrent}
+          incomeCategories={incomeCategories}
+          expenseCategories={expenseCategories}
+        />
         <DeleteTransactionButton
           id={tx.id}
           description={tx.description}
