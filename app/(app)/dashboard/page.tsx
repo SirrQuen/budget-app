@@ -35,6 +35,9 @@ import { ReturnSummaryStrip } from "@/components/ui/ReturnSummaryStrip";
 import { VariableAmountPrompt } from "./VariableAmountPrompt";
 import { ConfirmationQueue } from "../recurring/ConfirmationQueue";
 import { SafeToSpendHero } from "./SafeToSpendHero";
+import { WhatsNewCard } from "./WhatsNewCard";
+import { whatsNewVisible } from "@/lib/whatsNew";
+import { getWhatsNewSeen } from "@/lib/whatsNewDismissed";
 import { ScopedRegion } from "./ScopedRegion";
 import { CashflowChart } from "./CashflowChart";
 import { GroupMovementChart } from "./GroupMovementChart";
@@ -62,6 +65,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   const params = await searchParams;
   const [today, timeZone] = await Promise.all([getToday(), getTimeZone()]);
   const range = resolveDashboardRange(params, today);
+  // Read-only: a cookie says whether "Got it" was pressed. Nothing is written on render.
+  const showWhatsNew = whatsNewVisible(today, await getWhatsNewSeen());
   // Never throws: an unreadable layout is the default one.
   const layout = await getDashboardLayout();
   const currentMonth = monthStartISO(today);
@@ -483,6 +488,10 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
           ) : safeToSpendResult.data ? (
             <SafeToSpendHero data={safeToSpendResult.data} />
           ) : null}
+
+          {/* Directly below the hero, never above it. Not part of the layout:
+              not draggable and not hideable from the card menu. */}
+          {showWhatsNew ? <WhatsNewCard /> : null}
 
           <DashboardSections region="right-now" items={rightNowItems} />
         </section>
