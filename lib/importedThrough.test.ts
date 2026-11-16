@@ -13,3 +13,7 @@ test("states the fact, with no nudge", () => {
   assert.equal(s, "Your last import for Checking ran through Nov 8. Downloading from a few days before that is fine.");
   assert.doesNotMatch(s, /overdue|behind|haven't|!|remind/i);
 });
+
+test("a date ahead of today is shown as it is, never clamped", () => {
+  assert.equal(importedThroughLabel("2026-11-21", "2026-11-16"), "Imported through Nov 21");
+});

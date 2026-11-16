@@ -15,17 +15,18 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 /**
  * "Nov 12", or "Nov 12, 2025" when the year isn't the user's current one --
  * THE year rule for a calendar date shown as a fact. "Imported through"
- * uses it too (lib/importedThrough.ts); never restate it. A date a day
- * ahead of today (clock or zone quirk) reads as today.
+ * uses it too (lib/importedThrough.ts); never restate it. It formats the
+ * date it is given and never clamps: a bank file can hold dates ahead of
+ * today, and "Imported through" must say so.
  */
 export function calendarDateLabel(date: string, today: string): string {
-  const on = date > today ? today : date;
-  const [year, month, day] = on.split("-").map(Number);
+  const [year, month, day] = date.split("-").map(Number);
   const label = `${MONTHS[month - 1]} ${day}`;
   return year === Number(today.slice(0, 4)) ? label : `${label}, ${year}`;
 }
 
 export function lastLoggedLabel(lastLoggedOn: string | null, today: string): string {
   if (lastLoggedOn === null) return "Nothing logged yet";
-  return `Last logged ${calendarDateLabel(lastLoggedOn, today)}`;
+  // A clock or zone quirk can put it a day ahead; it was still today.
+  return `Last logged ${calendarDateLabel(lastLoggedOn > today ? today : lastLoggedOn, today)}`;
 }
