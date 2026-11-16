@@ -2385,3 +2385,29 @@ sums dollars as JavaScript floats, against "Never aggregate money in
 JavaScript". It feeds an average shown as a hint, so the error is a
 fraction of a cent, but it is the one place found that adds floats rather
 than integer cents. Raised once so far (this entry); not acted on.
+
+## Import deployed without the policy-change email (2026-11-16)
+
+**Status: known miss, not fixed.** Recorded 2026-11-16; raised once.
+
+Import deployed on 2026-11-14 (merge `a3f507a`, migration 68). The privacy
+policy it changed says: "If this policy changes in a way that affects how
+your information is handled, we'll email you before it takes effect"
+(docs/legal/privacy-and-terms.md, "Changes"). The terms say the same of a
+material change. The sentence it changed -- "Everything financial in Sorrel
+is information you typed in yourself" -- was false from the deploy, and no
+email went out first. The tester note, docs/tester-notes/2026-11-16-import.md,
+was written as a draft to send before deploy and was never sent.
+
+Matt's decision, 2026-11-16: the email is not being sent. The note's Sent
+line reads "Not sent (Matt's decision, see findings)".
+
+**Process fix:** the merge gate in CLAUDE.md ("Shipping"). Any report that
+says a branch is ready to merge starts by listing every tester note marked
+to go out before deploy whose Sent line is "not yet", so an unsent
+pre-deploy note is the first thing seen at merge time, not something found
+afterwards.
+
+**Related, parked:** `fix/policy-notice-by-email-or-app` (`b3fcae6`) would
+change the two notice clauses to "by email or by a notice in the app". It is
+held for the next policy-change email (docs/queue.md, Held).

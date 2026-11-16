@@ -5,7 +5,7 @@ lives in its findings entry (docs/phase-7-findings.md) or spec. "Do this
 next" means editing this file. Launch blockers live in the findings'
 authoritative list, not here.
 
-Last updated 2026-11-14.
+Last updated 2026-11-16.
 
 ## Next
 
@@ -47,6 +47,7 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 | Item | Since | Held until | Where |
 |---|---|---|---|
 | `feat/linked-goals`: migration 52, a goal's progress read from a linked account | 2026-10-26 | After the beta. It must be re-derived on top of 53, 57 and everything since, not just given a new timestamp. | Findings, "Held branches that touch goals"; the branch's own commits |
+| `fix/policy-notice-by-email-or-app` (`b3fcae6`): the privacy policy's "Changes" clause and the terms' "Changes" clause say "by email or by a notice in the app" instead of "email" | 2026-11-16 | Bundle with the next policy-change email (likely public launch). Merging it without that email would itself break the current notice clause. The policy's "Last updated" dates stay as they are. | Findings, "Import deployed without the policy-change email" |
 
 ## Deferred
 
