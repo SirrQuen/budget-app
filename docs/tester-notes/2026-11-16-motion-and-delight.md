@@ -1,7 +1,7 @@
 Sent:      not yet
 Migration: none
-Merge:     571b1f1 (feat/motion-and-delight-a), not pushed
-Deployed:  not yet
+Merge:     571b1f1 (feat/motion-and-delight-a)
+Deployed:  2026-11-16
 
 ---
 

@@ -50,7 +50,7 @@ cookie. Raised 2026-11-16.
 12. **Motion batch A -- steps 0, 1, 2, 3, 4, 6** (foundation, small
     touches, Safe to Spend rolls, logging feels good, empty states, the
     dashboard drag). Sonnet. Merged to main 2026-11-16 (`571b1f1`,
-    `feat/motion-and-delight-a`); not yet pushed, so not deployed. Also removed StatTile's count-up on mount (it now rolls on a
+    `feat/motion-and-delight-a`); deployed 2026-11-16. Also removed StatTile's count-up on mount (it now rolls on a
     change only, like the hero). Tester note: docs/tester-notes/2026-11-16-motion-and-delight.md.
 13. **Batch B -- step 7**, the mark alive (launch bloom, app icons, home
     screen). Sonnet. After A.
@@ -83,7 +83,7 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 - Goal links (migration 69, deployed 2026-11-16): draft in
   docs/tester-notes/2026-11-16-goal-links.md. Moves safe to spend. Next
   What's new card, with debt goals that follow a card. Not before-deploy.
-- Motion batch A (merged `571b1f1`, not yet deployed): draft in
+- Motion batch A (merged `571b1f1`, deployed 2026-11-16): draft in
   docs/tester-notes/2026-11-16-motion-and-delight.md. No number moves. Next
   What's new card. Not before-deploy.
 - Log again (deployed 2026-11-16): draft in
