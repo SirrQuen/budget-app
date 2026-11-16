@@ -106,7 +106,11 @@ Polish on the existing dnd-kit drag:
 
 ### 7 · The mark, alive (size M)
 
-- **Launch bloom:** on a cold start only (once per session, kept in a session cookie), the mark blooms as in the Brand Kit: three leaflets, 900ms, staggered 110ms. It must **never delay the dashboard.** If loading takes longer than 600ms, the flower breathes (scale 1 to 1.035 over 5s). **Never a spinner.**
+- **Launch bloom: already exists, nothing to build.** `WelcomeBloom` plays the
+  bloom on the first sign-in of the day (and after email confirmation), gated
+  until the dashboard is ready -- by Matt's decision (2026-11-16). No session
+  bloom, no breathing: the mark stays static per CLAUDE.md. Do not
+  reintroduce either.
 - **Brand rules:** any glow sits behind the mark, never on it. The mark is coral, white or ink only, and flat coral below 24px.
 - **App icons:** primary (gradient mark on ink, with a faint warm glow behind), gold (white mark on a gold gradient), light (ink mark on `#F4F1F5`), and flat coral on ink for small sizes.
 - **Home screen:** first report whether the app has a web app manifest and icons. Use Next.js's built-in file conventions (`app/manifest.ts`, `app/icon`, `app/apple-icon`, with `ImageResponse` from `next/og` if PNGs need generating) and **no new dependency.** Sizes 180, 192 and 512.
@@ -152,7 +156,7 @@ Polish on the existing dnd-kit drag:
 | Batch | Steps | Model | When |
 |---|---|---|---|
 | **A** | 0, 1, 2, 3, 4, 6 | Sonnet | After goal links (69) merges |
-| **B** | 7 | Sonnet | After A |
+| **B** | 7 (icons and manifest only; the bloom exists) | Sonnet | After A |
 | **C** | 5 | Sonnet | After debt goals (70) merges, because it changes the goal cards that 70 touches |
 | **D** | 8 | Sonnet | After C |
 | **E** | 9 | **Opus** | After D. It computes money figures and has privacy rules |
