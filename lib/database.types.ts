@@ -1811,6 +1811,10 @@ export type Database = {
           previous_login_at: string
         }[]
       }
+      replace_contribution_with_link: {
+        Args: { p_contribution_id: string; p_transaction_id: string }
+        Returns: undefined
+      }
       resolve_recurring_due_date: {
         Args: { anchor: string; offset_days: number; rule: string }
         Returns: string
@@ -1836,10 +1840,6 @@ export type Database = {
           transaction_id: string
           transfer_group_id: string
         }[]
-      }
-      replace_contribution_with_link: {
-        Args: { p_contribution_id: string; p_transaction_id: string }
-        Returns: undefined
       }
       same_bill_restores: {
         Args: { p_advanced_to_run_date: string; p_recurring_id: string }
