@@ -8,6 +8,8 @@ import {
   type TransactionAccountOption,
 } from "@/app/(app)/transactions/AddTransactionForm";
 import type { CategoryWithGroup } from "@/lib/db/categories";
+import type { GoalOption } from "@/lib/db/goals";
+import type { SameMoneyPair } from "@/lib/goalLinks";
 
 // Quick-add's escape hatch -- the same AddTransactionForm the /transactions
 // page uses, in "embedded" mode (always expanded, Close/save wired to this
@@ -16,6 +18,7 @@ export function FullFormOverlay({
   accounts,
   incomeCategories,
   expenseCategories,
+  goals = [],
   prefill,
   onClose,
   onSaved,
@@ -24,8 +27,10 @@ export function FullFormOverlay({
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
   prefill?: AddTransactionPrefill;
+  /** Goals a transaction can be for (migration 69). */
+  goals?: GoalOption[];
   onClose: () => void;
-  onSaved: (note: string | null, sameBill?: SameBillPair) => void;
+  onSaved: (note: string | null, sameBill?: SameBillPair, sameMoney?: SameMoneyPair) => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const labelId = useId();
@@ -95,6 +100,7 @@ export function FullFormOverlay({
           accounts={accounts}
           incomeCategories={incomeCategories}
           expenseCategories={expenseCategories}
+          goals={goals}
           onClose={onClose}
           onSaved={onSaved}
         />

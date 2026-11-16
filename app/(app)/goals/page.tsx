@@ -1,9 +1,11 @@
 import { getGoalProgress, getGoalsSummary } from "@/lib/db/dashboard";
 import {
   getGoalContributions,
+  getGoalLinkedTransactions,
   listFundingTransfers,
   listGoalFundingLinks,
   type GoalContribution,
+  type GoalLinkedTransaction,
 } from "@/lib/db/goals";
 import { getTimeZone } from "@/lib/db/settings";
 import { todayInZone } from "@/lib/date";
@@ -16,21 +18,24 @@ import { CreateGoalForm } from "./CreateGoalForm";
 import { GoalRow } from "./GoalRow";
 
 export default async function GoalsPage() {
-  const [progressResult, summaryResult, contributionsResult, timeZone, transfersResult, linksResult] = await Promise.all([
-    getGoalProgress(),
-    getGoalsSummary(),
-    getGoalContributions(),
-    getTimeZone(),
-    listFundingTransfers(),
-    listGoalFundingLinks(),
-  ]);
+  const [progressResult, summaryResult, contributionsResult, timeZone, transfersResult, linksResult, linkedResult] =
+    await Promise.all([
+      getGoalProgress(),
+      getGoalsSummary(),
+      getGoalContributions(),
+      getTimeZone(),
+      listFundingTransfers(),
+      listGoalFundingLinks(),
+      getGoalLinkedTransactions(),
+    ]);
 
   if (
     progressResult.error !== null ||
     summaryResult.error !== null ||
     contributionsResult.error !== null ||
     transfersResult.error !== null ||
-    linksResult.error !== null
+    linksResult.error !== null ||
+    linkedResult.error !== null
   ) {
     return (
       <div className="flex flex-col gap-6">
@@ -45,6 +50,7 @@ export default async function GoalsPage() {
             contributionsResult.error ??
             transfersResult.error ??
             linksResult.error ??
+            linkedResult.error ??
             "We couldn't load your goals. Refresh the page to try again."
           }
         />
@@ -59,6 +65,14 @@ export default async function GoalsPage() {
     const list = contributionsByGoal.get(contribution.goalid) ?? [];
     list.push(contribution);
     contributionsByGoal.set(contribution.goalid, list);
+  }
+  // Transactions linked to a goal (migration 69): part of its history, and
+  // already part of its total (v_goal_progress reads v_goal_money).
+  const linkedByGoal = new Map<string, GoalLinkedTransaction[]>();
+  for (const linked of linkedResult.data) {
+    const list = linkedByGoal.get(linked.goalid) ?? [];
+    list.push(linked);
+    linkedByGoal.set(linked.goalid, list);
   }
 
   // A brand-new goals list means nothing else on this page (the saved-so-far
@@ -106,6 +120,7 @@ export default async function GoalsPage() {
             key={goal.goal_id}
             goal={goal}
             contributions={contributionsByGoal.get(goal.goal_id ?? "") ?? []}
+            linked={linkedByGoal.get(goal.goal_id ?? "") ?? []}
             fundingRecurringId={linksResult.data.get(goal.goal_id ?? "") ?? null}
             fundingTransfers={transfersResult.data}
             // completed_at is an instant; the day it names is the user's.

@@ -7,6 +7,7 @@ import { TrashIcon } from "@/components/ui/icons";
 import { formatCurrency, formatDate, formatSignedAmount } from "@/lib/format";
 import type { TransactionType } from "@/lib/db/transactions";
 import { callAction } from "@/components/useActionForm";
+import { goalDeleteNote } from "@/lib/goalLinks";
 
 // Shared by the transactions list row and the edit page -- same dialog,
 // only where "after delete" lands (redirectToList) and which action fires
@@ -22,6 +23,7 @@ export function DeleteTransactionButton({
   transferGroupId = null,
   transferAccounts,
   forecastNote,
+  goalName,
   redirectToList,
   className = "inline-flex min-h-11 items-center rounded text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-critical focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
   label = "Delete",
@@ -41,6 +43,8 @@ export function DeleteTransactionButton({
    * can't -- that the bill leaves the forecast. Said before anything goes.
    */
   forecastNote?: string;
+  /** The goal this row counts toward (migration 69): deleting takes it off. */
+  goalName?: string | null;
   redirectToList: boolean;
   className?: string;
   label?: string;
@@ -86,7 +90,7 @@ export function DeleteTransactionButton({
           isTransfer
             ? "This can't be undone -- both legs of this transfer will be permanently removed."
             : "This can't be undone -- the transaction will be permanently removed."
-        }${forecastNote ? ` ${forecastNote}` : ""}`}
+        }${forecastNote ? ` ${forecastNote}` : ""}${goalName ? ` ${goalDeleteNote(goalName)}` : ""}`}
         confirmLabel={isDeleting ? "Deleting…" : "Delete"}
         confirmIcon={<TrashIcon className="h-4 w-4" />}
         cancelLabel="Cancel"

@@ -20,6 +20,7 @@ import { getDifferentBillAnswers, getSameBillDeletePreviews, getSameBillPairs } 
 import { sameBillDeleteNote } from "@/lib/sameBill";
 import { DifferentBillNote, SameBillQuestion } from "@/components/SameBillQuestion";
 import { getImportedAt } from "@/lib/db/imports";
+import { getGoalName, listGoalOptions, type GoalOption } from "@/lib/db/goals";
 import { getTimeZone } from "@/lib/db/settings";
 import { todayInZone } from "@/lib/date";
 import { formatDayMonth } from "@/lib/format";
@@ -58,6 +59,17 @@ async function loadSameBill(entryId: string, ids: string[]) {
       ) : null,
     deleteNote: preview ? sameBillDeleteNote(preview) : undefined,
   };
+}
+
+// The goal a row counts toward, named (migration 69). The picker lists
+// active, uncompleted goals; one archived or completed since is named here
+// so the field still shows it. A failed name read shows the goal unnamed.
+async function currentGoalFor(goalid: string | null, goals: GoalOption[]): Promise<{ id: string; name: string } | null> {
+  if (goalid === null) return null;
+  const listed = goals.find((g) => g.id === goalid);
+  if (listed) return { id: listed.id, name: listed.name };
+  const name = await getGoalName(goalid);
+  return { id: goalid, name: name.data ?? "A goal" };
 }
 
 // transactions_category_required (see 07_transfers.sql) guarantees categoryid
@@ -101,19 +113,21 @@ export default async function EditTransactionPage({
     // isNonTransfer keyed on transfer_group_id === null, so this branch has a
     // group id -- TS just can't narrow a non-union field through the negation.
     const transferGroupId = tx.transfer_group_id as string;
-    const [transferResult, transferAccountsResult, transferIncomeCategories, transferExpenseCategories] =
+    const [transferResult, transferAccountsResult, transferIncomeCategories, transferExpenseCategories, transferGoals] =
       await Promise.all([
         getTransferForEdit(transferGroupId),
         listAccounts({ is_active: true }),
         // Only for "Log again", whose form can switch type.
         listCategoriesForType("Income"),
         listCategoriesForType("Expense"),
+        listGoalOptions(),
       ]);
     if (
       transferResult.error !== null ||
       transferAccountsResult.error !== null ||
       transferIncomeCategories.error !== null ||
-      transferExpenseCategories.error !== null
+      transferExpenseCategories.error !== null ||
+      transferGoals.error !== null
     ) {
       return (
         <div className="flex flex-col gap-6">
@@ -124,6 +138,7 @@ export default async function EditTransactionPage({
               transferAccountsResult.error ??
               transferIncomeCategories.error ??
               transferExpenseCategories.error ??
+              transferGoals.error ??
               "We couldn't load this transfer."
             }
           />
@@ -170,6 +185,7 @@ export default async function EditTransactionPage({
     const fromName = transferAccounts.find((a) => a.id === transfer.fromLeg.accountId)?.account_name;
     const toName = transferAccounts.find((a) => a.id === transfer.toLeg.accountId)?.account_name;
     const sameBill = await loadSameBill(transfer.fromLeg.id, [transfer.fromLeg.id, transfer.toLeg.id]);
+    const transferGoal = await currentGoalFor(transfer.goalid, transferGoals.data);
 
     return (
       <div className="flex flex-col gap-6">
@@ -178,7 +194,12 @@ export default async function EditTransactionPage({
           description="A transfer moves money between two of your accounts. Both sides change together."
         />
         {sameBill.section}
-        <TransferEditForm transfer={transfer} accounts={transferAccounts} />
+        <TransferEditForm
+          transfer={transfer}
+          accounts={transferAccounts}
+          goals={transferGoals.data}
+          currentGoal={transferGoal}
+        />
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 self-start">
           <LogAgainButton
             source={{
@@ -187,10 +208,12 @@ export default async function EditTransactionPage({
               amount: transfer.amount,
               fromAccountId: transfer.fromLeg.accountId,
               toAccountId: transfer.toLeg.accountId,
+              goalid: transfer.goalid,
             }}
             accounts={transferAccounts}
             incomeCategories={transferIncomeCategories.data}
             expenseCategories={transferExpenseCategories.data}
+            goals={transferGoals.data}
           />
           <DeleteTransactionButton
             id={tx.id}
@@ -201,6 +224,7 @@ export default async function EditTransactionPage({
             transferGroupId={transferGroupId}
             transferAccounts={fromName && toName ? { from: fromName, to: toName } : undefined}
             forecastNote={sameBill.deleteNote}
+            goalName={transferGoal?.name}
             redirectToList={true}
             label="Delete this transfer"
           />
@@ -209,7 +233,7 @@ export default async function EditTransactionPage({
     );
   }
 
-  const [incomeCategoriesResult, expenseCategoriesResult, accountsResult, scheduleResult, sameBill, importedAt, timeZone] = await Promise.all([
+  const [incomeCategoriesResult, expenseCategoriesResult, accountsResult, scheduleResult, sameBill, importedAt, timeZone, goalsResult] = await Promise.all([
     listCategoriesForType("Income"),
     listCategoriesForType("Expense"),
     listAccounts({ is_active: true }),
@@ -217,13 +241,15 @@ export default async function EditTransactionPage({
     loadSameBill(tx.id, [tx.id]),
     getImportedAt(tx.id),
     getTimeZone(),
+    listGoalOptions(),
   ]);
 
   if (
     incomeCategoriesResult.error !== null ||
     expenseCategoriesResult.error !== null ||
     accountsResult.error !== null ||
-    scheduleResult.error !== null
+    scheduleResult.error !== null ||
+    goalsResult.error !== null
   ) {
     return (
       <div className="flex flex-col gap-6">
@@ -234,6 +260,7 @@ export default async function EditTransactionPage({
             expenseCategoriesResult.error ??
             accountsResult.error ??
             scheduleResult.error ??
+            goalsResult.error ??
             "We couldn't load this transaction. Refresh the page to try again."
           }
         />
@@ -261,6 +288,10 @@ export default async function EditTransactionPage({
       }
     }
   }
+
+  const goals = goalsResult.data;
+  const currentGoal =
+    tx.goalid === null ? null : { id: tx.goalid, name: tx.goal_name ?? goals.find((g) => g.id === tx.goalid)?.name ?? "A goal" };
 
   let accountsWithCurrent = accounts;
   if (!accounts.some((a) => a.id === tx.accountid)) {
@@ -302,10 +333,12 @@ export default async function EditTransactionPage({
           schedule: scheduleResult.data
             ? { description: scheduleResult.data.description, amountIsVariable: scheduleResult.data.amountIsVariable }
             : null,
+          goal: currentGoal,
         }}
         incomeCategories={incomeCategories}
         expenseCategories={expenseCategories}
         accounts={accountsWithCurrent}
+        goals={goals}
       />
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 self-start">
@@ -317,10 +350,12 @@ export default async function EditTransactionPage({
             transaction_type: tx.transaction_type as "Income" | "Expense",
             categoryid: tx.categoryid,
             accountid: tx.accountid,
+            goalid: tx.goalid,
           }}
           accounts={accountsWithCurrent}
           incomeCategories={incomeCategories}
           expenseCategories={expenseCategories}
+          goals={goals}
         />
         <DeleteTransactionButton
           id={tx.id}
@@ -329,6 +364,7 @@ export default async function EditTransactionPage({
           transactionType={tx.transaction_type as TransactionType}
           transactionDate={tx.transaction_date}
           forecastNote={sameBill.deleteNote}
+          goalName={currentGoal?.name}
           redirectToList={true}
           label="Delete transaction"
         />

@@ -19,7 +19,7 @@ import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { CheckIcon, ChevronDownIcon, TargetIcon, TrashIcon } from "@/components/ui/icons";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { GoalProgress } from "@/lib/db/dashboard";
-import type { FundingTransfer, GoalContribution } from "@/lib/db/goals";
+import type { FundingTransfer, GoalContribution, GoalLinkedTransaction } from "@/lib/db/goals";
 import type { GoalCompletion } from "@/lib/goalCompletion";
 import { ContributionList } from "./ContributionList";
 import { GoalForm } from "./GoalForm";
@@ -33,7 +33,15 @@ const TEXT_BUTTON_BASE =
 const TEXT_BUTTON = `${TEXT_BUTTON_BASE} hover:text-ink`;
 
 // What the delete confirmation says goes with the goal -- the part people
-// don't expect.
+// don't expect. Linked transactions don't go: they're the person's ledger,
+// and transactions.goalid is ON DELETE SET NULL.
+function linkedSentence(linkedCount: number): string {
+  if (linkedCount === 0) return "";
+  return linkedCount === 1
+    ? " The 1 transaction linked to it stays in your transactions, no longer for a goal."
+    : ` The ${linkedCount} transactions linked to it stay in your transactions, no longer for a goal.`;
+}
+
 function deleteTitle(goalName: string, contributionCount: number): string {
   if (contributionCount === 0) return `Delete ${goalName}?`;
   return contributionCount === 1
@@ -44,12 +52,15 @@ function deleteTitle(goalName: string, contributionCount: number): string {
 export function GoalRow({
   goal,
   contributions,
+  linked,
   completedOn,
   fundingRecurringId,
   fundingTransfers,
 }: {
   goal: GoalProgress;
   contributions: GoalContribution[];
+  /** Transactions linked to this goal (migration 69). */
+  linked: GoalLinkedTransaction[];
   /** goals.funding_recurringid -- v_goal_progress doesn't carry it. */
   fundingRecurringId: string | null;
   fundingTransfers: FundingTransfer[];
@@ -288,7 +299,7 @@ export function GoalRow({
         </span>
       </div>
 
-      {contributions.length > 0 ? (
+      {contributions.length + linked.length > 0 ? (
         <div className="flex flex-col gap-2">
           <button
             type="button"
@@ -301,13 +312,16 @@ export function GoalRow({
               className={`h-4 w-4 motion-safe:transition-transform motion-safe:duration-150 ${showHistory ? "rotate-180" : ""}`}
               aria-hidden="true"
             />
-            {contributions.length === 1 ? "1 contribution" : `${contributions.length} contributions`}
+            {contributions.length + linked.length === 1
+              ? "1 contribution"
+              : `${contributions.length + linked.length} contributions`}
           </button>
           {showHistory ? (
             <div id={`history-${goal.goal_id}`}>
               <ContributionList
                 goalName={goal.goal_name ?? "this goal"}
                 contributions={contributions}
+                linked={linked}
                 onCompleted={setCompletion}
               />
             </div>
@@ -356,9 +370,11 @@ export function GoalRow({
         open={confirmingDelete}
         title={deleteTitle(goalName, contributions.length)}
         description={
-          contributions.length > 0
-            ? `This can't be undone -- the goal and its ${formatCurrency(contributed)} of contributions will be permanently removed.`
-            : "This can't be undone -- the goal will be permanently removed."
+          (contributions.length > 0
+            ? linked.length === 0
+              ? `This can't be undone -- the goal and its ${formatCurrency(contributed)} of contributions will be permanently removed.`
+              : `This can't be undone -- the goal and the ${contributions.length === 1 ? "1 contribution" : `${contributions.length} contributions`} you entered by hand will be permanently removed.`
+            : "This can't be undone -- the goal will be permanently removed.") + linkedSentence(linked.length)
         }
         confirmLabel={isDeleting ? "Deleting…" : "Delete"}
         confirmIcon={<TrashIcon className="h-4 w-4" />}

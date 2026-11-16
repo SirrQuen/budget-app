@@ -97,3 +97,29 @@ test("a tapped chip fills the form like Log again", () => {
   const r = row("Shell", "chk", "gas", 41.5);
   assert.deepEqual(recentPrefill(r, options), logAgainPrefill({ kind: "single", ...r }, options));
 });
+
+test("the goal link comes along, visible and removable -- only while the goal can still be chosen", () => {
+  const withGoals: LogAgainOptions = { ...options, goalIds: new Set(["japan"]) };
+  const expense = logAgainPrefill(
+    { kind: "single", description: "Deposit", amount: 200, transaction_type: "Expense", categoryid: "food", accountid: "chk", goalid: "japan" },
+    withGoals,
+  );
+  assert.equal(expense.goalid, "japan");
+  const transfer = logAgainPrefill(
+    { kind: "transfer", description: "To savings", amount: 200, fromAccountId: "chk", toAccountId: "sav", goalid: "japan" },
+    withGoals,
+  );
+  assert.equal(transfer.goalid, "japan");
+  // Archived or completed since: not offered, so not copied.
+  const gone = logAgainPrefill(
+    { kind: "transfer", description: "To savings", amount: 200, fromAccountId: "chk", toAccountId: "sav", goalid: "done" },
+    withGoals,
+  );
+  assert.equal("goalid" in gone, false);
+  // No goal list at all (the Recent strip): never copied.
+  const noList = logAgainPrefill(
+    { kind: "transfer", description: "To savings", amount: 200, fromAccountId: "chk", toAccountId: "sav", goalid: "japan" },
+    options,
+  );
+  assert.equal("goalid" in noList, false);
+});

@@ -1,5 +1,5 @@
 -- =====================================================================
--- Goal monthly holds test (migration 57)
+-- Goal monthly holds test (migrations 57 and 69)
 --
 --   npx supabase db query --remote=tztbebdzlezlhvsbylsf -f docs/goal-monthly-holds-test.sql
 --
@@ -42,6 +42,33 @@
 --  12  A goal near its target holds only what's left: $950 of $1,000
 --      saved, $200 a month, holds $50 -- and agrees with
 --      v_goal_progress.remaining_amount, the goals page's own figure.
+--
+-- Migration 69 (a transaction can be for a goal). The worked example from
+-- the goals Phase 1 report: Checking, a $200-a-month goal, nothing
+-- contributed. Safe to spend = trough - cushion - hold; with no schedules
+-- the trough is the spendable balance, so "cash - hold" moving is the
+-- figure moving (the TypeScript side is pinned in
+-- lib/safeToSpendProjection.test.ts).
+--  13  A $200 Checking -> Savings transfer LINKED to the goal: cash -200,
+--      hold -200, so cash - hold is unchanged ($2,500 stays $2,500).
+--      The same transfer UNLINKED (today's behaviour): cash -200, hold
+--      unchanged, so cash - hold falls $200 ($2,300).
+--  14  A future-dated linked transfer later THIS month: cash unchanged
+--      today (it counts from its date, 65), hold 0 -- the projection
+--      subtracts it on its date, so it's counted once. Dated NEXT month:
+--      this month's hold is untouched (it's next month's money).
+--  15  Editing the linked amount moves progress and the hold; deleting
+--      the transfer removes both.
+--  16  Only an Expense row carries a goal: income refused, the Income leg
+--      refused (23514); a leg can't be linked outside update_transfer()
+--      (42501); update_transfer() puts it on the Expense leg only.
+--  17  Completion follows linked money: a linked transaction that reaches
+--      the target completes the goal; deleting it un-completes it.
+--  18  "Is this the same money?": same_goal_money() pairs a hand entry of
+--      the same amount within 3 days, not 4; replace_contribution_with_link()
+--      removes it and the goal counts the money once.
+--  19  goal_contributions.funding_method defaults to 'manual'.
+--  20  v_goal_money carries production's ACL and is security_invoker.
 -- =====================================================================
 
 begin;
@@ -294,6 +321,230 @@ begin
   perform pg_temp.unbecome();
 end
 $$;
+
+-- 13-19 (migration 69) ------------------------------------------------
+do $$
+declare
+  u        constant uuid := 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  chk      constant uuid := 'dddddddd-0000-4000-8000-000000000001';
+  sav      constant uuid := 'dddddddd-0000-4000-8000-000000000002';
+  g_link   constant uuid := 'dddddddd-0000-4000-8000-000000000041';
+  g_free   constant uuid := 'dddddddd-0000-4000-8000-000000000042';
+  g_done   constant uuid := 'dddddddd-0000-4000-8000-000000000043';
+  g_money  constant uuid := 'dddddddd-0000-4000-8000-000000000044';
+  grp      uuid;
+  grp2     uuid;
+  leg_out  uuid;
+  cash0    numeric;
+  cash1    numeric;
+  hold0    numeric;
+  hold1    numeric;
+  n        bigint;
+  state    text;
+  txt      text;
+  later    date;
+  next_m   date;
+  pay_cat  uuid;
+  grocery  uuid;
+  contrib  uuid;
+begin
+  perform pg_temp.become(u);
+  next_m := (date_trunc('month', current_date::timestamptz) + '1 mon'::interval)::date;
+  later  := least(current_date + 3, next_m - 1);
+  select id into pay_cat from public.categories where userid = u and category_type = 'Income' order by category_name limit 1;
+  select id into grocery from public.categories where userid = u and category_name = 'Groceries';
+
+  insert into public.goals (id, userid, goal_name, goal_type, target_amount, monthly_contribution, is_active)
+  values (g_link,  u, 'Linked', 'Vacation', 5000, 200, true),
+         (g_free,  u, 'Free',   'Vacation', 5000, 200, true),
+         (g_done,  u, 'Small',  'Vacation', 300,  100, true),
+         (g_money, u, 'Money',  'Vacation', 5000, 200, true);
+
+  -- 13: linked ---------------------------------------------------------
+  cash0 := public.spendable_cash_balance();
+  select still_to_set_aside into hold0 from public.v_goal_monthly_holds where goalid = g_link;
+  grp := gen_random_uuid();
+  -- The shape createTransfer writes: the goal on the Expense leg.
+  insert into public.transactions (userid, accountid, categoryid, amount, transaction_type,
+                                   transaction_date, description, transfer_group_id, goalid)
+  values (u, chk, null, 200, 'Expense', current_date, 'For Linked', grp, g_link),
+         (u, sav, null, 200, 'Income',  current_date, 'For Linked', grp, null);
+  cash1 := public.spendable_cash_balance();
+  select still_to_set_aside into hold1 from public.v_goal_monthly_holds where goalid = g_link;
+  perform pg_temp.rec('13 linked: cash falls 200', '-200.00', (cash1 - cash0)::numeric(12,2)::text);
+  perform pg_temp.rec('13 linked: hold falls 200 (200 -> 0)', '200 -> 0', hold0::int::text || ' -> ' || hold1::int::text);
+  perform pg_temp.rec('13 linked: cash - hold unchanged (2,500 stays 2,500)', '0.00',
+                      ((cash1 - hold1) - (cash0 - hold0))::numeric(12,2)::text);
+
+  -- 13: unlinked (today's behaviour, unchanged) ------------------------
+  cash0 := cash1;
+  select still_to_set_aside into hold0 from public.v_goal_monthly_holds where goalid = g_free;
+  grp2 := gen_random_uuid();
+  insert into public.transactions (userid, accountid, categoryid, amount, transaction_type,
+                                   transaction_date, description, transfer_group_id)
+  values (u, chk, null, 200, 'Expense', current_date, 'Not linked', grp2),
+         (u, sav, null, 200, 'Income',  current_date, 'Not linked', grp2);
+  cash1 := public.spendable_cash_balance();
+  select still_to_set_aside into hold1 from public.v_goal_monthly_holds where goalid = g_free;
+  perform pg_temp.rec('13 unlinked: hold unchanged (200)', '200 -> 200', hold0::int::text || ' -> ' || hold1::int::text);
+  perform pg_temp.rec('13 unlinked: cash - hold falls 200 (2,500 -> 2,300)', '-200.00',
+                      ((cash1 - hold1) - (cash0 - hold0))::numeric(12,2)::text);
+  delete from public.transactions where transfer_group_id = grp2;
+
+  -- 15: edit the linked amount, then delete ---------------------------
+  perform pg_temp.unbecome();
+  perform pg_temp.become(u);
+  perform public.update_transfer(grp, chk, sav, 150, current_date, 'For Linked', null, false,
+                                 null, null, null, null, false, null);
+  select still_to_set_aside into hold1 from public.v_goal_monthly_holds where goalid = g_link;
+  perform pg_temp.rec('15 amount 200 -> 150: hold 50 (goal kept: p_set_goal false)', '50', hold1::int::text);
+  select contributed_amount::int::text into txt from public.v_goal_progress where goal_id = g_link;
+  perform pg_temp.rec('15 ... and progress 150', '150', txt);
+  delete from public.transactions where transfer_group_id = grp;
+  select still_to_set_aside into hold1 from public.v_goal_monthly_holds where goalid = g_link;
+  perform pg_temp.rec('15 deleted: hold back to 200', '200', hold1::int::text);
+  select contributed_amount::int::text into txt from public.v_goal_progress where goal_id = g_link;
+  perform pg_temp.rec('15 ... and progress 0', '0', txt);
+
+  -- 14: future-dated ---------------------------------------------------
+  cash0 := public.spendable_cash_balance();
+  grp := gen_random_uuid();
+  insert into public.transactions (userid, accountid, categoryid, amount, transaction_type,
+                                   transaction_date, description, transfer_group_id, goalid)
+  values (u, chk, null, 200, 'Expense', later, 'Later this month', grp, g_link),
+         (u, sav, null, 200, 'Income',  later, 'Later this month', grp, null);
+  cash1 := public.spendable_cash_balance();
+  select still_to_set_aside into hold1 from public.v_goal_monthly_holds where goalid = g_link;
+  if later > current_date then
+    perform pg_temp.rec('14 later this month: cash unchanged today (counts on its date)', '0.00', (cash1 - cash0)::numeric(12,2)::text);
+  else
+    perform pg_temp.rec('14 (today is the month''s last day: "later" is today)', 'n/a', 'n/a');
+  end if;
+  perform pg_temp.rec('14 later this month: hold 0 (the projection counts it on its date)', '0', hold1::int::text);
+  delete from public.transactions where transfer_group_id = grp;
+
+  grp := gen_random_uuid();
+  insert into public.transactions (userid, accountid, categoryid, amount, transaction_type,
+                                   transaction_date, description, transfer_group_id, goalid)
+  values (u, chk, null, 200, 'Expense', next_m + 4, 'Next month', grp, g_link),
+         (u, sav, null, 200, 'Income',  next_m + 4, 'Next month', grp, null);
+  select still_to_set_aside into hold1 from public.v_goal_monthly_holds where goalid = g_link;
+  perform pg_temp.rec('14 next month: this month''s hold untouched', '200', hold1::int::text);
+  select contributed_amount::int::text into txt from public.v_goal_progress where goal_id = g_link;
+  perform pg_temp.rec('14 ... though progress counts it from entry', '200', txt);
+
+  -- 16: only an Expense row carries a goal ---------------------------
+  begin
+    insert into public.transactions (userid, accountid, categoryid, amount, transaction_type,
+                                     transaction_date, description, goalid)
+    values (u, chk, pay_cat, 50, 'Income', current_date, 'Paycheck', g_link);
+    state := 'accepted';
+  exception when others then state := sqlstate; end;
+  perform pg_temp.rec('16 income can''t be for a goal', '23514', state);
+
+  begin
+    grp2 := gen_random_uuid();
+    insert into public.transactions (userid, accountid, categoryid, amount, transaction_type,
+                                     transaction_date, description, transfer_group_id, goalid)
+    values (u, chk, null, 10, 'Expense', current_date, 'Both legs', grp2, g_link),
+           (u, sav, null, 10, 'Income',  current_date, 'Both legs', grp2, g_link);
+    state := 'accepted';
+  exception when others then state := sqlstate; end;
+  perform pg_temp.rec('16 the Income leg can''t carry it', '23514', state);
+
+  select id into leg_out from public.transactions where transfer_group_id = grp and transaction_type = 'Expense';
+  begin
+    update public.transactions set goalid = g_money where id = leg_out;
+    state := 'accepted';
+  exception when others then state := sqlstate; end;
+  perform pg_temp.rec('16 a leg''s goal isn''t set or changed outside update_transfer()', '42501', state);
+
+  perform public.update_transfer(grp, chk, sav, 200, next_m + 4, 'Next month', null, false,
+                                 null, null, null, null, true, g_money);
+  select string_agg(transaction_type || '=' || coalesce(case goalid when g_money then 'Money' end, 'none'), ', ' order by transaction_type)
+    into txt from public.transactions where transfer_group_id = grp;
+  perform pg_temp.rec('16 update_transfer() moves the goal, on the Expense leg only', 'Expense=Money, Income=none', txt);
+  perform public.update_transfer(grp, chk, sav, 200, next_m + 4, 'Next month', null, false,
+                                 null, null, null, null, true, null);
+  select count(*) into n from public.transactions where transfer_group_id = grp and goalid is not null;
+  perform pg_temp.rec('16 ... and clears it', '0', n::text);
+
+  -- Deleting a goal a transfer counts toward unlinks the leg (ON DELETE
+  -- SET NULL), past the pair trigger; the transfer itself stays.
+  perform public.update_transfer(grp, chk, sav, 200, next_m + 4, 'Next month', null, false,
+                                 null, null, null, null, true, g_free);
+  begin
+    delete from public.goals where id = g_free;
+    state := 'deleted';
+  exception when others then state := sqlstate; end;
+  perform pg_temp.rec('16 deleting a goal a transfer counts toward succeeds', 'deleted', state);
+  select count(*)::text || ' legs, ' || count(goalid)::text || ' linked' into txt
+    from public.transactions where transfer_group_id = grp;
+  perform pg_temp.rec('16 ... the transfer stays, unlinked', '2 legs, 0 linked', txt);
+  -- Anything else on a leg outside update_transfer() is still refused.
+  select id into leg_out from public.transactions where transfer_group_id = grp and transaction_type = 'Expense';
+  begin
+    update public.transactions set description = 'sneaky' where id = leg_out;
+    state := 'accepted';
+  exception when others then state := sqlstate; end;
+  perform pg_temp.rec('16 ... while any other leg edit is still refused', '42501', state);
+  delete from public.transactions where transfer_group_id = grp;
+
+  -- 17: completion follows linked money ------------------------------
+  insert into public.goal_contributions (userid, goalid, amount, date)
+  values (u, g_done, 100, current_date - 10);
+  insert into public.transactions (id, userid, accountid, categoryid, amount, transaction_type,
+                                   transaction_date, description, goalid)
+  values ('dddddddd-0000-4000-8000-000000000051', u, chk, grocery, 200, 'Expense', current_date, 'Pays it off', g_done);
+  select count(*) into n from public.goals where id = g_done and completed_at is not null;
+  perform pg_temp.rec('17 a linked transaction reaching the target completes the goal', '1', n::text);
+  update public.transactions set amount = 150 where id = 'dddddddd-0000-4000-8000-000000000051';
+  select count(*) into n from public.goals where id = g_done and completed_at is null;
+  perform pg_temp.rec('17 lowering its amount below the target un-completes it', '1', n::text);
+  update public.transactions set amount = 200 where id = 'dddddddd-0000-4000-8000-000000000051';
+  delete from public.transactions where id = 'dddddddd-0000-4000-8000-000000000051';
+  select count(*) into n from public.goals where id = g_done and completed_at is null;
+  perform pg_temp.rec('17 deleting it un-completes it', '1', n::text);
+
+  -- 18: "Is this the same money?" -------------------------------------
+  insert into public.goal_contributions (id, userid, goalid, amount, date, funding_method)
+  values ('dddddddd-0000-4000-8000-000000000061', u, g_money, 200, current_date - 3, 'manual'),
+         ('dddddddd-0000-4000-8000-000000000062', u, g_money, 200, current_date - 4, 'manual'),
+         ('dddddddd-0000-4000-8000-000000000063', u, g_money, 199, current_date,     'manual');
+  insert into public.transactions (id, userid, accountid, categoryid, amount, transaction_type,
+                                   transaction_date, description, goalid)
+  values ('dddddddd-0000-4000-8000-000000000052', u, chk, grocery, 200, 'Expense', current_date, 'Same money?', g_money);
+  select string_agg(contribution_id::text, ',') into txt
+    from public.same_goal_money('dddddddd-0000-4000-8000-000000000052');
+  perform pg_temp.rec('18 pairs the $200 three days back -- not four days back, not $199',
+                      'dddddddd-0000-4000-8000-000000000061', txt);
+  select contributed_amount::int::text into txt from public.v_goal_progress where goal_id = g_money;
+  perform pg_temp.rec('18 before answering, both count (200 + 200 + 199 + 200)', '799', txt);
+  perform public.replace_contribution_with_link('dddddddd-0000-4000-8000-000000000052', 'dddddddd-0000-4000-8000-000000000061');
+  select contributed_amount::int::text into txt from public.v_goal_progress where goal_id = g_money;
+  perform pg_temp.rec('18 "Yes": the hand entry goes, counted once', '599', txt);
+  begin
+    perform public.replace_contribution_with_link('dddddddd-0000-4000-8000-000000000052', 'dddddddd-0000-4000-8000-000000000062');
+    state := 'accepted';
+  exception when others then state := sqlstate; end;
+  perform pg_temp.rec('18 a hand entry that doesn''t match is refused', 'P0002', state);
+
+  -- 19: the default -----------------------------------------------------
+  insert into public.goal_contributions (id, userid, goalid, amount, date)
+  values ('dddddddd-0000-4000-8000-000000000064', u, g_money, 1, current_date)
+  returning funding_method into txt;
+  perform pg_temp.rec('19 funding_method defaults to manual', 'manual', txt);
+
+  perform pg_temp.unbecome();
+end
+$$;
+
+-- 20 -------------------------------------------------------------------
+select pg_temp.rec('20 v_goal_money ACL',
+                   'postgres=arwdDxtm/postgres authenticated=rDxtm/postgres service_role=Dxtm/postgres',
+                   (select array_to_string(relacl, ' ') from pg_class where oid = 'public.v_goal_money'::regclass));
+select pg_temp.rec('20 v_goal_money is security_invoker', 'security_invoker=true',
+                   (select array_to_string(reloptions, ',') from pg_class where oid = 'public.v_goal_money'::regclass));
 
 -- 11 -------------------------------------------------------------------
 select pg_temp.rec('11 v_goal_monthly_holds ACL',

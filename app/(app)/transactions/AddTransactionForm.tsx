@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useActionForm } from "@/components/useActionForm";
 import {
@@ -39,6 +40,10 @@ import type { AnchorAnswerColumns } from "@/lib/anchorAnswer";
 import { EditScopeChoice } from "@/components/EditScopeChoice";
 import { amountChanged } from "@/lib/recurringEditScope";
 import { ChevronDownIcon, FlameIcon } from "@/components/ui/icons";
+import { GoalField } from "@/components/GoalField";
+import { SameMoneyQuestion } from "@/components/SameMoneyQuestion";
+import type { GoalOption } from "@/lib/db/goals";
+import { goalFieldAsks, goalLinkable, type SameMoneyPair } from "@/lib/goalLinks";
 
 const fieldClassName = FIELD_CLASS;
 
@@ -78,6 +83,8 @@ export type AddTransactionPrefill = {
   toAccountId?: string;
   /** Log again / Recent: open with the amount selected, so typing replaces it. */
   selectAmount?: boolean;
+  /** Log again: the goal the original was for, visible and removable (migration 69). */
+  goalid?: string;
 };
 
 export type TransactionInitialValues = {
@@ -98,6 +105,8 @@ export type TransactionInitialValues = {
    * the amount then asks "Just this one / This and future occurrences".
    */
   schedule?: { description: string; amountIsVariable: boolean } | null;
+  /** The goal this row counts toward (migration 69), with its name for when the picker no longer lists it. */
+  goal?: { id: string; name: string } | null;
 };
 
 // Groups an already type-filtered category list by its category group for
@@ -130,6 +139,7 @@ export function AddTransactionForm({
   expenseCategories,
   accounts,
   prefill,
+  goals = [],
   embedded = false,
   headingId,
   onClose,
@@ -142,6 +152,8 @@ export function AddTransactionForm({
   accounts: TransactionAccountOption[];
   /** Create mode only -- seeds fields from a quick-add parse. */
   prefill?: AddTransactionPrefill;
+  /** Goals a transaction can be for (listGoalOptions). Empty: no Goal field. */
+  goals?: GoalOption[];
   /** Always renders the full form, skipping the collapsed "Add transaction"
    * button -- for mounting inside an overlay that's already the toggle. */
   embedded?: boolean;
@@ -153,8 +165,9 @@ export function AddTransactionForm({
   /** Embedded mode only: called once the create-success celebration
    * finishes, with the save's note (lib/whatsAhead.ts figureUnchangedNote)
    * for the caller to show -- this form unmounts with its overlay. */
-  onSaved?: (note: string | null, sameBill?: SameBillPair) => void;
+  onSaved?: (note: string | null, sameBill?: SameBillPair, sameMoney?: SameMoneyPair) => void;
 }) {
+  const router = useRouter();
   const isEdit = mode === "edit";
   const today = useToday();
   const [open, setOpen] = useState(isEdit || embedded);
@@ -189,6 +202,10 @@ export function AddTransactionForm({
   );
   const [paymentMethod, setPaymentMethod] = useState(initialValues?.payment_method ?? "");
   const [notes, setNotes] = useState(initialValues?.notes ?? "");
+  // The goal (migration 69). Income can't carry one, so a type change to
+  // Income clears it (handleTypeChange) rather than leaving a value the
+  // database would refuse.
+  const [goalid, setGoalid] = useState(initialValues?.goal?.id ?? prefill?.goalid ?? "");
   // On screen twice at once (inline on /transactions and the Full form
   // overlay) beside the filter bar's own Category/Account -- see useFieldId.
   const fieldId = useFieldId();
@@ -201,6 +218,8 @@ export function AddTransactionForm({
   // schedule's next occurrence (lib/sameBill.ts). Stays until answered or
   // put off; the next save replaces it.
   const [sameBillPair, setSameBillPair] = useState<SameBillPair | null>(null);
+  // "Is this the same money?" after a save that linked a goal.
+  const [sameMoneyPair, setSameMoneyPair] = useState<SameMoneyPair | null>(null);
   const pulse = useConfirmPulse();
   const formRef = useRef<HTMLFormElement>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
@@ -312,6 +331,7 @@ export function AddTransactionForm({
       setMerchant("");
       setPaymentMethod("");
       setNotes("");
+      setGoalid("");
       setClientError(undefined);
       // Reset leaves focus wherever it was (typically the submit button) --
       // pull it back into the form so the next entry can start typing
@@ -331,9 +351,11 @@ export function AddTransactionForm({
       // In an overlay the note goes to the caller, which outlives it.
       const note = state?.note ?? null;
       const sameBill = state?.sameBill;
+      const sameMoney = state?.sameMoney;
       if (!onSaved) {
         showSaveNote(note);
         setSameBillPair(sameBill ?? null);
+        setSameMoneyPair(sameMoney ?? null);
       }
       // Fires only on user-initiated create. A recurring confirmation has
       // its own sheet and its own pulse, never this one.
@@ -341,7 +363,7 @@ export function AddTransactionForm({
       clearTimeout(celebrateTimeout.current);
       celebrateTimeout.current = setTimeout(() => {
         setCelebrate(false);
-        onSaved?.(note, sameBill);
+        onSaved?.(note, sameBill, sameMoney);
       }, 1600);
     }
     wasPending.current = pending;
@@ -369,6 +391,7 @@ export function AddTransactionForm({
     // list -- clearing it is what keeps a mismatched pair unreachable,
     // rather than leaving a stale selection the picker no longer shows.
     setCategoryid("");
+    if (!goalLinkable(next)) setGoalid("");
     if (next === "Transfer") {
       setFromAccountId("");
       setToAccountId("");
@@ -409,6 +432,21 @@ export function AddTransactionForm({
     }
     submit(e);
   }
+
+  const goalFieldElement = (
+    <GoalField
+      id={fieldId("goalid")}
+      goals={goals}
+      value={goalid}
+      onChange={setGoalid}
+      currentGoal={initialValues?.goal ?? null}
+      asks={goalFieldAsks(
+        type,
+        accounts.find((a) => a.id === fromAccountId)?.account_type,
+        accounts.find((a) => a.id === toAccountId)?.account_type,
+      )}
+    />
+  );
 
   if (!isEdit && !embedded && !open) {
     return (
@@ -580,6 +618,7 @@ export function AddTransactionForm({
                   </select>
                 </FormField>
                 {toAccountId ? renderAnchorQuestion(toAccountId) : null}
+                {goalFieldElement}
               </>
             ) : (
               <>
@@ -629,6 +668,7 @@ export function AddTransactionForm({
                   </select>
                 </FormField>
                 {accountid ? renderAnchorQuestion(accountid) : null}
+                {type === "Expense" ? goalFieldElement : <input type="hidden" name="goalid" value="" />}
               </>
             )}
           </div>
@@ -695,6 +735,20 @@ export function AddTransactionForm({
 
       {!isEdit && sameBillPair ? (
         <SameBillQuestion key={sameBillPair.transactionId} pair={sameBillPair} onDismiss={() => setSameBillPair(null)} />
+      ) : null}
+
+      {!isEdit && sameMoneyPair ? (
+        <SameMoneyQuestion key={sameMoneyPair.contributionId} pair={sameMoneyPair} onDone={() => setSameMoneyPair(null)} />
+      ) : null}
+
+      {/* An edit that linked a goal answers instead of redirecting, so it can
+          ask; either answer then goes back to the list, as a save does. */}
+      {isEdit && state?.sameMoney ? (
+        <SameMoneyQuestion
+          key={state.sameMoney.contributionId}
+          pair={state.sameMoney}
+          onDone={() => router.push("/transactions")}
+        />
       ) : null}
 
       {isEdit ? null : (

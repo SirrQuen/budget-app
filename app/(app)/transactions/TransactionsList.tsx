@@ -80,6 +80,9 @@ type TransferDisplayRow = {
   toAccountId: string | null;
   /** Both legs share one amount, so either leg's is_estimated speaks for the pair. */
   isEstimated: boolean;
+  /** The goal the transfer is for -- carried on the Expense leg (migration 69). */
+  goalid: string | null;
+  goalName: string | null;
 };
 
 // is_estimated: no person supplied this amount -- a one-tap confirm of a
@@ -188,6 +191,8 @@ function buildDisplayRows(transactions: TransactionWithRelations[]): DisplayRow[
       isEstimated: tx.is_estimated,
       fromAccountId: fromLeg?.accountid ?? null,
       toAccountId: toLeg?.accountid ?? null,
+      goalid: fromLeg?.goalid ?? null,
+      goalName: fromLeg?.goal_name ?? null,
     });
   }
 
@@ -199,8 +204,8 @@ function buildDisplayRows(transactions: TransactionWithRelations[]): DisplayRow[
 // confirmation total, and either the raw id (single) or the transfer group id
 // (transfer, so both legs go together).
 type SelectionInfo =
-  | { key: string; amount: number; transactionId: string; transferGroupId: null }
-  | { key: string; amount: number; transactionId: null; transferGroupId: string };
+  | { key: string; amount: number; transactionId: string; transferGroupId: null; forGoal: boolean }
+  | { key: string; amount: number; transactionId: null; transferGroupId: string; forGoal: boolean };
 
 function selectionInfoFor(row: DisplayRow): SelectionInfo {
   if (row.kind === "transfer") {
@@ -209,6 +214,7 @@ function selectionInfoFor(row: DisplayRow): SelectionInfo {
       amount: row.amount,
       transactionId: null,
       transferGroupId: row.transferGroupId,
+      forGoal: row.goalid !== null,
     };
   }
   return {
@@ -216,6 +222,7 @@ function selectionInfoFor(row: DisplayRow): SelectionInfo {
     amount: Number(row.tx.amount),
     transactionId: row.tx.id,
     transferGroupId: null,
+    forGoal: row.tx.goalid !== null,
   };
 }
 
@@ -313,6 +320,7 @@ export function TransactionsList({
   const selectedTotal =
     selectedInfos.reduce((cents, info) => cents + Math.round(info.amount * 100), 0) / 100;
   const selectedTransferCount = selectedInfos.filter((info) => info.transferGroupId !== null).length;
+  const selectedForGoal = selectedInfos.filter((info) => info.forGoal).length;
   const selectedForecastNotes = selectedInfos
     .map((info) => deleteNotes[info.transferGroupId ?? info.transactionId!])
     .filter((note): note is string => note !== undefined);
@@ -636,10 +644,12 @@ export function TransactionsList({
                               amount: row.amount,
                               fromAccountId: row.fromAccountId,
                               toAccountId: row.toAccountId,
+                              goalid: row.goalid,
                             }}
                             accounts={accounts}
                             incomeCategories={incomeCategories}
                             expenseCategories={expenseCategories}
+                            goals={goals}
                           />
                         ) : null}
                         <Link
@@ -656,6 +666,7 @@ export function TransactionsList({
                           transactionDate={row.transaction_date}
                           transferGroupId={row.transferGroupId}
                           forecastNote={deleteNotes[row.transferGroupId]}
+                          goalName={row.goalName}
                           redirectToList={false}
                         />
                       </div>
@@ -736,10 +747,12 @@ export function TransactionsList({
                             transaction_type: tx.transaction_type as "Income" | "Expense",
                             categoryid: tx.categoryid,
                             accountid: tx.accountid,
+                            goalid: tx.goalid,
                           }}
                           accounts={accounts}
                           incomeCategories={incomeCategories}
                           expenseCategories={expenseCategories}
+                          goals={goals}
                         />
                       ) : null}
                       <Link
@@ -756,6 +769,7 @@ export function TransactionsList({
                         transactionDate={tx.transaction_date}
                         transferGroupId={tx.transfer_group_id}
                         forecastNote={deleteNotes[tx.transfer_group_id ?? tx.id]}
+                        goalName={tx.goal_name}
                         redirectToList={false}
                       />
                     </div>
@@ -778,7 +792,13 @@ export function TransactionsList({
                   ? "1 of these is a transfer"
                   : `${selectedTransferCount} of these are transfers`
               } — ${selectedTransferCount === 1 ? "its matching leg" : "their matching legs"} will also be deleted.`
-        }${selectedForecastNotes.map((note) => ` ${note}`).join("")}`}
+        }${selectedForecastNotes.map((note) => ` ${note}`).join("")}${
+          selectedForGoal === 0
+            ? ""
+            : selectedForGoal === 1
+              ? " 1 of these counts toward a goal, and comes off it."
+              : ` ${selectedForGoal} of these count toward goals, and come off them.`
+        }`}
         confirmLabel={isBulkDeleting ? "Deleting…" : "Delete"}
         confirmIcon={<TrashIcon className="h-4 w-4" />}
         cancelLabel="Cancel"

@@ -31,6 +31,9 @@ import { FullFormOverlay } from "@/components/quick-add/FullFormOverlay";
 import { needsAnchorAnswer } from "@/lib/anchorAnswer";
 import { FIELD_CLASS, FIELD_EDGE } from "@/components/ui/Input";
 import { recentCombinations, recentPrefill, type RecentRow } from "@/lib/logAgain";
+import type { GoalOption } from "@/lib/db/goals";
+import type { SameMoneyPair } from "@/lib/goalLinks";
+import { SameMoneyQuestion } from "@/components/SameMoneyQuestion";
 
 export function QuickAddBar({
   accounts,
@@ -38,6 +41,7 @@ export function QuickAddBar({
   expenseCategories,
   defaultAccountId,
   recentTransactions = [],
+  goals = [],
   navOpen = false,
 }: {
   accounts: TransactionAccountOption[];
@@ -47,6 +51,8 @@ export function QuickAddBar({
   /** Newest first. The "Recent" strip shows the five most recent distinct
    * (description, account, category) among them. */
   recentTransactions?: RecentRow[];
+  /** For the full form's Goal field (migration 69). The bar itself has no room for it. */
+  goals?: GoalOption[];
   /** The mobile nav drawer is open -- hide the FAB so it doesn't sit on top
    * of the drawer's footer controls. */
   navOpen?: boolean;
@@ -78,6 +84,7 @@ export function QuickAddBar({
   // "Is this the same bill?" after a save that matches a schedule's next
   // occurrence (lib/sameBill.ts) -- until answered or put off.
   const [sameBillPair, setSameBillPair] = useState<SameBillPair | null>(null);
+  const [sameMoneyPair, setSameMoneyPair] = useState<SameMoneyPair | null>(null);
   // Guards against a second Enter-triggered submit landing before React has
   // re-rendered with pending=true -- useActionState's `pending` is only
   // current as of the last commit, so a same-tick double Enter can race it.
@@ -287,9 +294,10 @@ export function QuickAddBar({
     setFullFormOpen(true);
   }
 
-  function handleFullFormSaved(note: string | null, sameBill?: SameBillPair) {
+  function handleFullFormSaved(note: string | null, sameBill?: SameBillPair, sameMoney?: SameMoneyPair) {
     showSaveNote(note);
     setSameBillPair(sameBill ?? null);
+    setSameMoneyPair(sameMoney ?? null);
     setFullFormOpen(false);
     setText("");
     setSheetOpen(false);
@@ -525,6 +533,14 @@ export function QuickAddBar({
             className="pointer-events-auto w-full max-w-md bg-surface shadow-lg"
           />
         ) : null}
+        {sameMoneyPair ? (
+          <SameMoneyQuestion
+            key={sameMoneyPair.contributionId}
+            pair={sameMoneyPair}
+            onDone={() => setSameMoneyPair(null)}
+            className="pointer-events-auto w-full max-w-md bg-surface shadow-lg"
+          />
+        ) : null}
       </div>
 
       {fullFormOpen ? (
@@ -532,6 +548,7 @@ export function QuickAddBar({
           accounts={accounts}
           incomeCategories={incomeCategories}
           expenseCategories={expenseCategories}
+          goals={goals}
           prefill={fullFormPrefill}
           onClose={() => setFullFormOpen(false)}
           onSaved={handleFullFormSaved}

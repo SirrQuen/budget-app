@@ -18,6 +18,8 @@ export type TransactionWithRelations = TransactionRow & {
   category_name: string | null;
   category_color: string | null;
   account_name: string | null;
+  /** The goal this row is for (goalid, migration 69), named for the delete confirmation. */
+  goal_name: string | null;
 };
 
 // The edit page's read: the row plus whether it counts toward its
@@ -65,20 +67,22 @@ export type TransactionsPage = {
 // couple of reporting views) -- naming "categories"/"accounts" explicitly
 // picks the base-table relationship, not the views.
 const TRANSACTION_SELECT =
-  "*, category:categories(category_name, color), account:accounts(account_name)";
+  "*, category:categories(category_name, color), account:accounts(account_name), goal:goals!transactions_goalid_fkey(goal_name)";
 
 type RawTransactionRow = TransactionRow & {
   category: { category_name: string; color: string | null } | null;
   account: { account_name: string } | null;
+  goal: { goal_name: string } | null;
 };
 
 function flatten(row: RawTransactionRow): TransactionWithRelations {
-  const { category, account, ...rest } = row;
+  const { category, account, goal, ...rest } = row;
   return {
     ...rest,
     category_name: category?.category_name ?? null,
     category_color: category?.color ?? null,
     account_name: account?.account_name ?? null,
+    goal_name: goal?.goal_name ?? null,
   };
 }
 
@@ -538,6 +542,12 @@ export type CreateTransferInput = {
   /** Each leg's pre-anchor answer (migration 62) -- two accounts, two anchors. */
   fromAnchorAnswer?: AnchorAnswerColumns;
   toAnchorAnswer?: AnchorAnswerColumns;
+  /**
+   * The goal this transfer is for (migration 69). Rides on the Expense leg
+   * only -- the database refuses it on the Income leg
+   * (transactions_goal_expense_only).
+   */
+  goalid?: string | null;
   // Rides on the outgoing leg only: the unique index is (userid,
   // idempotency_key), so both legs can't carry it. One leg is enough -- the
   // two are inserted in one statement, so if that leg exists, so does the
@@ -577,6 +587,7 @@ export async function createTransfer(
     notes: input.notes ?? null,
     transfer_group_id,
     idempotency_key: input.idempotency_key ?? null,
+    goalid: input.goalid ?? null,
     ...(input.fromAnchorAnswer ?? NO_ANCHOR_ANSWER),
   };
 
@@ -654,6 +665,8 @@ export type UpdateTransferInput = {
   /** Each leg's pre-anchor answer (migration 62), following its account. */
   fromAnchorAnswer: AnchorAnswerColumns;
   toAnchorAnswer: AnchorAnswerColumns;
+  /** The goal (null = none), written on the Expense leg (migration 69). */
+  goalid: string | null;
 };
 
 // The ONLY write path for an existing transfer: update_transfer()
@@ -677,6 +690,9 @@ export async function updateTransfer(input: UpdateTransferInput): Promise<DbResu
     p_from_anchor_answer_set_at: input.fromAnchorAnswer.anchor_answer_set_at ?? undefined,
     p_to_counts_despite_anchor: input.toAnchorAnswer.counts_despite_anchor ?? undefined,
     p_to_anchor_answer_set_at: input.toAnchorAnswer.anchor_answer_set_at ?? undefined,
+    // The editor always sends the goal it shows, so it's always written.
+    p_set_goal: true,
+    p_goalid: input.goalid ?? undefined,
   });
 
   if (error) {
@@ -715,8 +731,10 @@ export async function getScheduleSummary(recurringid: string | null): Promise<Db
 
 export type TransferForEdit = {
   transferGroupId: string;
-  /** The Expense leg -- money leaves this account. */
+  /** The Expense leg -- money leaves this account. It carries the goal, if any. */
   fromLeg: { id: string; accountId: string; anchorAnswer: AnchorAnswerColumns };
+  /** The goal this transfer is for (on the Expense leg, migration 69). */
+  goalid: string | null;
   /** The Income leg -- money lands here. */
   toLeg: { id: string; accountId: string; anchorAnswer: AnchorAnswerColumns };
   amount: number;
@@ -735,7 +753,7 @@ export async function getTransferForEdit(groupId: string): Promise<DbResult<Tran
   const { data, error } = await supabase
     .from("transactions")
     .select(
-      "id, accountid, transaction_type, amount, transaction_date, description, notes, recurringid, counts_despite_anchor, anchor_answer_set_at",
+      "id, accountid, transaction_type, amount, transaction_date, description, notes, recurringid, counts_despite_anchor, anchor_answer_set_at, goalid",
     )
     .eq("transfer_group_id", groupId);
 
@@ -759,6 +777,7 @@ export async function getTransferForEdit(groupId: string): Promise<DbResult<Tran
     data: {
       transferGroupId: groupId,
       fromLeg: { id: fromLeg.id, accountId: fromLeg.accountid, anchorAnswer: legAnswer(fromLeg) },
+      goalid: fromLeg.goalid,
       toLeg: { id: toLeg.id, accountId: toLeg.accountid, anchorAnswer: legAnswer(toLeg) },
       amount: Number(fromLeg.amount),
       date: fromLeg.transaction_date,
