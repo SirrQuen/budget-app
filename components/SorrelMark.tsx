@@ -3,7 +3,7 @@ type SorrelMarkProps = {
   className?: string;
 };
 
-const PETAL =
+export const PETAL =
   "M 50 50 C 44 36, 24 32, 24 18 C 24 8, 36 2, 44 8 C 47 10, 48.5 12, 50 16 C 51.5 12, 53 10, 56 8 C 64 2, 76 8, 76 18 C 76 32, 56 36, 50 50 Z";
 
 /**
