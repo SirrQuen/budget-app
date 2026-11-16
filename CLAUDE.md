@@ -512,6 +512,11 @@ before the link was folded in, and was live until the next push at
 docs/phase-7-findings.md, "62 without its answer link was live for 23
 minutes".
 
+**Merge gate.** Any report saying a branch is ready to merge STARTS by
+listing every note in `docs/tester-notes/` marked to go out before deploy
+whose Sent line is "not yet". If there are none, say "No tester notes
+blocking."
+
 A change that moves a number a tester can see (safe to spend, an
 estimate, a balance) gets a dated note in `docs/tester-notes/`: sent
 date, migration, merge commit, then the message as sent. One change per
