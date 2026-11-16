@@ -1,11 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { importedThroughDate, importedThroughLabel, importedThroughSentence } from "./importedThrough";
-
-test("current year drops the year, another year keeps it", () => {
-  assert.equal(importedThroughDate("2026-11-08", "2026-11-16"), "Nov 8");
-  assert.equal(importedThroughDate("2025-12-30", "2026-01-02"), "Dec 30, 2025");
-});
+import { importedThroughLabel, importedThroughSentence } from "./importedThrough";
 
 test("an account never imported into shows nothing", () => {
   assert.equal(importedThroughLabel(null, "2026-11-16"), null);

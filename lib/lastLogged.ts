@@ -12,12 +12,20 @@
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+/**
+ * "Nov 12", or "Nov 12, 2025" when the year isn't the user's current one --
+ * THE year rule for a calendar date shown as a fact. "Imported through"
+ * uses it too (lib/importedThrough.ts); never restate it. A date a day
+ * ahead of today (clock or zone quirk) reads as today.
+ */
+export function calendarDateLabel(date: string, today: string): string {
+  const on = date > today ? today : date;
+  const [year, month, day] = on.split("-").map(Number);
+  const label = `${MONTHS[month - 1]} ${day}`;
+  return year === Number(today.slice(0, 4)) ? label : `${label}, ${year}`;
+}
+
 export function lastLoggedLabel(lastLoggedOn: string | null, today: string): string {
   if (lastLoggedOn === null) return "Nothing logged yet";
-  // A clock or zone quirk can put it a day ahead; it was still today.
-  const on = lastLoggedOn > today ? today : lastLoggedOn;
-  const [year, month, day] = on.split("-").map(Number);
-  const date = `${MONTHS[month - 1]} ${day}`;
-  // The year only when it isn't the user's current one.
-  return year === Number(today.slice(0, 4)) ? `Last logged ${date}` : `Last logged ${date}, ${year}`;
+  return `Last logged ${calendarDateLabel(lastLoggedOn, today)}`;
 }

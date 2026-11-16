@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { lastLoggedLabel } from "./lastLogged";
+import { calendarDateLabel, lastLoggedLabel } from "./lastLogged";
 
 test("states the fact as a date", () => {
   assert.equal(lastLoggedLabel("2026-11-09", "2026-11-09"), "Last logged Nov 9");
@@ -30,4 +30,10 @@ test("never a scolding, never a nudge", () => {
 test("a day ahead (clock skew) reads as today's date", () => {
   assert.equal(lastLoggedLabel("2026-11-10", "2026-11-09"), "Last logged Nov 9");
   assert.equal(lastLoggedLabel("2027-01-01", "2026-12-31"), "Last logged Dec 31");
+});
+
+// "Imported through" shares this formatter: one year rule.
+test("calendarDateLabel is the shared date and year rule", () => {
+  assert.equal(calendarDateLabel("2026-11-08", "2026-11-16"), "Nov 8");
+  assert.equal(calendarDateLabel("2025-12-30", "2026-01-02"), "Dec 30, 2025");
 });
