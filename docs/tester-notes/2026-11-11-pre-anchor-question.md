@@ -1,4 +1,4 @@
-Sent:      not yet (planned 2026-11-11 -- not the 10th, which has goal money)
+Sent:      Not emailed. Announced in-app (What's new), 2026-11-16
 Migration: 62
 Merge:     e8f7916
 Deployed:  2026-11-10

@@ -1,4 +1,4 @@
-Sent:      not yet (planned 2026-11-12)
+Sent:      Not emailed. Announced in-app (What's new), 2026-11-16
 Migration: 63
 Merge:     67951d2
 Deployed:  2026-11-10
