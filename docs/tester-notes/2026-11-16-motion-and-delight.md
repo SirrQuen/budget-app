@@ -23,5 +23,8 @@ Sorrel now moves with you, a little. Nothing about your numbers changes.
 - Balances ease in after a save, pages fade in as you move between them,
   and loading placeholders pulse slowly.
 
+- **Sorrel has a home screen icon.** Add it to your phone's home screen and
+  it opens as its own app, with the Sorrel mark.
+
 If your device is set to reduce motion, all of this shows its end state at
 once, with no movement.
