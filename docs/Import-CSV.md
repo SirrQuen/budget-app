@@ -13,6 +13,19 @@
 
 What v1 isn't: Excel parsing, bank connections, auto-categorising, or more than one account per file.
 
+## Recent activity, not statements
+
+Import doesn't need to wait for a statement. Most banks let you download recent activity as a CSV any time, from the account's activity page, usually up to yesterday. The statement is only the monthly PDF. **The habit to encourage is a weekly import of the last few weeks.** Overlapping dates are harmless because duplicates are skipped by default (step 8).
+
+- **Tell people, on the import screen, under the file picker:**
+  > No need to wait for a statement. Most banks let you download recent activity any time. Look for "Download" or "Export" on the account's activity page. Overlapping dates are fine: Sorrel skips what it already has.
+- **"Imported through Nov 8"** on the account page, and in step 1 once an account is chosen: *"Your last import for Checking ran through Nov 8. Downloading from a few days before that is fine."*
+  - It's the latest **transaction date** among that account's imported rows. Not the import's created_at, because the question is which bank dates are covered.
+  - Derived at read time. No new column, and it recomputes after an Undo.
+  - It uses the same date formatter as "Last logged", with the year only when it isn't the current year.
+  - It isn't shown for an account that has never had an import.
+- **No reminders, badges or nags** to import. The line informs. It never chases.
+
 ## The library
 
 - **PapaParse, pinned to an exact version.** Use the newest version that has been published for at least two weeks. 5.7.1 came out on 11 November. Brand-new releases are how npm supply-chain attacks spread, and a short wait costs nothing. Take 5.7.1 sooner only if it fixes an advisory.
@@ -108,8 +121,6 @@ A row is flagged if an existing transaction on **the same account** has **the sa
 - Rows within the file are never flagged against each other. Two $5.75 coffees on one day are two coffees.
 - Each flagged row shows the existing transaction it matched. The user can include it.
 - This matcher is acceptable where the fuzzy duplicate detector was ruled out because it **only flags in a preview the user controls**. Nothing is merged or deleted.
-- **The server re-runs it.** `importTransactions()` runs the same `findDuplicates()` against what the account holds when the request arrives (`unincludedDuplicates()`, `lib/importReview.ts`) and refuses the whole import if any flagged row isn't marked `includeDuplicate` -- the same shape as the same-bill check. The browser's tick is the only thing that lets a flagged row through; its flagging is not trusted. A row in the same request is never compared with another.
-- **Where it starts.** Settings > Import, an account's page, and the Transactions screen are one flow (`/import`). From Transactions, an account filter preselects that account (`?account=`); `?from=transactions` only decides where Back goes.
 
 ### 9. Categories
 
@@ -225,4 +236,29 @@ VERIFY:
     that account's non-transfer rows.
   - Network tab: no request carries the file or any unconfirmed row.
   - Another user's account id is rejected by the database.
+```
+
+---
+
+## Addendum prompt: recent activity (add to the import build in progress)
+
+```
+Addendum to import Phase 2. Read the new "Recent activity, not
+statements" section of docs/Import-CSV.md.
+
+1. Under the file picker, the "No need to wait for a statement" text,
+   exactly as written in the doc. Neutral ink.
+2. "Imported through <date>" — the latest TRANSACTION DATE among that
+   account's imported rows (import_id not null). Derived on read, no new
+   column. Shown on the account page and in the import flow once an
+   account is chosen. Uses the same formatter as Last logged. Hidden for
+   accounts never imported into. Recomputes after Undo.
+3. No reminder, badge or notification about importing.
+
+VERIFY:
+  - Import Nov 1–14, then an overlapping file Nov 8–21: the second
+    preview flags exactly the Nov 8–14 rows, and saving with defaults
+    adds only Nov 15–21.
+  - "Imported through" reads Nov 14 after the first import and Nov 21
+    after the second; after undoing the second, Nov 14 again.
 ```
