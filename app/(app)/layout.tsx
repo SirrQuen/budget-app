@@ -5,7 +5,7 @@ import { recordLogin } from "@/lib/db/profile";
 import { listAccounts } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { getMostRecentTransactionAccountId, listRecentTransactions } from "@/lib/db/transactions";
-import { listGoalOptions } from "@/lib/db/goals";
+import { listFollowedGoals, listGoalOptions } from "@/lib/db/goals";
 import { getTheme, getTimeZone, getToday } from "@/lib/db/settings";
 import { AppShell } from "@/components/app-shell/AppShell";
 import { identityName } from "@/lib/displayName";
@@ -38,7 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 }
 
 async function AppFrame({ children }: { children: React.ReactNode }) {
-  const [user, loginResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme, timeZone, today, sessionId, recentTransactionsResult, goalsResult] =
+  const [user, loginResult, accountsResult, incomeCategoriesResult, expenseCategoriesResult, recentAccountResult, theme, timeZone, today, sessionId, recentTransactionsResult, goalsResult, followedGoalsResult] =
     await Promise.all([
       requireUser(),
       // Every authenticated route runs this layout, including the
@@ -65,6 +65,8 @@ async function AppFrame({ children }: { children: React.ReactNode }) {
       getToday().then((day) => listRecentTransactions(day)),
       // The full form's Goal field (migration 69). A failed read only hides it.
       listGoalOptions(),
+      // Goals that follow a card (migration 70). A failed read only drops the note.
+      listFollowedGoals(),
     ]);
 
   // A load failure here just means no quick-add bar for this request, not a
@@ -80,6 +82,7 @@ async function AppFrame({ children }: { children: React.ReactNode }) {
           defaultAccountId: recentAccountResult.data ?? null,
           recentTransactions: recentTransactionsResult.data ?? [],
           goals: goalsResult.data ?? [],
+          followedGoals: followedGoalsResult.data ?? [],
         }
       : null;
 

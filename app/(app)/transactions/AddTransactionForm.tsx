@@ -29,6 +29,7 @@ import { savedSummary, type SavedSummary } from "@/lib/savedSummary";
 import { logAgainPrefill, type LogAgainSource } from "@/lib/logAgain";
 import { tick } from "@/lib/haptics";
 import { prefersReducedMotion } from "@/components/ui/useReducedMotion";
+import { useShowGoalCompletion } from "@/components/GoalCompletionHost";
 import { SaveNote, useSaveNote } from "@/components/ui/SaveNote";
 import { SameBillQuestion } from "@/components/SameBillQuestion";
 import type { SameBillPair } from "@/lib/sameBill";
@@ -45,7 +46,7 @@ import { amountChanged } from "@/lib/recurringEditScope";
 import { ChevronDownIcon } from "@/components/ui/icons";
 import { GoalField } from "@/components/GoalField";
 import { SameMoneyQuestion } from "@/components/SameMoneyQuestion";
-import type { GoalOption } from "@/lib/db/goals";
+import type { FollowedGoal, GoalOption } from "@/lib/db/goals";
 import { goalFieldAsks, goalLinkable, type SameMoneyPair } from "@/lib/goalLinks";
 
 const fieldClassName = FIELD_CLASS;
@@ -143,6 +144,7 @@ export function AddTransactionForm({
   accounts,
   prefill,
   goals = [],
+  followedGoals = [],
   embedded = false,
   headingId,
   onClose,
@@ -157,6 +159,8 @@ export function AddTransactionForm({
   prefill?: AddTransactionPrefill;
   /** Goals a transaction can be for (listGoalOptions). Empty: no Goal field. */
   goals?: GoalOption[];
+  /** Goals that follow a card (migration 70): named beside the Goal field on a payment to that card. */
+  followedGoals?: FollowedGoal[];
   /** Always renders the full form, skipping the collapsed "Add transaction"
    * button -- for mounting inside an overlay that's already the toggle. */
   embedded?: boolean;
@@ -232,6 +236,7 @@ export function AddTransactionForm({
   // "Is this the same money?" after a save that linked a goal.
   const [sameMoneyPair, setSameMoneyPair] = useState<SameMoneyPair | null>(null);
   const pulse = useConfirmPulse();
+  const showCompletion = useShowGoalCompletion();
   const formRef = useRef<HTMLFormElement>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
   const wasPending = useRef(false);
@@ -377,6 +382,8 @@ export function AddTransactionForm({
       clearTimeout(savedLabelTimeout.current);
       savedLabelTimeout.current = setTimeout(() => setJustSaved(false), 900);
       tick();
+      // A payment that paid off a goal following its card (migration 70).
+      showCompletion(state?.completed);
       // In an overlay the note goes to the caller, which outlives it.
       const note = state?.note ?? null;
       const sameBill = state?.sameBill;
@@ -509,6 +516,8 @@ export function AddTransactionForm({
       value={goalid}
       onChange={setGoalid}
       currentGoal={initialValues?.goal ?? null}
+      followed={followedGoals}
+      accountIds={type === "Transfer" ? [fromAccountId, toAccountId] : [accountid]}
       asks={goalFieldAsks(
         type,
         accounts.find((a) => a.id === fromAccountId)?.account_type,

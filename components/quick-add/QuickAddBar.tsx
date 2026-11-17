@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/Button";
 import { SaveLeaves, SaveToast, SavedLabel, useSaveToast } from "@/components/ui/SaveToast";
 import { savedSummary, type SavedSummary } from "@/lib/savedSummary";
 import { tick } from "@/lib/haptics";
+import { useShowGoalCompletion } from "@/components/GoalCompletionHost";
 import { SaveNote, useSaveNote } from "@/components/ui/SaveNote";
 import { SameBillQuestion } from "@/components/SameBillQuestion";
 import type { SameBillPair } from "@/lib/sameBill";
@@ -32,7 +33,7 @@ import { FullFormOverlay } from "@/components/quick-add/FullFormOverlay";
 import { needsAnchorAnswer } from "@/lib/anchorAnswer";
 import { FIELD_CLASS, FIELD_EDGE } from "@/components/ui/Input";
 import { logAgainPrefill, recentCombinations, recentPrefill, type RecentRow } from "@/lib/logAgain";
-import type { GoalOption } from "@/lib/db/goals";
+import type { FollowedGoal, GoalOption } from "@/lib/db/goals";
 import type { SameMoneyPair } from "@/lib/goalLinks";
 import { SameMoneyQuestion } from "@/components/SameMoneyQuestion";
 
@@ -43,6 +44,7 @@ export function QuickAddBar({
   defaultAccountId,
   recentTransactions = [],
   goals = [],
+  followedGoals = [],
   navOpen = false,
 }: {
   accounts: TransactionAccountOption[];
@@ -54,6 +56,8 @@ export function QuickAddBar({
   recentTransactions?: RecentRow[];
   /** For the full form's Goal field (migration 69). The bar itself has no room for it. */
   goals?: GoalOption[];
+  /** Goals that follow a card, named beside the full form's Goal field (migration 70). */
+  followedGoals?: FollowedGoal[];
   /** The mobile nav drawer is open -- hide the FAB so it doesn't sit on top
    * of the drawer's footer controls. */
   navOpen?: boolean;
@@ -72,6 +76,7 @@ export function QuickAddBar({
   const [saveSeq, setSaveSeq] = useState(0);
   const [toast, showToast] = useSaveToast();
   const pulse = useConfirmPulse();
+  const showCompletion = useShowGoalCompletion();
 
   const sheetRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -214,6 +219,7 @@ export function QuickAddBar({
       clearTimeout(savedLabelTimeoutRef.current);
       savedLabelTimeoutRef.current = setTimeout(() => setJustSaved(false), 900);
       tick();
+      showCompletion(state?.completed);
       showSaveNote(state?.note ?? null);
       setSameBillPair(state?.sameBill ?? null);
       // Fires only on user-initiated create. A recurring confirmation has
@@ -582,6 +588,7 @@ export function QuickAddBar({
           incomeCategories={incomeCategories}
           expenseCategories={expenseCategories}
           goals={goals}
+          followedGoals={followedGoals}
           prefill={fullFormPrefill}
           onClose={() => setFullFormOpen(false)}
           onSaved={handleFullFormSaved}

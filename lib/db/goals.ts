@@ -5,6 +5,7 @@ import type { GoalType } from "@/lib/goalOptions";
 import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/errors";
 import { isSafeToSpendCommitment } from "@/lib/safeToSpend";
 import type { SameMoneyPair } from "@/lib/goalLinks";
+import { isLiabilityAccountType } from "@/lib/accountOptions";
 
 type GoalRow = Database["public"]["Tables"]["goals"]["Row"];
 type GoalInsert = Database["public"]["Tables"]["goals"]["Insert"];
@@ -13,9 +14,9 @@ type GoalContributionRow = Database["public"]["Tables"]["goal_contributions"]["R
 
 export type DbResult<T> = { data: T; error: null } | { data: null; error: string };
 
-// This app only ever offers Manual tracking (log a contribution yourself) --
-// LinkedAccount and TaggedTransactions are valid per goals_tracking_method_check
-// but there's no UI here to wire up either, so they're not exposed.
+// A goal is created Manual (log a contribution yourself). A debt payoff
+// goal can then follow a card (LinkedAccount, migration 70) -- only through
+// linkGoalToCard(), never at create. TaggedTransactions is unused.
 export type CreateGoalInput = {
   goal_name: string;
   goal_type: GoalType;
@@ -96,7 +97,9 @@ export type GoalOption = {
   fundingRecurringId: string | null;
 };
 
-// Active, uncompleted goals -- the ones a transfer can still be for. Each
+// Active, uncompleted goals -- the ones a transfer can still be for. A goal
+// that follows a card is never one (migration 70): payments count through
+// the card's balance, and the database refuses the link. Each
 // carries its current link, so the form can show which goal a schedule
 // already funds.
 export async function listGoalOptions(): Promise<DbResult<GoalOption[]>> {
@@ -106,6 +109,7 @@ export async function listGoalOptions(): Promise<DbResult<GoalOption[]>> {
     .select("id, goal_name, monthly_contribution, funding_recurringid")
     .eq("is_active", true)
     .is("completed_at", null)
+    .neq("tracking_method", "LinkedAccount")
     .order("goal_name");
   if (error) {
     return { data: null, error: describeReadError(error, "goal") };
@@ -179,16 +183,17 @@ export async function createGoal(input: CreateGoalInput): Promise<DbResult<GoalR
 
 export type UpdateGoalInput = CreateGoalInput;
 
-// Changing the type clears any link to an account: a Debt Payoff goal
-// switched to Vacation has no business still pointing at a credit card.
-// The current type is read first so an edit that keeps the type leaves
-// the link alone.
+// Changing the type stops a goal following its card (migration 70): a Debt
+// Payoff goal switched to Vacation has no business still pointing at a
+// credit card. unlink_goal_from_card() runs first, keeping the number,
+// then the edit lands on a manual goal. An edit that keeps the type
+// leaves the link alone.
 export async function updateGoal(id: string, input: UpdateGoalInput): Promise<DbResult<GoalRow>> {
   const supabase = await createClient();
 
   const { data: current, error: readError } = await supabase
     .from("goals")
-    .select("goal_type")
+    .select("goal_type, tracking_method")
     .eq("id", id)
     .single();
 
@@ -196,10 +201,14 @@ export async function updateGoal(id: string, input: UpdateGoalInput): Promise<Db
     return { data: null, error: describeReadError(readError, "goal") };
   }
 
-  const update: GoalUpdate =
-    current.goal_type === input.goal_type
-      ? { ...input }
-      : { ...input, accountid: null, tracking_method: "Manual" };
+  if (current.goal_type !== input.goal_type && current.tracking_method === "LinkedAccount") {
+    const unlinked = await unlinkGoalFromCard(id);
+    if (unlinked.error !== null) {
+      return { data: null, error: unlinked.error };
+    }
+  }
+
+  const update: GoalUpdate = { ...input };
 
   const { data, error } = await supabase.from("goals").update(update).eq("id", id).select().single();
 
@@ -244,34 +253,6 @@ export async function archiveGoal(id: string): Promise<DbResult<{ id: string }>>
   }
 
   return { data, error: null };
-}
-
-// completed_at is kept by the database (migration 53's triggers) on every
-// write. A server action reads it before and after its own write; only a
-// change from null to set, in that action, is a completion to celebrate.
-export async function getGoalCompletedAt(id: string): Promise<DbResult<string | null>> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase.from("goals").select("completed_at").eq("id", id).single();
-
-  if (error) {
-    return { data: null, error: describeReadError(error, "goal") };
-  }
-
-  return { data: data.completed_at, error: null };
-}
-
-// The goal a contribution belongs to, read before editing it.
-export async function getContributionGoalId(id: string): Promise<DbResult<string>> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase.from("goal_contributions").select("goalid").eq("id", id).single();
-
-  if (error) {
-    return { data: null, error: describeReadError(error, "contribution") };
-  }
-
-  return { data: data.goalid, error: null };
 }
 
 // The goal's first contribution date, for the completion line's "over four
@@ -488,4 +469,83 @@ export async function replaceContributionWithLink(
     return { data: null, error: describeWriteError(error, "contribution") };
   }
   return { data: null, error: null };
+}
+
+/** A card a debt payoff goal can follow: a liability that owes something now. */
+export type FollowableCard = { id: string; name: string; owed: number };
+
+// Active liability accounts (isLiabilityAccountType -- Credit Card or
+// Loan, is_liability_account_type() in SQL) that owe something now.
+// link_goal_to_card() checks all of this again; this is the picker.
+export async function listFollowableCards(): Promise<DbResult<FollowableCard[]>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("v_account_balances")
+    .select("account_id, account_name, account_type, balance")
+    .eq("is_active", true)
+    .order("account_name");
+  if (error) {
+    return { data: null, error: describeReadError(error, "account") };
+  }
+  return {
+    data: data.flatMap((a) =>
+      a.account_id !== null && isLiabilityAccountType(a.account_type ?? "") && Number(a.balance ?? 0) < 0
+        ? [{ id: a.account_id, name: a.account_name ?? "", owed: -Number(a.balance) }]
+        : [],
+    ),
+    error: null,
+  };
+}
+
+/** A goal that follows a card, for the transaction form's note beside the Goal field. */
+export type FollowedGoal = { id: string; name: string; accountId: string };
+
+export async function listFollowedGoals(): Promise<DbResult<FollowedGoal[]>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("goals")
+    .select("id, goal_name, accountid")
+    .eq("is_active", true)
+    .eq("tracking_method", "LinkedAccount")
+    .order("goal_name");
+  if (error) {
+    return { data: null, error: describeReadError(error, "goal") };
+  }
+  return {
+    data: data.flatMap((g) => (g.accountid ? [{ id: g.id, name: g.goal_name, accountId: g.accountid }] : [])),
+    error: null,
+  };
+}
+
+// The goal starts following the card (migration 70): what the card owes
+// now becomes its starting balance, once. Its contributions and linked
+// transactions stay as history and stop counting -- the form says so first.
+export async function linkGoalToCard(goalId: string, accountId: string): Promise<DbResult<null>> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("link_goal_to_card", { p_goal_id: goalId, p_account_id: accountId });
+  if (error) {
+    return { data: null, error: describeWriteError(error, "goal") };
+  }
+  return { data: null, error: null };
+}
+
+// The goal goes back to manual and keeps its number: the progress made
+// while following becomes one carried-over contribution. Returns that amount.
+export async function unlinkGoalFromCard(goalId: string): Promise<DbResult<number>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("unlink_goal_from_card", { p_goal_id: goalId });
+  if (error) {
+    return { data: null, error: describeWriteError(error, "goal") };
+  }
+  return { data: Number(data ?? 0), error: null };
+}
+
+/** Every goal's completed_at, keyed by id -- the "before" half of a completion check. */
+export async function getGoalCompletionStates(): Promise<DbResult<Map<string, string | null>>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("goals").select("id, completed_at").eq("is_active", true);
+  if (error) {
+    return { data: null, error: describeReadError(error, "goal") };
+  }
+  return { data: new Map(data.map((g) => [g.id, g.completed_at])), error: null };
 }

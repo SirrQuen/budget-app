@@ -23,8 +23,10 @@ import { addDismissedComingUpKey } from "@/lib/comingUpDismissed";
 import { getToday } from "@/lib/db/settings";
 import { needsAnchorAnswer, parseAnchorAnswers } from "@/lib/anchorAnswer";
 import { setGoalFunding } from "@/lib/db/goals";
+import type { GoalCompletion } from "@/lib/goalCompletion";
+import { completedSince, completionSnapshot } from "@/lib/goalCompletionCheck";
 
-export type ActionState = { error?: string } | undefined;
+export type ActionState = { error?: string; completed?: GoalCompletion } | undefined;
 
 /**
  * A one-tap answer's result. needsAnswer: the occurrence is dated before
@@ -32,7 +34,7 @@ export type ActionState = { error?: string } | undefined;
  * which one tap can't give -- the queue opens the sheet to ask. Nothing
  * was written.
  */
-export type OneTapState = { error?: string; needsAnswer?: boolean } | undefined;
+export type OneTapState = { error?: string; needsAnswer?: boolean; completed?: GoalCompletion } | undefined;
 
 // What the schedule picker actually offers -- a subset of what
 // rectx_frequency_check still allows (Daily/Biweekly/Quarterly stay valid
@@ -534,6 +536,7 @@ export async function confirmAsExpectedAction(id: string, dueDate: string): Prom
   if (!id || !ISO_DATE.test(dueDate)) {
     return { error: "We couldn't tell which one that was." };
   }
+  const before = await completionSnapshot();
   const { error } = await confirmOccurrence(id, { dueDate });
   if (error) {
     // Refused by the database before anything stuck (the claim is put
@@ -542,6 +545,9 @@ export async function confirmAsExpectedAction(id: string, dueDate: string): Prom
     return { error };
   }
   revalidateAnswered();
+  // A confirmed card payment can pay off a goal that follows the card.
+  const completed = await completedSince(before);
+  return completed ? { completed } : undefined;
 }
 
 /** Landed differently -- the sheet's form: amount and date, both pre-filled, both editable. */
@@ -564,6 +570,7 @@ export async function confirmDifferentlyAction(
     return { error: "Choose the date it landed." };
   }
 
+  const before = await completionSnapshot();
   const { error } = await confirmOccurrence(id, {
     dueDate,
     amount,
@@ -574,6 +581,8 @@ export async function confirmDifferentlyAction(
     return { error };
   }
   revalidateAnswered();
+  const completed = await completedSince(before);
+  return completed ? { completed } : undefined;
 }
 
 /**
@@ -621,13 +630,15 @@ export async function skipOccurrenceAction(id: string, dueDate: string): Promise
  */
 export async function confirmAllAsExpectedAction(
   items: { id: string; dueDate: string }[],
-): Promise<{ confirmed: number; needsAnswer: number; error?: string }> {
+): Promise<{ confirmed: number; needsAnswer: number; error?: string; completed?: GoalCompletion }> {
   const valid = items.filter((i) => i.id && ISO_DATE.test(i.dueDate));
+  const before = await completionSnapshot();
   const result = await confirmOccurrencesAsExpected(valid);
   revalidateAnswered();
+  const completed = await completedSince(before);
   // needsAnswer is reported, never swallowed: the queue says "2 items need
   // an answer" rather than quietly confirming fewer than it said it would.
   return result.errors.length > 0
-    ? { confirmed: result.confirmed, needsAnswer: result.needsAnswer, error: result.errors.join(" ") }
-    : { confirmed: result.confirmed, needsAnswer: result.needsAnswer };
+    ? { confirmed: result.confirmed, needsAnswer: result.needsAnswer, error: result.errors.join(" "), ...(completed ? { completed } : {}) }
+    : { confirmed: result.confirmed, needsAnswer: result.needsAnswer, ...(completed ? { completed } : {}) };
 }

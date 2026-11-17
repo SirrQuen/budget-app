@@ -29,6 +29,8 @@ import { parseGoalId, type SameMoneyPair } from "@/lib/goalLinks";
 import { getSafeToSpend } from "@/lib/db/dashboard";
 import { getTimeZone, getToday } from "@/lib/db/settings";
 import { isFirstSaveOfDay } from "@/lib/firstToday";
+import type { GoalCompletion } from "@/lib/goalCompletion";
+import { completedSince, completionSnapshot, type CompletionSnapshot } from "@/lib/goalCompletionCheck";
 import { figureUnchangedNote } from "@/lib/whatsAhead";
 import { amountChanged, parseEditScope } from "@/lib/recurringEditScope";
 import {
@@ -74,6 +76,11 @@ export type ActionState =
        * never stored (docs/Motion-and-Delight.md, step 3).
        */
       firstToday?: true;
+      /**
+       * A goal this save completed -- a payment that left a followed card
+       * owing nothing (migration 70). Only in this response; nothing stored.
+       */
+      completed?: GoalCompletion;
     }
   | undefined;
 
@@ -205,7 +212,7 @@ function parseTransferFields(formData: FormData): CreateTransferInput | { error:
 // check for a milestone on whatever just got created.
 type SavedRow = { id: string; transaction_date: string; goalid: string | null };
 
-async function afterTransactionCreated(saved: SavedRow[]): Promise<ActionState> {
+async function afterTransactionCreated(saved: SavedRow[], before: CompletionSnapshot): Promise<ActionState> {
   revalidatePath("/transactions");
   if (saved.some((r) => r.goalid !== null)) revalidateGoals();
   // Every create can move an account balance (a transfer always moves two)
@@ -215,9 +222,10 @@ async function afterTransactionCreated(saved: SavedRow[]): Promise<ActionState> 
   const [milestone, note] = await Promise.all([detectTransactionMilestone(), figureNote(saved)]);
   // After figureNote: both read the same cache()d schedules and future rows.
   const [sameBill, sameMoney] = await Promise.all([sameBillAfterSave(saved), sameMoneyAfterSave(saved)]);
-  const firstToday = await firstSaveToday(saved);
-  if (!milestone && !note && !sameBill && !sameMoney && !firstToday) return undefined;
+  const [firstToday, completed] = await Promise.all([firstSaveToday(saved), completedSince(before)]);
+  if (!milestone && !note && !sameBill && !sameMoney && !firstToday && !completed) return undefined;
   return {
+    ...(completed ? { completed } : {}),
     ...(firstToday ? { firstToday: true as const } : {}),
     ...(milestone ? { milestone } : {}),
     ...(note ? { note } : {}),
@@ -338,12 +346,13 @@ export async function createTransactionAction(
       return parsed;
     }
 
+    const before = await completionSnapshot();
     const { data: legs, error } = await createTransfer({ ...parsed, idempotency_key: idempotencyKey });
     if (error) {
       return { error };
     }
 
-    return afterTransactionCreated(legs ?? []);
+    return afterTransactionCreated(legs ?? [], before);
   }
 
   const parsed = parseTransactionFields(formData);
@@ -351,6 +360,7 @@ export async function createTransactionAction(
     return parsed;
   }
 
+  const before = await completionSnapshot();
   const { data: row, error } = await createTransaction({
     ...parsed,
     idempotency_key: idempotencyKey,
@@ -360,7 +370,7 @@ export async function createTransactionAction(
     return { error };
   }
 
-  return afterTransactionCreated(row ? [row] : []);
+  return afterTransactionCreated(row ? [row] : [], before);
 }
 
 export async function updateTransactionAction(

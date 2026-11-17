@@ -1129,7 +1129,23 @@ begin
       ('public.transactions_sync_goal_completed_at()',           'anon',          false),
       ('public.transactions_sync_goal_completed_at()',           'authenticated', false),
       ('public.update_transfer(uuid,uuid,uuid,numeric,date,text,text,boolean,boolean,timestamptz,boolean,timestamptz,boolean,uuid)', 'anon', false),
-      ('public.update_transfer(uuid,uuid,uuid,numeric,date,text,text,boolean,boolean,timestamptz,boolean,timestamptz,boolean,uuid)', 'authenticated', true)
+      ('public.update_transfer(uuid,uuid,uuid,numeric,date,text,text,boolean,boolean,timestamptz,boolean,timestamptz,boolean,uuid)', 'authenticated', true),
+      -- Debt goals that follow a card (migration 70). Signed-in only; the
+      -- trigger functions are closed like every trigger function.
+      ('public.link_goal_to_card(uuid,uuid)',                    'anon',          false),
+      ('public.link_goal_to_card(uuid,uuid)',                    'authenticated', true),
+      ('public.unlink_goal_from_card(uuid)',                     'anon',          false),
+      ('public.unlink_goal_from_card(uuid)',                     'authenticated', true),
+      ('public.sync_card_goal_completion(uuid,date[],boolean)',  'anon',          false),
+      ('public.sync_card_goal_completion(uuid,date[],boolean)',  'authenticated', true),
+      ('public.guard_goal_link()',                               'anon',          false),
+      ('public.guard_goal_link()',                               'authenticated', false),
+      ('public.refuse_money_to_followed_goal()',                 'anon',          false),
+      ('public.refuse_money_to_followed_goal()',                 'authenticated', false),
+      ('public.transactions_sync_card_goals()',                  'anon',          false),
+      ('public.transactions_sync_card_goals()',                  'authenticated', false),
+      ('public.accounts_sync_card_goals()',                      'anon',          false),
+      ('public.accounts_sync_card_goals()',                      'authenticated', false)
     ) as t(fn, role, expected)
   loop
     v_actual := has_function_privilege(v_check.role, v_check.fn::regprocedure, 'execute');
@@ -1424,6 +1440,88 @@ begin
     v_pass := v_try.state is null and not exists (select 1 from public.goal_contributions where id = v_match);
     perform pg_temp.rec('2i goal links', 'replace_contribution_with_link()', 'control: A replaces A''s own hand entry',
       'the hand entry is gone', coalesce(v_try.state || ': ' || v_try.msg, 'no error'), v_pass);
+  end loop;
+end
+$$;
+
+
+-- ---------------------------------------------------------------------
+-- 2j -- Debt goals that follow a card (migration 70)
+--
+-- sync_card_goal_completion() takes no user id and acts for the caller:
+-- security invoker (RLS hides A's goal from B) and an explicit
+-- auth.uid() filter. A's goal follows A's card, the card owes nothing,
+-- and the owner has cleared completed_at -- so a sync that reached it
+-- would write it. B calls it on A's goal: A's completed_at stays null.
+-- B can't link A's goal either (P0002, as for a made-up id), nor B's own
+-- goal to A's card. The control: A's own call completes it.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  a      uuid := pg_temp.fx('A');
+  b      uuid := pg_temp.fx('B');
+  a_card uuid := gen_random_uuid();
+  a_debt uuid := gen_random_uuid();
+  b_debt uuid := gen_random_uuid();
+  grp    uuid := gen_random_uuid();
+  v_try  record;
+  v_done text;
+begin
+  insert into public.accounts (id, userid, account_name, account_type, opening_balance, opening_date)
+  values (a_card, a, 'rls card', 'Credit Card', -100, current_date - 30);
+  insert into public.goals (id, userid, goal_name, goal_type, target_amount)
+  values (a_debt, a, 'rls payoff', 'Debt Payoff', 100),
+         (b_debt, b, 'rls b payoff', 'Debt Payoff', 100);
+
+  perform pg_temp.become(a);
+  perform public.link_goal_to_card(a_debt, a_card);
+  perform pg_temp.unbecome();
+
+  insert into public.transactions (userid, accountid, amount, transaction_type, transaction_date, description, transfer_group_id)
+  values (a, pg_temp.fx('A_acct'), 100, 'Expense', current_date, 'rls card payoff', grp),
+         (a, a_card,               100, 'Income',  current_date, 'rls card payoff', grp);
+  perform set_config('sorrel.goal_completion', 'on', true);
+  update public.goals set completed_at = null where id = a_debt;
+  perform set_config('sorrel.goal_completion', '', true);
+
+  for v_try in
+    select * from pg_temp.try_as(b, format('select public.sync_card_goal_completion(%L, array[current_date], true)', a_debt))
+  loop
+    select coalesce(completed_at::text, 'null') into v_done from public.goals where id = a_debt;
+    perform pg_temp.rec('2j card goals', 'sync_card_goal_completion()', 'B syncs A''s followed, paid-off goal',
+      'no write: A''s completed_at null', coalesce(v_try.state, 'no error') || '; completed_at ' || v_done,
+      v_done = 'null');
+  end loop;
+
+  for v_try in
+    select * from pg_temp.try_as(b, format('select public.link_goal_to_card(%L, %L)', a_debt, a_card))
+  loop
+    perform pg_temp.rec('2j card goals', 'link_goal_to_card()', 'B links A''s goal',
+      'P0002', coalesce(v_try.state, 'no error'), v_try.state = 'P0002');
+  end loop;
+
+  for v_try in
+    select * from pg_temp.try_as(b, format('select public.link_goal_to_card(%L, %L)', b_debt, a_card))
+  loop
+    perform pg_temp.rec('2j card goals', 'link_goal_to_card()', 'B links B''s goal to A''s card',
+      'P0002', coalesce(v_try.state, 'no error'), v_try.state = 'P0002');
+  end loop;
+
+  for v_try in
+    select * from pg_temp.try_as(b, format('select public.unlink_goal_from_card(%L)', a_debt))
+  loop
+    perform pg_temp.rec('2j card goals', 'unlink_goal_from_card()', 'B unlinks A''s goal',
+      'P0002; still following', coalesce(v_try.state, 'no error') || '; ' ||
+        (select tracking_method from public.goals where id = a_debt),
+      v_try.state = 'P0002' and (select tracking_method from public.goals where id = a_debt) = 'LinkedAccount');
+  end loop;
+
+  for v_try in
+    select * from pg_temp.try_as(a, format('select public.sync_card_goal_completion(%L, array[current_date], true)', a_debt))
+  loop
+    select coalesce(completed_at::text, 'null') into v_done from public.goals where id = a_debt;
+    perform pg_temp.rec('2j card goals', 'sync_card_goal_completion()', 'control: A syncs A''s own goal',
+      'completed_at set', coalesce(v_try.state, 'no error') || '; completed_at ' || v_done, v_done <> 'null');
   end loop;
 end
 $$;

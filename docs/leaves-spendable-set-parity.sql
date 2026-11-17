@@ -29,7 +29,9 @@
 -- Sections
 --   1  Account types  the constraint's set equals ACCOUNT_TYPES,
 --                     SPENDABLE_ACCOUNT_TYPES is inside it, and
---                     is_spendable_account_type() agrees with it
+--                     is_spendable_account_type() agrees with it, and
+--                     is_liability_account_type() (migration 70) agrees
+--                     with isLiabilityAccountType()
 --   2  Function       leaves_spendable_set(from, to) equals the TS answer
 --                     for every (from, to) pair and every plain Expense
 --   3  Cushion rows   a real transfer (both legs) for every pair, and a
@@ -132,6 +134,19 @@ select pg_temp.rec('1 account types', d.account_type,
   left join (select jsonb_array_elements_text(payload->'spendable_types') as account_type
                from parity_ts) s
     on s.account_type = d.account_type
+ order by d.ord;
+
+-- The liability twin (migration 70): is_liability_account_type() equals
+-- isLiabilityAccountType(), type by type. A goal follows only these.
+select pg_temp.rec('1 account types', d.account_type,
+  'is_liability_account_type',
+  (l.account_type is not null)::text,
+  public.is_liability_account_type(d.account_type)::text,
+  public.is_liability_account_type(d.account_type) = (l.account_type is not null))
+  from parity_db_types d
+  left join (select jsonb_array_elements_text(payload->'liability_types') as account_type
+               from parity_ts) l
+    on l.account_type = d.account_type
  order by d.ord;
 
 -- ---------------------------------------------------------------------

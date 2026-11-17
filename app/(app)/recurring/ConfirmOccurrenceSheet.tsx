@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useActionForm } from "@/components/useActionForm";
+import { useShowGoalCompletion } from "@/components/GoalCompletionHost";
 import { confirmDifferentlyAction, type ActionState } from "@/lib/actions/recurring";
 import type { ConfirmationQueueItem } from "@/lib/db/dashboard";
 import { useToday } from "@/components/TodayProvider";
@@ -60,14 +61,16 @@ export function ConfirmOccurrenceSheet({
 
   const [state, action, pending, submit] = useActionForm<ActionState>(confirmDifferentlyAction, undefined);
   const wasPending = useRef(false);
+  const showCompletion = useShowGoalCompletion();
 
   useEffect(() => {
     if (wasPending.current && !pending && !state?.error) {
       setOpen(false);
       pulse(item.kind === "Income" ? "income" : "default");
+      showCompletion(state?.completed);
     }
     wasPending.current = pending;
-  }, [pending, state, pulse, item.kind]);
+  }, [pending, state, pulse, item.kind, showCompletion]);
 
   // Once per account and date, only while open. A new transaction, so no
   // transaction id: it would be recorded now.

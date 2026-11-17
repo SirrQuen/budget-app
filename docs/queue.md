@@ -37,7 +37,11 @@ after import (deployed 2026-11-14). Raised 2026-11-16.
 10. ~~"Is this for a goal?" on one-time transactions -- migration 69~~ --
     deployed 2026-11-16 (see Done).
 11. **Debt payoff goals that follow the card's balance -- migration 70.**
-    Next: 69 is deployed. On its own branch. Held 52 is reference only:
+    Built on `feat/debt-goals` (2026-11-17); not merged. 70 on sorrel-dev
+    (pushed, then docs/70-dev-update.sql for the 2026-11-17 rulings);
+    debt-goal-test, rls-isolation-test and test:parity clean (Matt);
+    view-acl-check 17/0; verified in the browser on dev, test rows deleted. Tester note:
+    docs/tester-notes/2026-11-17-debt-goals-follow-card.md. 69 is deployed. On its own branch. Held 52 is reference only:
     re-derive, don't rebase. Liability = Credit Card or Loan through a new
     SQL twin, is_liability_account_type(), with a parity-test case.
     Completion is sticky: activity dated after it never reopens the goal.
@@ -86,6 +90,10 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 - Goal links (migration 69, deployed 2026-11-16): draft in
   docs/tester-notes/2026-11-16-goal-links.md. Moves safe to spend. Next
   What's new card, with debt goals that follow a card. Not before-deploy.
+- Debt goals that follow a card (migration 70, not merged): draft in
+  docs/tester-notes/2026-11-17-debt-goals-follow-card.md. Can move safe to
+  spend (a linked goal's monthly hold goes). Next What's new card. Not
+  before-deploy.
 - Motion batch A (merged `571b1f1`, deployed 2026-11-16): draft in
   docs/tester-notes/2026-11-16-motion-and-delight.md. No number moves. Next
   What's new card. Not before-deploy.
@@ -104,6 +112,7 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 
 | Item | Recorded | Decide or do when | Where |
 |---|---|---|---|
+| Bloom after an import that completes a goal. 70 records the completion (a followed card paid to zero by imported rows, or reopened by them) but no panel shows: import's response doesn't run the completion check. Edits, deletes and balance resets also complete quietly, by ruling (2026-11-17) | 2026-11-17 | Unscheduled | `lib/goalCompletionCheck.ts`; `lib/actions/import.ts` |
 | Auto-link a goal-funding schedule's confirmed occurrences to its goal (goals.funding_recurringid), so the goal's progress moves when the transfer is confirmed. Today the hold already skips a funded goal, but confirming writes no link | 2026-11-16 | After 69 and 70 merge | Findings, "A transfer for a goal came off safe to spend twice" |
 | Drag-and-drop library: classic `@dnd-kit/core` 6.3.1 + `@dnd-kit/sortable` 10.0.0, pinned exactly (chosen 2026-11-14: stable over active, one sortable list, small footprint; the new `@dnd-kit/react` line is 0.x). Revisit: move to the new line if classic breaks on a React upgrade, or when the new line reaches 1.0 | 2026-11-14 | On a React upgrade, or `@dnd-kit/react` 1.0 | `package.json`; `app/(app)/dashboard/DashboardSections.tsx` |
 | "Every number is a door", the rest: an upcoming line opens its schedule; "(average of last 3)" opens the three confirmations it averaged; a goal's progress opens its contributions. The first three (budget spent, a category, the low-point item) shipped with #1 + #2 | 2026-11-14 | After #5 export | docs/Views-Search-Import-Layout.md, "Suggest other views" |

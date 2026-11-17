@@ -48,7 +48,12 @@ export function GoalMeters({ goals }: { goals: GoalProgressRow[] }) {
               onMilestone={(m) => announce(m.message)}
             />
             <p className="mt-1.5 text-sm text-ink-secondary">
-              {formatCurrency(g.contributed_amount ?? 0)} of {formatCurrency(g.target_amount ?? 0)}
+              {/* A goal that follows a card (migration 70) reads by what it still owes. */}
+              {g.tracking_method === "LinkedAccount"
+                ? g.is_paid_off
+                  ? "Paid off"
+                  : `${formatCurrency(g.remaining_amount ?? 0)} to go · follows ${g.linked_account_name ?? "the card"}`
+                : `${formatCurrency(g.contributed_amount ?? 0)} of ${formatCurrency(g.target_amount ?? 0)}`}
               {g.target_date ? ` · target ${formatDate(g.target_date)}` : ""}
             </p>
           </li>

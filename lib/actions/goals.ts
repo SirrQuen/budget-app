@@ -7,17 +7,16 @@ import {
   contributeToGoal,
   deleteGoal,
   deleteGoalContribution,
-  getContributionGoalId,
-  getFirstContributionDate,
-  getGoalCompletedAt,
   isRecurringTransfer,
+  linkGoalToCard,
+  unlinkGoalFromCard,
   updateGoal,
   updateGoalContribution,
 } from "@/lib/db/goals";
 import { getGoalProgress } from "@/lib/db/dashboard";
-import { getToday } from "@/lib/db/settings";
 import { GOAL_TYPES, type GoalType } from "@/lib/goalOptions";
-import { completionCopy, type GoalCompletion } from "@/lib/goalCompletion";
+import type { GoalCompletion } from "@/lib/goalCompletion";
+import { completedSince, completionSnapshot } from "@/lib/goalCompletionCheck";
 import { formatCurrency } from "@/lib/format";
 
 const VALID_TYPES = new Set<GoalType>(GOAL_TYPES);
@@ -28,48 +27,11 @@ const VALID_TYPES = new Set<GoalType>(GOAL_TYPES);
 // shows nothing.
 export type ActionState = { error?: string; completed?: GoalCompletion } | undefined;
 
-// completed_at before this action's write. undefined when it can't be
-// read -- then there's no celebration rather than a wrong one.
-async function completedAtBefore(goalid: string): Promise<string | null | undefined> {
-  const result = await getGoalCompletedAt(goalid);
-  return result.error === null ? result.data : undefined;
-}
-
-// Completion is detected HERE, in the server action that wrote the change,
-// after the write, never during a render (docs/Goal-Completion.md, D). The
-// database re-derives completed_at on every write (migration 53); a
-// change from null to set across this action's write is a completion.
-// Reversal is the same column going back to null -- silently: nothing is
-// returned for it.
-async function detectCompletion(
-  goalid: string,
-  before: string | null | undefined,
-): Promise<GoalCompletion | undefined> {
-  if (before !== null) return undefined;
-  const after = await getGoalCompletedAt(goalid);
-  if (after.error !== null || after.data === null) return undefined;
-
-  const [progressResult, firstResult, today] = await Promise.all([
-    getGoalProgress(),
-    getFirstContributionDate(goalid),
-    getToday(),
-  ]);
-  const goal = progressResult.data?.find((row) => row.goal_id === goalid);
-  if (!goal || !goal.goal_name || !goal.goal_type || goal.contributed_amount === null || goal.target_amount === null) {
-    return undefined;
-  }
-
-  return completionCopy({
-    goalId: goalid,
-    goalName: goal.goal_name,
-    goalType: goal.goal_type,
-    contributed: goal.contributed_amount,
-    targetAmount: goal.target_amount,
-    targetDate: goal.target_date,
-    firstContributionDate: firstResult.data ?? null,
-    completedOn: today,
-  });
-}
+// Completion is detected in the server action that wrote the change,
+// after the write, never during a render (docs/Goal-Completion.md, D), by
+// the one shared check (lib/goalCompletionCheck.ts): a goal whose
+// completed_at went from null to set across this action's write. Reversal
+// is the same column going back to null -- silently: nothing is returned.
 
 function parseGoalFields(formData: FormData) {
   const goal_name = String(formData.get("goal_name") ?? "").trim();
@@ -168,7 +130,7 @@ export async function updateGoalAction(
   }
 
   // A lowered target can complete the goal; a raised one un-completes it.
-  const before = await completedAtBefore(id);
+  const before = await completionSnapshot();
   const { error } = await updateGoal(id, parsed);
 
   if (error) {
@@ -178,7 +140,39 @@ export async function updateGoalAction(
   revalidatePath("/goals");
   revalidatePath("/dashboard");
 
-  const completed = await detectCompletion(id, before);
+  const completed = await completedSince(before);
+  return completed ? { completed } : undefined;
+}
+
+// A debt payoff goal starts following a credit card or loan (migration 70).
+// Linking can't complete it: the card owes something, or it couldn't be
+// followed.
+export async function linkGoalToCardAction(goalId: string, accountId: string): Promise<ActionState> {
+  if (!goalId || !accountId) {
+    return { error: "Choose a credit card or loan." };
+  }
+  const { error } = await linkGoalToCard(goalId, accountId);
+  if (error) {
+    return { error };
+  }
+  revalidatePath("/goals");
+  // A followed goal holds nothing in safe to spend.
+  revalidatePath("/dashboard");
+}
+
+// Back to manual, keeping the number (one carried-over contribution).
+export async function unlinkGoalFromCardAction(goalId: string): Promise<ActionState> {
+  if (!goalId) {
+    return { error: "Missing goal id." };
+  }
+  const before = await completionSnapshot();
+  const { error } = await unlinkGoalFromCard(goalId);
+  if (error) {
+    return { error };
+  }
+  revalidatePath("/goals");
+  revalidatePath("/dashboard");
+  const completed = await completedSince(before);
   return completed ? { completed } : undefined;
 }
 
@@ -248,7 +242,7 @@ export async function contributeToGoalAction(
     return parsed;
   }
 
-  const before = await completedAtBefore(goalid);
+  const before = await completionSnapshot();
   const { error } = await contributeToGoal(goalid, parsed);
 
   if (error) {
@@ -261,7 +255,7 @@ export async function contributeToGoalAction(
 
   // The contribution that completes the goal gets the completion panel
   // instead of the running-total line -- one celebration, not two.
-  const completed = await detectCompletion(goalid, before);
+  const completed = await completedSince(before);
   if (completed) {
     return { completed };
   }
@@ -296,8 +290,7 @@ export async function updateContributionAction(
   }
 
   // Raising a contribution can complete its goal.
-  const goal = await getContributionGoalId(id);
-  const before = goal.error === null ? await completedAtBefore(goal.data) : undefined;
+  const before = await completionSnapshot();
   const { error } = await updateGoalContribution(id, parsed);
 
   if (error) {
@@ -310,8 +303,7 @@ export async function updateContributionAction(
   // A contribution changes this month's goal hold in safe to spend.
   revalidatePath("/dashboard");
 
-  if (goal.error !== null) return undefined;
-  const completed = await detectCompletion(goal.data, before);
+  const completed = await completedSince(before);
   return completed ? { completed } : undefined;
 }
 
