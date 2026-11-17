@@ -37,8 +37,10 @@ after import (deployed 2026-11-14). Raised 2026-11-16.
 10. ~~"Is this for a goal?" on one-time transactions -- migration 69~~ --
     deployed 2026-11-16 (see Done).
 11. **Debt payoff goals that follow the card's balance -- migration 70.**
-    Built on `feat/debt-goals` (2026-11-17); not merged. 70 waits for Matt's
-    push to sorrel-dev. Tester note:
+    Built on `feat/debt-goals` (2026-11-17); not merged. 70 on sorrel-dev
+    (pushed, then docs/70-dev-update.sql for the 2026-11-17 rulings);
+    debt-goal-test, rls-isolation-test and test:parity clean (Matt);
+    view-acl-check 17/0; verified in the browser on dev, test rows deleted. Tester note:
     docs/tester-notes/2026-11-17-debt-goals-follow-card.md. 69 is deployed. On its own branch. Held 52 is reference only:
     re-derive, don't rebase. Liability = Credit Card or Loan through a new
     SQL twin, is_liability_account_type(), with a parity-test case.
