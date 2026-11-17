@@ -41,6 +41,10 @@ import { SafeToSpendHero } from "./SafeToSpendHero";
 import { WhatsNewCard } from "./WhatsNewCard";
 import { whatsNewVisible } from "@/lib/whatsNew";
 import { getWhatsNewSeen } from "@/lib/whatsNewDismissed";
+import { cookies } from "next/headers";
+import { MonthRecap } from "./MonthRecap";
+import { getMonthStory } from "@/lib/db/monthStory";
+import { buildRecapCards, recapCookieName, recapMonthFor, shareLines, shareTitle } from "@/lib/monthStory";
 import { ScopedRegion } from "./ScopedRegion";
 import { CashflowChart } from "./CashflowChart";
 import { GroupMovementChart } from "./GroupMovementChart";
@@ -76,6 +80,20 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   const range = resolveDashboardRange(params, today);
   // Read-only: a cookie says whether "Got it" was pressed. Nothing is written on render.
   const showWhatsNew = whatsNewVisible(today, await getWhatsNewSeen());
+
+  // The month recap (lib/monthStory.ts): last month, in the first 7 days of
+  // this one, until Done or close sets its month's cookie (client-side).
+  // Reading the cookie is all a render does. In development only, a preview
+  // month can be asked for; the module that reads it is never bundled by
+  // `next build` (lib/recapPreview.ts, `npm run check:recap-preview`).
+  let previewMonth: string | null = null;
+  if (process.env.NODE_ENV === "development") {
+    const { recapPreviewMonth } = await import("@/lib/recapPreview");
+    previewMonth = recapPreviewMonth(params, process.env.NODE_ENV);
+  }
+  const recapMonth = previewMonth ?? recapMonthFor(today);
+  const recapSeen = recapMonth !== null && previewMonth === null && (await cookies()).has(recapCookieName(recapMonth));
+  const storyPromise = recapMonth !== null && !recapSeen ? getMonthStory(recapMonth) : Promise.resolve(null);
   // Never throws: an unreadable layout is the default one.
   const layout = await getDashboardLayout();
   const currentMonth = monthStartISO(today);
@@ -113,6 +131,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     lastLoggedResult,
     futureResult,
     sameBillResult,
+    storyResult,
   ] = await Promise.all([
     greetingPromise,
     // Decided when the session started -- see lib/auth/firstSession.ts.
@@ -136,6 +155,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     // A schedule's occurrence and an entry for the same bill: asked, in
     // Upcoming, where both would otherwise be listed (lib/sameBill.ts).
     getSameBillPairs(),
+    // Only in the recap window, and only until it's dismissed.
+    storyPromise,
   ]);
 
   // A failed profile read just means no name -- "Welcome back" alone.
@@ -454,6 +475,13 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     DASHBOARD_SECTIONS.filter((section) => section.region === region).flatMap((section) =>
       nodes[section.id] == null ? [] : [{ id: section.id, node: nodes[section.id] }],
     );
+  // A failed read of either is no recap (or no closing card), never a
+  // guessed figure. Safe to spend is today's, the same the hero shows.
+  const story = storyResult?.data ?? null;
+  const recapCards = story
+    ? buildRecapCards(story, safeToSpendResult.error ? null : (safeToSpendResult.data?.safeToSpend ?? null))
+    : null;
+
   const rightNowItems = itemsFor("right-now");
   const overTimeItems = itemsFor("over-time");
   const available = [...rightNowItems, ...overTimeItems].map((item) => item.id);
@@ -465,6 +493,17 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         <TimeOfDayGlow band={band} />
         {/* The data has landed: the daily welcome can dissolve onto this. */}
         <WelcomeReady />
+        {story && recapCards ? (
+          <MonthRecap
+            cards={recapCards}
+            cookieName={recapCookieName(story.monthStart)}
+            shareTitle={shareTitle(story)}
+            shareLinesHidden={shareLines(recapCards, false)}
+            shareLinesShown={shareLines(recapCards, true)}
+            fileName={`sorrel-${story.monthStart.slice(0, 7)}.png`}
+            preview={previewMonth !== null}
+          />
+        ) : null}
         {/* ── Right now: as-of-today and forward-looking; not scoped by the filter ── */}
         <section className="flex flex-col gap-6" aria-labelledby="dash-right-now">
           <PageHeader title="Dashboard" description={welcome} descriptionAdornment={<SeasonalLeaf season={season} />} />

@@ -44,6 +44,9 @@
 --      and calling sync_card_goal_completion() on my goal changes nothing.
 --  17  v_goal_progress and v_goal_monthly_holds carry production's ACL
 --      and are security_invoker.
+--  18  user_day() after migration 71 equals 70's inline expression for a
+--      null zone, an unknown name, a wrong-case name, no settings row and
+--      a real zone (which must move the day: the control).
 -- =====================================================================
 
 begin;
@@ -373,6 +376,55 @@ select pg_temp.rec('17 v_goal_monthly_holds ACL',
                    (select array_to_string(relacl, ' ') from pg_class where oid = 'public.v_goal_monthly_holds'::regclass));
 select pg_temp.rec('17 anon cannot read v_goal_progress', 'false',
                    has_table_privilege('anon', 'public.v_goal_progress', 'select')::text);
+
+-- 18 -------------------------------------------------------------------
+-- user_day() (redefined on user_time_zone() in migration 71) gives exactly
+-- what migration 70's inline expression gave, for the zones only a written
+-- row can produce: null, an unknown name, a wrong-case name, no settings
+-- row at all -- and a real zone whose day differs from UTC's (the control:
+-- a test where every case falls back to UTC would pass vacuously). Run as
+-- the table owner; the transaction rolls back.
+do $$
+declare
+  u     constant uuid := 'd9000000-0000-4000-8000-000000000001';
+  other constant uuid := 'd9000000-0000-4000-8000-000000000002';
+  at    constant timestamptz := '2026-11-16 12:00:00+00';
+  c     record;
+  v_new date;
+  v_old date;
+begin
+  for c in
+    select * from (values
+      ('null timezone',          'null'),
+      ('unknown zone name',      'Mars/Olympus'),
+      ('wrong-case zone name',   'pacific/kiritimati'),
+      ('real zone, UTC+14',      'Pacific/Kiritimati'),
+      ('no settings row',        '<delete>')
+    ) as t(label, zone)
+  loop
+    if c.zone = '<delete>' then
+      delete from public.settings where userid = other;
+    else
+      update public.settings set timezone = nullif(c.zone, 'null') where userid = other;
+    end if;
+
+    v_new := public.user_day(other, at);
+    v_old := (at at time zone coalesce(
+                (select s.timezone
+                   from public.settings s
+                  where s.userid = other
+                    and s.timezone in (select name from pg_catalog.pg_timezone_names)),
+                'UTC'))::date;
+    perform pg_temp.rec('18 user_day = 70''s expression: ' || c.label,
+                        coalesce(v_old::text, '<null>'), coalesce(v_new::text, '<null>'));
+  end loop;
+
+  -- The control: the real zone moved the day (UTC's is the 16th).
+  update public.settings set timezone = 'Pacific/Kiritimati' where userid = u;
+  perform pg_temp.rec('18 control: a real zone moves the day', '2026-11-17', public.user_day(u, at)::text);
+  perform pg_temp.rec('18 fallback: no settings row reads UTC', '2026-11-16', public.user_day(other, at)::text);
+end
+$$;
 
 select seq, check_, expected, actual, pass from dg_results order by seq;
 

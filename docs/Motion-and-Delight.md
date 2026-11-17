@@ -377,3 +377,66 @@ VERIFY (I'll sign you in on dev):
 Tester note (Sent: not yet, not before-deploy). Report, then stop.
 Don't merge.
 ```
+
+## Prompt for batch E (Opus)
+
+```
+Batch E: step 9 of docs/Motion-and-Delight.md (Your month, as a story).
+Own branch off main. This one computes money figures, so it goes in two
+phases.
+
+PRECONDITION: batch D merged; migrations 69 and 70 live on production.
+If not, stop and tell me.
+
+PHASE 1 — REPORT ONLY. Build nothing.
+
+For each card, say exactly which view/function the figure comes from
+and show its value for the dev test user for OCTOBER 2026 (read-only
+against sorrel-dev, with the Target line):
+
+ 1. "Your <Month>" — the previous calendar month in the USER'S timezone.
+ 2. "You logged N times" — transactions CREATED that month, EXCLUDING
+    imported rows (import_id not null). An import of 140 rows is not
+    140 logs; celebrating it would be false.
+ 3. "You set aside $X for <goal>" — from the single goal-money source
+    built in migration 69 (manual contributions + linked transactions),
+    dated that month. Propose: one goal (the largest) or a total with
+    the top goal named.
+ 3b. Debt goals that follow a card: "You paid <card> down by $X" =
+    owed at start of month minus owed at end, using counts_in_balance's
+    as-of date. Shown ONLY if positive. Never shown when the card went up.
+ 4. The closing card. The canvas said "December starts with $Y safe to
+    spend", but Safe to Spend can't be computed for a past date. Use the
+    current figure: "Right now, you have $Y safe to spend." Skip this
+    card if it's $0.
+
+Also report:
+ 5. Money: every figure comes from SQL in integer cents or numeric —
+    never summed in JS floats. Confirm the paths.
+ 6. How you'll let me see the recap on dev without waiting for December
+    1st. A preview switch is acceptable ONLY if it is inert in
+    production (guarded by environment, with a test proving the
+    production build ignores it). Propose it; don't build it yet.
+ 7. Whether the Web Share API with files works on the browsers we
+    support, and the download fallback.
+
+Report all seven, then stop.
+
+PHASE 2 — after I rule. The rules it will be built to:
+  - Shown the first time the app opens in the first 7 days of a month.
+    Done or close dismisses it for that month, kept by a cookie named
+    with the month, set by the client. Nothing written by a render;
+    nothing new stored.
+  - A card with nothing positive or neutral to say is LEFT OUT. Fewer
+    than 5 hand-logged transactions that month: no recap at all.
+  - Never "you overspent", never a comparison with last month or with
+    other people, no red.
+  - An accessible dialog: focus moves in and is trapped, Escape closes,
+    Next/Back buttons as well as tap and swipe, a screen reader reads
+    each card. Reduced motion: cards swap without sliding.
+  - SHARE: the image is drawn ON THE DEVICE (canvas), never by a
+    server. Amounts are hidden by default with a "Show amounts" toggle.
+    The user sees the exact image before sharing. Web Share API where
+    it works, a download otherwise. No new dependency. No analytics on
+    recap contents.
+```

@@ -6,6 +6,7 @@
 // --- Is a welcome playing? -------------------------------------------------
 
 let welcomeActive = false;
+const welcomeEndListeners = new Set<() => void>();
 
 /**
  * Set by the host when a welcome starts, cleared when it ends. The bloom
@@ -16,10 +17,30 @@ let welcomeActive = false;
  */
 export function setWelcomeActive(active: boolean) {
   welcomeActive = active;
+  if (!active) for (const listener of [...welcomeEndListeners]) listener();
 }
 
 export function isWelcomeActive(): boolean {
   return welcomeActive;
+}
+
+/**
+ * Calls `listener` once no welcome is playing (now, if none is). The month
+ * recap (MonthRecap) opens after the daily welcome, never under it.
+ */
+export function afterWelcome(listener: () => void): () => void {
+  if (!welcomeActive) {
+    listener();
+    return () => {};
+  }
+  const once = () => {
+    welcomeEndListeners.delete(once);
+    listener();
+  };
+  welcomeEndListeners.add(once);
+  return () => {
+    welcomeEndListeners.delete(once);
+  };
 }
 
 // --- A: the login form says a sign-in is in flight --------------------------

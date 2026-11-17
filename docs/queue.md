@@ -71,7 +71,10 @@ cookie. Raised 2026-11-16.
 15. **Batch D -- step 8**, seasons and time of day. Sonnet. After C. Note a
     hemisphere setting in Deferred when it lands.
 16. **Batch E -- step 9**, your month as a story. **Opus**: it computes
-    money figures and has privacy rules. After D.
+    money figures and has privacy rules. After D. Phase 1 reported and
+    ruled 2026-11-16. Built on `feat/motion-and-delight-e` with migration
+    71 (`month_story()`, read-only); 71 is for sorrel-dev only until the
+    merge (push pending). Not merged.
 
 ## Launch blockers still open
 
@@ -94,6 +97,11 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 - Debt goals that follow a card (migration 70, merged `24ba18c`, deployed 2026-11-17): draft in
   docs/tester-notes/2026-11-17-debt-goals-follow-card.md. Can move safe to
   spend (a linked goal's monthly hold goes). Next What's new card. Not
+  before-deploy.
+- Motion batch E, your month as a story (migration 71, branch
+  `feat/motion-and-delight-e`, not merged): draft in
+  docs/tester-notes/2026-11-18-month-recap.md. No number moves. Names the
+  goal-funding-schedule gap (auto-link queued). Next What's new card. Not
   before-deploy.
 - Motion batch D, seasons and time of day (merged `e1db401`, deployed 2026-11-17): draft in
   docs/tester-notes/2026-11-17-seasons-and-time-of-day.md. No number moves. Next What's new

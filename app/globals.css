@@ -564,6 +564,40 @@
   }
 }
 
+/* The month recap's cards (app/(app)/dashboard/MonthRecap.tsx) slide in
+   from the side they came from, on the signature curve. Reduced motion:
+   no class is set and nothing here applies -- the cards simply swap. */
+@media (prefers-reduced-motion: no-preference) {
+  .recap-card--next {
+    animation: recap-in-next 320ms var(--icon-anim-ease) both;
+  }
+  .recap-card--back {
+    animation: recap-in-back 320ms var(--icon-anim-ease) both;
+  }
+}
+
+@keyframes recap-in-next {
+  from {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes recap-in-back {
+  from {
+    opacity: 0;
+    transform: translateX(-32px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @keyframes row-settle {
   0% {
     opacity: 0.55;

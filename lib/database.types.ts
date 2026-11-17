@@ -1817,6 +1817,16 @@ export type Database = {
           row_count: number
         }[]
       }
+      month_story: {
+        Args: { p_month: string }
+        Returns: {
+          cards: Json
+          goal_total: number
+          goals: Json
+          logs: number
+          month_start: string
+        }[]
+      }
       record_different_bill: {
         Args: {
           p_occurrence_due_date: string
@@ -1922,6 +1932,7 @@ export type Database = {
         Returns: undefined
       }
       user_day: { Args: { p_at: string; p_userid: string }; Returns: string }
+      user_time_zone: { Args: { p_userid: string }; Returns: string }
       username_is_available: { Args: { p_username: string }; Returns: boolean }
     }
     Enums: {

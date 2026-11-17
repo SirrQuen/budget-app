@@ -58,6 +58,9 @@
 --                 link A's transaction, link to A's schedule, or learn
 --                 either exists; A can link A's own (the control)
 --   2g Same-bill answers (migration 66)
+--   2k Month recap (migration 71): month_story() as B shows only B's
+--                 logs and goal money, none of A's goals or cards; A's
+--                 own call is the control
 --   2i Goal links (migration 69)
 --                 same_goal_money() shows B nothing of A's;
 --                 replace_contribution_with_link() can't delete A's
@@ -1145,7 +1148,14 @@ begin
       ('public.transactions_sync_card_goals()',                  'anon',          false),
       ('public.transactions_sync_card_goals()',                  'authenticated', false),
       ('public.accounts_sync_card_goals()',                      'anon',          false),
-      ('public.accounts_sync_card_goals()',                      'authenticated', false)
+      ('public.accounts_sync_card_goals()',                      'authenticated', false),
+      -- The month recap (migration 71). Signed-in only; the full grant
+      -- block, so service_role holds no EXECUTE on month_story either.
+      ('public.month_story(date)',                               'anon',          false),
+      ('public.month_story(date)',                               'authenticated', true),
+      ('public.month_story(date)',                               'service_role',  false),
+      ('public.user_time_zone(uuid)',                            'anon',          false),
+      ('public.user_time_zone(uuid)',                            'authenticated', true)
     ) as t(fn, role, expected)
   loop
     v_actual := has_function_privilege(v_check.role, v_check.fn::regprocedure, 'execute');
@@ -1523,6 +1533,73 @@ begin
     perform pg_temp.rec('2j card goals', 'sync_card_goal_completion()', 'control: A syncs A''s own goal',
       'completed_at set', coalesce(v_try.state, 'no error') || '; completed_at ' || v_done, v_done <> 'null');
   end loop;
+end
+$$;
+
+
+-- ---------------------------------------------------------------------
+-- 2k -- The month recap (migration 71)
+--
+-- month_story() is security invoker with no user id: RLS alone scopes
+-- it. A gets a distinctive $1,234 contribution this month first, so a
+-- leak would move B's total. B's call must show exactly B's own logs and
+-- goal money (each worked out here as the table owner, filtered to B,
+-- by the same rules) and none of A's goals or cards. The control: A's
+-- own call names A's goal.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  a      uuid := pg_temp.fx('A');
+  b      uuid := pg_temp.fx('B');
+  v_b    record;
+  v_a    record;
+  v_logs integer;
+  v_total numeric;
+  v_leak bigint;
+begin
+  insert into public.goal_contributions (userid, goalid, amount, date, funding_method)
+  values (a, pg_temp.fx('A_goal'), 1234, current_date, 'manual');
+
+  perform pg_temp.become(b);
+  select * into v_b from public.month_story(current_date);
+  perform pg_temp.unbecome();
+
+  perform pg_temp.become(a);
+  select * into v_a from public.month_story(current_date);
+  perform pg_temp.unbecome();
+
+  -- The fixtures are written in this transaction, so every row was
+  -- created this month; these mirror month_story's filters for B.
+  select count(*) into v_logs
+    from public.transactions t
+   where t.userid = b
+     and t.import_id is null
+     and (t.transfer_group_id is null or t.transaction_type = 'Expense')
+     and t.created_at >= date_trunc('month', current_date::timestamp) at time zone 'UTC';
+  perform pg_temp.rec('2k month story', 'month_story()', 'B''s logs are B''s own',
+    v_logs::text, coalesce(v_b.logs::text, 'null'), v_b.logs = v_logs and v_logs > 0);
+
+  select coalesce(sum(gm.amount), 0) into v_total
+    from public.v_goal_money gm
+    join public.goals g on g.id = gm.goalid
+   where g.userid = b and g.is_active and g.tracking_method <> 'LinkedAccount'
+     and gm.date >= date_trunc('month', current_date::timestamp)::date
+     and gm.date <  (date_trunc('month', current_date::timestamp) + interval '1 month')::date;
+  perform pg_temp.rec('2k month story', 'month_story()', 'B''s goal total is B''s own money',
+    v_total::text, coalesce(v_b.goal_total::text, 'null'), v_b.goal_total = v_total and v_total > 0);
+
+  select count(*) into v_leak
+    from (select (e->>'goal_id')::uuid as id from jsonb_array_elements(v_b.goals) e
+          union all
+          select (e->>'goal_id')::uuid from jsonb_array_elements(v_b.cards) e) x
+    join public.goals g on g.id = x.id
+   where g.userid <> b;
+  perform pg_temp.rec('2k month story', 'month_story()', 'B sees none of A''s goals or cards',
+    '0', v_leak::text, v_leak = 0);
+
+  perform pg_temp.rec('2k month story', 'month_story()', 'control: A''s own call names A''s goal',
+    'A_goal listed', coalesce(v_a.goals::text, 'null'),
+    exists (select 1 from jsonb_array_elements(v_a.goals) e where (e->>'goal_id')::uuid = pg_temp.fx('A_goal')));
 end
 $$;
 

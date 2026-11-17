@@ -89,6 +89,20 @@ export function formatCurrency(amount: number): string {
   return currency.format(amount);
 }
 
+const wholeCurrency = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
+
+/**
+ * A figure in a sentence: "$650" when it is whole dollars, "$40.88" when it
+ * isn't -- the cents are never hidden, only a ".00". Display only.
+ */
+export function formatCurrencyInSentence(amount: number): string {
+  return Number.isInteger(Math.round(amount * 100) / 100) ? wholeCurrency.format(amount) : currency.format(amount);
+}
+
 /**
  * An account balance for display. Credit Card and Loan balances are stored
  * negative (accounts_liability_sign) -- the math stays negative, but this
