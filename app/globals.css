@@ -75,6 +75,16 @@
   --pulse-peak: 0.75;
   --pulse-peak-income: 0.85;
 
+  /* Time-of-day light (docs/Motion-and-Delight.md, step 8; components/
+     TimeOfDayGlow.tsx). Same hues in both themes; the light plane takes less
+     strength so the glow stays a tint. The dark values are the doc's table
+     and are the most saturated any band may be. Text never changes colour
+     for these -- they sit behind every card and word. */
+  --tod-morning: rgba(232, 180, 74, 0.16);
+  --tod-afternoon: rgba(243, 207, 122, 0.14);
+  --tod-evening: rgba(142, 124, 255, 0.13);
+  --tod-night: rgba(90, 120, 230, 0.1);
+
   /* surfaces -- page darkest, raised lightest, same direction as dark */
   --page: #ececf2;
   --surface: #f8f8fb;
@@ -205,6 +215,11 @@
   --dk-pulse-peak: 0.55;
   --dk-pulse-peak-income: 0.72;
 
+  --dk-tod-morning: rgba(232, 180, 74, 0.24);
+  --dk-tod-afternoon: rgba(243, 207, 122, 0.18);
+  --dk-tod-evening: rgba(142, 124, 255, 0.22);
+  --dk-tod-night: rgba(90, 120, 230, 0.16);
+
   --dk-page: #131322;
   --dk-surface: #1b1b2f;
   --dk-surface-raised: #23233a;
@@ -266,6 +281,11 @@
     --pulse-peak: var(--dk-pulse-peak);
     --pulse-peak-income: var(--dk-pulse-peak-income);
 
+    --tod-morning: var(--dk-tod-morning);
+    --tod-afternoon: var(--dk-tod-afternoon);
+    --tod-evening: var(--dk-tod-evening);
+    --tod-night: var(--dk-tod-night);
+
     --page: var(--dk-page);
     --surface: var(--dk-surface);
     --surface-raised: var(--dk-surface-raised);
@@ -317,6 +337,11 @@
 
   --pulse-peak: var(--dk-pulse-peak);
   --pulse-peak-income: var(--dk-pulse-peak-income);
+
+  --tod-morning: var(--dk-tod-morning);
+  --tod-afternoon: var(--dk-tod-afternoon);
+  --tod-evening: var(--dk-tod-evening);
+  --tod-night: var(--dk-tod-night);
 
   --page: var(--dk-page);
   --surface: var(--dk-surface);
@@ -1712,21 +1737,123 @@ body {
   animation: toast-in var(--motion-base) var(--ease-out) both;
 }
 
-/* Empty-state drawings sway gently: +-4deg over 6s. Still under reduced
-   motion (a loop at the edge of the eye is not allowed there). */
+/* Empty-state drawings sway gently: +-4deg over 6s, TWO cycles, then rest.
+   Nothing loops at the edge of the eye. It starts and ends at 0deg, so the
+   stop is invisible. None at all under reduced motion. */
 @keyframes empty-sway {
   0%,
   100% {
+    transform: rotate(0deg);
+  }
+  25% {
     transform: rotate(-4deg);
   }
-  50% {
+  75% {
     transform: rotate(4deg);
   }
 }
 @media (prefers-reduced-motion: no-preference) {
   .empty-sway {
     transform-origin: 50% 90%;
-    animation: empty-sway 6s ease-in-out infinite;
+    animation: empty-sway 6s ease-in-out 2;
+  }
+}
+
+/* The time-of-day glow (components/TimeOfDayGlow.tsx): static, behind the
+   dashboard's cards and words (its parent is relative + isolate). The
+   strength at each gradient's origin IS the token, so that is the most
+   colour any text can ever sit on. Never animated. */
+.tod-glow {
+  position: absolute;
+  /* Starts at the dashboard's own top edge (never over the quick-add bar
+     above it) and bleeds 1rem sideways, the page's narrowest gutter. */
+  inset: 0 -1rem auto -1rem;
+  height: 30rem;
+  z-index: -1;
+  pointer-events: none;
+  /* Feathered on the top and both sides, so the box never shows as an edge:
+     transparent at the box's edge, full strength 1rem (sides) or 2rem (top)
+     in. The peak still lands at the page's own corner. */
+  -webkit-mask-image:
+    linear-gradient(to bottom, transparent 0, #000 2rem),
+    linear-gradient(to right, transparent 0, #000 1rem, #000 calc(100% - 1rem), transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to bottom, transparent 0, #000 2rem),
+    linear-gradient(to right, transparent 0, #000 1rem, #000 calc(100% - 1rem), transparent 100%);
+  mask-composite: intersect;
+}
+.tod-glow--morning {
+  background: radial-gradient(ellipse 60% 100% at 0% 0%, var(--tod-morning), transparent 70%);
+}
+.tod-glow--afternoon {
+  background: radial-gradient(ellipse 60% 100% at 50% 0%, var(--tod-afternoon), transparent 70%);
+}
+.tod-glow--evening {
+  background: radial-gradient(ellipse 60% 100% at 100% 0%, var(--tod-evening), transparent 70%);
+}
+.tod-glow--night {
+  background: radial-gradient(ellipse 90% 100% at 50% 0%, var(--tod-night), transparent 75%);
+}
+
+/* The seasonal leaf (components/SeasonalLeaf.tsx) is still unless the season
+   changed since this device last looked; then its accent plays ONCE
+   (.season-leaf--play is added once, never removed into a loop). Reduced
+   motion: never. */
+@media (prefers-reduced-motion: no-preference) {
+  .season-leaf--play .season-leaf__a {
+    transform-box: fill-box;
+    animation-duration: 1200ms;
+    animation-timing-function: var(--ease-out);
+    animation-fill-mode: both;
+    animation-iteration-count: 1;
+  }
+  .season-leaf--spring.season-leaf--play .season-leaf__a {
+    transform-origin: 50% 100%;
+    animation-name: season-sprout;
+  }
+  .season-leaf--summer.season-leaf--play .season-leaf__a {
+    transform-origin: 50% 100%;
+    animation-name: season-sprout;
+  }
+  .season-leaf--autumn.season-leaf--play .season-leaf__a {
+    transform-origin: 50% 100%;
+    animation-name: season-drift;
+  }
+  .season-leaf--winter.season-leaf--play .season-leaf__a {
+    animation-name: season-frost;
+  }
+}
+@keyframes season-sprout {
+  from {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes season-drift {
+  from {
+    transform: translate(-5px, -9px) rotate(-30deg);
+    opacity: 0;
+  }
+  60% {
+    transform: translate(2px, 1px) rotate(8deg);
+    opacity: 1;
+  }
+  to {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+}
+@keyframes season-frost {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 

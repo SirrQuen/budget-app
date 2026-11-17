@@ -140,6 +140,9 @@ test("greeting: by local hour, with the name or no name -- never 'there'", () =>
   assert.equal(dailyGreeting(12, "Matt"), "Good afternoon, Matt.");
   assert.equal(dailyGreeting(17, "Matt"), "Good evening, Matt.");
   assert.equal(dailyGreeting(8, null), "Good morning.");
+  // The night band addresses them already; no name is added.
+  assert.equal(dailyGreeting(23, "Matt"), "Hi, night owl.");
+  assert.equal(dailyGreeting(3, null), "Hi, night owl.");
 });
 
 test("hourInZone reads the wall clock in the zone, UTC for an unknown one", () => {

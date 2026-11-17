@@ -1,10 +1,13 @@
 export function PageHeader({
   title,
   description,
+  descriptionAdornment,
   action,
 }: {
   title: string;
   description?: string;
+  /** Decoration beside the description (the dashboard's seasonal leaf). */
+  descriptionAdornment?: React.ReactNode;
   action?: React.ReactNode;
 }) {
   return (
@@ -15,7 +18,16 @@ export function PageHeader({
         <h1 id="page-title" tabIndex={-1} className="text-2xl font-semibold text-ink focus:outline-none">
           {title}
         </h1>
-        {description ? <p className="mt-1 text-sm text-ink-secondary">{description}</p> : null}
+        {description ? (
+          descriptionAdornment ? (
+            <div className="mt-1 flex items-center gap-2">
+              {descriptionAdornment}
+              <p className="text-sm text-ink-secondary">{description}</p>
+            </div>
+          ) : (
+            <p className="mt-1 text-sm text-ink-secondary">{description}</p>
+          )
+        ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>
