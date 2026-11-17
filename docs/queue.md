@@ -37,8 +37,8 @@ after import (deployed 2026-11-14). Raised 2026-11-16.
 10. ~~"Is this for a goal?" on one-time transactions -- migration 69~~ --
     deployed 2026-11-16 (see Done).
 11. **Debt payoff goals that follow the card's balance -- migration 70.**
-    Merged to main 2026-11-17 (`24ba18c`, `feat/debt-goals`); not pushed --
-    70 goes to production first. 70 on sorrel-dev
+    Merged to main 2026-11-17 (`24ba18c`, `feat/debt-goals`); 70 on
+    production (view-acl-check 17/0); deployed 2026-11-17. 70 on sorrel-dev
     (pushed, then docs/70-dev-update.sql for the 2026-11-17 rulings);
     debt-goal-test, rls-isolation-test and test:parity clean (Matt);
     view-acl-check 17/0; verified in the browser on dev, test rows deleted. Tester note:
@@ -91,7 +91,7 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 - Goal links (migration 69, deployed 2026-11-16): draft in
   docs/tester-notes/2026-11-16-goal-links.md. Moves safe to spend. Next
   What's new card, with debt goals that follow a card. Not before-deploy.
-- Debt goals that follow a card (migration 70, merged `24ba18c`, not deployed): draft in
+- Debt goals that follow a card (migration 70, merged `24ba18c`, deployed 2026-11-17): draft in
   docs/tester-notes/2026-11-17-debt-goals-follow-card.md. Can move safe to
   spend (a linked goal's monthly hold goes). Next What's new card. Not
   before-deploy.

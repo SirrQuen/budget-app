@@ -1,7 +1,7 @@
 Sent:      not yet
 Migration: 70
-Merge:     24ba18c (feat/debt-goals), not pushed
-Deployed:  not yet
+Merge:     24ba18c (feat/debt-goals)
+Deployed:  2026-11-17
 
 ---
 
