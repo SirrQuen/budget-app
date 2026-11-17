@@ -117,6 +117,25 @@ export function MonthRecap({
         dismiss();
       }}
       onKeyDown={(e) => {
+        // Trapped: Tab wraps inside the dialog rather than leaving for the
+        // browser's own controls, which a native modal would allow.
+        if (e.key === "Tab") {
+          const focusable = [
+            ...e.currentTarget.querySelectorAll<HTMLElement>("button, [href], [tabindex]:not([tabindex='-1'])"),
+          ].filter((el) => !el.hasAttribute("disabled") && el.offsetParent !== null);
+          const first = focusable[0];
+          const lastEl = focusable[focusable.length - 1];
+          if (first && lastEl) {
+            if (e.shiftKey && (document.activeElement === first || !e.currentTarget.contains(document.activeElement))) {
+              e.preventDefault();
+              lastEl.focus();
+            } else if (!e.shiftKey && document.activeElement === lastEl) {
+              e.preventDefault();
+              first.focus();
+            }
+          }
+          return;
+        }
         if (view !== "cards") return;
         if (e.key === "ArrowRight") {
           e.preventDefault();
@@ -409,7 +428,7 @@ function SharePanel({
           <span
             aria-hidden="true"
             className={`absolute top-0.5 h-5 w-5 rounded-full transition-transform duration-150 motion-reduce:transition-none ${
-              showAmounts ? "translate-x-6 bg-action-ink" : "translate-x-0.5 bg-ink-secondary"
+              showAmounts ? "translate-x-[22px] bg-action-ink" : "translate-x-[2px] bg-ink-secondary"
             }`}
           />
         </button>
