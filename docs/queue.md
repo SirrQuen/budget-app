@@ -62,7 +62,7 @@ cookie. Raised 2026-11-16.
     2026-11-16. The launch bloom already exists
     (WelcomeBloom, first sign-in of the day, gated -- ruled 2026-11-16): no
     session bloom, no breathing, the mark stays static.
-14. **Batch C -- step 5**, goals that grow. Sonnet. After debt goals (70)
+14. ~~**Batch C -- step 5**, goals that grow.~~ Merged `bb19676`, deployed 2026-11-17. Sonnet. After debt goals (70)
     merges: it changes the goal cards 70 touches. Its gold meter fill
     conflicts with CLAUDE.md ("gold never a meter fill"). Ruled 2026-11-16:
     CLAUDE.md wins over the doc -- the glow in A uses `--action`, and C's
@@ -95,7 +95,7 @@ docs/tester-notes/README.md). Move a line out when it's sent.
   docs/tester-notes/2026-11-17-debt-goals-follow-card.md. Can move safe to
   spend (a linked goal's monthly hold goes). Next What's new card. Not
   before-deploy.
-- Motion batch C, goals that grow (branch `feat/motion-and-delight-c`, not merged): draft in
+- Motion batch C, goals that grow (merged `bb19676`, deployed 2026-11-17): draft in
   docs/tester-notes/2026-11-17-goals-that-grow.md. No number moves. Next What's new
   card. Not before-deploy.
 - Motion batch A (merged `571b1f1`, deployed 2026-11-16): draft in

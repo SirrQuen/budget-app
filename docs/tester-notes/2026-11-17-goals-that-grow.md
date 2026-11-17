@@ -1,7 +1,7 @@
 Sent:      not yet
 Migration: none
 Merge:     bb19676 (feat/motion-and-delight-c)
-Deployed:  not yet
+Deployed:  2026-11-17
 
 ---
 
