@@ -75,7 +75,7 @@ cookie. Raised 2026-11-16.
     ruled 2026-11-16. Merged to main 2026-11-17 (`cf1308f`, fast-forward
     of `feat/motion-and-delight-e`); 71 (`month_story()`, read-only) on
     sorrel-dev and production, user-day equivalence check differ = 0 on
-    production. Deploy pending Matt's push. Tester note:
+    production. Deployed 2026-11-17. Tester note:
     docs/tester-notes/2026-11-18-month-recap.md.
 
 ## Launch blockers still open
@@ -101,7 +101,7 @@ docs/tester-notes/README.md). Move a line out when it's sent.
   spend (a linked goal's monthly hold goes). Next What's new card. Not
   before-deploy.
 - Motion batch E, your month as a story (migration 71, merged `cf1308f`,
-  deploy pending): draft in
+  deployed 2026-11-17): draft in
   docs/tester-notes/2026-11-18-month-recap.md. No number moves. Names the
   goal-funding-schedule gap (auto-link queued). Next What's new card. Not
   before-deploy.

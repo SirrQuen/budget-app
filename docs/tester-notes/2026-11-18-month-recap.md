@@ -1,7 +1,7 @@
 Sent:      not yet
 Migration: 71
 Merge:     cf1308f (feat/motion-and-delight-e, fast-forward)
-Deployed:  not yet
+Deployed:  2026-11-17
 
 ---
 
