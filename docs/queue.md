@@ -5,7 +5,7 @@ lives in its findings entry (docs/phase-7-findings.md) or spec. "Do this
 next" means editing this file. Launch blockers live in the findings'
 authoritative list, not here.
 
-Last updated 2026-11-16.
+Last updated 2026-11-17.
 
 ## Next
 
@@ -77,6 +77,23 @@ cookie. Raised 2026-11-16.
     sorrel-dev and production, user-day equivalence check differ = 0 on
     production. Deployed 2026-11-17. Tester note:
     docs/tester-notes/2026-11-18-month-recap.md.
+
+Spec for the next five: docs/Decide-and-Grow.md, in this order (its
+"Batches and order" table). The motion rules in docs/Motion-and-Delight.md
+apply to all five. Each adds a tester note (Sent: not yet, not
+before-deploy) for the next What's new card. Raised 2026-11-17.
+
+17. **Batch I -- Coming up as a timeline.** Sonnet. Can start now. No
+    migration, no write path: same data as the Coming up list, leaf from
+    the hero's tightest day.
+18. **Batch J -- lifetime milestones.** Sonnet. Can start now. Derived on
+    read, celebrated once per device (localStorage); nothing stored in the
+    database.
+19. **Batch F -- the runway + "Can I afford it?"** Opus. Phase 1 (one report
+    for F, G and H) given 2026-11-17; waits on Matt's rulings.
+20. **Batch G -- onboarding that grows.** Opus. After F; before any new
+    testers.
+21. **Batch H -- goal pace.** Opus. After G.
 
 ## Launch blockers still open
 
