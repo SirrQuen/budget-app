@@ -1,5 +1,6 @@
 import { BLOOM_MS } from "@/lib/bloom";
 import { isValidTimeZone, todayInZone } from "@/lib/date";
+import { greetingWithName, hourInZone, timeBand } from "@/lib/timeOfDay";
 
 // The welcome overlay (components/WelcomeBloom.tsx): the bloom in front of
 // the app on the first sign-in of the day (placement A) and on a
@@ -157,26 +158,14 @@ export function clearCookieScript(name: string): string {
   return `${name}=; Max-Age=0; path=/; SameSite=Lax`;
 }
 
-/** The hour (0-23) on the wall clock in `timeZone`; UTC if it's unknown. */
-export function hourInZone(timeZone: string | null, now: Date): number {
-  const format = (zone: string) =>
-    Number(
-      new Intl.DateTimeFormat("en-US", { timeZone: zone, hour: "numeric", hourCycle: "h23" })
-        .formatToParts(now)
-        .find((p) => p.type === "hour")!.value,
-    );
-  try {
-    return format(timeZone ?? "UTC");
-  } catch {
-    return format("UTC");
-  }
-}
+// The hour in a zone now lives with the bands it feeds (lib/timeOfDay.ts).
+export { hourInZone };
 
 /**
  * "Good morning, Matt." -- a name and nothing else: no figures, no counts.
  * With no name (greetingName() is null), no name at all; never "there".
+ * The phrase and its bands are lib/timeOfDay.ts's, shared with the dashboard.
  */
 export function dailyGreeting(hour: number, name: string | null): string {
-  const part = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
-  return name ? `Good ${part}, ${name}.` : `Good ${part}.`;
+  return `${greetingWithName(timeBand(hour), name)}.`;
 }

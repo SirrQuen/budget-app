@@ -1,6 +1,9 @@
 import { recordLogin } from "@/lib/db/profile";
 import { isFirstSession } from "@/lib/auth/firstSession";
 import { welcomeMessage } from "@/lib/displayName";
+import { seasonAt, timeBandAt } from "@/lib/timeOfDay";
+import { TimeOfDayGlow } from "@/components/TimeOfDayGlow";
+import { SeasonalLeaf } from "@/components/SeasonalLeaf";
 import {
   getDashboardOnboarding,
   classifyDashboardStage,
@@ -64,6 +67,12 @@ import { WelcomeReady } from "@/components/WelcomeReady";
 export default async function DashboardPage({ searchParams }: PageProps<"/dashboard">) {
   const params = await searchParams;
   const [today, timeZone] = await Promise.all([getToday(), getTimeZone()]);
+  // The band and the season are the user's own hour and month, in
+  // settings.timezone (lib/timeOfDay.ts). The instant is the only thing read
+  // from the process clock; the zone, never the server's, decides what it means.
+  const renderedAt = new Date();
+  const band = timeBandAt(timeZone, renderedAt);
+  const season = seasonAt(timeZone, renderedAt);
   const range = resolveDashboardRange(params, today);
   // Read-only: a cookie says whether "Got it" was pressed. Nothing is written on render.
   const showWhatsNew = whatsNewVisible(today, await getWhatsNewSeen());
@@ -130,7 +139,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   ]);
 
   // A failed profile read just means no name -- "Welcome back" alone.
-  const welcome = welcomeMessage(greetingResult.data ?? {}, firstSession);
+  const welcome = welcomeMessage(greetingResult.data ?? {}, firstSession, band);
   const previousLoginAt = greetingResult.data?.previousLoginAt ?? null;
 
   // If the snapshot itself failed we can't tell which stage the user is in --
@@ -451,12 +460,14 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
 
   return (
     <DashboardLayoutProvider saved={layout}>
-      <div className="flex flex-col gap-10">
+      <div className="relative isolate flex flex-col gap-10">
+        {/* Behind everything, static, by the user's local hour. */}
+        <TimeOfDayGlow band={band} />
         {/* The data has landed: the daily welcome can dissolve onto this. */}
         <WelcomeReady />
         {/* ── Right now: as-of-today and forward-looking; not scoped by the filter ── */}
         <section className="flex flex-col gap-6" aria-labelledby="dash-right-now">
-          <PageHeader title="Dashboard" description={welcome} />
+          <PageHeader title="Dashboard" description={welcome} descriptionAdornment={<SeasonalLeaf season={season} />} />
           {pageLevelError ? <LoadError message="We couldn’t load parts of your dashboard." /> : null}
           {/* The mark is ambient -- day/night for "right now" -- and kept out
               of the hero's row so nothing competes with that figure. */}

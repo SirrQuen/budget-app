@@ -5,6 +5,8 @@
 //
 // Neither resolver ever returns the full email address.
 
+import { greetingWithName, type TimeBand } from "@/lib/timeOfDay";
+
 export type NameFields = {
   firstName?: string | null;
   lastName?: string | null;
@@ -63,11 +65,13 @@ export function identityName({
 }
 
 /**
- * Dashboard welcome. No name resolves -> the bare phrase, never
- * "Welcome, ". No full stop: a greeting isn't a sentence.
+ * Dashboard greeting. The first session of a sign-in is "Welcome"; after
+ * that it is the time-of-day phrase (lib/timeOfDay.ts -- the one greeting
+ * source, shared with the sign-in splash). No name resolves -> the bare
+ * phrase, never "Welcome, ". No full stop: a greeting isn't a sentence.
  */
-export function welcomeMessage(fields: NameFields, isFirstLogin: boolean): string {
-  const phrase = isFirstLogin ? "Welcome" : "Welcome back";
+export function welcomeMessage(fields: NameFields, isFirstLogin: boolean, band: TimeBand): string {
   const name = greetingName(fields);
-  return name ? `${phrase}, ${name}` : phrase;
+  if (isFirstLogin) return name ? `Welcome, ${name}` : "Welcome";
+  return greetingWithName(band, name);
 }
