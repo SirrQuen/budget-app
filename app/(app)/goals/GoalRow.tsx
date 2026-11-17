@@ -9,14 +9,15 @@ import {
   deleteGoalAction,
   type ContributeActionState,
 } from "@/lib/actions/goals";
-import { GoalMeter } from "@/components/ui/GoalMeter";
+import { GoalStem } from "@/components/ui/GoalStem";
+import { SorrelFlower } from "@/components/SorrelFlower";
 import { Celebration } from "@/components/ui/Celebration";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Input, FIELD_EDGE } from "@/components/ui/Input";
 import { FormField } from "@/components/ui/FormField";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
-import { CheckIcon, ChevronDownIcon, TargetIcon, TrashIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, TargetIcon, TrashIcon } from "@/components/ui/icons";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { GoalProgress } from "@/lib/db/dashboard";
 import type { FollowableCard, FundingTransfer, GoalContribution, GoalLinkedTransaction } from "@/lib/db/goals";
@@ -80,8 +81,6 @@ export function GoalRow({
   );
   const [celebrate, setCelebrate] = useState(false);
   const [celebrateMessage, setCelebrateMessage] = useState("");
-  const [milestoneCelebrate, setMilestoneCelebrate] = useState(false);
-  const [milestoneMessage, setMilestoneMessage] = useState("");
   // Set only from a server action's response in this interaction -- the
   // one that completed the goal. Never derived from the goal's state, so a
   // reload or another device never shows it.
@@ -89,7 +88,6 @@ export function GoalRow({
   const formRef = useRef<HTMLFormElement>(null);
   const wasPending = useRef(false);
   const celebrateTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const milestoneTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     const succeeded = wasPending.current && !pending && !state?.error;
@@ -112,14 +110,6 @@ export function GoalRow({
   }, [pending, state]);
 
   useEffect(() => () => clearTimeout(celebrateTimeout.current), []);
-  useEffect(() => () => clearTimeout(milestoneTimeout.current), []);
-
-  function handleMilestone(milestone: { pct: number; message: string }) {
-    setMilestoneMessage(milestone.message);
-    setMilestoneCelebrate(true);
-    clearTimeout(milestoneTimeout.current);
-    milestoneTimeout.current = setTimeout(() => setMilestoneCelebrate(false), 1800);
-  }
 
   const [editing, setEditing] = useState(false);
   const [choosingCard, setChoosingCard] = useState(false);
@@ -307,11 +297,11 @@ export function GoalRow({
       {deleteError ? <ErrorMessage message={deleteError} /> : null}
       {archiveError ? <ErrorMessage message={archiveError} /> : null}
 
-      <GoalMeter
-        goalId={goal.goal_id ?? ""}
+      <GoalStem
         goalName={goal.goal_name ?? "This goal"}
         value={pct}
-        onMilestone={handleMilestone}
+        toGo={remaining}
+        complete={Boolean(completedOn) || goal.is_paid_off === true}
       />
 
       {choosingCard && canFollow ? (
@@ -337,7 +327,7 @@ export function GoalRow({
                   the date appears once completion is recorded. */}
               {goal.is_paid_off ? (
                 <span className="inline-flex items-center gap-1">
-                  <CheckIcon className="h-4 w-4" aria-hidden="true" />
+                  <SorrelFlower size={20} />
                   {completedOn ? `Paid off on ${formatDate(completedOn)}` : "Paid off"}
                 </span>
               ) : (
@@ -355,8 +345,8 @@ export function GoalRow({
         <span className="text-ink-secondary">
           {completedOn ? (
             <span className="inline-flex items-center gap-1">
-              <CheckIcon className="h-4 w-4" aria-hidden="true" />
-              Completed {formatDate(completedOn)}
+              <SorrelFlower size={20} />
+              Reached on {formatDate(completedOn)}
             </span>
           ) : remaining > 0 ? (
             `${formatCurrency(remaining)} to go`
@@ -456,7 +446,6 @@ export function GoalRow({
 
       {panel}
       <Celebration show={celebrate} message={celebrateMessage} icon="✦" />
-      <Celebration show={milestoneCelebrate} message={milestoneMessage} icon="✦" />
     </li>
   );
 }

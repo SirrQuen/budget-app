@@ -412,17 +412,30 @@
   }
 }
 
-/* Goal meter milestone pulse -- a single ring expanding out from the fill
-   and fading, one cycle (no infinite iteration count). */
-@keyframes goal-pulse {
-  0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 55%, transparent);
+/* Goal stem (components/ui/GoalStem.tsx): the fill is drawn with scaleX and
+   moves over 700ms when progress changes while on screen -- the same for a
+   rise and a fall. It has no transition on first paint because it renders
+   at its final scale. A leaf unfurls once, 250ms, when the fill passes it
+   going up; a leaf that goes back to outline gets no animation at all. */
+.goal-stem__fill {
+  transform-origin: left center;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .goal-stem__fill {
+    transition: transform 700ms var(--ease-out);
   }
-  70% {
-    box-shadow: 0 0 0 14px color-mix(in srgb, var(--good) 0%, transparent);
+  .goal-leaf--unfurl {
+    animation: goal-leaf-unfurl 250ms var(--ease-spring) both;
   }
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 0%, transparent);
+}
+@keyframes goal-leaf-unfurl {
+  from {
+    transform: scale(0.2) rotate(-25deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
   }
 }
 

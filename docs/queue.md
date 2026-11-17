@@ -95,6 +95,9 @@ docs/tester-notes/README.md). Move a line out when it's sent.
   docs/tester-notes/2026-11-17-debt-goals-follow-card.md. Can move safe to
   spend (a linked goal's monthly hold goes). Next What's new card. Not
   before-deploy.
+- Motion batch C, goals that grow (branch `feat/motion-and-delight-c`, not merged): draft in
+  docs/tester-notes/2026-11-17-goals-that-grow.md. No number moves. Next What's new
+  card. Not before-deploy.
 - Motion batch A (merged `571b1f1`, deployed 2026-11-16): draft in
   docs/tester-notes/2026-11-16-motion-and-delight.md. No number moves. Next
   What's new card. Not before-deploy.

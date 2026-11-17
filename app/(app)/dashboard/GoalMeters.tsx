@@ -1,31 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { GoalMeter } from "@/components/ui/GoalMeter";
-import { Celebration } from "@/components/ui/Celebration";
+import { GoalStem } from "@/components/ui/GoalStem";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Database } from "@/lib/database.types";
 
 type GoalProgressRow = Database["public"]["Views"]["v_goal_progress"]["Row"];
 
-// GoalMeter brings its own behaviour from the goal-bar spec: a glow that
-// scales with completion, a fill that animates up from the last-seen value,
-// and a milestone pulse when a threshold is crossed. onMilestone is the
-// reduced-motion-safe channel for that last one -- a short text banner that
-// fires whether or not the visual pulse does.
 export function GoalMeters({ goals }: { goals: GoalProgressRow[] }) {
-  const [milestone, setMilestone] = useState<string | null>(null);
-  const timeout = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  useEffect(() => () => clearTimeout(timeout.current), []);
-
-  function announce(message: string) {
-    setMilestone(message);
-    clearTimeout(timeout.current);
-    timeout.current = setTimeout(() => setMilestone(null), 1800);
-  }
-
   return (
     <section className="h-full rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
       <div className="mb-4 flex items-baseline justify-between gap-2">
@@ -41,11 +23,11 @@ export function GoalMeters({ goals }: { goals: GoalProgressRow[] }) {
       <ul className="flex flex-col gap-4">
         {goals.map((g) => (
           <li key={g.goal_id}>
-            <GoalMeter
-              goalId={g.goal_id ?? ""}
+            <GoalStem
               goalName={g.goal_name ?? "This goal"}
               value={g.pct_complete ?? 0}
-              onMilestone={(m) => announce(m.message)}
+              toGo={g.remaining_amount ?? null}
+              complete={g.is_paid_off === true || g.completed_at != null}
             />
             <p className="mt-1.5 text-sm text-ink-secondary">
               {/* A goal that follows a card (migration 70) reads by what it still owes. */}
@@ -60,11 +42,6 @@ export function GoalMeters({ goals }: { goals: GoalProgressRow[] }) {
         ))}
       </ul>
 
-      {milestone ? (
-        <div className="mt-4">
-          <Celebration show message={milestone} icon="✦" />
-        </div>
-      ) : null}
     </section>
   );
 }
