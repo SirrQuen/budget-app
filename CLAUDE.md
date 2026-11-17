@@ -17,6 +17,18 @@ over `lib/**/*.test.ts`, `app/**/*.test.tsx`, `components/**/*.test.tsx` and
 `postcss/**/*.test.ts`.
 These tests are pure: no database connection.
 
+### Testing in the browser
+
+In browser checks, before clicking any Delete or Confirm, read the dialog's
+visible text and confirm it names an item you created this session
+(ZZ-prefixed). Select destructive buttons by their dialog's accessible name,
+never by "first matching button". Never run scripted clicks against
+production.
+
+Why: on 2026-11-16 a scripted click on the first "Delete" found inside any
+dialog confirmed the hidden delete dialog of a real dev goal, not the test
+contribution it was meant for. Hidden dialogs are in the DOM for every row.
+
 ## Environments — read before any database or deploy command
 
 Projects are identified by REF, not by name. Names can be changed in the
