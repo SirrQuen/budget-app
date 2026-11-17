@@ -1,6 +1,6 @@
 Sent:      not yet
 Migration: none
-Merge:     not yet (feat/motion-and-delight-c)
+Merge:     bb19676 (feat/motion-and-delight-c)
 Deployed:  not yet
 
 ---
