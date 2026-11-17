@@ -315,3 +315,65 @@ VERIFY (I'll sign you in on dev):
 Tester note (Sent: not yet, not before-deploy). Report, then stop.
 Don't merge.
 ```
+
+## Prompt for batch D
+
+```
+Batch D: step 8 of docs/Motion-and-Delight.md (Seasons and time of
+day). Own branch off main.
+
+PRECONDITION: batch C is merged to main. If not, stop and tell me.
+
+REPORT FIRST, then build:
+  - Does the dashboard already have a greeting? Where does its text
+    come from? Reuse it; there must be ONE greeting source.
+  - How the server knows the user's timezone (the migration 40 hook)
+    and how the dashboard can read the local hour and month from it.
+  - Light theme: the canvas only shows dark. Propose light-theme glow
+    values (same hues, lower strength) and show both themes.
+
+BUILD:
+1. TIME-OF-DAY LIGHT, rendered on the server from the user's timezone
+   (no flash, nothing stored):
+     5am–noon     "Good morning"     gold glow, top-left
+     noon–5pm     "Good afternoon"   pale gold glow, top-centre
+     5pm–10pm     "Good evening"     violet glow, top-right
+     10pm–5am     "Hi, night owl"    deep blue glow
+   Dark-theme strengths from the doc's table are the MAXIMUM. The glow
+   sits behind everything and is STATIC — no pulsing or drifting.
+   Numbers and text never change colour. Text over the glow still
+   meets 4.5:1 — check it.
+2. SEASONAL LEAF beside the greeting, northern hemisphere by month:
+   spring sprout (Mar–May), summer full stem (Jun–Aug), autumn leaf
+   (Sep–Nov), winter bare stem with frost (Dec–Feb). Inline SVG,
+   aria-hidden, STATIC by default.
+   - It animates ONCE when the season has changed since the user's
+     last visit (localStorage last-seen season, try/catch; if storage
+     is unavailable, no animation). Same "motion means change" rule as
+     the goal meters. Never a continuous loop.
+   - Queue: a hemisphere setting.
+3. FIX FROM BATCH A: the empty-state drawings sway continuously, which
+   breaks rule 5 (nothing loops at the edge of the eye). Make them sway
+   for two cycles, then rest.
+4. Reduced motion: everything static.
+
+No migration, no write path, no new dependency. If any of that seems
+needed: STOP and tell me.
+
+VERIFY (I'll sign you in on dev):
+  - Unit tests for every hour boundary (4:59, 5:00, 11:59, 12:00,
+    16:59, 17:00, 21:59, 22:00) and every month's season, in at least
+    two timezones.
+  - The current band and season render correctly on dev with no flash
+    on load. Then change the dev test user's timezone in Settings to
+    land in a different band, check it, and CHANGE IT BACK.
+  - Changing last-seen season in localStorage and reloading animates
+    the leaf once; a second reload doesn't.
+  - Contrast of the greeting and the Safe to Spend figure over each
+    glow, both themes: report the ratios.
+  - Empty states sway twice, then rest.
+  - Reduced motion forced on in DevTools: nothing moves.
+  - tsc, eslint, full npm test. Delete anything you created on dev.
+Tester note (Sent: not yet, not before-deploy). Report, then stop.
+Don't merge.
+```
