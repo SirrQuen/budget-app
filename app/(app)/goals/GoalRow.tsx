@@ -19,7 +19,8 @@ import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { CheckIcon, ChevronDownIcon, TargetIcon, TrashIcon } from "@/components/ui/icons";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { GoalProgress } from "@/lib/db/dashboard";
-import type { FundingTransfer, GoalContribution, GoalLinkedTransaction } from "@/lib/db/goals";
+import type { FollowableCard, FundingTransfer, GoalContribution, GoalLinkedTransaction } from "@/lib/db/goals";
+import { FollowCardForm, StopFollowingButton } from "./FollowCard";
 import type { GoalCompletion } from "@/lib/goalCompletion";
 import { ContributionList } from "./ContributionList";
 import { GoalForm } from "./GoalForm";
@@ -56,6 +57,7 @@ export function GoalRow({
   completedOn,
   fundingRecurringId,
   fundingTransfers,
+  cards = [],
 }: {
   goal: GoalProgress;
   contributions: GoalContribution[];
@@ -64,6 +66,8 @@ export function GoalRow({
   /** goals.funding_recurringid -- v_goal_progress doesn't carry it. */
   fundingRecurringId: string | null;
   fundingTransfers: FundingTransfer[];
+  /** Cards a debt payoff goal can follow (migration 70). */
+  cards?: FollowableCard[];
   /** completed_at as the user's calendar day, or null while not complete. */
   completedOn: string | null;
 }) {
@@ -118,6 +122,7 @@ export function GoalRow({
   }
 
   const [editing, setEditing] = useState(false);
+  const [choosingCard, setChoosingCard] = useState(false);
   const closeEdit = useCallback(() => setEditing(false), []);
 
   // "Set the next one": the edit form opens with focus on the target.
@@ -188,6 +193,16 @@ export function GoalRow({
     });
   }
 
+  // A debt payoff goal that follows a card (migration 70): the card's
+  // balance is the whole measure, so it takes no contributions here.
+  const follows = goal.tracking_method === "LinkedAccount";
+  const cardName = goal.linked_account_name ?? "the card";
+  const canFollow = !follows && goal.goal_type === "Debt Payoff" && !completedOn;
+  // Whole cents, summed as integers: the sentence names a total, never a float.
+  const historyCents =
+    contributions.reduce((sum, c) => sum + Math.round(Number(c.amount) * 100), 0) +
+    linked.reduce((sum, t) => sum + Math.round(Number(t.amount) * 100), 0);
+
   const target = goal.target_amount ?? 0;
   const contributed = goal.contributed_amount ?? 0;
   const remaining = goal.remaining_amount ?? 0;
@@ -207,6 +222,7 @@ export function GoalRow({
             target_date: goal.target_date,
             monthly_contribution: goal.monthly_contribution,
             funding_recurringid: fundingRecurringId,
+            follows_card: follows ? cardName : null,
           }}
           fundingTransfers={fundingTransfers}
           onSuccess={closeEdit}
@@ -231,14 +247,31 @@ export function GoalRow({
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-4">
-          <button
-            type="button"
-            id={`add-contribution-${goal.goal_id}`}
-            onClick={() => setContributing((v) => !v)}
-            className={TEXT_BUTTON}
-          >
-            {contributing ? "Cancel" : "Add contribution"}
-          </button>
+          {follows ? (
+            <StopFollowingButton
+              goalId={goal.goal_id ?? ""}
+              goalName={goalName}
+              cardName={cardName}
+              paidOff={completedOn !== null}
+              carried={contributed}
+              toGo={remaining}
+              onCompleted={setCompletion}
+            />
+          ) : (
+            <button
+              type="button"
+              id={`add-contribution-${goal.goal_id}`}
+              onClick={() => setContributing((v) => !v)}
+              className={TEXT_BUTTON}
+            >
+              {contributing ? "Cancel" : "Add contribution"}
+            </button>
+          )}
+          {canFollow ? (
+            <button type="button" onClick={() => setChoosingCard((v) => !v)} className={TEXT_BUTTON}>
+              {choosingCard ? "Cancel" : "Follow a card"}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => setEditing(true)}
@@ -281,6 +314,38 @@ export function GoalRow({
         onMilestone={handleMilestone}
       />
 
+      {choosingCard && canFollow ? (
+        <FollowCardForm
+          goalId={goal.goal_id ?? ""}
+          cards={cards}
+          historyCount={contributions.length + linked.length}
+          historyTotal={historyCents / 100}
+          onDone={() => setChoosingCard(false)}
+        />
+      ) : null}
+
+      {follows ? (
+        // The figure never comments on its direction: "$1,240 to go",
+        // never "behind" -- and the meter never turns red.
+        <div className="flex flex-col gap-1 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-ink-secondary">
+              {formatCurrency(contributed)} of {formatCurrency(goal.starting_balance ?? 0)} paid off
+            </span>
+            <span className="text-ink-secondary">
+              {completedOn ? (
+                <span className="inline-flex items-center gap-1">
+                  <CheckIcon className="h-4 w-4" aria-hidden="true" />
+                  Paid off on {formatDate(completedOn)}
+                </span>
+              ) : (
+                `${formatCurrency(remaining)} to go`
+              )}
+            </span>
+          </div>
+          <p className="text-xs text-ink-muted">Follows {cardName}&apos;s balance in Sorrel.</p>
+        </div>
+      ) : (
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span className="text-ink-secondary">
           {formatCurrency(contributed)} of {formatCurrency(target)} saved
@@ -298,6 +363,7 @@ export function GoalRow({
           )}
         </span>
       </div>
+      )}
 
       {contributions.length + linked.length > 0 ? (
         <div className="flex flex-col gap-2">
@@ -313,8 +379,8 @@ export function GoalRow({
               aria-hidden="true"
             />
             {contributions.length + linked.length === 1
-              ? "1 contribution"
-              : `${contributions.length + linked.length} contributions`}
+              ? `1 ${follows ? "earlier " : ""}contribution`
+              : `${contributions.length + linked.length} ${follows ? "earlier " : ""}contributions`}
           </button>
           {showHistory ? (
             <div id={`history-${goal.goal_id}`}>
@@ -329,7 +395,7 @@ export function GoalRow({
         </div>
       ) : null}
 
-      {contributing ? (
+      {contributing && !follows ? (
         <form
           ref={formRef}
           action={action}

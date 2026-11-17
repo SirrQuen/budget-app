@@ -2,7 +2,7 @@ import Link from "next/link";
 import { listTransactions, TRANSACTIONS_PAGE_SIZE } from "@/lib/db/transactions";
 import { listCategories, listCategoriesForType } from "@/lib/db/categories";
 import { listAccounts } from "@/lib/db/accounts";
-import { listGoalOptions } from "@/lib/db/goals";
+import { listFollowedGoals, listGoalOptions } from "@/lib/db/goals";
 import { LoadError } from "@/components/ui/LoadError";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { InfoIcon } from "@/components/ui/icons";
@@ -55,6 +55,7 @@ export async function TransactionsView({
     incomeCategoriesResult,
     expenseCategoriesResult,
     goalsResult,
+    followedGoalsResult,
   ] = await Promise.all([
     listTransactions({
       ...(filters.dateFrom ? { dateFrom: filters.dateFrom } : {}),
@@ -70,6 +71,7 @@ export async function TransactionsView({
     listCategoriesForType("Income"),
     listCategoriesForType("Expense"),
     listGoalOptions(),
+    listFollowedGoals(),
   ]);
 
   if (
@@ -139,6 +141,7 @@ export async function TransactionsView({
           expenseCategories={expenseCategoriesResult.data}
           accounts={activeAccounts}
           goals={goalsResult.data}
+          followedGoals={followedGoalsResult.data ?? []}
           prefill={lockedAccountId ? { accountid: lockedAccountId } : undefined}
         />
       ) : null}

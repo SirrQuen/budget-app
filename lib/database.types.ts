@@ -306,7 +306,9 @@ export type Database = {
           goal_type: string
           id: string
           is_active: boolean
+          linked_at: string | null
           monthly_contribution: number | null
+          starting_balance: number | null
           status: string
           target_amount: number
           target_date: string | null
@@ -323,7 +325,9 @@ export type Database = {
           goal_type: string
           id?: string
           is_active?: boolean
+          linked_at?: string | null
           monthly_contribution?: number | null
+          starting_balance?: number | null
           status?: string
           target_amount: number
           target_date?: string | null
@@ -340,7 +344,9 @@ export type Database = {
           goal_type?: string
           id?: string
           is_active?: boolean
+          linked_at?: string | null
           monthly_contribution?: number | null
+          starting_balance?: number | null
           status?: string
           target_amount?: number
           target_date?: string | null
@@ -1298,10 +1304,14 @@ export type Database = {
           is_active: boolean | null
           is_on_track: boolean | null
           last_contribution_date: string | null
+          linked_account_name: string | null
+          linked_at: string | null
           monthly_contribution: number | null
+          owed_amount: number | null
           pct_complete: number | null
           projected_completion_date: string | null
           remaining_amount: number | null
+          starting_balance: number | null
           status: string | null
           target_amount: number | null
           target_date: string | null
@@ -1772,11 +1782,19 @@ export type Database = {
         }[]
       }
       is_business_day: { Args: { d: string }; Returns: boolean }
+      is_liability_account_type: {
+        Args: { p_account_type: string }
+        Returns: boolean
+      }
       is_spendable_account_type: { Args: { p_type: string }; Returns: boolean }
       join_waitlist: { Args: { p_email: string }; Returns: undefined }
       leaves_spendable_set: {
         Args: { p_from_type: string; p_to_type: string }
         Returns: boolean
+      }
+      link_goal_to_card: {
+        Args: { p_account_id: string; p_goal_id: string }
+        Returns: undefined
       }
       link_transaction_to_schedule: {
         Args: { p_recurring_id: string; p_transaction_id: string }
@@ -1874,6 +1892,7 @@ export type Database = {
           out_deleted: number
         }[]
       }
+      unlink_goal_from_card: { Args: { p_goal_id: string }; Returns: number }
       update_transfer: {
         Args: {
           p_amount: number

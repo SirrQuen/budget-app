@@ -8,7 +8,7 @@ import {
   type TransactionAccountOption,
 } from "@/app/(app)/transactions/AddTransactionForm";
 import type { CategoryWithGroup } from "@/lib/db/categories";
-import type { GoalOption } from "@/lib/db/goals";
+import type { FollowedGoal, GoalOption } from "@/lib/db/goals";
 import type { SameMoneyPair } from "@/lib/goalLinks";
 import type { SavedSummary } from "@/lib/savedSummary";
 
@@ -20,6 +20,7 @@ export function FullFormOverlay({
   incomeCategories,
   expenseCategories,
   goals = [],
+  followedGoals = [],
   prefill,
   onClose,
   onSaved,
@@ -30,6 +31,8 @@ export function FullFormOverlay({
   prefill?: AddTransactionPrefill;
   /** Goals a transaction can be for (migration 69). */
   goals?: GoalOption[];
+  /** Goals that follow a card (migration 70). */
+  followedGoals?: FollowedGoal[];
   onClose: () => void;
   onSaved: (note: string | null, sameBill?: SameBillPair, sameMoney?: SameMoneyPair, saved?: SavedSummary) => void;
 }) {
@@ -102,6 +105,7 @@ export function FullFormOverlay({
           incomeCategories={incomeCategories}
           expenseCategories={expenseCategories}
           goals={goals}
+          followedGoals={followedGoals}
           onClose={onClose}
           onSaved={onSaved}
         />

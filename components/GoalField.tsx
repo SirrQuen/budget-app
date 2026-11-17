@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { FormField } from "@/components/ui/FormField";
 import { FIELD_CLASS } from "@/components/ui/Input";
-import type { GoalOption } from "@/lib/db/goals";
+import type { FollowedGoal, GoalOption } from "@/lib/db/goals";
+import { followedNote } from "@/lib/goalFollow";
 
 // "Is this for a goal?" (docs/Log-Again-and-Goal-Links.md, section 3;
 // migration 69). Optional, never required, and collapsed to one quiet row
@@ -24,6 +25,8 @@ export function GoalField({
   asks,
   currentGoal,
   id,
+  followed = [],
+  accountIds = [],
 }: {
   /** Active, uncompleted goals (listGoalOptions). */
   goals: GoalOption[];
@@ -35,6 +38,10 @@ export function GoalField({
   /** The goal this row already carries when the list no longer offers it (archived or completed). */
   currentGoal?: { id: string; name: string } | null;
   id: string;
+  /** Goals that follow a card (migration 70): never offered, but named when this transaction touches their card. */
+  followed?: FollowedGoal[];
+  /** The account(s) this transaction is on: the account, or a transfer's from and to. */
+  accountIds?: string[];
 }) {
   const [opened, setOpened] = useState(false);
   const options =
@@ -42,15 +49,32 @@ export function GoalField({
       ? [...goals, { id: currentGoal.id, name: currentGoal.name, monthlyContribution: null, fundingRecurringId: null }]
       : goals;
 
+  // A payment to a followed card already counts toward its goal: say so,
+  // beside the field, instead of offering the goal.
+  const onCard = followed.filter((g) => accountIds.includes(g.accountId));
+  const cardNote =
+    onCard.length > 0 ? (
+      <p className="text-xs text-ink-secondary">
+        {onCard.map((g) => followedNote(g.name)).join(" ")}
+      </p>
+    ) : null;
+
   // No goal to offer: nothing to show. A value can't exist without an
   // option, so there's nothing to keep either.
-  if (options.length === 0) return <input type="hidden" name="goalid" value="" />;
+  if (options.length === 0)
+    return (
+      <>
+        <input type="hidden" name="goalid" value="" />
+        {cardNote}
+      </>
+    );
 
   const expanded = opened || asks || value !== "";
 
   if (!expanded) {
     return (
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2 text-sm">
         <input type="hidden" name="goalid" value="" />
         <span className="text-ink-secondary">Goal: none</span>
         <button
@@ -60,6 +84,8 @@ export function GoalField({
         >
           Choose a goal
         </button>
+        </div>
+        {cardNote}
       </div>
     );
   }
@@ -78,6 +104,7 @@ export function GoalField({
           </option>
         ))}
       </select>
+      {cardNote}
     </FormField>
   );
 }

@@ -31,6 +31,8 @@ export const ACCOUNT_TYPE_GROUP_ORDER: AccountType[] = [
 // Mirrors accounts_liability_sign (20260822000006_06_liability_sign.sql):
 // Credit Card and Loan balances are stored negative. Every place that reads
 // or writes opening_balance needs to know which types those are.
+// Its SQL twin is is_liability_account_type() (migration 70), which a goal
+// following a card is checked against; npm run test:parity keeps them equal.
 export function isLiabilityAccountType(type: string): boolean {
   return type === "Credit Card" || type === "Loan";
 }

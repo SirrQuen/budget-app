@@ -3,6 +3,7 @@ import {
   getGoalContributions,
   getGoalLinkedTransactions,
   listFundingTransfers,
+  listFollowableCards,
   listGoalFundingLinks,
   type GoalContribution,
   type GoalLinkedTransaction,
@@ -18,7 +19,7 @@ import { CreateGoalForm } from "./CreateGoalForm";
 import { GoalRow } from "./GoalRow";
 
 export default async function GoalsPage() {
-  const [progressResult, summaryResult, contributionsResult, timeZone, transfersResult, linksResult, linkedResult] =
+  const [progressResult, summaryResult, contributionsResult, timeZone, transfersResult, linksResult, linkedResult, cardsResult] =
     await Promise.all([
       getGoalProgress(),
       getGoalsSummary(),
@@ -27,6 +28,9 @@ export default async function GoalsPage() {
       listFundingTransfers(),
       listGoalFundingLinks(),
       getGoalLinkedTransactions(),
+      // Cards a debt payoff goal can follow (migration 70). A failed read
+      // only means no card is offered.
+      listFollowableCards(),
     ]);
 
   if (
@@ -122,6 +126,7 @@ export default async function GoalsPage() {
             linked={linkedByGoal.get(goal.goal_id ?? "") ?? []}
             fundingRecurringId={linksResult.data.get(goal.goal_id ?? "") ?? null}
             fundingTransfers={transfersResult.data}
+            cards={cardsResult.data ?? []}
             // completed_at is an instant; the day it names is the user's.
             completedOn={goal.completed_at ? todayInZone(timeZone, new Date(goal.completed_at)) : null}
           />

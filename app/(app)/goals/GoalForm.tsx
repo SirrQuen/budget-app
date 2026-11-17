@@ -23,6 +23,8 @@ export type EditableGoal = {
   target_date: string | null;
   monthly_contribution: number | null;
   funding_recurringid: string | null;
+  /** The card it follows (migration 70), so the form can say what a type change does. */
+  follows_card?: string | null;
 };
 
 // Create and edit share one form, like CategoryForm/AccountForm, so the two
@@ -95,7 +97,16 @@ export function GoalForm({
         />
       </FormField>
 
-      <FormField label="Type" htmlFor={fieldId("goal_type")} required>
+      <FormField
+        label="Type"
+        htmlFor={fieldId("goal_type")}
+        required
+        hint={
+          goal?.follows_card
+            ? `Changing the type stops it following ${goal.follows_card}. What it has paid off stays as a contribution.`
+            : undefined
+        }
+      >
         <select
           id={fieldId("goal_type")}
           name="goal_type"

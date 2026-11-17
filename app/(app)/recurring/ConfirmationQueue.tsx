@@ -17,6 +17,7 @@ import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { formatDateWithWeekday, formatWeekday } from "@/lib/format";
 import { CalendarIcon } from "@/components/ui/icons";
 import { DrawnCheck } from "@/components/ui/DrawnCheck";
+import { useShowGoalCompletion } from "@/components/GoalCompletionHost";
 import { ConfirmOccurrenceSheet } from "./ConfirmOccurrenceSheet";
 import { PaymentNote } from "@/components/PaymentNote";
 import { AmountBasisTag } from "@/components/AmountBasisTag";
@@ -46,6 +47,8 @@ export function ConfirmationQueue({ items }: { items: ConfirmationQueueItem[] })
   // the "already included?" answer, which one press can't give (migration
   // 62). They stay in the list for their own sheet.
   const [bulkSkipped, setBulkSkipped] = useState(0);
+  // A confirmed card payment can pay off a goal that follows the card.
+  const showCompletion = useShowGoalCompletion();
 
   // One list, two states (lib/confirmationQueue.ts). Only the to-confirm
   // items are counted or confirmed in bulk; coming-up ones are reminders.
@@ -63,6 +66,7 @@ export function ConfirmationQueue({ items }: { items: ConfirmationQueueItem[] })
       );
       if (result.error) setBulkError(result.error);
       setBulkSkipped("needsAnswer" in result ? result.needsAnswer : 0);
+      showCompletion("completed" in result ? result.completed : undefined);
     });
   };
 
@@ -178,11 +182,13 @@ function QueueRow({ item, disabled }: { item: ConfirmationQueueItem; disabled: b
   // sheet opens to ask it. Nothing was written.
   const [askRequest, setAskRequest] = useState(0);
 
+  const showCompletion = useShowGoalCompletion();
   const answer = (call: () => Promise<OneTapState>) => {
     setError(null);
     startTransition(async () => {
       const result = await callAction(call);
       if (result && "needsAnswer" in result && result.needsAnswer) setAskRequest((n) => n + 1);
+      else if (result && "completed" in result) showCompletion(result.completed);
       else if (result?.error) setError(result.error);
     });
   };

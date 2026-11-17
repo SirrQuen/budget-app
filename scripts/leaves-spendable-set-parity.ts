@@ -16,7 +16,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { ACCOUNT_TYPES } from "../lib/accountOptions";
+import { ACCOUNT_TYPES, isLiabilityAccountType } from "../lib/accountOptions";
 import { SPENDABLE_ACCOUNT_TYPES, isSafeToSpendCommitment } from "../lib/safeToSpend";
 
 const TEST_FILE = resolve(__dirname, "../docs/leaves-spendable-set-parity.sql");
@@ -41,6 +41,8 @@ const cases: Case[] = ACCOUNT_TYPES.flatMap((from) => [
 const payload = JSON.stringify({
   account_types: [...ACCOUNT_TYPES],
   spendable_types: [...SPENDABLE_ACCOUNT_TYPES],
+  // Migration 70: is_liability_account_type() is isLiabilityAccountType()'s SQL twin.
+  liability_types: ACCOUNT_TYPES.filter((t) => isLiabilityAccountType(t)),
   cases,
 });
 

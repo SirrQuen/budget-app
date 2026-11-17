@@ -9,13 +9,14 @@ import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { QuickAddBar } from "@/components/quick-add/QuickAddBar";
 import { showsQuickAdd } from "@/lib/quickAdd/visibility";
 import type { RecentRow } from "@/lib/logAgain";
-import type { GoalOption } from "@/lib/db/goals";
+import type { FollowedGoal, GoalOption } from "@/lib/db/goals";
 import { OptimisticTransactionsProvider } from "@/components/quick-add/OptimisticTransactionsContext";
 import { ConfirmPulseProvider } from "@/components/ui/ConfirmPulse";
 import { SorrelMark } from "@/components/SorrelMark";
 import { IdleTimeout } from "@/components/IdleTimeout";
 import { PageArrival } from "@/components/PageArrival";
 import { RippleHost } from "@/components/RippleHost";
+import { GoalCompletionProvider } from "@/components/GoalCompletionHost";
 import type { TransactionAccountOption } from "@/app/(app)/transactions/AddTransactionForm";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 
@@ -28,6 +29,8 @@ export type QuickAddData = {
   recentTransactions: RecentRow[];
   /** Goals a transaction can be for, for the full form's Goal field. */
   goals: GoalOption[];
+  /** Goals that follow a card (migration 70), for the note beside the Goal field. */
+  followedGoals: FollowedGoal[];
 };
 
 type NavItem = {
@@ -76,6 +79,7 @@ export function AppShell({
 
   return (
     <ConfirmPulseProvider>
+      <GoalCompletionProvider>
       {sessionId ? <IdleTimeout sessionId={sessionId} /> : null}
       <RippleHost />
       <div className="min-h-dvh bg-page text-ink md:flex">
@@ -156,6 +160,7 @@ export function AppShell({
                   defaultAccountId={quickAdd.defaultAccountId}
                   recentTransactions={quickAdd.recentTransactions}
                   goals={quickAdd.goals}
+                  followedGoals={quickAdd.followedGoals}
                   navOpen={open}
                 />
               ) : null}
@@ -164,6 +169,7 @@ export function AppShell({
           </div>
         </main>
       </div>
+      </GoalCompletionProvider>
     </ConfirmPulseProvider>
   );
 }
