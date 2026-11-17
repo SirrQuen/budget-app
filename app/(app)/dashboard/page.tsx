@@ -1,7 +1,7 @@
 import { recordLogin } from "@/lib/db/profile";
 import { isFirstSession } from "@/lib/auth/firstSession";
 import { welcomeMessage } from "@/lib/displayName";
-import { seasonAt, timeBandAt } from "@/lib/timeOfDay";
+import { markStateAt, seasonAt, timeBandAt } from "@/lib/timeOfDay";
 import { TimeOfDayGlow } from "@/components/TimeOfDayGlow";
 import { SeasonalLeaf } from "@/components/SeasonalLeaf";
 import {
@@ -475,7 +475,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
             <h2 id="dash-right-now" className="text-sm font-medium text-ink-secondary">
               Right now
             </h2>
-            <DayNightMark size={56} />
+            <DayNightMark size={56} timeZone={timeZone} initialState={markStateAt(timeZone, renderedAt)} />
           </div>
 
           {/* LoggingStreakStrip is hidden, not deleted: it counts days with a

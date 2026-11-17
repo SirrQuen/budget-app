@@ -115,3 +115,54 @@ test("dashboard greeting: first session is Welcome; otherwise the one shared phr
   assert.equal(welcomeMessage({}, false, "morning"), "Good morning");
   assert.equal(welcomeMessage({ firstName: "Matt" }, false, "night"), "Hi, night owl");
 });
+
+import { markStateAt, markStateForHour, msUntilNextMarkBoundary } from "./timeOfDay";
+
+test("the flower: 6:59 folded, 7:00 open, 18:59 open, 19:00 folded", () => {
+  assert.equal(markStateForHour(6), "folded"); // 6:59
+  assert.equal(markStateForHour(7), "open");
+  assert.equal(markStateForHour(18), "open"); // 18:59
+  assert.equal(markStateForHour(19), "folded");
+  assert.equal(markStateForHour(0), "folded");
+  assert.equal(markStateForHour(12), "open");
+});
+
+test("the flower reads the stored zone's wall clock, in New York and Tokyo", () => {
+  const cases: [number, number, "open" | "folded"][] = [
+    [6, 59, "folded"],
+    [7, 0, "open"],
+    [18, 59, "open"],
+    [19, 0, "folded"],
+  ];
+  for (const [h, m, state] of cases) {
+    assert.equal(markStateAt(NY, nyAt(h, m)), state, `NY ${h}:${m}`);
+    assert.equal(markStateAt(TOKYO, tokyoAt(h, m)), state, `Tokyo ${h}:${m}`);
+  }
+});
+
+test("the flower and the glow share one hour: the same instant, the same zone, one clock", () => {
+  const instant = new Date("2026-11-17T14:00:00Z"); // 9am New York, 11pm Tokyo
+  assert.equal(markStateAt(NY, instant), "open");
+  assert.equal(timeBandAt(NY, instant), "morning");
+  assert.equal(markStateAt(TOKYO, instant), "folded");
+  assert.equal(timeBandAt(TOKYO, instant), "night");
+  // The browser's own zone is never consulted: an unknown zone is UTC (14:00, open).
+  assert.equal(markStateAt("Not/AZone", instant), "open");
+  assert.equal(markStateAt(null, instant), "open");
+});
+
+test("next flower boundary, in the stored zone", () => {
+  const s = 1000;
+  const m = 60 * s;
+  const h = 60 * m;
+  assert.equal(msUntilNextMarkBoundary(NY, nyAt(6, 59)), 1 * m); // to 7:00
+  assert.equal(msUntilNextMarkBoundary(NY, nyAt(7, 0)), 12 * h); // on a boundary: the next one
+  assert.equal(msUntilNextMarkBoundary(NY, nyAt(18, 59)), 1 * m); // to 19:00
+  assert.equal(msUntilNextMarkBoundary(NY, nyAt(19, 0)), 12 * h); // to 7:00 tomorrow
+  assert.equal(msUntilNextMarkBoundary(NY, nyAt(23, 0)), 8 * h);
+  assert.equal(msUntilNextMarkBoundary(TOKYO, tokyoAt(6, 59)), 1 * m);
+  assert.equal(msUntilNextMarkBoundary(TOKYO, tokyoAt(19, 0)), 12 * h);
+  // Sub-second remainder is taken off, so the timer lands on the boundary.
+  const justBefore = new Date(nyAt(6, 59).getTime() + 250);
+  assert.equal(msUntilNextMarkBoundary(NY, justBefore), 1 * m - 250);
+});

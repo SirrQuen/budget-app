@@ -12,19 +12,32 @@ import { todayInZone } from "@/lib/date";
 
 export type TimeBand = "morning" | "afternoon" | "evening" | "night";
 
+/** The wall clock in `timeZone` (hour 0-23); UTC if the zone is unknown. */
+export function wallClockInZone(
+  timeZone: string | null,
+  now: Date,
+): { hour: number; minute: number; second: number } {
+  const read = (zone: string) => {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: zone,
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+      hourCycle: "h23",
+    }).formatToParts(now);
+    const get = (type: string) => Number(parts.find((p) => p.type === type)!.value);
+    return { hour: get("hour"), minute: get("minute"), second: get("second") };
+  };
+  try {
+    return read(timeZone ?? "UTC");
+  } catch {
+    return read("UTC");
+  }
+}
+
 /** The wall-clock hour (0-23) in `timeZone`; UTC if it's unknown. */
 export function hourInZone(timeZone: string | null, now: Date): number {
-  const format = (zone: string) =>
-    Number(
-      new Intl.DateTimeFormat("en-US", { timeZone: zone, hour: "numeric", hourCycle: "h23" })
-        .formatToParts(now)
-        .find((p) => p.type === "hour")!.value,
-    );
-  try {
-    return format(timeZone ?? "UTC");
-  } catch {
-    return format("UTC");
-  }
+  return wallClockInZone(timeZone, now).hour;
 }
 
 /**
@@ -76,4 +89,37 @@ export function monthInZone(timeZone: string | null, now: Date): number {
 
 export function seasonAt(timeZone: string | null, now: Date): Season {
   return seasonForMonth(monthInZone(timeZone, now));
+}
+
+// The dashboard flower (components/DayNightMark.tsx): open 7:00am-6:59pm,
+// folded 7:00pm-6:59am, on the SAME hour as the glow above -- the user's
+// stored zone, never the browser's clock. These hours are the flower's own;
+// they are not the greeting's bands.
+export type MarkState = "open" | "folded";
+
+export const MARK_DAY_START = 7;
+export const MARK_NIGHT_START = 19;
+
+export function markStateForHour(hour: number): MarkState {
+  return hour >= MARK_DAY_START && hour < MARK_NIGHT_START ? "open" : "folded";
+}
+
+export function markStateAt(timeZone: string | null, now: Date): MarkState {
+  return markStateForHour(hourInZone(timeZone, now));
+}
+
+/**
+ * Milliseconds until the wall clock in `timeZone` next reads 7:00 or 19:00.
+ * Always positive: exactly on a boundary, the answer is the one after it. A
+ * daylight-saving change can make the real wait an hour off for that one
+ * night; the caller re-reads the state when the timer fires and re-arms, so
+ * it only ever lands early or late once.
+ */
+export function msUntilNextMarkBoundary(timeZone: string | null, now: Date): number {
+  const { hour, minute, second } = wallClockInZone(timeZone, now);
+  const secondsIntoDay = hour * 3600 + minute * 60 + second;
+  const day = 24 * 3600;
+  const next =
+    [MARK_DAY_START * 3600, MARK_NIGHT_START * 3600].find((b) => b > secondsIntoDay) ?? MARK_DAY_START * 3600 + day;
+  return (next - secondsIntoDay) * 1000 - now.getUTCMilliseconds();
 }

@@ -3,34 +3,7 @@
 import { useEffect, useState } from "react";
 import { SorrelFlower } from "@/components/SorrelFlower";
 import { takeSignInFold } from "@/lib/welcomeSignals";
-
-type MarkState = "open" | "folded";
-
-const DAY_START = 7; // 7:00am -- open
-const NIGHT_START = 19; // 7:00pm -- folded
-
-// Always the browser's local clock. This component only decides state after
-// mount, so the server's timezone never gets a say.
-function stateForHour(now: Date): MarkState {
-  const h = now.getHours();
-  return h >= DAY_START && h < NIGHT_START ? "open" : "folded";
-}
-
-// Milliseconds until the next 7:00 or 19:00, local time. Built with the Date
-// constructor rather than adding hours, so a DST change lands on the wall
-// clock boundary rather than an hour either side of it.
-function msUntilNextBoundary(now: Date): number {
-  const next = new Date(now);
-  next.setMinutes(0, 0, 0);
-  const h = now.getHours();
-  if (h < DAY_START) next.setHours(DAY_START);
-  else if (h < NIGHT_START) next.setHours(NIGHT_START);
-  else {
-    next.setDate(next.getDate() + 1);
-    next.setHours(DAY_START);
-  }
-  return next.getTime() - now.getTime();
-}
+import { markStateAt, msUntilNextMarkBoundary, type MarkState } from "@/lib/timeOfDay";
 
 // Fold runs --flower-fold-duration (820ms) plus two --flower-petal-stagger
 // (100ms) steps (app/globals.css, SORREL FLOWER).
@@ -38,24 +11,36 @@ const FOLD_MS = 1020;
 const HOLD_MS = 400;
 
 /**
- * The dashboard's Sorrel flower: open 7:00am-6:59pm, folded 7:00pm-6:59am,
- * flipping live when the clock crosses either boundary. Straight after
- * sign-in it plays fold -> hold -> reopen, then settles into the hour's
+ * The dashboard's Sorrel flower: open 7:00am-6:59pm, folded 7:00pm-6:59am
+ * in the user's stored zone (lib/timeOfDay.ts -- the same hour as the
+ * dashboard's glow), flipping live when that clock crosses either boundary.
+ * The server renders the state for its own hour, so there is no flash and
+ * nothing to guess on hydration. Straight after sign-in it plays fold -> hold -> reopen, then settles into the hour's
  * state -- unless the welcome bloom (components/WelcomeBloom.tsx) played
  * on this load, which supersedes it. Ambient only -- decorative to
  * assistive tech.
  */
-export function DayNightMark({ size = 56 }: { size?: number }) {
-  // null until mounted: the server can't know the viewer's local hour, and
-  // rendering a guessed state would either mismatch on hydration or animate
-  // into the real one on every page load at night.
-  const [state, setState] = useState<MarkState | null>(null);
+export function DayNightMark({
+  size = 56,
+  timeZone,
+  initialState,
+}: {
+  size?: number;
+  /** settings.timezone (getTimeZone()); null is UTC. */
+  timeZone: string | null;
+  /** markStateAt(timeZone, now), computed on the server for the first paint. */
+  initialState: MarkState;
+}) {
+  // The server already knows the hour in the stored zone, so the first
+  // paint is the right state. (A flower that mounts folded arrives folded:
+  // SorrelFlower only folds on a CHANGE.)
+  const [state, setState] = useState<MarkState>(initialState);
 
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
     let boundaryTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const settle = () => setState(stateForHour(new Date()));
+    const settle = () => setState(markStateAt(timeZone, new Date()));
 
     // A timer per boundary, re-armed on each fire. visibilitychange covers
     // the cases setTimeout can't: a sleeping laptop or a throttled
@@ -65,7 +50,7 @@ export function DayNightMark({ size = 56 }: { size?: number }) {
       boundaryTimer = setTimeout(() => {
         settle();
         arm();
-      }, msUntilNextBoundary(new Date()));
+      }, msUntilNextMarkBoundary(timeZone, new Date()));
     };
     const onVisible = () => {
       if (document.visibilityState === "visible") {
@@ -91,7 +76,9 @@ export function DayNightMark({ size = 56 }: { size?: number }) {
         // mount, so the layout's layout effect has always run by now; taken
         // even under reduced motion, so it can't play later.
         const offered = takeSignInFold(path);
-        const playSignIn = offered && !reduceMotion;
+        // At night the flower already arrived folded: there is no fold to
+        // play, and opening it just to close it again would be a blink.
+        const playSignIn = offered && !reduceMotion && markStateAt(timeZone, new Date()) === "open";
         if (!playSignIn) {
           settle();
           return;
@@ -119,11 +106,11 @@ export function DayNightMark({ size = 56 }: { size?: number }) {
       clearTimeout(boundaryTimer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [timeZone]);
 
   return (
     <span aria-hidden="true" className="block shrink-0" style={{ width: size, height: size }}>
-      {state ? <SorrelFlower size={size} state={state} /> : null}
+      <SorrelFlower size={size} state={state} />
     </span>
   );
 }
