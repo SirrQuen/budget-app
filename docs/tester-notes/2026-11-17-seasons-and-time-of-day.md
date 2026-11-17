@@ -1,7 +1,7 @@
 Sent:      not yet
 Migration: none
 Merge:     e1db401 (feat/motion-and-delight-d)
-Deployed:  not yet
+Deployed:  2026-11-17
 
 ---
 
