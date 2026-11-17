@@ -14,9 +14,11 @@ Goals now grow.
 - **Your goal is a stem with leaves.** The bar has a leaf at a quarter,
   halfway and three-quarters. A leaf fills in the moment your progress
   passes it.
-- **It moves when something changes, not when you open the page.** Add a
-  contribution and the bar grows to the new spot. Reload and it just sits
-  there.
+- **It moves when something changes, not every time you open the page.**
+  Add a contribution and the bar grows to the new spot. Come back after
+  progress has changed and it grows from where you last saw it, once.
+  Reload with nothing new and it just sits there. Passing a quarter, half
+  or three-quarters also says so, in a short line.
 - **A goal that follows a card can ease back** when the card's balance goes
   up. The bar shrinks quietly and the line still reads what's left to go.
 - **Finishing a goal** still blooms once. After that the open flower sits

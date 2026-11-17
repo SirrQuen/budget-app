@@ -1,13 +1,28 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { GoalStem } from "@/components/ui/GoalStem";
+import { Celebration } from "@/components/ui/Celebration";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Database } from "@/lib/database.types";
 
 type GoalProgressRow = Database["public"]["Views"]["v_goal_progress"]["Row"];
 
 export function GoalMeters({ goals }: { goals: GoalProgressRow[] }) {
+  // GoalStem announces a crossed milestone to screen readers itself; this is
+  // the visible banner.
+  const [milestone, setMilestone] = useState<string | null>(null);
+  const timeout = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => () => clearTimeout(timeout.current), []);
+
+  function announce(message: string) {
+    setMilestone(message);
+    clearTimeout(timeout.current);
+    timeout.current = setTimeout(() => setMilestone(null), 1800);
+  }
+
   return (
     <section className="h-full rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
       <div className="mb-4 flex items-baseline justify-between gap-2">
@@ -24,6 +39,8 @@ export function GoalMeters({ goals }: { goals: GoalProgressRow[] }) {
         {goals.map((g) => (
           <li key={g.goal_id}>
             <GoalStem
+              goalId={g.goal_id ?? ""}
+              onMilestone={announce}
               goalName={g.goal_name ?? "This goal"}
               value={g.pct_complete ?? 0}
               toGo={g.remaining_amount ?? null}
@@ -41,6 +58,12 @@ export function GoalMeters({ goals }: { goals: GoalProgressRow[] }) {
           </li>
         ))}
       </ul>
+
+      {milestone ? (
+        <div className="mt-4" aria-hidden="true">
+          <Celebration show message={milestone} icon="✦" />
+        </div>
+      ) : null}
 
     </section>
   );

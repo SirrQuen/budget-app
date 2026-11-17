@@ -79,6 +79,9 @@ export function GoalRow({
     contributeToGoalAction,
     undefined,
   );
+  const [milestoneCelebrate, setMilestoneCelebrate] = useState(false);
+  const [milestoneMessage, setMilestoneMessage] = useState("");
+  const milestoneTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [celebrate, setCelebrate] = useState(false);
   const [celebrateMessage, setCelebrateMessage] = useState("");
   // Set only from a server action's response in this interaction -- the
@@ -110,6 +113,16 @@ export function GoalRow({
   }, [pending, state]);
 
   useEffect(() => () => clearTimeout(celebrateTimeout.current), []);
+  useEffect(() => () => clearTimeout(milestoneTimeout.current), []);
+
+  // The stem announces the milestone to screen readers itself; this is the
+  // visible banner.
+  function handleMilestone(message: string) {
+    setMilestoneMessage(message);
+    setMilestoneCelebrate(true);
+    clearTimeout(milestoneTimeout.current);
+    milestoneTimeout.current = setTimeout(() => setMilestoneCelebrate(false), 1800);
+  }
 
   const [editing, setEditing] = useState(false);
   const [choosingCard, setChoosingCard] = useState(false);
@@ -298,6 +311,8 @@ export function GoalRow({
       {archiveError ? <ErrorMessage message={archiveError} /> : null}
 
       <GoalStem
+        goalId={goal.goal_id ?? ""}
+        onMilestone={handleMilestone}
         goalName={goal.goal_name ?? "This goal"}
         value={pct}
         toGo={remaining}
@@ -446,6 +461,9 @@ export function GoalRow({
 
       {panel}
       <Celebration show={celebrate} message={celebrateMessage} icon="✦" />
+      <div aria-hidden="true">
+        <Celebration show={milestoneCelebrate} message={milestoneMessage} icon="✦" />
+      </div>
     </li>
   );
 }

@@ -424,6 +424,9 @@
   .goal-stem__fill {
     transition: transform 700ms var(--ease-out);
   }
+  .goal-stem__fill--instant {
+    transition: none;
+  }
   .goal-leaf--unfurl {
     animation: goal-leaf-unfurl 250ms var(--ease-spring) both;
   }
