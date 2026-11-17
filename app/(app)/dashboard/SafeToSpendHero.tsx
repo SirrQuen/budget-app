@@ -24,6 +24,10 @@ import {
 } from "@/lib/format";
 import { ChevronDownIcon, PlusIcon } from "@/components/ui/icons";
 import { AmountBasisTag } from "@/components/AmountBasisTag";
+import { RunwayDialog } from "./RunwayDialog";
+
+const heroLink =
+  "inline-flex min-h-11 items-center rounded-full px-2 text-sm font-medium text-ink-secondary underline-offset-2 transition-colors duration-150 hover:text-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 
 // A projection or a real payday gets the weekday ("Friday 3 October" -- a
 // date worth checking against your own bank); the end-of-month fallback
@@ -168,6 +172,8 @@ function figureText(value: number): string {
 // below zero never turns red or grows a warning icon.
 export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
   const [open, setOpen] = useState(false);
+  // The runway (F1) or the question alone (F2). Mounted only while open.
+  const [runway, setRunway] = useState<"runway" | "whatif" | null>(null);
   const panelId = useId();
 
   // The figure rolls only when it CHANGES while on screen (a paycheck
@@ -210,6 +216,19 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
           }`}
         />
       </button>
+
+      {/* The runway and "What if…" (docs/Decide-and-Grow.md, F1 and F2):
+          the figure drawn day by day, and the question asked against it.
+          Siblings of the card's button, never inside it. */}
+      <div className="-mt-2 flex flex-wrap gap-1 px-3 pb-3">
+        <button type="button" onClick={() => setRunway("runway")} className={heroLink}>
+          See your runway
+        </button>
+        <button type="button" onClick={() => setRunway("whatif")} className={heroLink}>
+          What if…
+        </button>
+      </div>
+      {runway ? <RunwayDialog data={data} startWith={runway} onClose={() => setRunway(null)} /> : null}
 
       {/* No usable paycheck: the one prompt to fix that, visible without
           opening the breakdown. A paycheck paying outside the set needs

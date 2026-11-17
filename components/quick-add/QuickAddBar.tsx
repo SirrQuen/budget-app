@@ -36,6 +36,7 @@ import { logAgainPrefill, recentCombinations, recentPrefill, type RecentRow } fr
 import type { FollowedGoal, GoalOption } from "@/lib/db/goals";
 import type { SameMoneyPair } from "@/lib/goalLinks";
 import { SameMoneyQuestion } from "@/components/SameMoneyQuestion";
+import { OPEN_ADD_FORM_EVENT, type OpenAddFormDetail } from "@/lib/quickAdd/openAddForm";
 
 export function QuickAddBar({
   accounts,
@@ -270,6 +271,21 @@ export function QuickAddBar({
     }
     document.addEventListener("keydown", handleGlobalKeydown);
     return () => document.removeEventListener("keydown", handleGlobalKeydown);
+  }, []);
+
+  // "Log it" from "Can I afford it?" (lib/quickAdd/openAddForm.ts): the
+  // full form, filled in. Saving is still its own tap, through this bar's
+  // ordinary save.
+  useEffect(() => {
+    function handleOpenAddForm(e: Event) {
+      const detail = (e as CustomEvent<OpenAddFormDetail>).detail;
+      if (!detail) return;
+      detail.handled = true;
+      setFullFormPrefill(detail.prefill);
+      setFullFormOpen(true);
+    }
+    window.addEventListener(OPEN_ADD_FORM_EVENT, handleOpenAddForm);
+    return () => window.removeEventListener(OPEN_ADD_FORM_EVENT, handleOpenAddForm);
   }, []);
 
   function openFullForm() {

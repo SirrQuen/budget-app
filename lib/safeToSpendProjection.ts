@@ -187,6 +187,10 @@ export type ProjectedDay = {
   low: number;
   /** After its income -- what the next day opens on. */
   end: number;
+  /** What comes out that day, each with its source ids -- the runway's doors. */
+  out: ProjectedObligation[];
+  /** What lands that day, likewise. */
+  income: ProjectedIncome[];
 };
 
 export type HorizonReason =
@@ -258,6 +262,12 @@ export type SafeToSpendProjection = {
   incomes: ProjectedIncome[];
   /** max(0, trough - cushion - goalHold). */
   safeToSpend: number;
+  /**
+   * trough - cushion - goalHold, before the $0 floor -- negative when the
+   * floor applies. Computed beside the floor, its one home, so nothing
+   * downstream re-derives it. "Can I afford it?" fits when this is >= 0.
+   */
+  signedSafeToSpend: number;
   /** Set when the trough itself goes below zero -- how far, and when. */
   shortfall: { amount: number; date: string } | null;
   /** safeToSpend spread over daysRemaining; null when safeToSpend is 0. */
@@ -645,7 +655,8 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
   const goalHoldCents = goalHolds.reduce((sum, g) => sum + toCents(g.amount), 0);
   // Flat, like the cushion -- not pro-rated by horizon. The episodes below
   // still measure against the cushion alone.
-  const safeCents = Math.max(0, troughCents - cushionCents - goalHoldCents);
+  const signedCents = troughCents - cushionCents - goalHoldCents;
+  const safeCents = Math.max(0, signedCents);
   const daysRemaining = daysBetweenInclusive(today, horizonEnd);
 
   return {
@@ -662,6 +673,7 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
     obligations,
     incomes,
     safeToSpend: toDollars(safeCents),
+    signedSafeToSpend: toDollars(signedCents),
     shortfall: troughCents < 0 ? { amount: toDollars(-troughCents), date: troughDate } : null,
     perDay: safeCents > 0 ? safeCents / daysRemaining / 100 : null,
     unconfirmedIncome,
@@ -673,7 +685,13 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
       ),
       payAtLow: incomes.some((i) => i.recurringId !== null && atLow.has(i.recurringId)),
     },
-    daily: days.map((d) => ({ date: d.date, low: toDollars(d.lowCents), end: toDollars(d.endCents) })),
+    daily: days.map((d) => ({
+      date: d.date,
+      low: toDollars(d.lowCents),
+      end: toDollars(d.endCents),
+      out: d.out,
+      income: d.income,
+    })),
   };
 }
 

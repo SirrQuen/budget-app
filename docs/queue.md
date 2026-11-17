@@ -90,7 +90,11 @@ before-deploy) for the next What's new card. Raised 2026-11-17.
     read, celebrated once per device (localStorage); nothing stored in the
     database.
 19. **Batch F -- the runway + "Can I afford it?"** Opus. Phase 1 (one report
-    for F, G and H) given 2026-11-17; waits on Matt's rulings.
+    for F, G and H) given 2026-11-17; ruled the same day. Built on
+    `feat/runway-what-if` 2026-11-17, verified on sorrel-dev; not merged.
+    No migration. Open question for Matt: the runway opens from "See your
+    runway" under the card, not from tapping the figure (which still opens
+    the breakdown).
 20. **Batch G -- onboarding that grows.** Opus. After F; before any new
     testers.
 21. **Batch H -- goal pace.** Opus. After G.
@@ -122,6 +126,9 @@ docs/tester-notes/README.md). Move a line out when it's sent.
   docs/tester-notes/2026-11-18-month-recap.md. No number moves. Names the
   goal-funding-schedule gap (auto-link queued). Next What's new card. Not
   before-deploy.
+- Batch F, the runway and "What if…" (no migration, `feat/runway-what-if`,
+  not merged): draft in docs/tester-notes/2026-11-17-runway-and-what-if.md.
+  No number moves. Next What's new card. Not before-deploy.
 - Motion batch D, seasons and time of day (merged `e1db401`, deployed 2026-11-17): draft in
   docs/tester-notes/2026-11-17-seasons-and-time-of-day.md. No number moves. Next What's new
   card. Not before-deploy.

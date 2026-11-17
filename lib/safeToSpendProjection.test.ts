@@ -559,7 +559,46 @@ test("income and an obligation on the same day -> the obligation is applied firs
   assert.deepEqual(result.shortfall, { amount: 200, date: day(5) });
   assert.equal(result.safeToSpend, 0);
   const payday = result.daily.find((d) => d.date === day(5));
-  assert.deepEqual(payday, { date: day(5), low: -200, end: 1300 });
+  assert.ok(payday);
+  assert.deepEqual({ date: payday.date, low: payday.low, end: payday.end }, { date: day(5), low: -200, end: 1300 });
+  // Each day carries its own items, with their source ids -- the runway's doors.
+  assert.deepEqual(
+    payday.out.map((o) => [o.name, o.recurringId, o.amount]),
+    [["Car payment", "Car payment", 1200]],
+  );
+  assert.deepEqual(
+    payday.income.map((i) => [i.name, i.recurringId, i.amount]),
+    [["Paycheck", "Paycheck", 1500]],
+  );
+});
+
+test("daily: every obligation and income appears on exactly its own day", () => {
+  const result = run([paycheck, rent]);
+  const outs = result.daily.flatMap((d) => d.out.map((o) => [d.date, o.date, o.name]));
+  const ins = result.daily.flatMap((d) => d.income.map((i) => [d.date, i.date, i.name]));
+  assert.deepEqual(outs.map(([d, o]) => d === o), outs.map(() => true));
+  assert.deepEqual(ins.map(([d, i]) => d === i), ins.map(() => true));
+  assert.equal(outs.length, result.obligations.length);
+  assert.equal(ins.length, result.incomes.length);
+});
+
+test("signedSafeToSpend: the figure before the $0 floor, beside it", () => {
+  // Worked case: 1700 - 300 = 1400, the floor doesn't apply.
+  const fine = run([paycheck, rent]);
+  assert.equal(fine.signedSafeToSpend, 1400);
+  assert.equal(fine.safeToSpend, 1400);
+  // A $2,500 cushion: 1700 - 2500 = -800; the hero still floors at $0.
+  const floored = run([paycheck, rent], 2000, 2500);
+  assert.equal(floored.signedSafeToSpend, -800);
+  assert.equal(floored.safeToSpend, 0);
+  // Goal money comes off before the floor too: 1700 - 300 - 1500 = -100.
+  const withGoals = run([paycheck, rent], 2000, 300, [{ goalId: "g", name: "Japan", amount: 1500 }]);
+  assert.equal(withGoals.signedSafeToSpend, -100);
+  assert.equal(withGoals.safeToSpend, 0);
+  // Exactly zero is zero either way.
+  const exact = run([paycheck, rent], 2000, 1700);
+  assert.equal(exact.signedSafeToSpend, 0);
+  assert.equal(exact.safeToSpend, 0);
 });
 
 test("cushion larger than the trough -> hero is $0, never negative", () => {

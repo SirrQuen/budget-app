@@ -11,7 +11,6 @@ import { getBankHolidays } from "@/lib/db/holidays";
 import { paydayWindowEnd } from "@/lib/recurringSchedule";
 import type { NonBusinessDayRule } from "@/lib/businessDays";
 import {
-  projectSafeToSpend,
   type GoalHold,
   type ProjectedObligation,
   type ProjectionSchedule,
@@ -19,6 +18,8 @@ import {
   type SafeToSpendProjection,
 } from "@/lib/safeToSpendProjection";
 import { isSpendableAccountType } from "@/lib/safeToSpend";
+import { assembleSafeToSpend, type SafeToSpendInputs } from "@/lib/safeToSpendInputs";
+import { answerWhatIf, type WhatIfAnswer } from "@/lib/whatIf";
 import { isLiabilityAccountType } from "@/lib/accountOptions";
 import { listAccountBalances } from "@/lib/db/accounts";
 import {
@@ -895,6 +896,17 @@ async function getGoalMonthlyHolds(): Promise<DbResult<GoalHold[]>> {
 // No budget term: a category that is both budgeted and funded by a
 // recurring transaction would otherwise be counted twice.
 export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
+  const inputs = await getSafeToSpendInputs();
+  if (inputs.error !== null) {
+    return { data: null, error: inputs.error };
+  }
+  return { data: assembleSafeToSpend(inputs.data), error: null };
+}
+
+// Every read the hero's figure rests on, and nothing else -- the projection
+// itself runs in assembleSafeToSpend (lib/safeToSpendInputs.ts). Split out
+// so "Can I afford it?" (getWhatIf) projects from exactly the same inputs.
+export async function getSafeToSpendInputs(): Promise<DbResult<SafeToSpendInputs>> {
   const supabase = await createClient();
 
   const today = await getToday();
@@ -958,31 +970,42 @@ export async function getSafeToSpend(): Promise<DbResult<SafeToSpend>> {
     fallbackWindowEnd = today;
   }
 
-  // Summed in SQL (migration 47): active accounts in the spendable set.
-  const projection = projectSafeToSpend({
-    today,
-    cash: cashRes.data,
-    cushion: cushionRes.data.amount,
-    goalHolds: goalHoldsRes.data,
-    schedules: recurringRes.data,
-    futureTransactions: futureRes.data,
-    // A failed holiday read degrades to weekends-only -- not a reason to
-    // fail the hero.
-    holidays: holidaysRes.data ?? new Set<string>(),
-    fallbackWindowEnd,
-  });
-
   return {
     data: {
-      ...projection,
-      windowReason: projection.mode === "window" ? fallbackReason : null,
-      cushionIsDefault: cushionRes.data.isDefault,
-      nextIncome,
-      paycheck: paycheckState(incomeRes.data),
-      ...splitBySpendable(accountsRes.data),
+      projection: {
+        today,
+        // Summed in SQL (migration 47): active accounts in the spendable set.
+        cash: cashRes.data,
+        cushion: cushionRes.data.amount,
+        goalHolds: goalHoldsRes.data,
+        schedules: recurringRes.data,
+        futureTransactions: futureRes.data,
+        // A failed holiday read degrades to weekends-only -- not a reason to
+        // fail the hero.
+        holidays: holidaysRes.data ?? new Set<string>(),
+        fallbackWindowEnd,
+      },
+      context: {
+        fallbackReason,
+        cushionIsDefault: cushionRes.data.isDefault,
+        nextIncome,
+        paycheck: paycheckState(incomeRes.data),
+        ...splitBySpendable(accountsRes.data),
+      },
     },
     error: null,
   };
+}
+
+// "Can I afford it?" (docs/Decide-and-Grow.md, F2): the hero's inputs, read
+// once, projected again with a pretend expense (lib/whatIf.ts). Reads only:
+// nothing is written, logged or revalidated.
+export async function getWhatIf(cents: number, date: string): Promise<DbResult<WhatIfAnswer>> {
+  const inputs = await getSafeToSpendInputs();
+  if (inputs.error !== null) {
+    return { data: null, error: inputs.error };
+  }
+  return { data: answerWhatIf(inputs.data.projection, cents, date), error: null };
 }
 
 type AccountBalanceRow = Database["public"]["Views"]["v_account_balances"]["Row"];

@@ -1931,3 +1931,32 @@ body {
   border-radius: 1rem;
   transition: transform 200ms var(--ease-out);
 }
+
+/* The runway's draw (docs/Decide-and-Grow.md, F1): once per session, a mask
+   rect widens across the plot -- transform only (rule 8), on the signature
+   curve. Reduced motion never gets the class: the runway is drawn already. */
+@media (prefers-reduced-motion: no-preference) {
+  .runway-reveal {
+    transform-box: fill-box;
+    transform-origin: left center;
+    animation: runway-reveal 800ms var(--icon-anim-ease) both;
+  }
+  /* The selected day chip's ring. */
+  .whatif-chip {
+    transition: box-shadow 160ms var(--icon-anim-ease), background-color 160ms var(--icon-anim-ease);
+  }
+}
+@keyframes runway-reveal {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+/* A runway mark's focus ring: its hit target, outlined. */
+.runway-mark:focus-visible > rect:first-child {
+  stroke: var(--action);
+  stroke-width: 2;
+  rx: 6px;
+}
