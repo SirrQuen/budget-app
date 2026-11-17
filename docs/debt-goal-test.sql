@@ -23,19 +23,25 @@
 --   5  A $500 payment: owed $1,500, 25%, to go $1,500.
 --   6  $30 of interest logged: to go $1,530, 23.5% -- the true figure.
 --   7  A followed goal holds nothing in safe to spend.
---   8  Paying to zero completes it (once): 100%, to go $0.
+--   8  Paying to zero completes it (once): 100%, to go $0. In the gap
+--      before completed_at is written (owner clears it), the view still
+--      reads paid off -- is_paid_off, 100%, $0 to go -- never 100% alone.
 --   9  STICKY: a later charge doesn't reopen it, and editing that later
 --      charge doesn't either. The goal rests at 100%.
 --  10  Deleting the payment that completed it (dated before the
 --      completion day) reopens it.
---  11  Paying again completes it again.
+--  11  Paying again completes it again. A NEW charge dated on the
+--      completion day (as an import would add) reopens it, showing what's
+--      to go; paying that completes it again. Owing a cent reads 99.9%,
+--      never 100%.
 --  12  Unlinking a paid-off goal keeps it paid off: one carried-over
 --      contribution of the starting balance; target = history + that.
 --  13  Unlinking a goal part-way keeps "to go": a $1,000 loan, $300 paid,
 --      unlinks to $300 carried over and $700 to go.
 --  14  Changing a followed goal's type is refused until it's unlinked.
 --  15  Archiving the card unlinks its goal, keeping the number.
---  16  RLS: another user can't link my goal, or their goal to my card.
+--  16  RLS: another user can't link my goal, or their goal to my card,
+--      and calling sync_card_goal_completion() on my goal changes nothing.
 --  17  v_goal_progress and v_goal_monthly_holds carry production's ACL
 --      and are security_invoker.
 -- =====================================================================
@@ -112,6 +118,9 @@ declare
   p3      uuid := gen_random_uuid();
   p4      uuid := gen_random_uuid();
   p5      uuid := gen_random_uuid();
+  p6      uuid := gen_random_uuid();
+  p7      uuid := gen_random_uuid();
+  p8      uuid := gen_random_uuid();
   cat     uuid;
   charge  uuid;
   v       record;
@@ -202,6 +211,18 @@ begin
   select * into v from public.v_goal_progress where goal_id = g;
   perform pg_temp.rec('8 paid to zero: complete, 100%, $0 to go', 'true|100.0|0.00',
     (v.completed_at is not null)::text || '|' || v.pct_complete::text || '|' || v.remaining_amount::numeric(12,2)::text);
+  perform pg_temp.rec('8 is_paid_off', 'true', v.is_paid_off::text);
+
+  -- The gap: owing nothing, completed_at not yet written.
+  perform pg_temp.unbecome();
+  perform set_config('sorrel.goal_completion', 'on', true);
+  update public.goals set completed_at = null where id = g;
+  perform set_config('sorrel.goal_completion', '', true);
+  perform pg_temp.become(u);
+  select * into v from public.v_goal_progress where goal_id = g;
+  perform pg_temp.rec('8 the gap reads paid off, no date: is_paid_off, 100%, $0 to go, completed_at null',
+    'true|100.0|0.00|<null>',
+    v.is_paid_off::text || '|' || v.pct_complete::text || '|' || v.remaining_amount::numeric(12,2)::text || '|' || coalesce(v.completed_at::text, '<null>'));
 
   -- Recorded nine days ago, as if the completing payment were entered then
   -- (owner, through the completion gate), so "after the completion day"
@@ -240,6 +261,27 @@ begin
          (u, visa, 1590, 'Income',  current_date, 'Visa payoff, again', p3);
   select (completed_at is not null)::text into t from public.goals where id = g;
   perform pg_temp.rec('11 paying again completes it again', 'true', t);
+
+  -- A new charge dated on the completion day (today), as an import adds.
+  insert into public.transactions (userid, accountid, categoryid, amount, transaction_type, transaction_date, description)
+  values (u, visa, cat, 25, 'Expense', current_date, 'Imported charge');
+  select * into v from public.v_goal_progress where goal_id = g;
+  perform pg_temp.rec('11 a new charge dated on the completion day reopens it, showing what''s to go', '<null>|false|25.00',
+    coalesce(v.completed_at::text, '<null>') || '|' || v.is_paid_off::text || '|' || v.remaining_amount::numeric(12,2)::text);
+
+  -- Pay all but a cent: still not paid off, so never 100%.
+  insert into public.transactions (userid, accountid, amount, transaction_type, transaction_date, description, transfer_group_id)
+  values (u, chk,  24.99, 'Expense', current_date, 'Almost', p6),
+         (u, visa, 24.99, 'Income',  current_date, 'Almost', p6);
+  select * into v from public.v_goal_progress where goal_id = g;
+  perform pg_temp.rec('11 owing a cent reads 99.9%, not paid off', '99.9|false|0.01',
+    v.pct_complete::text || '|' || v.is_paid_off::text || '|' || v.remaining_amount::numeric(12,2)::text);
+
+  insert into public.transactions (userid, accountid, amount, transaction_type, transaction_date, description, transfer_group_id)
+  values (u, chk,  0.01, 'Expense', current_date, 'The cent', p7),
+         (u, visa, 0.01, 'Income',  current_date, 'The cent', p7);
+  select (completed_at is not null)::text into t from public.goals where id = g;
+  perform pg_temp.rec('11 paying the rest completes it again', 'true', t);
 
   -- 12 -----------------------------------------------------------------
   perform pg_temp.rec('12 unlinking a paid-off goal carries over the starting balance', '2000.00',
@@ -295,6 +337,28 @@ begin
   select count(*) into n from public.v_goal_progress where goal_id in (g, g_loan, g_arch);
   perform pg_temp.rec('16 another user sees none of my goals', '0', n::text);
   perform pg_temp.unbecome();
+
+  -- My followed goal, paid off, with completed_at cleared by the owner:
+  -- the other user calling the sync on it must not write it.
+  perform pg_temp.become(u);
+  perform public.link_goal_to_card(g_arch, loan);
+  insert into public.transactions (userid, accountid, amount, transaction_type, transaction_date, description, transfer_group_id)
+  values (u, chk,  700, 'Expense', current_date, 'Loan payoff', p8),
+         (u, loan, 700, 'Income',  current_date, 'Loan payoff', p8);
+  perform pg_temp.unbecome();
+  perform set_config('sorrel.goal_completion', 'on', true);
+  update public.goals set completed_at = null where id = g_arch;
+  perform set_config('sorrel.goal_completion', '', true);
+  perform pg_temp.become(other);
+  perform public.sync_card_goal_completion(g_arch, array[current_date], true);
+  perform pg_temp.unbecome();
+  select coalesce(completed_at::text, '<null>') into t from public.goals where id = g_arch;
+  perform pg_temp.rec('16 another user''s sync call writes nothing to my goal', '<null>', t);
+  perform pg_temp.become(u);
+  perform public.sync_card_goal_completion(g_arch, array[current_date], true);
+  perform pg_temp.unbecome();
+  select (completed_at is not null)::text into t from public.goals where id = g_arch;
+  perform pg_temp.rec('16 control: my own sync call completes it', 'true', t);
 end
 $$;
 

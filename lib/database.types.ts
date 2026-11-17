@@ -1303,6 +1303,7 @@ export type Database = {
           goal_type: string | null
           is_active: boolean | null
           is_on_track: boolean | null
+          is_paid_off: boolean | null
           last_contribution_date: string | null
           linked_account_name: string | null
           linked_at: string | null
@@ -1614,6 +1615,10 @@ export type Database = {
       }
     }
     Functions: {
+      account_balance_as_of: {
+        Args: { p_account_id: string; p_as_of: string }
+        Returns: number
+      }
       account_last_logged: {
         Args: never
         Returns: {
@@ -1886,6 +1891,10 @@ export type Database = {
       }
       spendable_cash_balance: { Args: never; Returns: number }
       suggested_safe_to_spend_cushion: { Args: never; Returns: number }
+      sync_card_goal_completion: {
+        Args: { p_goal_id: string; p_reassess: boolean; p_touched: string[] }
+        Returns: undefined
+      }
       undo_import: {
         Args: { p_import_id: string }
         Returns: {
@@ -1912,6 +1921,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      user_day: { Args: { p_at: string; p_userid: string }; Returns: string }
       username_is_available: { Args: { p_username: string }; Returns: boolean }
     }
     Enums: {

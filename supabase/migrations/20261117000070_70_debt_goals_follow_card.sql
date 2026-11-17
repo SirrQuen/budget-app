@@ -39,17 +39,23 @@
 --    goal is set by the write that leaves the card owing nothing as of the
 --    user's today (account_balance_as_of(card, today) >= 0). After that:
 --      - new activity dated AFTER the completion day never clears it;
---      - an EDIT or DELETE of a card transaction dated ON OR BEFORE the
---        completion day re-assesses it: still owing nothing as of that
---        day (counts_in_balance with p_as_of = the completion day) keeps
---        it; otherwise it clears -- and if the card owes nothing today,
---        it completes again, today.
+--      - any INSERT, EDIT or DELETE of a card transaction dated ON OR
+--        BEFORE the completion day (an import included) re-assesses it:
+--        still owing nothing as of that day (counts_in_balance with
+--        p_as_of = the completion day) keeps it; otherwise it clears --
+--        and if the card owes nothing today, it completes again, today.
+--        Re-opened, the goal simply shows what's to go, with no comment.
 --    No page render writes any of it. The completion day is completed_at
 --    in the user's zone (user_day), named explicitly because triggers can
 --    run outside a request (service role, scripts), where the session
 --    zone is UTC.
---    By ruling, a NEW transaction dated on or before the completion day
---    (an insert, not an edit) does not re-assess it.
+--    A new opening balance on the card can complete a goal, never reopen
+--    it: it isn't a transaction dated into the card's history.
+--
+--    The view never shows 100% without "paid off": a card that owes
+--    nothing whose completed_at isn't written yet (a future-dated payment
+--    whose day has come, with no write since) reads as paid off, no date
+--    (v_goal_progress.is_paid_off); the date appears once it's recorded.
 --
 -- 5. Unlinking keeps the number. unlink_goal_from_card() returns the goal
 --    to manual and writes the progress made while following as ONE
@@ -347,10 +353,11 @@ create trigger trg_transactions_refuse_followed_goal
 -- 8. Card completion
 -- ---------------------------------------------------------------------
 
--- Sets or re-assesses one followed goal's completion. p_touched are the
--- dates of the transaction rows this write changed; p_reassess says
--- whether this write may re-assess a completed goal at all (an edit or a
--- delete may; an insert, and a balance reset, may not -- by ruling).
+-- Sets or re-assesses one followed goal's completion. Takes no user id: it
+-- acts for the caller. p_touched are the dates of the transaction rows
+-- this write changed; p_reassess says whether this write may re-assess a
+-- completed goal at all (any transaction write may; a balance reset may
+-- not).
 create function public.sync_card_goal_completion(p_goal_id uuid, p_touched date[], p_reassess boolean)
 returns void
 language plpgsql
@@ -363,10 +370,16 @@ declare
   v_done_on date;
   v_next    timestamptz;
 begin
+  -- Scoped to the caller twice over: security invoker, so RLS hides
+  -- another user's goal; and explicitly to auth.uid(). auth.uid() is null
+  -- only outside a signed-in request (the table owner, service role
+  -- scripts), where there is no caller to scope to.
   select g.id, g.userid, g.accountid, g.completed_at
     into v_goal
     from public.goals g
-   where g.id = p_goal_id and g.tracking_method = 'LinkedAccount';
+   where g.id = p_goal_id
+     and g.tracking_method = 'LinkedAccount'
+     and (auth.uid() is null or g.userid = auth.uid());
   if not found then
     return;
   end if;
@@ -399,7 +412,7 @@ end;
 $$;
 
 comment on function public.sync_card_goal_completion(uuid, date[], boolean) is
-  'A goal following a card: completes when a write leaves the card owing nothing as of the user''s today. Sticky: re-assessed only when p_reassess (an edit or delete) touched a transaction dated on or before the completion day -- kept if the card owed nothing as of that day, else cleared (and completed again today if it owes nothing now). Migration 70.';
+  'A goal following a card: completes when a write leaves the card owing nothing as of the user''s today. Sticky: re-assessed only when p_reassess (any insert, edit or delete of a card transaction) touched a transaction dated on or before the completion day -- kept if the card owed nothing as of that day, else cleared (and completed again today if it owes nothing now). Acts for auth.uid() only (and RLS); search_path pinned. Migration 70.';
 
 -- The trigger functions call it as the user, so the user needs EXECUTE.
 -- Called directly it only ever re-derives the truth for the caller's own
@@ -428,14 +441,14 @@ begin
          case when tg_op in ('UPDATE', 'DELETE') then old.accountid end,
          case when tg_op in ('INSERT', 'UPDATE') then new.accountid end)
   loop
-    perform public.sync_card_goal_completion(v_goal_id, v_touched, tg_op <> 'INSERT');
+    perform public.sync_card_goal_completion(v_goal_id, v_touched, true);
   end loop;
   return null;
 end;
 $$;
 
 comment on function public.transactions_sync_card_goals() is
-  'AFTER INSERT/UPDATE/DELETE on transactions: a write on a card a goal follows syncs that goal''s completion (sync_card_goal_completion). Inserts can complete; edits and deletes can also re-assess (migration 70).';
+  'AFTER INSERT/UPDATE/DELETE on transactions: a write on a card a goal follows syncs that goal''s completion (sync_card_goal_completion): it can complete it, and a row dated on or before the completion day re-assesses it (migration 70).';
 
 revoke all on function public.transactions_sync_card_goals() from public, anon, authenticated;
 
@@ -617,10 +630,13 @@ create trigger trg_accounts_card_goals
 --
 -- 69's definition, with each figure read through one lateral `p`:
 -- manual goals exactly as before; a followed goal from its card. A
--- completed followed goal rests at 100% ("Paid off on <date>"): a later
--- charge doesn't reopen it, so it doesn't move its meter either.
+-- followed goal that is paid off rests at 100% with nothing to go:
+-- completed (a later charge doesn't reopen it, so it doesn't move its
+-- meter either), or owing nothing before completed_at is written. The
+-- meter is never 100% unless is_paid_off is true.
 -- New columns on the end: starting_balance, owed_amount (the card's
--- true figure, positive = owed), linked_account_name, linked_at.
+-- true figure, positive = owed), linked_account_name, linked_at,
+-- is_paid_off (null for a manual goal).
 -- ---------------------------------------------------------------------
 create or replace view public.v_goal_progress with (security_invoker = true) as
  SELECT g.id AS goal_id,
@@ -654,7 +670,8 @@ create or replace view public.v_goal_progress with (security_invoker = true) as
     g.starting_balance,
     p.owed AS owed_amount,
     b.account_name AS linked_account_name,
-    g.linked_at
+    g.linked_at,
+    o.paid_off AS is_paid_off
    FROM public.goals g
      LEFT JOIN LATERAL ( SELECT sum(m.amount) AS contributed,
             count(*) AS contribution_count,
@@ -667,29 +684,35 @@ create or replace view public.v_goal_progress with (security_invoker = true) as
             CASE
               WHEN g.tracking_method <> 'LinkedAccount' THEN NULL::numeric
               ELSE -COALESCE(b.balance, (0)::numeric)
-            END AS owed ) o
+            END AS owed,
+            CASE
+              WHEN g.tracking_method <> 'LinkedAccount' THEN NULL::boolean
+              ELSE (g.completed_at IS NOT NULL OR -COALESCE(b.balance, (0)::numeric) <= (0)::numeric)
+            END AS paid_off ) o
      CROSS JOIN LATERAL ( SELECT
             o.owed,
             CASE
               WHEN g.tracking_method <> 'LinkedAccount' THEN COALESCE(c.contributed, (0)::numeric)
-              WHEN g.completed_at IS NOT NULL THEN g.starting_balance
+              WHEN o.paid_off THEN g.starting_balance
               ELSE GREATEST(LEAST(g.starting_balance - o.owed, g.starting_balance), (0)::numeric)
             END AS contributed,
             CASE
               WHEN g.tracking_method <> 'LinkedAccount'
                 THEN GREATEST((g.target_amount - COALESCE(c.contributed, (0)::numeric)), (0)::numeric)
-              WHEN g.completed_at IS NOT NULL THEN (0)::numeric
+              WHEN o.paid_off THEN (0)::numeric
               ELSE GREATEST(o.owed, (0)::numeric)
             END AS remaining,
             CASE
               WHEN g.tracking_method <> 'LinkedAccount'
                 THEN LEAST((COALESCE(c.contributed, (0)::numeric) / NULLIF(g.target_amount, (0)::numeric)), (1)::numeric)
-              WHEN g.completed_at IS NOT NULL THEN (1)::numeric
-              ELSE GREATEST(LEAST(((g.starting_balance - o.owed) / g.starting_balance), (1)::numeric), (0)::numeric)
+              WHEN o.paid_off THEN (1)::numeric
+              -- Owing anything at all, the meter stops short of 100%:
+              -- 100% means paid off.
+              ELSE LEAST(GREATEST(((g.starting_balance - o.owed) / g.starting_balance), (0)::numeric), 0.999)
             END AS ratio ) p;
 
 comment on view public.v_goal_progress is
-  'Per goal: progress from its goal money (v_goal_money, 69) -- or, for a debt payoff goal following a card (migration 70), from the card: owed_amount is what it owes now, remaining_amount the amount to go, pct_complete (starting_balance - owed) / starting_balance clamped 0..100. A completed followed goal rests at 100%.';
+  'Per goal: progress from its goal money (v_goal_money, 69) -- or, for a debt payoff goal following a card (migration 70), from the card: owed_amount is what it owes now, remaining_amount the amount to go, pct_complete (starting_balance - owed) / starting_balance clamped 0..100. is_paid_off: completed, or owing nothing before completed_at is written -- the only state at 100%.';
 
 revoke all on table public.v_goal_progress from public, anon, authenticated, service_role;
 grant select, references, trigger, truncate, maintain on table public.v_goal_progress to authenticated;

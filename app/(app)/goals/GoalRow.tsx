@@ -252,7 +252,7 @@ export function GoalRow({
               goalId={goal.goal_id ?? ""}
               goalName={goalName}
               cardName={cardName}
-              paidOff={completedOn !== null}
+              paidOff={goal.is_paid_off === true}
               carried={contributed}
               toGo={remaining}
               onCompleted={setCompletion}
@@ -333,10 +333,12 @@ export function GoalRow({
               {formatCurrency(contributed)} of {formatCurrency(goal.starting_balance ?? 0)} paid off
             </span>
             <span className="text-ink-secondary">
-              {completedOn ? (
+              {/* Paid off is the only state at 100% (v_goal_progress.is_paid_off):
+                  the date appears once completion is recorded. */}
+              {goal.is_paid_off ? (
                 <span className="inline-flex items-center gap-1">
                   <CheckIcon className="h-4 w-4" aria-hidden="true" />
-                  Paid off on {formatDate(completedOn)}
+                  {completedOn ? `Paid off on ${formatDate(completedOn)}` : "Paid off"}
                 </span>
               ) : (
                 `${formatCurrency(remaining)} to go`

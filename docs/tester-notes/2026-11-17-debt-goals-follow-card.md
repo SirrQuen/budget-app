@@ -20,8 +20,10 @@ itself by what the card owes in Sorrel:
 - **The meter runs from what the card owed when you linked it**, so it
   starts at 0% and fills as the balance falls.
 - **When the card reaches zero, the goal is paid off**, and stays paid off:
-  using the card again later doesn't undo it. Only changing or deleting the
-  payments that got it to zero can.
+  using the card again later doesn't undo it. Only a change to the card's
+  history up to that day can -- editing or deleting a payment that got it
+  there, or adding an earlier charge (an import, say). Then the goal shows
+  what's to go again.
 - **Interest is only in Sorrel when it's in Sorrel**: logged, imported with
   a statement, or the card's balance updated.
 - Payments you'd already logged on the goal stay in its history. **Stop
