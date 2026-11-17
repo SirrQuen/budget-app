@@ -92,9 +92,9 @@ before-deploy) for the next What's new card. Raised 2026-11-17.
 19. **Batch F -- the runway + "Can I afford it?"** Opus. Phase 1 (one report
     for F, G and H) given 2026-11-17; ruled the same day. Built on
     `feat/runway-what-if` 2026-11-17, verified on sorrel-dev; not merged.
-    No migration. Open question for Matt: the runway opens from "See your
-    runway" under the card, not from tapping the figure (which still opens
-    the breakdown).
+    No migration. Ruled 2026-11-17: the figure keeps opening the breakdown;
+    the runway opens from "See your runway" under the card and inside the
+    breakdown, not from the figure (the spec's F1 said the figure).
 20. **Batch G -- onboarding that grows.** Opus. After F; before any new
     testers.
 21. **Batch H -- goal pace.** Opus. After G.

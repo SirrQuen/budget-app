@@ -379,6 +379,11 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
             <p className="mt-2 text-xs text-ink-muted">{cautionLine(data.cautious)}</p>
           ) : null}
 
+          {/* The same figure, drawn day by day (F1). */}
+          <button type="button" onClick={() => setRunway("runway")} className={`${heroLink} mt-2 -ml-2`}>
+            See your runway
+          </button>
+
           <WhatsAheadBlock data={data} />
 
           {/* Expected income is context, never part of the breakdown's

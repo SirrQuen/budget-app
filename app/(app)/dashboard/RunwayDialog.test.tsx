@@ -383,3 +383,18 @@ test("Log it from inside the runway closes the runway too, so the add form isn't
     g.fetch = realFetch;
   }
 });
+
+test("the breakdown has its own See your runway, and the figure still opens the breakdown", async () => {
+  const container = await renderHero(safeToSpend());
+  const toggle = container.querySelector("button[aria-expanded]") as HTMLButtonElement;
+  await act(async () => toggle.click());
+  assert.equal(toggle.getAttribute("aria-expanded"), "true");
+  assert.equal(container.querySelector("dialog"), null, "the figure opens the breakdown, not the runway");
+  const panel = document.getElementById(toggle.getAttribute("aria-controls") ?? "");
+  assert.ok(panel);
+  const inside = [...panel.querySelectorAll("button")].find((b) => b.textContent?.trim() === "See your runway");
+  assert.ok(inside, "no See your runway inside the breakdown");
+  await act(async () => (inside as HTMLButtonElement).click());
+  assert.ok(container.querySelector("dialog")?.hasAttribute("open"));
+  await closeRunway(container);
+});
