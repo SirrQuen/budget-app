@@ -106,11 +106,7 @@ Polish on the existing dnd-kit drag:
 
 ### 7 · The mark, alive (size M)
 
-- **Launch bloom: already exists, nothing to build.** `WelcomeBloom` plays the
-  bloom on the first sign-in of the day (and after email confirmation), gated
-  until the dashboard is ready -- by Matt's decision (2026-11-16). No session
-  bloom, no breathing: the mark stays static per CLAUDE.md. Do not
-  reintroduce either.
+- **Launch bloom:** on a cold start only (once per session, kept in a session cookie), the mark blooms as in the Brand Kit: three leaflets, 900ms, staggered 110ms. It must **never delay the dashboard.** If loading takes longer than 600ms, the flower breathes (scale 1 to 1.035 over 5s). **Never a spinner.**
 - **Brand rules:** any glow sits behind the mark, never on it. The mark is coral, white or ink only, and flat coral below 24px.
 - **App icons:** primary (gradient mark on ink, with a faint warm glow behind), gold (white mark on a gold gradient), light (ink mark on `#F4F1F5`), and flat coral on ink for small sizes.
 - **Home screen:** first report whether the app has a web app manifest and icons. Use Next.js's built-in file conventions (`app/manifest.ts`, `app/icon`, `app/apple-icon`, with `ImageResponse` from `next/og` if PNGs need generating) and **no new dependency.** Sizes 180, 192 and 512.
@@ -156,7 +152,7 @@ Polish on the existing dnd-kit drag:
 | Batch | Steps | Model | When |
 |---|---|---|---|
 | **A** | 0, 1, 2, 3, 4, 6 | Sonnet | After goal links (69) merges |
-| **B** | 7 (icons and manifest only; the bloom exists) | Sonnet | After A |
+| **B** | 7 | Sonnet | After A |
 | **C** | 5 | Sonnet | After debt goals (70) merges, because it changes the goal cards that 70 touches |
 | **D** | 8 | Sonnet | After C |
 | **E** | 9 | **Opus** | After D. It computes money figures and has privacy rules |
@@ -164,6 +160,10 @@ Polish on the existing dnd-kit drag:
 All of these are user-visible, so each batch adds lines to the next **What's new** card, with a new dated cookie.
 
 ---
+
+## Prompts
+
+Batches C to E get their prompts when their turn comes. Each depends on work that isn't finished yet (debt goals, goal links), so its prompt is written from the state the code is actually in at that point.
 
 ## Prompt for batch A
 
@@ -202,4 +202,116 @@ VERIFY, in the browser on dev (I'll sign in for you):
   - tsc, eslint, full npm test.
 Add a tester note (Sent: not yet, not before-deploy) for the next
 What's new card. Report, then stop. Don't merge.
+```
+
+## Prompt for batch B
+
+```
+Batch B: step 7 of docs/Motion-and-Delight.md (The mark, alive). Own
+branch off main.
+
+PRECONDITION: batch A (feat/motion-and-delight-a) is merged into main.
+If it isn't, stop and tell me.
+
+REPORT FIRST, then build:
+  - Does the app have a web app manifest, favicon/icon files, or an
+    apple-touch-icon today? Where?
+  - Where does the Sorrel mark's SVG live (SorrelMark.tsx)? Use THAT
+    path for every icon — never redraw the mark.
+
+BUILD:
+1. LAUNCH BLOOM — cold start only:
+   - The Brand Kit bloom: three leaflets, 900ms, staggered 110ms, using
+     the motion tokens from batch A.
+   - Once per browser session: a session cookie set by the client AFTER
+     it plays. Nothing written by a render, nothing in the database.
+   - It must NEVER delay the dashboard. The bloom overlays or precedes
+     content that is already loading, and content shows the moment it's
+     ready.
+   - If loading passes 600ms, the flower breathes (scale 1 -> 1.035 over
+     5s). NEVER a spinner anywhere this replaces one.
+   - Reduced motion: the mark appears still, no bloom, no breathing.
+2. APP ICONS, from the real mark:
+   - Primary: gradient mark on ink (#0B0B12) with a faint warm glow
+     BEHIND the mark, never on it.
+   - Light: ink mark on #F4F1F5.
+   - Small sizes (under 24px): flat coral, no gradient.
+   - Gold variant: build it but don't wire it anywhere; it's for
+     marketing.
+3. HOME SCREEN: Next.js built-in conventions only — app/manifest.ts,
+   app/icon, app/apple-icon, ImageResponse from next/og if PNGs must be
+   generated. Sizes 180, 192, 512. NO new dependency. The apple icon has
+   a solid background (iOS fills transparency with black). Manifest
+   name "Sorrel", theme and background colour from the app's existing
+   ink token.
+
+VERIFY (I'll sign you in on dev):
+  - A new browser session shows the bloom once; navigating and reloading
+    in the same session don't.
+  - Time until dashboard content appears is the same with and without
+    the bloom. Report both numbers.
+  - A slow load (throttle the network) shows breathing, no spinner.
+  - Reduced motion forced on: still mark, nothing moves.
+  - The manifest loads with no errors in DevTools (Application tab),
+    and each icon size renders correctly.
+  - tsc, eslint, full npm test.
+Add a tester note (Sent: not yet, not before-deploy). Report, then
+stop. Don't merge.
+```
+
+## Prompt for batch C
+
+```
+Batch C: step 5 of docs/Motion-and-Delight.md (Goals that grow). Own
+branch off main. 
+
+PRECONDITION: migration 70 (debt goals that follow a card) is merged to
+main AND applied to production. If not, stop and tell me.
+
+REPORT FIRST, then build:
+  - Every place a goal meter renders (goals page, dashboard Goals card,
+    goal detail, anywhere else). They must all become ONE component.
+  - Which colour token CLAUDE.md allows for progress. The doc says gold;
+    CLAUDE.md wins. Tell me what you're using.
+
+BUILD — one GoalStem component:
+  - A 10px track with the fill drawn by transform: scaleX(), never
+    width. Colour from the token CLAUDE.md allows.
+  - Leaves at 25%, 50%, 75%: passed = solid, not yet passed = outline in
+    the muted text colour. A leaf unfurls once, 250ms with
+    --ease-spring, when the fill passes it ON A CHANGE (useValueChange).
+  - Going backwards (a debt goal after a new charge): the fill shrinks
+    calmly over the same 700ms, and a leaf it falls below simply returns
+    to outline with NO animation — nothing that reads as wilting or
+    loss. No red, no direction words. "To go" stays the only line.
+  - The fill grows over 700ms only when progress changes while on
+    screen. Never on page load or navigation.
+  - Completion: the existing SorrelFlower bloom, ONLY through the
+    existing completion paths (detectCompletion and
+    lib/goalCompletionCheck.ts). At rest: the open flower, static, beside
+    "Reached on <date>" or "Paid off on <date>" (debt goals). No new
+    bloom triggers.
+  - Accessibility: role="progressbar" with aria-valuenow/min/max and an
+    aria-valuetext like "72 percent, $560 to go". Leaves aria-hidden.
+  - Reduced motion: final state at once, no unfurl.
+  - Works identically for manual goals, goals with linked transactions,
+    and goals that follow a card.
+
+If anything needs a migration, a write-path change, or a change to how
+progress is calculated: STOP and tell me. This is display only.
+
+VERIFY (I'll sign you in on dev):
+  - Adding a contribution grows the meter on screen; reloading shows it
+    still, no animation.
+  - Crossing 50% unfurls that leaf once; a reload doesn't replay it.
+  - A charge on a followed card shrinks the meter calmly; the leaf it
+    drops below changes with no animation; no red anywhere.
+  - Completing a goal plays the bloom once; afterwards the resting
+    flower and date show.
+  - Reduced motion forced on: everything at its end state.
+  - A screen reader reads the progress text, not the leaves.
+  - Every meter location from your report uses the new component.
+  - tsc, eslint, full npm test. Delete anything you created on dev.
+Tester note (Sent: not yet, not before-deploy). Report, then stop.
+Don't merge.
 ```
