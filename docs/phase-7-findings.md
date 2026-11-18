@@ -592,6 +592,7 @@ Source: `docs/legal/privacy-and-terms.md` (rendered by `lib/legal.ts`).
   | `sorrel_signup_email` | sessionStorage, one-shot | check-your-email, `33191e8` (2026-10-20) | **no** |
   | `sorrel_runway_drawn` | sessionStorage | runway, `7fd0adb` (2026-11-17) | **no** |
   | `sorrel_payday_skipped` | cookie, 1 year; value is a hash of the user id | onboarding's skip, batch G (2026-11-17) | yes, written in ahead ("skipping a setup step") |
+  | `sorrel_bills_card_dismissed` | cookie, 30 days; value is a hash of the user id | the bills card's Dismiss, batch G addition (2026-11-17) | yes ("dismissing a card") |
 
   The cookie sentence now adds "remember small choices you make in the
   app, such as dismissing a card, answering 'not yet' to a question, or

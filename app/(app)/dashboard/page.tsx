@@ -23,9 +23,13 @@ import { getUser } from "@/lib/auth/dal";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { onboardingStep } from "@/lib/onboarding";
 import { PAYDAY_SKIP_COOKIE } from "@/lib/paydaySkip";
-import { paydaySkipToken, paydaySkipped } from "@/lib/paydaySkipToken";
+import { billsCardDismissToken, billsCardDismissed, paydaySkipToken, paydaySkipped } from "@/lib/paydaySkipToken";
 import { isSpendableAccountType } from "@/lib/safeToSpend";
 import { OnboardingFlow } from "./OnboardingFlow";
+import { BillsCard } from "./BillsCard";
+import { getBillsFormLists, getFirstAccountCreatedAt } from "@/lib/db/billsPrompt";
+import { addedBillKeys, billsCardVisible } from "@/lib/billsPrompt";
+import { BILLS_CARD_DISMISS_COOKIE } from "@/lib/billsCardDismiss";
 import { getBudgetsForMonth } from "@/lib/db/budgets";
 import { getAccountLastLogged, listAccountBalances } from "@/lib/db/accounts";
 import { getReturnSummaryFacts } from "@/lib/actions/activity";
@@ -195,7 +199,9 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     });
 
     if (step !== null) {
-      const categories = step === 2 ? await listCategoriesForType("Income") : null;
+      const [categories, billsLists] = step === 2
+        ? await Promise.all([listCategoriesForType("Income"), getBillsFormLists()])
+        : [null, null];
       const incomeCategories = (categories?.data ?? []).map((c) => ({ id: c.id, name: c.category_name }));
       const paychecks = incomeCategories.find((c) => c.name === "Paychecks/Salary");
       const accounts = (balancesResult.data ?? []).flatMap((a) =>
@@ -215,17 +221,47 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
             incomeCategories={incomeCategories}
             defaultCategoryId={paychecks?.id ?? null}
             skipToken={paydaySkipToken(userId)}
+            billsLists={billsLists}
           />
         </>
       );
     }
   }
 
+  // The bills card, for someone new who tapped "Later" at step 3 -- or
+  // anyone new still short of three bills (docs/Decide-and-Grow.md, G,
+  // addition). Derived: recurring expenses (category schedules, not
+  // transfers; v_upcoming_recurring holds active ones), the first account's
+  // age, and this user's dismiss cookie. Its lists load only when it shows.
+  const billsUser = await getUser();
+  const billsUserId = billsUser?.id ?? "";
+  const expenseScheduleNames = (recurringResult.data ?? [])
+    .filter((r) => r.category_type === "Expense" && r.to_accountid === null)
+    .map((r) => r.description ?? "");
+  const showBillsCard =
+    recurringResult.error === null &&
+    billsCardVisible({
+      firstAccountCreatedAt: await getFirstAccountCreatedAt(),
+      timeZone,
+      today,
+      expenseSchedules: expenseScheduleNames.length,
+      dismissed: billsCardDismissed((await cookies()).get(BILLS_CARD_DISMISS_COOKIE)?.value, billsUserId),
+    });
+  const billsCardLists = showBillsCard ? await getBillsFormLists() : null;
+  const billsCard = billsCardLists ? (
+    <BillsCard
+      lists={billsCardLists}
+      added={[...addedBillKeys(expenseScheduleNames)]}
+      dismissToken={billsCardDismissToken(billsUserId)}
+    />
+  ) : null;
+
   if (stage === "no-transactions") {
     return (
       <>
         <WelcomeReady />
         <NoTransactionsView
+          billsCard={billsCard}
           welcome={welcome}
           accounts={balancesResult.data ?? []}
           accountsError={balancesResult.error}
@@ -582,6 +618,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
           {/* Directly below the hero, never above it. Not part of the layout:
               not draggable and not hideable from the card menu. */}
           {showWhatsNew ? <WhatsNewCard /> : null}
+
+          {billsCard}
 
           <DashboardSections region="right-now" items={rightNowItems} />
         </section>

@@ -39,6 +39,16 @@ test("the skip is keyed to the user, by a hash -- never the id itself", async ()
   assert.equal(paydaySkipped("1", A), false);
 });
 
+test("the bills card's dismiss is keyed the same way, and differs from the skip", async () => {
+  const { billsCardDismissToken, billsCardDismissed, paydaySkipToken } = await import("./paydaySkipToken");
+  const token = billsCardDismissToken(A);
+  assert.match(token, /^[0-9a-f]{16}$/);
+  assert.notEqual(token, paydaySkipToken(A), "one choice never stands in for the other");
+  assert.equal(billsCardDismissed(token, A), true);
+  assert.equal(billsCardDismissed(token, B), false);
+  assert.equal(billsCardDismissed(undefined, A), false);
+});
+
 test("paydaySkipCookie: a year, site-wide, lax, secure on https", () => {
   assert.equal(
     paydaySkipCookie("abc", true),

@@ -36,6 +36,7 @@ export function NoTransactionsView({
   netWorth,
   netWorthError,
   safeToSpend,
+  billsCard = null,
 }: {
   welcome: string;
   accounts: AccountBalanceRow[];
@@ -44,6 +45,8 @@ export function NoTransactionsView({
   netWorthError: string | null;
   /** The figure onboarding's step 3 showed: the hero, from its own read. null when it didn't load. */
   safeToSpend: SafeToSpend | null;
+  /** The bills card (BillsCard), when it shows. */
+  billsCard?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-6">
@@ -52,6 +55,7 @@ export function NoTransactionsView({
       {/* The number onboarding ended on, here to stay. A failed read leaves
           it out: the full dashboard's section errors aren't on this view. */}
       {safeToSpend ? <SafeToSpendHero data={safeToSpend} /> : null}
+      {billsCard}
 
       {/* A failed read says so; it never just drops the figure. With the
           accounts list down too, that notice covers both. */}
