@@ -21,6 +21,10 @@ New to Sorrel? Getting started now takes three short screens.
   your pay landed; it never adds it on its own. If your pay isn't regular,
   you can skip this.
 - **Your number.** Your first Safe to spend, with "See how we got there"
-  to show the day-by-day runway behind it.
+  to show the day-by-day runway behind it. At this point it counts your
+  pay but no bills yet, so it says so: tap "Add your bills" to add rent,
+  your phone and the rest, and the number gets sharper. Choose "Later" and
+  the same choices wait on your dashboard for your first two weeks, until
+  you've added three or dismissed them.
 
 If you're already set up, nothing changes for you.
