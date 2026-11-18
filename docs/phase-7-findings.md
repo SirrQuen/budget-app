@@ -2478,3 +2478,39 @@ Linked, the figure stays $2,500. Unlinked transfers behave as before
 Not built, by ruling: auto-linking a goal-funding schedule's confirmed
 occurrences to its goal (docs/queue.md, Deferred). Until then a confirmed
 funding transfer moves the balance but not the goal's progress.
+
+## The RLS harness couldn't finish on dev from migration 62 on (2026-11-18)
+
+**Status: harness fixed on `batch-h-goal-pace`; ALL PASS on sorrel-dev
+2026-11-18 after migration 73 (Matt's run; row counts not recorded).
+Migration 73 on sorrel-dev only -- production not yet.** Raised 2026-11-18
+three times (batch H's harness runs on sorrel-dev).
+
+docs/rls-isolation-test.sql could not run to the end on sorrel-dev from
+the day migration 62 reached it (2026-11-09): section 8 inserted a row
+dated before its fixture account's balance date with no anchor answer
+(SRA01), and section 2d checked two function signatures 62 had dropped
+(`anchor_includes`' 4-argument form, `counts_toward_balance_preview`).
+The last recorded full pass was 273/273 on 2026-10-29 (migration 54).
+Migration 66's commit reported a pass on dev after 62; 69, 70 and 71
+added sections (2i, 2j, 2k) with no run result recorded. Those sections
+first ran on 2026-11-18 and found:
+
+- 2d: `transactions_sync_goal_completed_at()` executable by anon and
+  authenticated. An audit of every function in public found 13 grants
+  left by the two-line `revoke ... from public` form on dev's stock
+  default privileges -- the view problem CLAUDE.md already records, in
+  functions. Migration 73 states them explicitly.
+- 5: `v_recurring_amounts` (59) untested. Added.
+- 6 and 2i: expectations written before migration 70's guard and the
+  WITH CHECK/FK order (updated to the current behaviour); 2i's control
+  used A_txn after section 6 had edited it to $30 (fixture; see
+  docs/same-goal-money-repro.sql).
+
+Fix to the process: every test script ends with a SUMMARY row, and a
+run counts only when it says ALL PASS (CLAUDE.md, 2026-11-18).
+
+Open for a ruling: `username_is_available(text)` is SECURITY DEFINER and
+executable by anon (granted in the baseline). The app has no username
+login and signup collects no username, so nothing calls it; as granted
+it answers "is this username taken?" for anyone holding the anon key.

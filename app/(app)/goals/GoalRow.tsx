@@ -26,6 +26,8 @@ import type { GoalCompletion } from "@/lib/goalCompletion";
 import { ContributionList } from "./ContributionList";
 import { GoalForm } from "./GoalForm";
 import { GoalCompletePanel } from "./GoalCompletePanel";
+import { GoalPaceLine } from "./GoalPaceLine";
+import type { GoalPace } from "@/lib/goalPace";
 import { NEW_GOAL_EVENT } from "./CreateGoalForm";
 
 const fieldClassName = `w-full ${FIELD_EDGE} bg-surface px-3 py-2 text-sm text-ink`;
@@ -59,6 +61,7 @@ export function GoalRow({
   fundingRecurringId,
   fundingTransfers,
   cards = [],
+  pace = null,
 }: {
   goal: GoalProgress;
   contributions: GoalContribution[];
@@ -69,6 +72,8 @@ export function GoalRow({
   fundingTransfers: FundingTransfer[];
   /** Cards a debt payoff goal can follow (migration 70). */
   cards?: FollowableCard[];
+  /** The history pace (goal_pace(), migration 72); null shows no line. */
+  pace?: GoalPace | null;
   /** completed_at as the user's calendar day, or null while not complete. */
   completedOn: string | null;
 }) {
@@ -371,6 +376,8 @@ export function GoalRow({
         </span>
       </div>
       )}
+
+      {pace ? <GoalPaceLine pace={pace} name={follows ? cardName : goalName} /> : null}
 
       {contributions.length + linked.length > 0 ? (
         <div className="flex flex-col gap-2">

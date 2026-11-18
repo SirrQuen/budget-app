@@ -6,6 +6,7 @@ import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/e
 import { isSafeToSpendCommitment } from "@/lib/safeToSpend";
 import type { SameMoneyPair } from "@/lib/goalLinks";
 import { isLiabilityAccountType } from "@/lib/accountOptions";
+import { parseGoalPace, type GoalPace } from "@/lib/goalPace";
 
 type GoalRow = Database["public"]["Tables"]["goals"]["Row"];
 type GoalInsert = Database["public"]["Tables"]["goals"]["Insert"];
@@ -548,4 +549,28 @@ export async function getGoalCompletionStates(): Promise<DbResult<Map<string, st
     return { data: null, error: describeReadError(error, "goal") };
   }
   return { data: new Map(data.map((g) => [g.id, g.completed_at])), error: null };
+}
+
+/**
+ * Each active goal's history pace and what it implies (goal_pace(),
+ * migration 72), keyed by goal id. Read-only; every figure is worked out
+ * in SQL. A row in an unexpected shape is dropped, so that goal shows no
+ * pace line rather than a wrong one.
+ */
+export async function getGoalPace(): Promise<DbResult<Map<string, GoalPace>>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("goal_pace");
+  if (error) {
+    return { data: null, error: describeReadError(error, "goals") };
+  }
+  const byGoal = new Map<string, GoalPace>();
+  for (const row of data ?? []) {
+    const pace = parseGoalPace(row as Record<string, unknown>);
+    if (pace === null) {
+      console.error("[goal pace] unexpected goal_pace() row");
+      continue;
+    }
+    byGoal.set(pace.goalId, pace);
+  }
+  return { data: byGoal, error: null };
 }

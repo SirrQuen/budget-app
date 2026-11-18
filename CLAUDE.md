@@ -96,6 +96,21 @@ script and `npm run test:parity` (they write, then roll back): I run
 those. Never pass `--yes` or `--agent no` to get past it. Read-only
 catalog and count queries go through with `--read-only`.
 
+**A test script counts as passed only when its final summary row says
+ALL PASS.** The SUMMARY row is the script's last row: total rows, number
+false, ALL PASS or NOT PASSED. No summary row -- the run errored or
+stopped early -- is not a pass, however many rows came back true.
+Record a pass with the summary's figures ("rls-isolation-test.sql: 312
+rows, 0 false, ALL PASS"), never "passes" alone. rls-isolation-test.sql,
+goal-pace-test.sql and same-goal-money-repro.sql have one; any other
+`docs/*-test.sql` script gets one before its next recorded pass, and a
+new script gets one in the same change.
+
+Why: on 2026-11-18 rls-isolation-test.sql was found unable to finish on
+sorrel-dev since migration 62 (2026-11-09) -- a pre-anchor fixture row
+and two dropped function signatures -- while passes were reported for
+66 and sections were added for 69-71 that had never run.
+
 Before any `db push` to production, also run:
 
     git branch --show-current

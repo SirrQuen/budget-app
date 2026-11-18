@@ -2,6 +2,7 @@ import { getGoalProgress, getGoalsSummary } from "@/lib/db/dashboard";
 import {
   getGoalContributions,
   getGoalLinkedTransactions,
+  getGoalPace,
   listFundingTransfers,
   listFollowableCards,
   listGoalFundingLinks,
@@ -19,7 +20,7 @@ import { CreateGoalForm } from "./CreateGoalForm";
 import { GoalRow } from "./GoalRow";
 
 export default async function GoalsPage() {
-  const [progressResult, summaryResult, contributionsResult, timeZone, transfersResult, linksResult, linkedResult, cardsResult] =
+  const [progressResult, summaryResult, contributionsResult, timeZone, transfersResult, linksResult, linkedResult, cardsResult, paceResult] =
     await Promise.all([
       getGoalProgress(),
       getGoalsSummary(),
@@ -31,6 +32,9 @@ export default async function GoalsPage() {
       // Cards a debt payoff goal can follow (migration 70). A failed read
       // only means no card is offered.
       listFollowableCards(),
+      // The history pace (migration 72). A failed read only means no pace
+      // line: the goals themselves still show.
+      getGoalPace(),
     ]);
 
   if (
@@ -127,6 +131,7 @@ export default async function GoalsPage() {
             fundingRecurringId={linksResult.data.get(goal.goal_id ?? "") ?? null}
             fundingTransfers={transfersResult.data}
             cards={cardsResult.data ?? []}
+            pace={paceResult.data?.get(goal.goal_id ?? "") ?? null}
             // completed_at is an instant; the day it names is the user's.
             completedOn={goal.completed_at ? todayInZone(timeZone, new Date(goal.completed_at)) : null}
           />

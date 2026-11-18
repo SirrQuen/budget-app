@@ -61,6 +61,9 @@
 --   2k Month recap (migration 71): month_story() as B shows only B's
 --                 logs and goal money, none of A's goals or cards; A's
 --                 own call is the control
+--   2l Goal pace (migration 72): goal_pace() as B lists only B's goals,
+--                 never A's, and B's pace is B's own money; A's own call
+--                 (A's pace from A's two months) is the control
 --   2i Goal links (migration 69)
 --                 same_goal_money() shows B nothing of A's;
 --                 replace_contribution_with_link() can't delete A's
@@ -336,6 +339,8 @@ begin
       ('2 views', 'v_monthly_cashflow',     format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_net_worth',            format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_portfolio_summary',    format('userid = %L', a),                            format('userid <> %L', b)),
+      -- Every schedule's amount and basis (migration 59); A_recur gives A a row.
+      ('2 views', 'v_recurring_amounts',    format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_upcoming_recurring',   format('userid = %L', a),                            format('userid <> %L', b))
     ) as t(section, rel, a_rows, not_b_rows)
   loop
@@ -593,8 +598,12 @@ begin
         format('update public.investments set shares = 3 where id = %L', pg_temp.fx('A_invest'))),
       ('goals', 'INSERT, accountid null', 1,
         format('insert into public.goals (userid, goal_name, goal_type, target_amount) values (%L, ''rls ok'', ''Custom'', 100)', a)),
-      ('goals', 'INSERT, own linked account', 1,
-        format('insert into public.goals (userid, goal_name, goal_type, target_amount, tracking_method, accountid) values (%L, ''rls ok'', ''Custom'', 100, ''LinkedAccount'', %L)', a, pg_temp.fx('A_acct'))),
+      -- Own account on a goal: the WITH CHECK on goals.accountid. Since
+      -- migration 70 a goal can't be INSERTed as LinkedAccount at all
+      -- (guard_goal_link) -- that shape, and linking through
+      -- link_goal_to_card(), are checked in 6b below.
+      ('goals', 'INSERT, own account', 1,
+        format('insert into public.goals (userid, goal_name, goal_type, target_amount, accountid) values (%L, ''rls ok'', ''Custom'', 100, %L)', a, pg_temp.fx('A_acct'))),
       ('goals', 'UPDATE own goal', 1,
         format('update public.goals set goal_name = ''rls edited'' where id = %L', pg_temp.fx('A_goal'))),
       ('goal_contributions', 'INSERT manual, transactionid null', 1,
@@ -611,6 +620,47 @@ begin
       coalesce('accepted, ' || w.n::text || ' rows', 'REJECTED ' || w.state || ': ' || w.msg),
       w.n = r.rows_expected);
   end loop;
+end
+$$;
+
+
+-- ---------------------------------------------------------------------
+-- 6b Same-user writes: a goal follows A's own card
+--
+-- Migration 70: only link_goal_to_card() writes the follow-a-card
+-- columns. A direct INSERT of a LinkedAccount goal is refused by
+-- guard_goal_link (42501, naming link_goal_to_card) -- even onto A's own
+-- account. The accepted path: A links A's own debt goal to A's own card,
+-- and the goal then follows it.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  a      uuid := pg_temp.fx('A');
+  a_card uuid := gen_random_uuid();
+  a_debt uuid := gen_random_uuid();
+  w      record;
+  v_goal record;
+begin
+  select * into w from pg_temp.try_as(a,
+    format('insert into public.goals (userid, goal_name, goal_type, target_amount, tracking_method, accountid) values (%L, ''rls direct link'', ''Debt Payoff'', 100, ''LinkedAccount'', %L)', a, pg_temp.fx('A_acct')));
+  perform pg_temp.rec('6 same-user writes', 'goals', 'A INSERT, LinkedAccount directly (own account)',
+    'rejected 42501 by guard_goal_link',
+    coalesce('rejected ' || w.state || ': ' || w.msg, 'ACCEPTED, ' || w.n::text || ' rows'),
+    w.state = '42501' and w.msg like '%link_goal_to_card()%');
+
+  insert into public.accounts (id, userid, account_name, account_type, opening_balance, opening_date)
+  values (a_card, a, 'rls 6b card', 'Credit Card', -200, current_date - 30);
+  insert into public.goals (id, userid, goal_name, goal_type, target_amount)
+  values (a_debt, a, 'rls 6b debt', 'Debt Payoff', 200);
+
+  select * into w from pg_temp.try_as(a, format('select public.link_goal_to_card(%L, %L)', a_debt, a_card));
+  select tracking_method, accountid into v_goal from public.goals where id = a_debt;
+  perform pg_temp.rec('6 same-user writes', 'goals', 'A links own debt goal to own card (link_goal_to_card)',
+    'accepted; follows the card',
+    coalesce('rejected ' || w.state || ': ' || w.msg,
+             'accepted; ' || coalesce(v_goal.tracking_method, 'null') || ' -> '
+               || case when v_goal.accountid = a_card then 'the card' else coalesce(v_goal.accountid::text, 'null') end),
+    w.state is null and v_goal.tracking_method = 'LinkedAccount' and v_goal.accountid = a_card);
 end
 $$;
 
@@ -795,10 +845,17 @@ begin
                                    transaction_type, transaction_date)
   values (v_txn_goal, a, pg_temp.fx('A_acct'), pg_temp.fx('A_groceries'), v_goal, 'rls fk', 1,
           'Expense', current_date);
+  -- Dated before A_acct's balance date (current_date - 30), so it carries
+  -- the pre-anchor answer migration 62 requires (SRA01 otherwise): "Yes,
+  -- it's already counted", against the account's current anchor. The
+  -- date only keeps the row clear of every other fixture; this section
+  -- tests the recurringid FK's SET NULL, which the answer doesn't touch.
   insert into public.transactions (id, userid, accountid, categoryid, recurringid, description, amount,
-                                   transaction_type, transaction_date)
+                                   transaction_type, transaction_date,
+                                   counts_despite_anchor, anchor_answer_set_at)
   values (v_txn_recur, a, pg_temp.fx('A_acct'), pg_temp.fx('A_rent'), v_recur, 'rls fk', 1,
-          'Expense', current_date - 400);
+          'Expense', current_date - 400,
+          false, (select opening_set_at from public.accounts where id = pg_temp.fx('A_acct')));
   insert into public.goals (id, userid, goal_name, goal_type, target_amount, accountid)
   values (v_goal_linked, a, 'rls fk linked', 'Custom', 1, v_acct);
   insert into public.goals (id, userid, goal_name, goal_type, target_amount, funding_recurringid)
@@ -964,6 +1021,29 @@ $$;
 
 
 -- ---------------------------------------------------------------------
+-- 2 views -- v_recurring_amounts reads as the caller
+--
+-- The read checks above prove B sees none of A's rows today; this pins
+-- the reason. Without security_invoker a view reads as its owner and
+-- returns every user's rows (CLAUDE.md, "Any migration that creates a
+-- view"). docs/view-acl-check.sql checks every view this way after a
+-- push; this keeps it in the harness for the one the coverage check
+-- found untested (2026-11-18).
+-- ---------------------------------------------------------------------
+do $$
+declare
+  v_invoker boolean;
+begin
+  select coalesce('security_invoker=true' = any (c.reloptions), false) into v_invoker
+    from pg_class c
+   where c.oid = 'public.v_recurring_amounts'::regclass;
+  perform pg_temp.rec('2 views', 'v_recurring_amounts', 'security_invoker set',
+    'true', coalesce(v_invoker::text, 'null'), v_invoker is true);
+end
+$$;
+
+
+-- ---------------------------------------------------------------------
 -- 5 Coverage
 --
 -- Fails when a migration adds a table or view this file doesn't test.
@@ -1067,13 +1147,16 @@ begin
       ('public.spendable_cash_balance()',                        'anon',          false),
       ('public.spendable_cash_balance()',                        'authenticated', true),
       -- The balance anchor rule and its readers (migration 48), and the
-      -- Accounts page subtotals (49). Signed-in only.
-      ('public.anchor_includes(date,timestamptz,date,timestamptz)', 'anon',       false),
-      ('public.anchor_includes(date,timestamptz,date,timestamptz)', 'authenticated', true),
+      -- Accounts page subtotals (49). Signed-in only. Migration 62
+      -- replaced anchor_includes' 4-argument form with the 6-argument one
+      -- (the stored answer) and counts_toward_balance_preview with
+      -- balance_anchor_preview; same grants (62, lines 96-97, 190-191).
+      ('public.anchor_includes(date,timestamptz,date,timestamptz,boolean,timestamptz)', 'anon',          false),
+      ('public.anchor_includes(date,timestamptz,date,timestamptz,boolean,timestamptz)', 'authenticated', true),
       ('public.counts_toward_balance(public.transactions)',      'anon',          false),
       ('public.counts_toward_balance(public.transactions)',      'authenticated', true),
-      ('public.counts_toward_balance_preview(uuid,date,uuid)',   'anon',          false),
-      ('public.counts_toward_balance_preview(uuid,date,uuid)',   'authenticated', true),
+      ('public.balance_anchor_preview(uuid,date,uuid)',          'anon',          false),
+      ('public.balance_anchor_preview(uuid,date,uuid)',          'authenticated', true),
       ('public.account_type_subtotals(boolean)',                 'anon',          false),
       ('public.account_type_subtotals(boolean)',                 'authenticated', true),
       -- Trigger functions: closed in migration 36 so nobody has to
@@ -1155,7 +1238,42 @@ begin
       ('public.month_story(date)',                               'authenticated', true),
       ('public.month_story(date)',                               'service_role',  false),
       ('public.user_time_zone(uuid)',                            'anon',          false),
-      ('public.user_time_zone(uuid)',                            'authenticated', true)
+      ('public.user_time_zone(uuid)',                            'authenticated', true),
+      -- Goal pace (migration 72). Signed-in only; the full grant block.
+      ('public.goal_pace()',                                     'anon',          false),
+      ('public.goal_pace()',                                     'authenticated', true),
+      ('public.goal_pace()',                                     'service_role',  false),
+      -- Migration 73: grants stated explicitly, so dev's stock default
+      -- privileges can't decide them. Trigger functions: not callable.
+      ('public.clear_estimate_on_amount_change()',               'anon',          false),
+      ('public.clear_estimate_on_amount_change()',               'authenticated', false),
+      ('public.enforce_transfer_pair()',                         'anon',          false),
+      ('public.enforce_transfer_pair()',                         'authenticated', false),
+      ('public.goal_contributions_sync_completed_at()',          'anon',          false),
+      ('public.goal_contributions_sync_completed_at()',          'authenticated', false),
+      ('public.goals_sync_completed_at()',                       'anon',          false),
+      ('public.goals_sync_completed_at()',                       'authenticated', false),
+      ('public.set_updated_at()',                                'anon',          false),
+      ('public.set_updated_at()',                                'authenticated', false),
+      -- Callable helpers read by views and triggers: signed in only.
+      ('public.add_business_days(date,integer)',                 'anon',          false),
+      ('public.add_business_days(date,integer)',                 'authenticated', true),
+      ('public.estimate_expense_amount_high(uuid,numeric)',      'anon',          false),
+      ('public.estimate_expense_amount_high(uuid,numeric)',      'authenticated', true),
+      ('public.goal_completed_at(uuid,numeric,timestamptz)',     'anon',          false),
+      ('public.goal_completed_at(uuid,numeric,timestamptz)',     'authenticated', true),
+      ('public.has_three_supplied_amounts(uuid,text)',           'anon',          false),
+      ('public.has_three_supplied_amounts(uuid,text)',           'authenticated', true),
+      ('public.is_business_day(date)',                           'anon',          false),
+      ('public.is_business_day(date)',                           'authenticated', true),
+      ('public.resolve_recurring_due_date(date,integer,text)',   'anon',          false),
+      ('public.resolve_recurring_due_date(date,integer,text)',   'authenticated', true),
+      ('public.signed_amount(numeric,text)',                     'anon',          false),
+      ('public.signed_amount(numeric,text)',                     'authenticated', true),
+      -- Deliberately anon: the pre-request hook runs on every request
+      -- (migration 42) -- losing this takes the API down.
+      ('public.apply_user_timezone()',                           'anon',          true),
+      ('public.apply_user_timezone()',                           'authenticated', true)
     ) as t(fn, role, expected)
   loop
     v_actual := has_function_privilege(v_check.role, v_check.fn::regprocedure, 'execute');
@@ -1416,6 +1534,7 @@ declare
   v_seen bigint;
   v_pass boolean;
   v_match uuid := gen_random_uuid();
+  v_link  uuid := gen_random_uuid();
 begin
   v_seen := pg_temp.count_as(b, format('select count(*) from public.same_goal_money(%L)', pg_temp.fx('A_txn')));
   perform pg_temp.rec('2i goal links', 'same_goal_money()', 'B asks about A''s linked transaction', '0 rows',
@@ -1434,18 +1553,34 @@ begin
   for v_try in
     select * from pg_temp.try_as(b, format('update public.transactions set goalid = %L where id = %L', pg_temp.fx('A_goal'), pg_temp.fx('B_txn')))
   loop
+    -- Either layer may refuse first: the WITH CHECK on transactions
+    -- (parent ownership, migration 37; 42501) runs before the composite
+    -- FK (44; 23503). Both are refusals; anything else -- including no
+    -- error -- fails. The row is checked unchanged as well.
     perform pg_temp.rec('2i goal links', 'transactions.goalid', 'B points B''s own row at A''s goal',
-      '23503', coalesce(v_try.state, 'no error'), v_try.state = '23503');
+      'rejected 42501 or 23503; B''s row unchanged',
+      coalesce(v_try.state || ': ' || v_try.msg, 'no error'),
+      v_try.state in ('42501', '23503')
+        and not exists (select 1 from public.transactions
+                         where id = pg_temp.fx('B_txn') and goalid = pg_temp.fx('A_goal')));
   end loop;
 
-  -- Control: A's own pair.
+  -- Control: A's own pair, on a linked row made here. Not A_txn: by now
+  -- section 6 has edited it to $30 and moved it to the brokerage account,
+  -- so a $25 hand entry correctly doesn't match it (the rule is the same
+  -- amount) -- which is why this control read 0 / P0002 on 2026-11-18.
+  -- docs/same-goal-money-repro.sql shows both cases outside the harness.
+  insert into public.transactions (id, userid, accountid, categoryid, goalid, description, amount,
+                                   transaction_type, transaction_date)
+  values (v_link, a, pg_temp.fx('A_acct'), pg_temp.fx('A_groceries'), pg_temp.fx('A_goal'),
+          'rls 2i link', 25, 'Expense', current_date);
   insert into public.goal_contributions (id, userid, goalid, amount, date, funding_method)
   values (v_match, a, pg_temp.fx('A_goal'), 25, current_date - 2, 'manual');
-  v_seen := pg_temp.count_as(a, format('select count(*) from public.same_goal_money(%L) where contribution_id = %L', pg_temp.fx('A_txn'), v_match));
+  v_seen := pg_temp.count_as(a, format('select count(*) from public.same_goal_money(%L) where contribution_id = %L', v_link, v_match));
   perform pg_temp.rec('2i goal links', 'same_goal_money()', 'control: A sees A''s own matching hand entry', '1',
     v_seen::text, v_seen = 1);
   for v_try in
-    select * from pg_temp.try_as(a, format('select public.replace_contribution_with_link(%L, %L)', pg_temp.fx('A_txn'), v_match))
+    select * from pg_temp.try_as(a, format('select public.replace_contribution_with_link(%L, %L)', v_link, v_match))
   loop
     v_pass := v_try.state is null and not exists (select 1 from public.goal_contributions where id = v_match);
     perform pg_temp.rec('2i goal links', 'replace_contribution_with_link()', 'control: A replaces A''s own hand entry',
@@ -1604,9 +1739,92 @@ end
 $$;
 
 
+-- ---------------------------------------------------------------------
+-- 2l -- Goal pace (migration 72)
+--
+-- goal_pace() is security invoker with no user id: RLS alone scopes it.
+-- Each user gets a fresh goal here (the fixture goals carry this month's
+-- money, and 2k completes A's), so the expected figures are exact:
+-- A's: $600 in each of the two months before this one -> pace 400.
+-- B's: $90 and $60 in those months -> pace (90 + 60) / 3 = 50.
+-- B's call must list none of A's goals and give B's pace exactly; the
+-- control is A's own call giving 400 for A's goal.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  a       uuid := pg_temp.fx('A');
+  b       uuid := pg_temp.fx('B');
+  ga      uuid := gen_random_uuid();
+  gb      uuid := gen_random_uuid();
+  m1      date := (date_trunc('month', current_date::timestamp) - interval '1 month')::date;
+  m2      date := (date_trunc('month', current_date::timestamp) - interval '2 months')::date;
+  v_leak  bigint;
+  v_b     numeric;
+  v_a     numeric;
+begin
+  insert into public.goals (id, userid, goal_name, goal_type, target_amount, status, tracking_method)
+  values (ga, a, 'RLS A pace goal', 'Custom', 100000, 'Active', 'Manual'),
+         (gb, b, 'RLS B pace goal', 'Custom', 100000, 'Active', 'Manual');
+  insert into public.goal_contributions (userid, goalid, amount, date, funding_method)
+  values (a, ga, 600, m1, 'manual'),
+         (a, ga, 600, m2, 'manual'),
+         (b, gb,  90, m1, 'manual'),
+         (b, gb,  60, m2, 'manual');
+
+  perform pg_temp.become(b);
+  -- Joined to goals AS B: an id of A's would come back with a null
+  -- userid (B can't read it), which "is distinct from b" counts.
+  select count(*) filter (where g.userid is distinct from b) into v_leak
+    from public.goal_pace() p
+    left join public.goals g on g.id = p.goal_id;
+  select p.pace into v_b from public.goal_pace() p where p.goal_id = gb;
+  perform pg_temp.unbecome();
+
+  perform pg_temp.rec('2l goal pace', 'goal_pace()', 'B lists none of A''s goals',
+    '0', v_leak::text, v_leak = 0);
+  perform pg_temp.rec('2l goal pace', 'goal_pace()', 'B''s pace is B''s own money',
+    '50.00', coalesce(v_b::text, 'null'), v_b = 50);
+
+  perform pg_temp.become(a);
+  select p.pace into v_a from public.goal_pace() p where p.goal_id = ga;
+  perform pg_temp.unbecome();
+
+  perform pg_temp.rec('2l goal pace', 'goal_pace()', 'control: A''s own call paces A''s goal',
+    '400.00', coalesce(v_a::text, 'null'), v_a = 400);
+end
+$$;
+
+
 -- The report. Must be the last statement that returns rows.
+-- The summary is the LAST row. A run counts as passed only when it says
+-- ALL PASS (CLAUDE.md). A run that errors part-way returns no rows at
+-- all, so it can never show ALL PASS; a section that silently recorded
+-- nothing is named here as missing and also fails the run.
+with expected_sections(s) as (
+  select unnest(array['1 reads', '2 views', '2c money functions', '2d function grants',
+                      '2e waitlist', '2f definer writes', '2g same-bill answers',
+                      '2h import', '2i goal links', '2j card goals', '2k month story',
+                      '2l goal pace', '3 writes', '4 cross-tenant refs', '5 coverage',
+                      '6 same-user writes', '7 trigger oracles', '8 composite FKs'])
+),
+tally as (
+  select (select count(*) from rls_results)                   as total,
+         (select count(*) from rls_results where not pass)    as failed,
+         (select string_agg(e.s, ', ' order by e.s)
+            from expected_sections e
+           where not exists (select 1 from rls_results r where r.section = e.s)) as missing
+)
 select section, object, check_ as check, expected, actual, pass
-  from rls_results
+  from (select seq, section, object, check_, expected, actual, pass
+          from rls_results
+        union all
+        select 2147483647, 'SUMMARY', 'all sections', 'every row true, every section present',
+               'ALL PASS',
+               t.total || ' rows, ' || t.failed || ' false'
+                 || coalesce(', missing sections: ' || t.missing, '')
+                 || ' -- ' || case when t.failed = 0 and t.missing is null then 'ALL PASS' else 'NOT PASSED' end,
+               t.failed = 0 and t.missing is null
+          from tally t) x
  order by seq;
 
 rollback;

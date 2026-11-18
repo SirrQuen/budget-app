@@ -467,6 +467,31 @@
   }
 }
 
+/* Goal pace's calendar page (components/ui/BloomCalendar.tsx): flips over
+   once, 320ms on the signature curve, when the bloom month changes -- on
+   screen or since last seen. Never on a plain load; no flip at all with
+   reduced motion, where the month simply shows. Transform and opacity
+   only. */
+.bloom-cal {
+  perspective: 240px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bloom-cal__page--flip {
+    transform-origin: 50% 0;
+    animation: bloom-cal-flip 320ms var(--icon-anim-ease) both;
+  }
+}
+@keyframes bloom-cal-flip {
+  from {
+    transform: rotateX(-90deg);
+    opacity: 0;
+  }
+  to {
+    transform: rotateX(0deg);
+    opacity: 1;
+  }
+}
+
 /* A freshly-added row's one-time entrance -- relies on React reusing the
    DOM node for rows it already knew about (same key) and only mounting
    fresh for a genuinely new one, so this can be applied unconditionally to

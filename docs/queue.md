@@ -111,7 +111,20 @@ before-deploy) for the next What's new card. Raised 2026-11-17.
     with no account see step 1 in place of the old "Add your first
     account" screen -- it is the only way in, and asks the same thing. Tester note:
     docs/tester-notes/2026-11-17-onboarding.md.
-21. **Batch H -- goal pace.** Opus. After G.
+21. **Batch H -- goal pace.** Opus. After G. Built on `batch-h-goal-pace`
+    2026-11-18 and verified on sorrel-dev: migration 72 (`goal_pace()`) and
+    73 (function EXECUTE grants, found by the harness) on sorrel-dev only,
+    not production. rls-isolation-test.sql, goal-pace-test.sql and
+    same-goal-money-repro.sql all ALL PASS on dev (Matt, 2026-11-18;
+    row counts not recorded). Browser on dev: a ZZ goal with Japan trip's
+    exact figures showed "blooms in May" / "About $390 a month would bloom
+    it by April"; the calendar flipped on change and since last seen, not
+    on a plain load; deleted after. The real Japan trip (7e9a84e3) is
+    checked by goal-pace-test section 11. No UI read
+    projected_completion_date / is_on_track, so no wording changed.
+    Open for a ruling: `username_is_available()` anon EXECUTE
+    (docs/phase-7-findings.md, "The RLS harness couldn't finish on dev").
+    Tester note: docs/tester-notes/2026-11-18-goal-pace.md.
 
 ## Launch blockers still open
 

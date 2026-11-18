@@ -1761,6 +1761,21 @@ export type Database = {
         Args: { p_current: string; p_goal_id: string; p_target: number }
         Returns: string
       }
+      goal_pace: {
+        Args: never
+        Returns: {
+          bloom_month: string
+          follows_card: boolean
+          goal_id: string
+          months_with_money: number
+          needed_monthly: number
+          on_pace: boolean
+          pace: number
+          remaining: number
+          state: string
+          target_month: string
+        }[]
+      }
       has_three_supplied_amounts: {
         Args: { p_recurring_id: string; p_type: string }
         Returns: boolean
