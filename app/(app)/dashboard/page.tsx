@@ -301,12 +301,23 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   // show exactly what that figure counted. The view only supplies each
   // schedule's icon and its Confirm target.
   const upcoming = safeToSpendResult.data ? buildUpcomingOccurrences(safeToSpendResult.data, today) : null;
+  // Account labels for the timeline's day detail, from rows already read:
+  // the schedule's own account and a transfer's destination.
+  const accountNameById = new Map(
+    (balancesResult.data ?? []).flatMap((a) => (a.account_id && a.account_name ? [[a.account_id, a.account_name] as const] : [])),
+  );
+  const accountLabel = (fromId: string | null, toId: string | null, toName: string | null) => {
+    const from = fromId ? (accountNameById.get(fromId) ?? null) : null;
+    const to = toId ? (toName ?? accountNameById.get(toId) ?? null) : null;
+    return from && to ? `${from} → ${to}` : from;
+  };
   const upcomingSchedules: Record<string, UpcomingScheduleMeta> = Object.fromEntries(
     (recurringResult.data ?? []).map((r) => [
       r.recurring_id ?? "",
       {
         categoryIcon: r.category_icon,
         isTransfer: r.to_accountid !== null,
+        accountName: accountLabel(r.accountid, r.to_accountid, r.to_account_name),
         // The card's statement amount -- a revision of the expectation,
         // never a transaction (that's the confirmation queue's job).
         confirm:
@@ -334,7 +345,12 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   const upcomingFuture: Record<string, UpcomingScheduleMeta> = Object.fromEntries(
     (futureResult.data ?? []).map((t) => [
       t.transactionId,
-      { categoryIcon: t.categoryIcon, isTransfer: t.kind === "Transfer", confirm: null },
+      {
+        categoryIcon: t.categoryIcon,
+        isTransfer: t.kind === "Transfer",
+        accountName: accountLabel(t.accountId, t.toAccountId, null),
+        confirm: null,
+      },
     ]),
   );
 
@@ -479,6 +495,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         futureTransactions={upcomingFuture}
         // A failed read only loses the question; both rows still show.
         sameBillPairs={sameBillResult.data ?? []}
+        today={today}
+        tightestDate={safeToSpendResult.data?.trough.date ?? today}
       />
     ) : null,
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { TransferIcon } from "@/components/ui/icons";
@@ -17,11 +17,15 @@ import { INLINE_ACTION, UnconfirmedIncomeNote } from "./UnconfirmedIncomeNote";
 import { AmountBasisTag } from "@/components/AmountBasisTag";
 import { SameBillQuestion } from "@/components/SameBillQuestion";
 import type { SameBillPair } from "@/lib/sameBill";
+import { TIMELINE_VIEW_KEY } from "@/lib/comingUpTimeline";
+import { UpcomingTimeline } from "./UpcomingTimeline";
 
 /** Per-schedule display details the projection doesn't carry. */
 export type UpcomingScheduleMeta = {
   categoryIcon: string | null;
   isTransfer: boolean;
+  /** "Checking", or "Checking → Savings" for a transfer out; null if unknown. */
+  accountName?: string | null;
   /**
    * A card payment's "enter the statement amount", when it has one -- a
    * revision of the expectation, not a confirmation (those live in the
@@ -42,6 +46,8 @@ export function UpcomingList({
   schedules,
   futureTransactions,
   sameBillPairs = [],
+  today,
+  tightestDate,
 }: {
   data: UpcomingOccurrences;
   /** The projection's missed paychecks -- what a "missed" row describes. */
@@ -54,8 +60,35 @@ export function UpcomingList({
    * shown together, once, with the question -- never as two unrelated rows.
    */
   sameBillPairs?: SameBillPair[];
+  /** The user's today -- the timeline's first day. */
+  today: string;
+  /** The hero's tightest day (trough.date), where the timeline puts its leaf. */
+  tightestDate: string;
 }) {
   const [expanded, setExpanded] = useState(false);
+  // List is the default and the first render; the remembered choice is read
+  // after mount (a per-device convenience -- storage can be absent or throw).
+  const [view, setView] = useState<"list" | "timeline">("list");
+  // Deferred a frame, as SeasonalLeaf does, so the read never sets state
+  // inside the effect body.
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      try {
+        if (window.localStorage.getItem(TIMELINE_VIEW_KEY) === "timeline") setView("timeline");
+      } catch {
+        // Storage unavailable: stay on the list.
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const chooseView = (next: "list" | "timeline") => {
+    setView(next);
+    try {
+      window.localStorage.setItem(TIMELINE_VIEW_KEY, next);
+    } catch {
+      // Not remembered; the choice still holds for this visit.
+    }
+  };
   const listId = useId();
 
   const inWindow = data.items.filter((i) => i.date <= data.windowEnd);
@@ -76,6 +109,11 @@ export function UpcomingList({
       : item.transactionId !== null
         ? futureTransactions[item.transactionId]
         : undefined;
+  const accountNames: Record<string, string> = {};
+  for (const item of data.items) {
+    const name = metaOf(item)?.accountName;
+    if (name) accountNames[item.key] = name;
+  }
   // The pair sits where its first half would; the second half is skipped.
   const placed = new Set<SameBillPair>();
   const rows = shown.flatMap((item) => {
@@ -105,20 +143,41 @@ export function UpcomingList({
         <div>
           <h2 className="text-sm font-medium text-ink-secondary">Upcoming</h2>
           <p className="text-xs text-ink-muted">
-            {expanded
+            {expanded && view === "list"
               ? `Through ${formatDateShort(data.horizonEnd)}`
               : `Next ${UPCOMING_DEFAULT_DAYS} days · through ${formatDateShort(data.windowEnd)}`}
           </p>
         </div>
+        <div className="flex items-center gap-3">
+          <div role="group" aria-label="Upcoming view" className="flex rounded-full border border-hairline p-0.5 text-xs">
+            {(["list", "timeline"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={view === v}
+                onClick={() => chooseView(v)}
+                className={`rounded-full px-2.5 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action ${
+                  view === v ? "bg-surface-raised font-medium text-ink" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                {v === "list" ? "List" : "Timeline"}
+              </button>
+            ))}
+          </div>
         <Link
           href="/transactions"
           className="text-xs text-ink-muted transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           Transactions
         </Link>
+        </div>
       </div>
 
-      <div id={listId}>
+      {view === "timeline" ? (
+        <UpcomingTimeline data={data} today={today} tightestDate={tightestDate} accountNames={accountNames} />
+      ) : null}
+
+      <div id={listId} hidden={view === "timeline"}>
         {shown.length === 0 ? (
           <p className="py-2.5 text-sm text-ink-secondary">
             Nothing due in the next {UPCOMING_DEFAULT_DAYS} days.
@@ -128,7 +187,7 @@ export function UpcomingList({
         )}
       </div>
 
-      {later > 0 ? (
+      {later > 0 && view === "list" ? (
         <button
           type="button"
           aria-expanded={expanded}
