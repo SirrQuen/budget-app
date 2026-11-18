@@ -157,9 +157,12 @@ export async function updateProfile(
   return { data, error: null };
 }
 
-// username_is_available(text) is SECURITY DEFINER and granted to anon
-// (it has to run before signup, when there's no session yet), so this
-// deliberately does not touch the profiles table directly.
+// username_is_available(text) is SECURITY DEFINER. Since migration 74
+// (2026-11-18) neither anon nor authenticated can execute it -- the app
+// has no username login, and as granted it told anyone whether a
+// username was taken -- so this fails until that's revisited. Unused:
+// nothing imports it. When username login is built, resolve usernames
+// server-side (see email_for_username()).
 export async function checkUsernameAvailable(
   username: string,
 ): Promise<DbResult<boolean>> {

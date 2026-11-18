@@ -2481,9 +2481,11 @@ funding transfer moves the balance but not the goal's progress.
 
 ## The RLS harness couldn't finish on dev from migration 62 on (2026-11-18)
 
-**Status: harness fixed on `batch-h-goal-pace`; ALL PASS on sorrel-dev
-2026-11-18 after migration 73 (Matt's run; row counts not recorded).
-Migration 73 on sorrel-dev only -- production not yet.** Raised 2026-11-18
+**Status: harness fixed on `batch-h-goal-pace`. On sorrel-dev
+2026-11-18, after migration 73: rls-isolation-test.sql 430 rows, 0
+false, ALL PASS; goal-pace-test.sql 13 rows (12 of 12 fixture checks), 0
+false, ALL PASS. Migrations 73 and 74 on sorrel-dev only -- production
+not yet.** Raised 2026-11-18
 three times (batch H's harness runs on sorrel-dev).
 
 docs/rls-isolation-test.sql could not run to the end on sorrel-dev from
@@ -2510,7 +2512,16 @@ first ran on 2026-11-18 and found:
 Fix to the process: every test script ends with a SUMMARY row, and a
 run counts only when it says ALL PASS (CLAUDE.md, 2026-11-18).
 
-Open for a ruling: `username_is_available(text)` is SECURITY DEFINER and
-executable by anon (granted in the baseline). The app has no username
-login and signup collects no username, so nothing calls it; as granted
-it answers "is this username taken?" for anyone holding the anon key.
+Rows 394-395 (2i's same_goal_money() control) were the fixture, not a
+real bug: docs/same-goal-money-repro.sql, run on sorrel-dev 2026-11-18,
+had all 5 checks true -- a real user's $25 link and $25 hand entry pair
+and "Yes" replaces it (R1); the harness's $30-vs-$25 state correctly
+doesn't (R2). Its summary read NOT PASSED only because it expected 6
+rows, not 5 (fixed); by the ALL PASS rule it counts once rerun.
+
+`username_is_available(text)`: SECURITY DEFINER and executable by anon
+and authenticated since the baseline, answering "is this username
+taken?" for anyone holding the anon key, with no caller (its wrapper,
+checkUsernameAvailable(), is imported nowhere). Ruled 2026-11-18:
+revoke from anon and authenticated, keep the function -- migration 74,
+asserted in the harness's 2d.

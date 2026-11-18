@@ -114,17 +114,30 @@ before-deploy) for the next What's new card. Raised 2026-11-17.
 21. **Batch H -- goal pace.** Opus. After G. Built on `batch-h-goal-pace`
     2026-11-18 and verified on sorrel-dev: migration 72 (`goal_pace()`) and
     73 (function EXECUTE grants, found by the harness) on sorrel-dev only,
-    not production. rls-isolation-test.sql, goal-pace-test.sql and
-    same-goal-money-repro.sql all ALL PASS on dev (Matt, 2026-11-18;
-    row counts not recorded). Browser on dev: a ZZ goal with Japan trip's
+    not production. On sorrel-dev 2026-11-18 (Matt's runs):
+    rls-isolation-test.sql 430 rows, 0 false, ALL PASS;
+    goal-pace-test.sql 13 rows (12 of 12 fixture checks), 0 false, ALL
+    PASS; same-goal-money-repro.sql 5 rows, 0 false, NOT PASSED -- its
+    summary wrongly expected 6 rows (fixed to 5); every check true, but
+    by the rule it hasn't passed until rerun. Migration 74
+    (username_is_available() revoked from anon and authenticated, ruled
+    2026-11-18) written; to sorrel-dev by Matt, then the harness rerun.
+    Browser on dev: a ZZ goal with Japan trip's
     exact figures showed "blooms in May" / "About $390 a month would bloom
     it by April"; the calendar flipped on change and since last seen, not
     on a plain load; deleted after. The real Japan trip (7e9a84e3) is
     checked by goal-pace-test section 11. No UI read
     projected_completion_date / is_on_track, so no wording changed.
-    Open for a ruling: `username_is_available()` anon EXECUTE
-    (docs/phase-7-findings.md, "The RLS harness couldn't finish on dev").
     Tester note: docs/tester-notes/2026-11-18-goal-pace.md.
+22. **Bug -- an expired session on a save shows the generic error.** Next
+    after batch H ships. Found 2026-11-18 verifying H on dev: after the
+    idle sign-out, the tab stayed on /goals, and the next save (Add
+    goal) was redirected by the server action to /login, which the
+    client reported as "Something on our end broke" (useActionForm:
+    "An unexpected response was received from the server"). Required:
+    an expired session on ANY save lands on /login?reason=timeout, never
+    the generic error. Also why the idle sign-out didn't move the tab to
+    /login?reason=timeout itself (components/IdleTimeout.tsx).
 
 ## Launch blockers still open
 

@@ -133,15 +133,15 @@ begin
 end
 $$;
 
--- The summary is the last row. 6 checks are expected: fewer means the
+-- The summary is the last row. 5 checks are expected: fewer means the
 -- script stopped early, which is NOT PASSED however many passed.
 select check_ as check, expected, actual, pass
   from (select seq, check_, expected, actual, pass from sgm_results
         union all
-        select 2147483647, 'SUMMARY', 'ALL PASS (6 rows, 0 false)',
+        select 2147483647, 'SUMMARY', 'ALL PASS (5 rows, 0 false)',
                count(*) || ' rows, ' || count(*) filter (where not pass) || ' false -- '
-                 || case when count(*) filter (where not pass) = 0 and count(*) = 6 then 'ALL PASS' else 'NOT PASSED' end,
-               count(*) filter (where not pass) = 0 and count(*) = 6
+                 || case when count(*) filter (where not pass) = 0 and count(*) = 5 then 'ALL PASS' else 'NOT PASSED' end,
+               count(*) filter (where not pass) = 0 and count(*) = 5
           from sgm_results) x
  order by seq;
 

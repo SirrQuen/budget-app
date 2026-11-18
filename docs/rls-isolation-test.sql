@@ -1270,6 +1270,10 @@ begin
       ('public.resolve_recurring_due_date(date,integer,text)',   'authenticated', true),
       ('public.signed_amount(numeric,text)',                     'anon',          false),
       ('public.signed_amount(numeric,text)',                     'authenticated', true),
+      -- Migration 74 (ruled 2026-11-18): no username login, so nobody
+      -- calls this; it answered "is this username taken?" for anyone.
+      ('public.username_is_available(text)',                     'anon',          false),
+      ('public.username_is_available(text)',                     'authenticated', false),
       -- Deliberately anon: the pre-request hook runs on every request
       -- (migration 42) -- losing this takes the API down.
       ('public.apply_user_timezone()',                           'anon',          true),
