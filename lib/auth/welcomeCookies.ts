@@ -32,6 +32,21 @@ export async function sessionGreetingName(supabase: SupabaseClient<Database>): P
 }
 
 /**
+ * Whether the signed-in user has an active account. With none, the welcome
+ * yields: onboarding's step 3 carries the bloom, so a new user sees one,
+ * not two (docs/Decide-and-Grow.md, G; ruled 2026-11-17). A failed read
+ * answers true -- the welcome plays as it always has rather than vanish
+ * over a hiccup. Read with the client that just opened the session.
+ */
+export async function sessionHasAccount(supabase: SupabaseClient<Database>): Promise<boolean> {
+  const { count, error } = await supabase
+    .from("accounts")
+    .select("id", { count: "exact", head: true })
+    .eq("is_active", true);
+  return error !== null || (count ?? 0) > 0;
+}
+
+/**
  * B: queues the confirmed welcome for the page this lands on (the host's
  * pre-paint script reads it) and marks the day. Called only from the
  * action that confirmed the signup, never from a render.

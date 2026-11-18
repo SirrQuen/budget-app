@@ -97,7 +97,9 @@ before-deploy) for the next What's new card. Raised 2026-11-17.
     the runway opens from "See your runway" under the card and inside the
     breakdown, not from the figure (the spec's F1 said the figure).
 20. **Batch G -- onboarding that grows.** Opus. After F; before any new
-    testers.
+    testers. Ruled 2026-11-17. Built on `feat/onboarding-grows`; not
+    merged. Preceded by the privacy-policy cookie correction on main
+    (`e3f9c65`). No migration.
 21. **Batch H -- goal pace.** Opus. After G.
 
 ## Launch blockers still open
@@ -154,6 +156,7 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 
 | Item | Recorded | Decide or do when | Where |
 |---|---|---|---|
+| A real "last day of the month" option and a semi-monthly frequency, together. Today onboarding's "Last day of the month" anchors a Monthly schedule's start_date on a 31st (it clamps to every month's end), and "twice a month" is two Monthly schedules. Both work with no migration but read as "Monthly on the 31st" and as two schedules. A proper frequency needs rectx_frequency_check, the cadence (lib/recurringCadence.ts) and its wording | 2026-11-17 | Unscheduled | `lib/onboarding.ts` (`lastDayAnchor`, `paycheckPlans`); docs/Decide-and-Grow.md, rulings for G |
 | Hemisphere setting for the seasonal leaf. Batch D picks the season from the month, northern hemisphere; a southern-hemisphere user sees the wrong one. Needs a setting (a settings column, so a migration) and a Settings control. The doc's own note ("Note a hemisphere setting in the queue") | 2026-11-17 | Unscheduled | `lib/timeOfDay.ts` (`seasonForMonth`); docs/Motion-and-Delight.md, step 8 |
 | Bloom after an import that completes a goal. 70 records the completion (a followed card paid to zero by imported rows, or reopened by them) but no panel shows: import's response doesn't run the completion check. Edits, deletes and balance resets also complete quietly, by ruling (2026-11-17) | 2026-11-17 | Unscheduled | `lib/goalCompletionCheck.ts`; `lib/actions/import.ts` |
 | Auto-link a goal-funding schedule's confirmed occurrences to its goal (goals.funding_recurringid), so the goal's progress moves when the transfer is confirmed. Today the hold already skips a funded goal, but confirming writes no link | 2026-11-16 | After 69 and 70 merge | Findings, "A transfer for a goal came off safe to spend twice" |

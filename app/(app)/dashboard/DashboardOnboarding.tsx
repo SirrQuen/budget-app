@@ -7,6 +7,8 @@ import { SorrelMark } from "@/components/SorrelMark";
 import { PlusIcon } from "@/components/ui/icons";
 import { formatAccountBalance, formatCompactNumber } from "@/lib/format";
 import type { Database } from "@/lib/database.types";
+import type { SafeToSpend } from "@/lib/db/dashboard";
+import { SafeToSpendHero } from "./SafeToSpendHero";
 
 type AccountBalanceRow = Database["public"]["Views"]["v_account_balances"]["Row"];
 
@@ -22,28 +24,8 @@ const ladderMark = <SorrelMark size={104} className="opacity-[0.08]" />;
 
 // `welcome` is the resolved greeting from welcomeMessage() in
 // lib/displayName.ts -- built once in the page, shared by every stage.
-
-// Stage 1: no accounts. Nothing else on the dashboard means anything until
-// there's an account to log against, so the whole view is one welcome and
-// one action -- no $0 hero, no empty charts, no zeroed tiles.
-export function NoAccountsView({ welcome }: { welcome: string }) {
-  return (
-    <div className="flex flex-col gap-6">
-      <PageHeader title="Dashboard" description={welcome} />
-      <EmptyState
-        icon={ladderMark}
-        heading="Add your first account"
-        message="Sorrel keeps your accounts, spending, budgets and goals in one place. It starts with an account — checking, savings, a card, or the cash in your pocket."
-        action={
-          <Link href="/accounts" className={primaryAction}>
-            <PlusIcon className="h-4 w-4" aria-hidden="true" />
-            Add your first account
-          </Link>
-        }
-      />
-    </div>
-  );
-}
+//
+// Stage 1 (no accounts) is onboarding now: OnboardingFlow.tsx.
 
 // Stage 2: accounts, but nothing logged yet. The balances are real, so show
 // them. Everything time-based is a promise, not a figure.
@@ -53,16 +35,23 @@ export function NoTransactionsView({
   accountsError,
   netWorth,
   netWorthError,
+  safeToSpend,
 }: {
   welcome: string;
   accounts: AccountBalanceRow[];
   accountsError: string | null;
   netWorth: number | null;
   netWorthError: string | null;
+  /** The figure onboarding's step 3 showed: the hero, from its own read. null when it didn't load. */
+  safeToSpend: SafeToSpend | null;
 }) {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Dashboard" description={welcome} />
+
+      {/* The number onboarding ended on, here to stay. A failed read leaves
+          it out: the full dashboard's section errors aren't on this view. */}
+      {safeToSpend ? <SafeToSpendHero data={safeToSpend} /> : null}
 
       {/* A failed read says so; it never just drops the figure. With the
           accounts list down too, that notice covers both. */}

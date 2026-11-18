@@ -17,7 +17,15 @@ import {
   getUpcomingRecurring,
   getConfirmationQueue,
   getFutureTransactions,
+  getIncomeSchedules,
 } from "@/lib/db/dashboard";
+import { getUser } from "@/lib/auth/dal";
+import { listCategoriesForType } from "@/lib/db/categories";
+import { onboardingStep } from "@/lib/onboarding";
+import { PAYDAY_SKIP_COOKIE } from "@/lib/paydaySkip";
+import { paydaySkipToken, paydaySkipped } from "@/lib/paydaySkipToken";
+import { isSpendableAccountType } from "@/lib/safeToSpend";
+import { OnboardingFlow } from "./OnboardingFlow";
 import { getBudgetsForMonth } from "@/lib/db/budgets";
 import { getAccountLastLogged, listAccountBalances } from "@/lib/db/accounts";
 import { getReturnSummaryFacts } from "@/lib/actions/activity";
@@ -62,7 +70,7 @@ import {
 import { DashboardSections } from "./DashboardSections";
 import { SectionError } from "./SectionError";
 import { LoadError } from "@/components/ui/LoadError";
-import { NoAccountsView, NoTransactionsView } from "./DashboardOnboarding";
+import { NoTransactionsView } from "./DashboardOnboarding";
 import { DayNightMark } from "@/components/DayNightMark";
 import { WelcomeReady } from "@/components/WelcomeReady";
 
@@ -170,13 +178,47 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     ? classifyDashboardStage(onboardingResult.data, today)
     : "full";
 
-  if (stage === "no-accounts") {
-    return (
-      <>
-        <WelcomeReady />
-        <NoAccountsView welcome={welcome} />
-      </>
-    );
+  // Onboarding (docs/Decide-and-Grow.md, G): which step is derived from what
+  // exists plus this user's skip cookie -- never a stored flag
+  // (lib/onboarding.ts). Only the no-accounts and no-transactions stages can
+  // show it, so anyone who has logged anything never does. A failed income
+  // read counts as "has a paycheck": better no step 2 than one shown to
+  // someone who already has one.
+  if (stage === "no-accounts" || stage === "no-transactions") {
+    const user = await getUser();
+    const userId = user?.id ?? "";
+    const income = stage === "no-transactions" ? await getIncomeSchedules() : null;
+    const step = onboardingStep({
+      stage,
+      anyIncome: income?.data?.anyIncome ?? true,
+      skippedPayday: paydaySkipped((await cookies()).get(PAYDAY_SKIP_COOKIE)?.value, userId),
+    });
+
+    if (step !== null) {
+      const categories = step === 2 ? await listCategoriesForType("Income") : null;
+      const incomeCategories = (categories?.data ?? []).map((c) => ({ id: c.id, name: c.category_name }));
+      const paychecks = incomeCategories.find((c) => c.name === "Paychecks/Salary");
+      const accounts = (balancesResult.data ?? []).flatMap((a) =>
+        a.account_id && a.account_name && a.account_type && isSpendableAccountType(a.account_type)
+          ? [{ id: a.account_id, name: a.account_name }]
+          : [],
+      );
+      return (
+        <>
+          <WelcomeReady />
+          {/* One component in one place for both steps, so it keeps its state
+              as step 1's save re-renders the page into step 2. */}
+          <OnboardingFlow
+            step={step}
+            welcome={welcome}
+            accounts={accounts}
+            incomeCategories={incomeCategories}
+            defaultCategoryId={paychecks?.id ?? null}
+            skipToken={paydaySkipToken(userId)}
+          />
+        </>
+      );
+    }
   }
 
   if (stage === "no-transactions") {
@@ -189,6 +231,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
           accountsError={balancesResult.error}
           netWorth={netWorthResult.data?.net_worth ?? null}
           netWorthError={netWorthResult.error}
+          safeToSpend={safeToSpendResult.data}
         />
       </>
     );

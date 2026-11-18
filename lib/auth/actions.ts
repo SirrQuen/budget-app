@@ -8,7 +8,7 @@ import { authErrorMessage } from "@/lib/auth/errors";
 import { SIGNED_IN_COOKIE, SIGNED_IN_MAX_AGE_S } from "@/lib/auth/signedInFlag";
 import { markSessionStart, clearSessionStart } from "@/lib/auth/firstSession";
 import { createAccount, type SignupActionState } from "@/lib/auth/signup";
-import { sessionGreetingName, sessionTimeZone, setDailyWelcome } from "@/lib/auth/welcomeCookies";
+import { sessionGreetingName, sessionHasAccount, sessionTimeZone, setDailyWelcome, setWelcomedOn } from "@/lib/auth/welcomeCookies";
 import {
   WELCOMED_ON_COOKIE,
   WELCOME_DAILY_ENABLED,
@@ -64,11 +64,21 @@ export async function login(
     // Both reads at once: the name is only used on a new day, but reading
     // it in series added a round trip to the welcome's sign-in response
     // (~300ms on dev, measured), delaying the redirect's page behind it.
-    const [storedZone, name] = await Promise.all([sessionTimeZone(supabase), sessionGreetingName(supabase)]);
+    const [storedZone, name, hasAccount] = await Promise.all([
+      sessionTimeZone(supabase),
+      sessionGreetingName(supabase),
+      sessionHasAccount(supabase),
+    ]);
     const now = new Date();
     const day = welcomeDay(storedZone, formZone, now);
     if (shouldWelcomeToday(jar.get(WELCOMED_ON_COOKIE)?.value, day)) {
-      setDailyWelcome(jar, dailyGreeting(hourInZone(welcomeZone(storedZone, formZone), now), name), day);
+      // No account yet: onboarding's step 3 is the bloom. The day is still
+      // marked, so the welcome doesn't follow it later today.
+      if (hasAccount) {
+        setDailyWelcome(jar, dailyGreeting(hourInZone(welcomeZone(storedZone, formZone), now), name), day);
+      } else {
+        setWelcomedOn(jar, day);
+      }
     }
   }
 

@@ -12,6 +12,9 @@ import { isLiabilityAccountType } from "@/lib/accountOptions";
 
 export type ActionState = { error?: string } | undefined;
 
+/** Create also says which account it made (onboarding needs it next). */
+export type CreateAccountState = { error?: string; id?: string } | undefined;
+
 const VALID_TYPES = new Set<AccountType>(ACCOUNT_TYPES);
 
 type ParsedAccountFields = {
@@ -88,9 +91,9 @@ function parseAnchor(
 }
 
 export async function createAccountAction(
-  _prevState: ActionState,
+  _prevState: CreateAccountState,
   formData: FormData,
-): Promise<ActionState> {
+): Promise<CreateAccountState> {
   const parsed = parseAccountFields(formData);
   if ("error" in parsed) {
     return parsed;
@@ -103,13 +106,17 @@ export async function createAccountAction(
     return anchor;
   }
 
-  const { error } = await createAccount({ ...parsed, ...anchor });
+  const created = await createAccount({ ...parsed, ...anchor });
 
-  if (error) {
-    return { error };
+  if (created.error !== null) {
+    return { error: created.error };
   }
 
   revalidatePath("/accounts");
+  // The dashboard derives its onboarding step from what exists: a first
+  // account moves it from step 1 to step 2 (docs/Decide-and-Grow.md, G).
+  revalidatePath("/dashboard");
+  return { id: created.data.id };
 }
 
 export async function updateAccountAction(
