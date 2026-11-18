@@ -565,6 +565,49 @@ Source: `docs/legal/privacy-and-terms.md` (rendered by `lib/legal.ts`).
   is already in their profile. What made the user id wrong in
   `sorrel_welcomed_on` was 400-day persistence, not that it was personal;
   display text that exists for under a minute is a different thing.
+- **Privacy policy, corrected 2026-11-17 (cookie and storage paragraph).**
+  Raised 2026-11-17 by batch G's check: a "skipped payday" cookie would
+  have made the paragraph untrue. Auditing it showed it was ALREADY
+  untrue: "the only cookies Sorrel sets" was a closed list, and features
+  since had added first-party cookies and browser-storage keys it never
+  named. The audit, every key the app sets (2026-11-17):
+
+  | Key | Where | Added by | Listed before? |
+  |---|---|---|---|
+  | `sb-<ref>-auth-token` (+ chunks, code verifier) | cookie | Supabase Auth | yes (signed in / sign-in process) |
+  | `sorrel_signed_in` | cookie, 60 s | Sorrel mark fold, `53f5051` (2026-09-27) | yes (sign-in process) |
+  | `sorrel_first_session` | cookie, httpOnly | preferred name, `e52871a` (2026-09-27) | yes (sign-in process) |
+  | `sorrel_welcome` | cookie, 60 s | welcome bloom | yes |
+  | `sorrel_welcomed_on` | cookie, 7 days | welcome bloom, `33a1232` (2026-10-27) | yes |
+  | `sorrel_not_yet` | cookie | "Hasn't landed yet", `18a7616` (2026-10-17) | **no** |
+  | `sorrel_coming_up_seen` | cookie | Coming up "Got it", `60daa96` (2026-11-09) | **no** |
+  | `sorrel_whats_new_seen_<date>` | cookie | What's new "Got it", `cfa43f2` (2026-11-16) | **no** |
+  | `sorrel_recap_seen_<YYYY-MM>` | cookie, 45 days | month recap, `9681b87` (2026-11-16) | **no** |
+  | `sorrel-theme` | localStorage | theme | yes |
+  | `sorrel_last_activity` | localStorage | idle sign-out, `51e2319` (2026-10-17) | **no** |
+  | `celebrated-budget-<id>` | localStorage | budget celebration, `5f1e333` (2026-08-20) | **no** |
+  | `goal-pct-<goalId>` | localStorage | goal stem, `04ba4f6` (2026-08-24) | **no** |
+  | `sorrel.datedAhead` | localStorage | dated-ahead settle, `8df3631` (2026-11-10) | **no** |
+  | `season-seen` | localStorage | seasonal leaf, `1fd77f3` (2026-11-16) | **no** |
+  | `sorrel_signup_email` | sessionStorage, one-shot | check-your-email, `33191e8` (2026-10-20) | **no** |
+  | `sorrel_runway_drawn` | sessionStorage | runway, `7fd0adb` (2026-11-17) | **no** |
+
+  The cookie sentence now adds "remember small choices you make in the
+  app, such as dismissing a card, answering 'not yet' to a question, or
+  skipping a setup step" (the last is batch G's skip cookie, written in
+  ahead of it by ruling). The storage sentence now covers what's actually
+  there: theme, display preferences, when you were last active (idle
+  sign-out), what you last saw so animations only play on a change, and
+  the one-shot signup email in the tab. "Last updated" November 17, 2026.
+  **A correction, not a change in how information is handled; no tester
+  email** (ruled 2026-11-17). Reasoning: it is none of the three triggers
+  (processor, bank connection, deletion behaviour); every key is
+  first-party, stays on the device or travels only to mysorrel.com,
+  carries no tracking or analytics, and the data each holds was already
+  being held -- the policy text simply hadn't caught up. The cause is
+  process, so the rule now sits in CLAUDE.md's merge gate: a branch that
+  adds a cookie or a localStorage key lists it in its report and updates this
+  paragraph in the same branch.
 - **Terms of service:** published 2026-10-12, unchanged since.
 - **Operator:** MW Cyber Architects LLC. **Contact:** hello@mysorrel.com.
 

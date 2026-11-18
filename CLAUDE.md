@@ -533,6 +533,11 @@ minutes".
 listing every note in `docs/tester-notes/` marked to go out before deploy
 whose Sent line is "not yet". If there are none, say "No tester notes
 blocking."
+Any branch that adds a cookie or a localStorage key lists it in the
+report and updates the privacy policy's cookie paragraph in the same
+branch. (Why: the paragraph said "the only cookies Sorrel sets" while
+features since had added eleven unlisted keys; corrected 2026-11-17 --
+docs/phase-7-findings.md, "Privacy policy and terms (A2)".)
 
 A change that moves a number a tester can see (safe to spend, an
 estimate, a balance) gets a dated note in `docs/tester-notes/`: sent

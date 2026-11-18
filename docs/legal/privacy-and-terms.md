@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated: November 14, 2026**
+**Last updated: November 17, 2026**
 
 Sorrel is a personal budgeting app operated by **MW Cyber Architects LLC**. This policy explains what we collect, where it lives, who can see it, and what happens when you leave.
 
@@ -28,7 +28,7 @@ Sorrel is currently in beta testing. This policy describes what we do today, not
 - Sign-in times and session records
 - Error logs when something goes wrong, which may include the page you were on and what failed
 
-We don't use advertising trackers, analytics pixels, or third-party cookies. The only cookies Sorrel sets are the ones that keep you signed in, support the sign-in process, remember when you last saw the opening animation, and, for up to a minute as you sign in, carry the name that animation greets you by. Your theme and a few display preferences are stored in your browser's local storage, on your device only.
+We don't use advertising trackers, analytics pixels, or third-party cookies. The only cookies Sorrel sets are the ones that keep you signed in, support the sign-in process, remember when you last saw the opening animation, carry the name that animation greets you by for up to a minute as you sign in, and remember small choices you make in the app, such as dismissing a card, answering "not yet" to a question, or skipping a setup step. Your browser's own storage, on your device only, holds your theme, your display preferences, when you were last active (so Sorrel can sign you out after a stretch of inactivity), and what you last saw, so animations only play when something changed. While you sign up, the browser tab also holds the email address you entered, so the sign-in screen can fill it in; it's removed as soon as that screen reads it.
 
 ## If you join the waitlist
 
