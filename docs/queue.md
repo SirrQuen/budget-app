@@ -92,7 +92,7 @@ before-deploy) for the next What's new card. Raised 2026-11-17.
 19. **Batch F -- the runway + "Can I afford it?"** Opus. Phase 1 (one report
     for F, G and H) given 2026-11-17; ruled the same day. Built on
     `feat/runway-what-if` 2026-11-17, verified on sorrel-dev. Merged to main
-    2026-11-17 (`922e4d3`, fast-forward); not yet deployed.
+    2026-11-17 (`922e4d3`, fast-forward); deployed 2026-11-17.
     No migration. Ruled 2026-11-17: the figure keeps opening the breakdown;
     the runway opens from "See your runway" under the card and inside the
     breakdown, not from the figure (the spec's F1 said the figure).
@@ -128,7 +128,7 @@ docs/tester-notes/README.md). Move a line out when it's sent.
   goal-funding-schedule gap (auto-link queued). Next What's new card. Not
   before-deploy.
 - Batch F, the runway and "What if…" (no migration, merged `922e4d3`,
-  not yet deployed): draft in docs/tester-notes/2026-11-17-runway-and-what-if.md.
+  deployed 2026-11-17): draft in docs/tester-notes/2026-11-17-runway-and-what-if.md.
   No number moves. Next What's new card. Not before-deploy.
 - Motion batch D, seasons and time of day (merged `e1db401`, deployed 2026-11-17): draft in
   docs/tester-notes/2026-11-17-seasons-and-time-of-day.md. No number moves. Next What's new
