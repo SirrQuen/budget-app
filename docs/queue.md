@@ -97,9 +97,13 @@ before-deploy) for the next What's new card. Raised 2026-11-17.
     the runway opens from "See your runway" under the card and inside the
     breakdown, not from the figure (the spec's F1 said the figure).
 20. **Batch G -- onboarding that grows.** Opus. After F; before any new
-    testers. Ruled 2026-11-17. Built on `feat/onboarding-grows`; not
-    merged. Preceded by the privacy-policy cookie correction on main
-    (`e3f9c65`). No migration.
+    testers. Ruled 2026-11-17. Built on `feat/onboarding-grows` and
+    verified on sorrel-dev with a new user 2026-11-17 (every frequency,
+    skip, step 3 = hero); not merged. Preceded by the privacy-policy cookie
+    correction on main (`e3f9c65`). No migration. Open: one production
+    user has an account, no transactions and no paycheck, so would see
+    step 2 (counted read-only 2026-11-17); Matt to rule. Tester note:
+    docs/tester-notes/2026-11-17-onboarding.md.
 21. **Batch H -- goal pace.** Opus. After G.
 
 ## Launch blockers still open
@@ -129,6 +133,9 @@ docs/tester-notes/README.md). Move a line out when it's sent.
   docs/tester-notes/2026-11-18-month-recap.md. No number moves. Names the
   goal-funding-schedule gap (auto-link queued). Next What's new card. Not
   before-deploy.
+- Batch G, onboarding (no migration, `feat/onboarding-grows`, not merged):
+  draft in docs/tester-notes/2026-11-17-onboarding.md. No number moves for
+  existing users. Next What's new card. Not before-deploy.
 - Batch F, the runway and "What if…" (no migration, merged `922e4d3`,
   deployed 2026-11-17): draft in docs/tester-notes/2026-11-17-runway-and-what-if.md.
   No number moves. Next What's new card. Not before-deploy.
