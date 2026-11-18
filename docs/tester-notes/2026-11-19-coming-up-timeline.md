@@ -1,7 +1,7 @@
 Sent:      not yet
 Migration: none
 Merge:     b5bb7aa (feat/coming-up-timeline, fast-forward)
-Deployed:  not yet
+Deployed:  2026-11-18
 
 ---
 
