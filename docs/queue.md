@@ -106,8 +106,9 @@ before-deploy) for the next What's new card. Raised 2026-11-17.
     production then has 0 users who would see either (read-only count
     2026-11-18). Bills addition (step 3 "Add your bills", dashboard card)
     built and verified on dev 2026-11-18; the test user was deleted through
-    Settings and confirmed gone. Open: 3 production users with no account
-    would see step 1 in place of the old "Add your first account" screen. Tester note:
+    Settings and confirmed gone. Ruled 2026-11-18: the 3 production users
+    with no account see step 1 in place of the old "Add your first
+    account" screen -- it is the only way in, and asks the same thing. Tester note:
     docs/tester-notes/2026-11-17-onboarding.md.
 21. **Batch H -- goal pace.** Opus. After G.
 
