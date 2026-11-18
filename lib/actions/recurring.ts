@@ -355,7 +355,13 @@ export async function createRecurringAction(
     revalidatePath("/transactions");
   }
 
-  revalidatePath("/recurring");
+  // "Add your bills" in onboarding's step 3 asks to stay on the page:
+  // any revalidation here re-renders the calling route (Next 16), which
+  // would replace step 3. It refreshes its own figure instead, and
+  // /recurring renders dynamically, so nothing is left stale.
+  if (formData.get("stay_on_page") !== "1") {
+    revalidatePath("/recurring");
+  }
 
   if (goalLink?.goalId) {
     const linked = await setGoalFunding(created.data.id, goalLink.goalId);

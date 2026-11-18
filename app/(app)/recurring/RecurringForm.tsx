@@ -154,6 +154,16 @@ export type EditableRecurring = {
 // next occurrence after it -- following Repeats until the person sets a
 // date themselves. Repeats and Ends start from the create-mode defaults; a
 // one-off implies no cadence.
+/** A new schedule from a choice, not a transaction: see RecurringForm's `start`. */
+export type RecurringStart = {
+  description: string;
+  kind: Kind;
+  categoryid: string | null;
+  accountid: string;
+  to_accountid: null;
+  amount?: undefined;
+};
+
 export type RecurringPrefill = {
   description: string;
   amount: number;
@@ -271,6 +281,8 @@ function TimingRadioList<T extends string>({
 export function RecurringForm({
   recurring,
   prefill,
+  start,
+  stayOnPage = false,
   incomeCategories,
   expenseCategories,
   accounts,
@@ -282,6 +294,20 @@ export function RecurringForm({
   recurring?: EditableRecurring;
   /** Create mode only -- seeds fields from an existing transaction. Ignored if `recurring` is set. */
   prefill?: RecurringPrefill;
+  /**
+   * Create mode only -- a new schedule started from a choice rather than a
+   * transaction ("Add your bills", docs/Decide-and-Grow.md G): a name, a
+   * kind and, when one fits, a category. Ignored if `recurring` or
+   * `prefill` is set.
+   */
+  start?: RecurringStart;
+  /**
+   * Create mode only: save without re-rendering the page the form sits on.
+   * In Next 16 any revalidatePath in an action re-renders the calling
+   * route; onboarding's step 3 would be replaced mid-way. The caller then
+   * refreshes what it shows itself.
+   */
+  stayOnPage?: boolean;
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
   accounts: TransactionAccountOption[];
@@ -299,7 +325,7 @@ export function RecurringForm({
   onCancel: () => void;
 }) {
   const isEdit = recurring !== undefined;
-  const seed = recurring ?? prefill;
+  const seed = recurring ?? prefill ?? start;
   const [state, action, pending, submit] = useActionForm<ActionState>(
     isEdit ? updateRecurringAction : createRecurringAction,
     undefined,
@@ -447,6 +473,7 @@ export function RecurringForm({
     >
       {isEdit ? <input type="hidden" name="id" value={recurring.id} /> : null}
       {source ? <input type="hidden" name="source_transaction_id" value={source.sourceTransactionId} /> : null}
+      {stayOnPage && !isEdit ? <input type="hidden" name="stay_on_page" value="1" /> : null}
 
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold text-ink">

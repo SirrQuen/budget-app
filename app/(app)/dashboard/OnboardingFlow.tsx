@@ -16,8 +16,10 @@ import type { SafeToSpend } from "@/lib/db/dashboard";
 import { formatDateWithWeekday, formatSignedAmount, formatCurrency } from "@/lib/format";
 import { ONBOARDING_ACCOUNT_TYPES, PAY_FREQUENCIES, nextLastDay, type OnboardingStep, type PayFrequency } from "@/lib/onboarding";
 import { paydaySkipCookie } from "@/lib/paydaySkip";
-import { whyThisNumber } from "@/lib/whatsAhead";
 import { RunwayDialog } from "./RunwayDialog";
+import { BillsPrompt, type BillsFormLists } from "./BillsPrompt";
+import { RollingFigure } from "@/components/ui/RollingFigure";
+import { useValueChange } from "@/components/ui/useValueChange";
 
 // Onboarding that grows (docs/Decide-and-Grow.md, G): three screens for
 // someone with no accounts -- an account, a paycheck, the number. The page
@@ -39,8 +41,11 @@ export function OnboardingFlow({
   incomeCategories,
   defaultCategoryId,
   skipToken,
+  billsLists = null,
 }: {
   step: OnboardingStep;
+  /** Step 3's "Add your bills": the recurring form's lists. */
+  billsLists?: BillsFormLists | null;
   welcome: string;
   /** Step 2: the checking and cash accounts pay can land in. */
   accounts: OnboardingAccount[];
@@ -83,7 +88,7 @@ export function OnboardingFlow({
             onDone={setResult}
           />
         ) : result ? (
-          <NumberStep headingRef={headingRef} data={result} />
+          <NumberStep headingRef={headingRef} data={result} lists={billsLists} />
         ) : null}
       </section>
     </div>
@@ -445,16 +450,37 @@ function PaydayField({ n, label, today, allowLastDay }: { n: 1 | 2; label: strin
 
 function NumberStep({
   headingRef,
-  data,
+  data: initial,
+  lists,
 }: {
   headingRef: React.RefObject<HTMLHeadingElement | null>;
   data: SafeToSpend;
+  /** The recurring form's lists, for "Add your bills". null: bills aren't offered here. */
+  lists: BillsFormLists | null;
 }) {
   const router = useRouter();
+  const [data, setData] = useState(initial);
   const [runwayOpen, setRunwayOpen] = useState(false);
+  const [addingBills, setAddingBills] = useState(false);
   const [continuing, startContinue] = useTransition();
   const positive = data.safeToSpend > 0;
   const figure = positive ? formatSignedAmount(data.safeToSpend, "Income").text : formatCurrency(0);
+  // A bill lowers the number: it rolls down calmly -- no glow, no leaves, no
+  // comment (RollingFigure with glow off; a fall never glows anyway).
+  const change = useValueChange(data.safeToSpend);
+  const previousFigure =
+    change.previous === null ? null : change.previous > 0 ? formatSignedAmount(change.previous, "Income").text : formatCurrency(0);
+  // Honest about what it counts: right after onboarding there are no bills.
+  const paycheckCounted = data.incomes.length > 0;
+
+  function refreshFigure() {
+    startContinue(async () => {
+      const res = await currentSafeToSpendAction();
+      if (!("error" in res)) setData(res.safeToSpend);
+    });
+  }
+
+  const toDashboard = () => startContinue(() => router.refresh());
 
   return (
     <div className="flex flex-col items-center gap-4 text-center">
@@ -468,23 +494,40 @@ function NumberStep({
         <StepHeading headingRef={headingRef}>Here&apos;s your number</StepHeading>
         <p className="mt-1 text-sm text-ink-secondary">Safe to spend through {formatDateWithWeekday(data.horizonEnd)}</p>
       </div>
-      <p className={`text-5xl font-medium ${positive ? toneClassName("good") : "text-ink"}`}>{figure}</p>
-      <p className="max-w-sm text-sm text-ink-secondary">{whyThisNumber(data).cause}</p>
+      <p className={`text-5xl font-medium ${positive ? toneClassName("good") : "text-ink"}`}>
+        <RollingFigure text={figure} previousText={previousFigure} change={change} glow={false} />
+      </p>
+      <p className="max-w-sm text-sm text-ink-secondary">
+        {paycheckCounted ? "That counts your paycheck. " : ""}Add your regular bills and it gets sharper.
+      </p>
 
-      <div className="flex flex-wrap items-center justify-center gap-3">
-        <button
-          type="button"
-          onClick={() => setRunwayOpen(true)}
-          className="inline-flex min-h-11 items-center rounded-full px-3 text-sm font-medium text-ink-secondary underline-offset-2 transition-colors duration-150 hover:text-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-        >
-          See how we got there
-        </button>
-        <Button type="button" disabled={continuing} onClick={() => startContinue(() => router.refresh())}>
-          {continuing ? "One moment…" : "Go to your dashboard"}
-        </Button>
-      </div>
+      {addingBills && lists ? (
+        <div className="flex w-full flex-col items-center gap-3">
+          <BillsPrompt lists={lists} added={[]} stayOnPage onAdded={refreshFigure} />
+          <Button type="button" disabled={continuing} onClick={toDashboard}>
+            {continuing ? "One moment…" : "Done"}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          {lists ? (
+            <Button type="button" onClick={() => setAddingBills(true)}>
+              Add your bills
+            </Button>
+          ) : null}
+          <button type="button" disabled={continuing} onClick={toDashboard} className={secondaryButton}>
+            {continuing ? "One moment…" : lists ? "Later" : "Go to your dashboard"}
+          </button>
+        </div>
+      )}
+      <button type="button" onClick={() => setRunwayOpen(true)} className={secondaryButton}>
+        See how we got there
+      </button>
 
       {runwayOpen ? <RunwayDialog data={data} startWith="runway" onClose={() => setRunwayOpen(false)} /> : null}
     </div>
   );
 }
+
+const secondaryButton =
+  "inline-flex min-h-11 items-center rounded-full px-3 text-sm font-medium text-ink-secondary underline-offset-2 transition-colors duration-150 hover:text-ink hover:underline disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";

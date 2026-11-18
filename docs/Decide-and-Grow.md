@@ -48,6 +48,14 @@
 - **Resumable without a new stored flag:** which step to show is worked out from what exists (no account means step 1; an account but no income schedule, and not skipped, means step 2). The "skipped" choice is a cookie.
 - **Under two minutes,** three screens, progress shown, keyboard and screen-reader friendly.
 
+### G, addition (2026-11-17): bills
+
+- **Step 3 is honest.** Right after onboarding the number counts the paycheck but no bills, so it overstates. Under the figure: *"That counts your paycheck. Add your regular bills and it gets sharper."* Primary button "Add your bills", secondary "Later". "See how we got there" stays.
+- **Add your bills:** chips for Rent or mortgage, Phone, Internet, Car payment, Insurance, Subscriptions and Other. Each opens the **existing** recurring create form, prefilled with an expense and a name. Category: an existing match if there is one, otherwise the picker. **Never create a category silently.** Adding several in a row returns to the chips, each added one with a quiet "Added" check.
+- **Dashboard card, if they chose Later:** *"Have regular bills? Add them for a sharper Safe to Spend."* with the same chips. Shown until it's dismissed, 3 recurring expenses exist, or 14 days have passed since the first account was created. Derived from data plus a dismiss cookie (listed per the merge-gate rule; the corrected policy wording covers it). No badge, no notification, never shown to existing users.
+- **Tone:** adding a bill lowers the number. It rolls down calmly, with no glow, no leaves and no comment.
+- **Verify:** a new user who taps Later sees the card; adding one bill moves the number by that bill and the card stays; adding three hides it; dismissing hides it; an existing user never sees it.
+
 ## H · Goal pace
 
 - **Pace:** the average monthly goal money over the last 3 complete months, from the single goal-money source (migration 69). Shown only when there's enough history (Phase 1 proposes the minimum) and the pace is above zero.
