@@ -116,3 +116,63 @@ test("landing page: signed out sees it, signed in goes to the dashboard", async 
   assert.equal(res.status, 307);
   assert.equal(new URL(res.headers.get("location")!).pathname, "/dashboard");
 });
+
+// Queue item 22 (ruled 2026-11-18): a save whose session has gone must land
+// on /login?reason=expired, never the generic error. A 307 is followed by
+// the browser's fetch as a POST to /login, which Next's client can't read
+// as an action response. The proxy answers a Server Action call with the
+// header Next's client turns into a full page load instead.
+function actionRequest(pathname: string, signedIn: boolean) {
+  const req = new NextRequest(`http://app.test${pathname}`, {
+    method: "POST",
+    headers: { "next-action": "7f00000000000000000000000000000000000000aa", "content-type": "text/plain;charset=UTF-8" },
+    body: "[]",
+  });
+  if (signedIn) req.cookies.set(COOKIE, sessionCookie());
+  return req;
+}
+
+test("save with no session: x-action-redirect to /login?reason=expired, never a redirect", async (t) => {
+  quiet(t);
+  stubFetch(t, unreachable);
+  for (const pathname of ["/goals", "/dashboard", "/transactions"]) {
+    const res = await updateSession(actionRequest(pathname, false));
+    assert.equal(res.status, 401, pathname);
+    assert.equal(res.headers.get("location"), null, `${pathname}: a 3xx would be followed as POST /login`);
+    assert.equal(res.headers.get("x-action-redirect"), "/login?reason=expired;replace", pathname);
+    assert.equal(passedThrough(res), false, `${pathname}: passed through`);
+    assert.equal(await res.text(), "", `${pathname}: body`);
+  }
+});
+
+test("save whose token the auth server rejects: the same landing", async (t) => {
+  quiet(t);
+  stubFetch(t, respond(401, { code: "bad_jwt", msg: "invalid JWT" }));
+  const res = await updateSession(actionRequest("/goals", true));
+  assert.equal(res.status, 401);
+  assert.equal(res.headers.get("x-action-redirect"), "/login?reason=expired;replace");
+});
+
+test("save with a verified session: passes through", async (t) => {
+  quiet(t);
+  stubFetch(t, respond(200, { id: "user-1", aud: "authenticated" }));
+  assert.equal(passedThrough(await updateSession(actionRequest("/goals", true))), true);
+});
+
+test("save while the auth server is unreachable: still the 503, not a sign-out", async (t) => {
+  quiet(t);
+  stubFetch(t, unreachable);
+  const res = await updateSession(actionRequest("/goals", true));
+  assert.equal(res.status, 503);
+  assert.equal(res.headers.get("x-action-redirect"), null);
+});
+
+test("a POST that isn't a Server Action keeps the plain redirect", async (t) => {
+  quiet(t);
+  stubFetch(t, unreachable);
+  const req = new NextRequest("http://app.test/goals", { method: "POST", body: "x" });
+  const res = await updateSession(req);
+  assert.equal(res.status, 307);
+  assert.equal(new URL(res.headers.get("location")!).pathname, "/login");
+  assert.equal(res.headers.get("x-action-redirect"), null);
+});

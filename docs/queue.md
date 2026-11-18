@@ -138,6 +138,19 @@ before-deploy) for the next What's new card. Raised 2026-11-17.
     an expired session on ANY save lands on /login?reason=timeout, never
     the generic error. Also why the idle sign-out didn't move the tab to
     /login?reason=timeout itself (components/IdleTimeout.tsx).
+    Cause (2026-11-18): the proxy answered a Server Action with no
+    session with a 307, which fetch follows as POST /login. And the idle
+    sign-out never fired: the save failed 3 min 18 s after the page
+    loaded (warning at 10 min); most likely Log out in another tab, which
+    ends every session but didn't tell other tabs. Ruled 2026-11-18: a
+    save with no session lands on a NEW /login?reason=expired ("Your
+    session ended. Sign in to carry on."), not reason=timeout, whose
+    15-minute sentence would be untrue; Log out tells the session's other
+    tabs (same record as idle, "manual"). Built on
+    `fix/expired-session-on-save`, verified on dev 2026-11-18: an
+    expired save landed on /login?reason=expired and wrote nothing; Log
+    out in one tab moved the other to /login with no input. No number
+    moves, no new storage key: no tester note.
 
 ## Launch blockers still open
 

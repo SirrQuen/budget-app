@@ -617,6 +617,17 @@ authenticated routes run it -- warning modal at 10 min, sign-out at 15.
 - Timeout lands on `/login?reason=timeout`, which says what happened.
   "Sign out now" from the warning goes to plain `/login` -- it wasn't a
   timeout.
+- A save that finds the session gone lands on `/login?reason=expired`
+  ("Your session ended. Sign in to carry on."), never the generic error
+  and never `reason=timeout`: the server can't tell why it ended. The
+  proxy answers a Server Action call with no session with an
+  `x-action-redirect` header, not a redirect -- a 307 is followed as a
+  POST to /login and surfaces as "Something on our end broke"
+  (`lib/sessionEnded.ts`, ruled 2026-11-18).
+- The sidebar's Log out writes the same shared record ("manual") before
+  its action runs, so the session's other tabs leave at once
+  (`announceSignOut`). Log out ends every session; the tab that pressed
+  it ignores its own record so nothing cuts that request off.
 
 ## A page render never writes
 

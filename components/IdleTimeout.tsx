@@ -53,6 +53,26 @@ function writeRecord(record: ActivityRecord) {
   }
 }
 
+// Set by announceSignOut in the tab that pressed Log out; the page then
+// unloads, so it never needs resetting.
+let loggingOutHere = false;
+
+/**
+ * Tell this session's other tabs it is ending by choice (the sidebar's Log
+ * out), the same record the idle path writes: each one's storage listener
+ * reads it and leaves to /login at once, instead of sitting on its page
+ * until a save finds the session gone (queue item 22, ruled 2026-11-18).
+ * "manual", so they land on plain /login -- it wasn't a timeout.
+ */
+export function announceSignOut(sessionId: string) {
+  // This tab is leaving through the Log out action (which ends every
+  // session and redirects). Its own timer must not act on the record:
+  // the idle path's local sign-out and navigation could cut that request
+  // off before it ends the other sessions.
+  loggingOutHere = true;
+  writeRecord({ sessionId, at: Date.now(), signedOut: "manual" });
+}
+
 export function IdleTimeout({ sessionId }: { sessionId: string }) {
   const lastActivityAt = useRef(0);
   const lastWriteAt = useRef(0);
@@ -88,7 +108,7 @@ export function IdleTimeout({ sessionId }: { sessionId: string }) {
   );
 
   const evaluate = useCallback((): IdlePhase["kind"] => {
-    if (leaving.current) return "expired";
+    if (leaving.current || loggingOutHere) return "expired";
 
     const record = readRecord();
     const elsewhere = signedOutElsewhere(record, sessionId);

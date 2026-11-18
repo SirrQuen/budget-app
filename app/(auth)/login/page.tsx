@@ -1,5 +1,6 @@
 import { InboxIcon, InfoIcon } from "@/components/ui/icons";
 import { timeoutNotice } from "@/lib/idleTimeout";
+import { SESSION_ENDED_NOTICE } from "@/lib/sessionEnded";
 import { LoginForm } from "./login-form";
 import { EMAIL_CONFIRMED_NOTICE, linkErrorMessage } from "@/lib/auth/linkOutcome";
 
@@ -22,6 +23,11 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   // the session. Neutral -- it's housekeeping, not an error.
   const timedOut = params.reason === "timeout";
 
+  // Set when a save found the session gone (the proxy, lib/sessionEnded.ts).
+  // The server can't tell why it ended, so this names no cause -- the idle
+  // sign-out keeps its own reason, above.
+  const sessionEnded = params.reason === "expired";
+
   return (
     <>
       <h1 className="mb-6 text-2xl font-semibold text-ink">Log in</h1>
@@ -33,11 +39,11 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         </div>
       ) : null}
 
-      {timedOut ? (
+      {timedOut || sessionEnded ? (
         <div className="mb-6 flex items-start gap-3 rounded-xl border border-hairline bg-surface-raised px-4 py-3">
           <InfoIcon className="mt-0.5 h-5 w-5 shrink-0 text-ink-muted" aria-hidden="true" />
           <p role="status" className="text-sm text-ink-secondary">
-            {timeoutNotice()}
+            {timedOut ? timeoutNotice() : SESSION_ENDED_NOTICE}
           </p>
         </div>
       ) : null}

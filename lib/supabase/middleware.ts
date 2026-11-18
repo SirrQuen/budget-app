@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/database.types";
 import { classifyDbError, logDbError, UNREACHABLE } from "@/lib/db/errors";
+import { isServerActionRequest, sessionEndedActionResponse } from "@/lib/sessionEnded";
 
 // Paths reachable without a session. Everything else (including every route
 // under app/(app)/) requires auth. /auth/confirm is the email-link callback;
@@ -120,6 +121,16 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (!isAuthenticated && !PUBLIC_PATHS.has(pathname) && !pathname.startsWith("/auth/")) {
+    // A save (Server Action) whose session has gone: a redirect here would
+    // be followed as a POST to /login and surface as the generic error.
+    // Answer in the form Next's client turns into a full page load to
+    // /login?reason=expired instead (lib/sessionEnded.ts).
+    if (isServerActionRequest(request.method, request.headers)) {
+      const ended = sessionEndedActionResponse();
+      const response = new NextResponse(null, { status: ended.status, headers: ended.headers });
+      supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+      return response;
+    }
     return redirectTo(request, "/login", supabaseResponse);
   }
 

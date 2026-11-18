@@ -13,7 +13,7 @@ import type { FollowedGoal, GoalOption } from "@/lib/db/goals";
 import { OptimisticTransactionsProvider } from "@/components/quick-add/OptimisticTransactionsContext";
 import { ConfirmPulseProvider } from "@/components/ui/ConfirmPulse";
 import { SorrelMark } from "@/components/SorrelMark";
-import { IdleTimeout } from "@/components/IdleTimeout";
+import { IdleTimeout, announceSignOut } from "@/components/IdleTimeout";
 import { PageArrival } from "@/components/PageArrival";
 import { RippleHost } from "@/components/RippleHost";
 import { GoalCompletionProvider } from "@/components/GoalCompletionHost";
@@ -131,7 +131,15 @@ export function AppShell({
               <ThemeToggle variant="compact" />
             </div>
             <p className="truncate px-3 text-sm text-ink-secondary">{accountName}</p>
-            <form action={logout}>
+            {/* Before the action runs, the session's other tabs are told
+                (announceSignOut): Log out ends every session, and a tab
+                left on its page would otherwise only find out on a save. */}
+            <form
+              action={logout}
+              onSubmit={() => {
+                if (sessionId) announceSignOut(sessionId);
+              }}
+            >
               <button
                 type="submit"
                 className="min-h-11 w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-secondary transition-colors duration-150 hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page"
