@@ -151,6 +151,8 @@ before-deploy) for the next What's new card. Raised 2026-11-17.
     expired save landed on /login?reason=expired and wrote nothing; Log
     out in one tab moved the other to /login with no input. No number
     moves, no new storage key: no tester note.
+    Merged to main 2026-11-18 (`bc918b3`, fast-forward); deployed
+    2026-11-18.
 
 ## Launch blockers still open
 
