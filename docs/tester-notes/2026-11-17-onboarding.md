@@ -1,7 +1,7 @@
 Sent:      not yet
 Migration: none
 Merge:     b5d2cf2 (feat/onboarding-grows, fast-forward)
-Deployed:  not yet
+Deployed:  2026-11-18
 
 ---
 

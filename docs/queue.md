@@ -100,7 +100,7 @@ before-deploy) for the next What's new card. Raised 2026-11-17.
     testers. Ruled 2026-11-17. Built on `feat/onboarding-grows` and
     verified on sorrel-dev with a new user 2026-11-17 (every frequency,
     skip, step 3 = hero). Merged to main 2026-11-18 (`b5d2cf2`,
-    fast-forward); not yet deployed. Preceded by the privacy-policy cookie
+    fast-forward); deployed 2026-11-18. Preceded by the privacy-policy cookie
     correction on main (`e3f9c65`). No migration. Ruled 2026-11-18:
     step 2 and the bills card are only for someone whose first account is
     on or after 2026-11-18 00:00 UTC (NEW_USERS_FROM, lib/onboarding.ts);
@@ -140,7 +140,7 @@ docs/tester-notes/README.md). Move a line out when it's sent.
   docs/tester-notes/2026-11-18-month-recap.md. No number moves. Names the
   goal-funding-schedule gap (auto-link queued). Next What's new card. Not
   before-deploy.
-- Batch G, onboarding (no migration, merged `b5d2cf2`, not yet deployed):
+- Batch G, onboarding (no migration, merged `b5d2cf2`, deployed 2026-11-18):
   draft in docs/tester-notes/2026-11-17-onboarding.md. No number moves for
   existing users. Next What's new card. Not before-deploy.
 - Batch F, the runway and "What if…" (no migration, merged `922e4d3`,
