@@ -15,13 +15,37 @@ import type { DashboardStage } from "@/lib/db/dashboard";
 
 export type OnboardingStep = 1 | 2;
 
+/**
+ * New since onboarding shipped: anyone whose first account is older has
+ * been using Sorrel without it, and never sees the payday step or the bills
+ * card (ruled 2026-11-18: "Existing users never see onboarding"). One
+ * cutoff for both, so they can't disagree about who is new.
+ */
+export const NEW_USERS_FROM = "2026-11-18T00:00:00Z";
+
+/** Whether a first account created at this instant belongs to someone new. */
+export function isNewSince(firstAccountCreatedAt: string | null): boolean {
+  if (firstAccountCreatedAt === null) return false;
+  const t = Date.parse(firstAccountCreatedAt);
+  return !Number.isNaN(t) && t >= Date.parse(NEW_USERS_FROM);
+}
+
 export function onboardingStep(input: {
   stage: DashboardStage;
   anyIncome: boolean;
   skippedPayday: boolean;
+  /** The first account's created_at; step 2 is only for someone new (NEW_USERS_FROM). */
+  firstAccountCreatedAt: string | null;
 }): OnboardingStep | null {
   if (input.stage === "no-accounts") return 1;
-  if (input.stage === "no-transactions" && !input.anyIncome && !input.skippedPayday) return 2;
+  if (
+    input.stage === "no-transactions" &&
+    !input.anyIncome &&
+    !input.skippedPayday &&
+    isNewSince(input.firstAccountCreatedAt)
+  ) {
+    return 2;
+  }
   return null;
 }
 

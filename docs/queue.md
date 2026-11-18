@@ -100,9 +100,14 @@ before-deploy) for the next What's new card. Raised 2026-11-17.
     testers. Ruled 2026-11-17. Built on `feat/onboarding-grows` and
     verified on sorrel-dev with a new user 2026-11-17 (every frequency,
     skip, step 3 = hero); not merged. Preceded by the privacy-policy cookie
-    correction on main (`e3f9c65`). No migration. Open: one production
-    user has an account, no transactions and no paycheck, so would see
-    step 2 (counted read-only 2026-11-17); Matt to rule. Tester note:
+    correction on main (`e3f9c65`). No migration. Ruled 2026-11-18:
+    step 2 and the bills card are only for someone whose first account is
+    on or after 2026-11-18 00:00 UTC (NEW_USERS_FROM, lib/onboarding.ts);
+    production then has 0 users who would see either (read-only count
+    2026-11-18). Bills addition (step 3 "Add your bills", dashboard card)
+    built and verified on dev 2026-11-18; the test user was deleted through
+    Settings and confirmed gone. Open: 3 production users with no account
+    would see step 1 in place of the old "Add your first account" screen. Tester note:
     docs/tester-notes/2026-11-17-onboarding.md.
 21. **Batch H -- goal pace.** Opus. After G.
 

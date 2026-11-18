@@ -2,26 +2,35 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { addDaysISO, endOfMonthISO } from "./date";
 import { nextOccurrenceISO } from "./recurringCadence";
-import { lastDayAnchor, nextLastDay, onboardingStep, paycheckPlans, type PaycheckSchedulePlan } from "./onboarding";
+import { NEW_USERS_FROM, lastDayAnchor, nextLastDay, onboardingStep, paycheckPlans, type PaycheckSchedulePlan } from "./onboarding";
 
 const TODAY = "2026-11-17";
+const NEW = "2026-11-18T02:55:51+00:00";
 
 // ---------------------------------------------------------------------------
 // Which step
 // ---------------------------------------------------------------------------
 
 test("onboardingStep: derived from what exists, plus the skip", () => {
-  assert.equal(onboardingStep({ stage: "no-accounts", anyIncome: false, skippedPayday: false }), 1);
+  assert.equal(onboardingStep({ stage: "no-accounts", anyIncome: false, skippedPayday: false , firstAccountCreatedAt: NEW }), 1);
   // A skip cookie or an income schedule can't hide step 1.
-  assert.equal(onboardingStep({ stage: "no-accounts", anyIncome: true, skippedPayday: true }), 1);
-  assert.equal(onboardingStep({ stage: "no-transactions", anyIncome: false, skippedPayday: false }), 2);
-  assert.equal(onboardingStep({ stage: "no-transactions", anyIncome: true, skippedPayday: false }), null);
-  assert.equal(onboardingStep({ stage: "no-transactions", anyIncome: false, skippedPayday: true }), null);
+  assert.equal(onboardingStep({ stage: "no-accounts", anyIncome: true, skippedPayday: true , firstAccountCreatedAt: NEW }), 1);
+  assert.equal(onboardingStep({ stage: "no-transactions", anyIncome: false, skippedPayday: false , firstAccountCreatedAt: NEW }), 2);
+  assert.equal(onboardingStep({ stage: "no-transactions", anyIncome: true, skippedPayday: false , firstAccountCreatedAt: NEW }), null);
+  assert.equal(onboardingStep({ stage: "no-transactions", anyIncome: false, skippedPayday: true , firstAccountCreatedAt: NEW }), null);
+});
+
+test("onboardingStep: an existing user (first account before the cutoff) never sees step 2", () => {
+  const old = { stage: "no-transactions" as const, anyIncome: false, skippedPayday: false };
+  assert.equal(onboardingStep({ ...old, firstAccountCreatedAt: "2026-11-17T23:59:59+00:00" }), null);
+  assert.equal(onboardingStep({ ...old, firstAccountCreatedAt: "2026-10-01T12:00:00+00:00" }), null);
+  assert.equal(onboardingStep({ ...old, firstAccountCreatedAt: null }), null, "unknown is treated as existing");
+  assert.equal(onboardingStep({ ...old, firstAccountCreatedAt: NEW_USERS_FROM }), 2);
 });
 
 test("onboardingStep: anyone with a transaction never sees onboarding, paycheck or not", () => {
   for (const stage of ["early", "full"] as const) {
-    assert.equal(onboardingStep({ stage, anyIncome: false, skippedPayday: false }), null);
+    assert.equal(onboardingStep({ stage, anyIncome: false, skippedPayday: false , firstAccountCreatedAt: NEW }), null);
   }
 });
 

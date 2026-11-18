@@ -191,9 +191,11 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   if (stage === "no-accounts" || stage === "no-transactions") {
     const user = await getUser();
     const userId = user?.id ?? "";
-    const income = stage === "no-transactions" ? await getIncomeSchedules() : null;
+    const [income, firstAccountCreatedAt] =
+      stage === "no-transactions" ? await Promise.all([getIncomeSchedules(), getFirstAccountCreatedAt()]) : [null, null];
     const step = onboardingStep({
       stage,
+      firstAccountCreatedAt,
       anyIncome: income?.data?.anyIncome ?? true,
       skippedPayday: paydaySkipped((await cookies()).get(PAYDAY_SKIP_COOKIE)?.value, userId),
     });

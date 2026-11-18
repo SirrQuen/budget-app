@@ -14,6 +14,7 @@
 // (BILLS_PROMPT_FROM), so existing users never see it.
 
 import { addDaysISO, todayInZone } from "@/lib/date";
+import { NEW_USERS_FROM, isNewSince } from "@/lib/onboarding";
 
 export type BillChoice = {
   key: string;
@@ -38,11 +39,8 @@ export const BILL_CHOICES: BillChoice[] = [
 export const BILLS_TARGET = 3;
 /** Days after the first account's creation the card is offered for. */
 export const BILLS_PROMPT_DAYS = 14;
-/**
- * The card is for people new since it shipped: anyone whose first account
- * is older has been using Sorrel without it and never sees it.
- */
-export const BILLS_PROMPT_FROM = "2026-11-18T00:00:00Z";
+/** The card is for people new since it shipped -- the same cutoff as step 2 (lib/onboarding.ts). */
+export const BILLS_PROMPT_FROM = NEW_USERS_FROM;
 
 /** The category a choice starts with: the first active one that fits, else null (the picker). */
 export function billCategoryId(choice: BillChoice, activeExpenseCategories: { id: string; name: string }[]): string | null {
@@ -71,8 +69,8 @@ export function billsCardVisible(input: {
   dismissed: boolean;
 }): boolean {
   if (input.dismissed || input.firstAccountCreatedAt === null) return false;
+  if (!isNewSince(input.firstAccountCreatedAt)) return false;
   const created = new Date(input.firstAccountCreatedAt);
-  if (Number.isNaN(created.getTime()) || created.getTime() < Date.parse(BILLS_PROMPT_FROM)) return false;
   if (input.expenseSchedules >= BILLS_TARGET) return false;
   const createdDay = todayInZone(input.timeZone, created);
   return input.today < addDaysISO(createdDay, BILLS_PROMPT_DAYS);
