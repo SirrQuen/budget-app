@@ -120,6 +120,8 @@ before-deploy) for the next What's new card. Raised 2026-11-17.
     false, ALL PASS (after 74); goal-pace-test.sql 13 rows (12 of 12
     fixture checks), 0 false, ALL PASS; same-goal-money-repro.sql 5 rows,
     0 false, ALL PASS (rerun after its expected count was fixed).
+    Merged to main 2026-11-18 (`9ebfc3c`, fast-forward); not yet pushed
+    or deployed.
     Browser on dev: a ZZ goal with Japan trip's
     exact figures showed "blooms in May" / "About $390 a month would bloom
     it by April"; the calendar flipped on change and since last seen, not
