@@ -113,15 +113,13 @@ before-deploy) for the next What's new card. Raised 2026-11-17.
     docs/tester-notes/2026-11-17-onboarding.md.
 21. **Batch H -- goal pace.** Opus. After G. Built on `batch-h-goal-pace`
     2026-11-18 and verified on sorrel-dev: migration 72 (`goal_pace()`) and
-    73 (function EXECUTE grants, found by the harness) on sorrel-dev only,
-    not production. On sorrel-dev 2026-11-18 (Matt's runs):
-    rls-isolation-test.sql 430 rows, 0 false, ALL PASS;
-    goal-pace-test.sql 13 rows (12 of 12 fixture checks), 0 false, ALL
-    PASS; same-goal-money-repro.sql 5 rows, 0 false, NOT PASSED -- its
-    summary wrongly expected 6 rows (fixed to 5); every check true, but
-    by the rule it hasn't passed until rerun. Migration 74
+    73 (function EXECUTE grants, found by the harness), and 74
     (username_is_available() revoked from anon and authenticated, ruled
-    2026-11-18) written; to sorrel-dev by Matt, then the harness rerun.
+    2026-11-18). 72-74 on sorrel-dev and production 2026-11-18 (Matt).
+    On sorrel-dev (Matt's runs): rls-isolation-test.sql 432 rows, 0
+    false, ALL PASS (after 74); goal-pace-test.sql 13 rows (12 of 12
+    fixture checks), 0 false, ALL PASS; same-goal-money-repro.sql 5 rows,
+    0 false, ALL PASS (rerun after its expected count was fixed).
     Browser on dev: a ZZ goal with Japan trip's
     exact figures showed "blooms in May" / "About $390 a month would bloom
     it by April"; the calendar flipped on change and since last seen, not

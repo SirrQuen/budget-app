@@ -2481,11 +2481,12 @@ funding transfer moves the balance but not the goal's progress.
 
 ## The RLS harness couldn't finish on dev from migration 62 on (2026-11-18)
 
-**Status: harness fixed on `batch-h-goal-pace`. On sorrel-dev
-2026-11-18, after migration 73: rls-isolation-test.sql 430 rows, 0
-false, ALL PASS; goal-pace-test.sql 13 rows (12 of 12 fixture checks), 0
-false, ALL PASS. Migrations 73 and 74 on sorrel-dev only -- production
-not yet.** Raised 2026-11-18
+**Status: done. On sorrel-dev 2026-11-18: rls-isolation-test.sql 430
+rows, 0 false, ALL PASS after migration 73, and 432 rows, 0 false, ALL
+PASS after 74; goal-pace-test.sql 13 rows (12 of 12 fixture checks), 0
+false, ALL PASS; same-goal-money-repro.sql 5 rows, 0 false, ALL PASS
+(rerun). Migrations 72-74 on sorrel-dev and production 2026-11-18
+(Matt).** Raised 2026-11-18
 three times (batch H's harness runs on sorrel-dev).
 
 docs/rls-isolation-test.sql could not run to the end on sorrel-dev from
@@ -2516,8 +2517,8 @@ Rows 394-395 (2i's same_goal_money() control) were the fixture, not a
 real bug: docs/same-goal-money-repro.sql, run on sorrel-dev 2026-11-18,
 had all 5 checks true -- a real user's $25 link and $25 hand entry pair
 and "Yes" replaces it (R1); the harness's $30-vs-$25 state correctly
-doesn't (R2). Its summary read NOT PASSED only because it expected 6
-rows, not 5 (fixed); by the ALL PASS rule it counts once rerun.
+doesn't (R2). Its first summary read NOT PASSED only because it
+expected 6 rows, not 5; fixed and rerun: 5 rows, 0 false, ALL PASS.
 
 `username_is_available(text)`: SECURITY DEFINER and executable by anon
 and authenticated since the baseline, answering "is this username
