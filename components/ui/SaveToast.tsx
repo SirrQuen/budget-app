@@ -55,6 +55,12 @@ export function SaveToast({
           First one today
         </span>
       ) : null}
+      {summary.milestoneLabel ? (
+        <span className="inline-flex items-center gap-1 rounded-full border border-hairline px-2 py-0.5 text-xs text-ink-secondary">
+          <LeafIcon className="h-3 w-3 text-gold" />
+          {summary.milestoneLabel}
+        </span>
+      ) : null}
       <button
         type="button"
         onClick={() => onLogAgain(summary)}

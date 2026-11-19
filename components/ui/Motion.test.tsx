@@ -163,6 +163,7 @@ test("reduced motion: a balance just changes", async () => {
 const coffee: SavedSummary = {
   message: "Logged · Coffee $5.75",
   firstToday: false,
+  milestoneLabel: null,
   source: {
     kind: "single",
     description: "Coffee",

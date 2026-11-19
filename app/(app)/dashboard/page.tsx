@@ -66,6 +66,8 @@ import { GoalMeters } from "./GoalMeters";
 import { UpcomingList, type UpcomingScheduleMeta } from "./UpcomingList";
 import { buildUpcomingOccurrences } from "@/lib/upcomingOccurrences";
 import { getSameBillPairs } from "@/lib/db/sameBill";
+import { getEarnedMilestoneIds } from "@/lib/db/milestones";
+import { MilestoneToast } from "./MilestoneToast";
 import {
   DashboardLayoutFooter,
   DashboardLayoutProvider,
@@ -144,6 +146,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     futureResult,
     sameBillResult,
     storyResult,
+    milestonesResult,
   ] = await Promise.all([
     greetingPromise,
     // Decided when the session started -- see lib/auth/firstSession.ts.
@@ -169,6 +172,9 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
     getSameBillPairs(),
     // Only in the recap window, and only until it's dismissed.
     storyPromise,
+    // Which lifetime milestones are earned -- no dates, three queries in all
+    // (the dates are Settings'); this device decides which are new.
+    getEarnedMilestoneIds(),
   ]);
 
   // A failed profile read just means no name -- "Welcome back" alone.
@@ -592,6 +598,10 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         <TimeOfDayGlow band={band} />
         {/* The data has landed: the daily welcome can dissolve onto this. */}
         <WelcomeReady />
+        {/* A failed read is no toast, never an error. */}
+        {milestonesResult.data ? (
+          <MilestoneToast earned={milestonesResult.data} />
+        ) : null}
         {story && recapCards ? (
           <MonthRecap
             cards={recapCards}

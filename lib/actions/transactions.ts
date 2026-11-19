@@ -29,6 +29,8 @@ import { parseGoalId, type SameMoneyPair } from "@/lib/goalLinks";
 import { getSafeToSpend } from "@/lib/db/dashboard";
 import { getTimeZone, getToday } from "@/lib/db/settings";
 import { isFirstSaveOfDay } from "@/lib/firstToday";
+import { logMilestoneCrossedBy } from "@/lib/db/milestones";
+import type { MilestoneId } from "@/lib/milestones";
 import type { GoalCompletion } from "@/lib/goalCompletion";
 import { completedSince, completionSnapshot, type CompletionSnapshot } from "@/lib/goalCompletionCheck";
 import { figureUnchangedNote } from "@/lib/whatsAhead";
@@ -76,6 +78,12 @@ export type ActionState =
        * never stored (docs/Motion-and-Delight.md, step 3).
        */
       firstToday?: true;
+      /**
+       * A log milestone this save crossed (lib/milestones.ts): the Nth log
+       * is one of the rows just created. Derived from this response, never
+       * stored; the device decides whether it was already celebrated.
+       */
+      logMilestone?: { id: MilestoneId; label: string };
       /**
        * A goal this save completed -- a payment that left a followed card
        * owing nothing (migration 70). Only in this response; nothing stored.
@@ -222,9 +230,14 @@ async function afterTransactionCreated(saved: SavedRow[], before: CompletionSnap
   const [milestone, note] = await Promise.all([detectTransactionMilestone(), figureNote(saved)]);
   // After figureNote: both read the same cache()d schedules and future rows.
   const [sameBill, sameMoney] = await Promise.all([sameBillAfterSave(saved), sameMoneyAfterSave(saved)]);
-  const [firstToday, completed] = await Promise.all([firstSaveToday(saved), completedSince(before)]);
-  if (!milestone && !note && !sameBill && !sameMoney && !firstToday && !completed) return undefined;
+  const [firstToday, completed, logMilestone] = await Promise.all([
+    firstSaveToday(saved),
+    completedSince(before),
+    logMilestoneCrossedBy(saved.map((r) => r.id)),
+  ]);
+  if (!milestone && !note && !sameBill && !sameMoney && !firstToday && !completed && !logMilestone) return undefined;
   return {
+    ...(logMilestone ? { logMilestone } : {}),
     ...(completed ? { completed } : {}),
     ...(firstToday ? { firstToday: true as const } : {}),
     ...(milestone ? { milestone } : {}),
