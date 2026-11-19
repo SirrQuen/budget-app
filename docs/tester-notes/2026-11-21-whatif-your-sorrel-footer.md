@@ -1,6 +1,6 @@
 Sent:      not yet
 Migration: none
-Merge:     not yet merged (display-whatif-sorrelpanel-footer)
+Merge:     3448e54 (display-whatif-sorrelpanel-footer, fast-forward)
 Deployed:  not yet
 
 ---
