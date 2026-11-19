@@ -19,7 +19,7 @@ function Glyph({ path }: { path: string }) {
 export function SocialLinks({ ring = "page", className = "" }: { ring?: "page" | "surface"; className?: string }) {
   const offset = ring === "page" ? "focus-visible:ring-offset-page" : "focus-visible:ring-offset-surface";
   return (
-    <ul aria-label="Sorrel on social media" className={`flex items-center gap-1 ${className}`}>
+    <ul aria-label="Sorrel elsewhere" className={`flex items-center gap-1 ${className}`}>
       {SOCIAL_LINKS.map((link) => (
         <li key={link.id}>
           <a

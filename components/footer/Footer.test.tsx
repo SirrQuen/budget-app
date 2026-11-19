@@ -48,3 +48,19 @@ test("settings footer: the icons, Privacy and Terms, and nothing else", () => {
   assert.ok(html.includes("Privacy") && html.includes("Terms"));
   assert.doesNotMatch(html, /mailto:|waitlist|MW Cyber/);
 });
+
+// Content blockers hide elements by class, id and data attribute (and by a
+// link's href, which only ever hides the icon anchors themselves). Nothing
+// on the footer or its link groups may carry one of these words, or a filter
+// list could hide the whole footer. The aria-labels on the icon links stay
+// for screen readers; the list's own label is neutral.
+test("no class, id or data attribute on a footer carries a word blockers hide by", () => {
+  const WORDS = /social|share|follow|facebook|instagram|tiktok/i;
+  for (const html of [renderToStaticMarkup(<PublicFooter />), renderToStaticMarkup(<SettingsFooter />)]) {
+    const attrs = [...html.matchAll(/\s(class|id|data-[\w-]+|aria-label)="([^"]*)"/g)];
+    for (const [, name, value] of attrs) {
+      if (name === "aria-label" && /^Sorrel on (TikTok|Instagram|Facebook) \(opens in a new tab\)$/.test(value)) continue;
+      assert.doesNotMatch(value, WORDS, `${name}="${value}"`);
+    }
+  }
+});
