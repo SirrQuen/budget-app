@@ -151,7 +151,7 @@ export function WhatIfPanel({
   return (
     <section aria-labelledby={`${answerId}-h`} className="flex flex-col gap-4">
       <h3 id={`${answerId}-h`} className="text-sm font-medium text-ink">
-        What if…
+        What if I spend…
       </h3>
 
       <div className="flex flex-col gap-1.5">

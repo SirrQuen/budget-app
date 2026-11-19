@@ -217,7 +217,7 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
         />
       </button>
 
-      {/* The runway and "What if…" (docs/Decide-and-Grow.md, F1 and F2):
+      {/* The runway and "What if I spend…" (docs/Decide-and-Grow.md, F1 and F2):
           the figure drawn day by day, and the question asked against it.
           Siblings of the card's button, never inside it. */}
       <div className="-mt-2 flex flex-wrap gap-1 px-3 pb-3">
@@ -225,7 +225,7 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
           See your runway
         </button>
         <button type="button" onClick={() => setRunway("whatif")} className={heroLink}>
-          What if…
+          What if I spend…
         </button>
       </div>
       {runway ? <RunwayDialog data={data} startWith={runway} onClose={() => setRunway(null)} /> : null}

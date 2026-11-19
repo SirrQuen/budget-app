@@ -115,7 +115,7 @@ test("whatIfView: fits, tightest day unchanged", () => {
   assert.deepEqual(whatIfView(answer(), 90000, "2026-11-21", TODAY), {
     kind: "figure",
     safeToSpend: 1600,
-    line: "With $900 on Saturday, safe to spend would be $1,600.",
+    line: "If you spend $900 on Saturday, you'd still have $1,600 safe to spend.",
     tightest: "Your tightest day stays Friday 20 November.",
   });
 });

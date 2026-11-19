@@ -198,7 +198,7 @@ test("the hero offers the runway and the question, beside the card -- never insi
   const toggle = container.querySelector("button[aria-expanded]") as HTMLButtonElement;
   assert.equal(toggle.querySelector("button"), null);
   buttonNamed(container, "See your runway");
-  buttonNamed(container, "What if…");
+  buttonNamed(container, "What if I spend…");
   assert.equal(container.querySelector("dialog"), null, "mounted only when opened");
 });
 
@@ -261,9 +261,9 @@ test("draws in once per session; reduced motion never draws in", async () => {
   await closeRunway(container);
 });
 
-test("What if… on the hero opens the question with the amount focused; Just looking closes", async () => {
+test("What if I spend… on the hero opens the question with the amount focused; Just looking closes", async () => {
   const container = await renderHero(safeToSpend());
-  await act(async () => buttonNamed(container, "What if…").click());
+  await act(async () => buttonNamed(container, "What if I spend…").click());
   const dialog = container.querySelector("dialog") as HTMLDialogElement;
   assert.ok(dialog);
   const amount = dialog.querySelector("input[inputmode=decimal]");
@@ -311,7 +311,7 @@ test("asking: POST with the amount in the body only, stale requests aborted, Log
   dom.window.addEventListener("sorrel:open-add-form", listener);
   try {
     const container = await renderHero(safeToSpend());
-    await act(async () => buttonNamed(container, "What if…").click());
+    await act(async () => buttonNamed(container, "What if I spend…").click());
     const dialog = container.querySelector("dialog") as HTMLDialogElement;
     const amount = dialog.querySelector("input[inputmode=decimal]") as HTMLInputElement;
     const setValue = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!;
@@ -335,7 +335,7 @@ test("asking: POST with the amount in the body only, stale requests aborted, Log
     }
     assert.equal(calls[0].init.signal?.aborted, true, "the stale question is aborted");
     assert.deepEqual(JSON.parse(String(calls[1].init.body)), { cents: 90000, date: TODAY });
-    assert.match(dialog.textContent ?? "", /With \$900 today, safe to spend would be \$400\./);
+    assert.match(dialog.textContent ?? "", /If you spend \$900 today, you'd still have \$400 safe to spend\./);
 
     await act(async () => buttonNamed(dialog, "Log it").click());
     assert.deepEqual(opened, [{ transaction_type: "Expense", amount: "900.00", transaction_date: TODAY }]);
@@ -368,7 +368,7 @@ test("Log it from inside the runway closes the runway too, so the add form isn't
   try {
     const container = await renderHero(safeToSpend());
     const dialog = await openRunway(container);
-    await act(async () => buttonNamed(dialog, "What if…").click());
+    await act(async () => buttonNamed(dialog, "What if I spend…").click());
     const amount = dialog.querySelector("input[inputmode=decimal]") as HTMLInputElement;
     const setValue = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!;
     await act(async () => {

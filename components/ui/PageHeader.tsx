@@ -2,12 +2,15 @@ export function PageHeader({
   title,
   description,
   descriptionAdornment,
+  descriptionAfter,
   action,
 }: {
   title: string;
   description?: string;
   /** Decoration beside the description (the dashboard's seasonal leaf). */
   descriptionAdornment?: React.ReactNode;
+  /** Beside the description, after it (the dashboard's "Your Sorrel" link). */
+  descriptionAfter?: React.ReactNode;
   action?: React.ReactNode;
 }) {
   return (
@@ -19,10 +22,11 @@ export function PageHeader({
           {title}
         </h1>
         {description ? (
-          descriptionAdornment ? (
-            <div className="mt-1 flex items-center gap-2">
+          descriptionAdornment || descriptionAfter ? (
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
               {descriptionAdornment}
               <p className="text-sm text-ink-secondary">{description}</p>
+              {descriptionAfter}
             </div>
           ) : (
             <p className="mt-1 text-sm text-ink-secondary">{description}</p>

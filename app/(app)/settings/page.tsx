@@ -12,8 +12,8 @@ import { SafeToSpendWindowToggle } from "./SafeToSpendWindowToggle";
 import { SafeToSpendCushionForm } from "./SafeToSpendCushionForm";
 import { ProfileForm } from "./ProfileForm";
 import { ImportsSection } from "./ImportsSection";
-import { YourSorrelSection } from "./YourSorrelSection";
 import { Wordmark } from "@/components/Wordmark";
+import { SettingsFooter } from "@/components/footer/SettingsFooter";
 import { PRIVACY_PATH, TERMS_PATH } from "@/lib/legal";
 import pkg from "@/package.json";
 
@@ -189,8 +189,6 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
         </a>
       </section>
 
-      <YourSorrelSection />
-
       <ImportsSection />
 
       <section
@@ -226,6 +224,8 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
       {/* Last, below everything else. Always rendered -- summary is null if
           the count query failed, and the section handles that itself. */}
       <DeleteAccountSection summary={summary.data} />
+
+      <SettingsFooter />
     </div>
   );
 }

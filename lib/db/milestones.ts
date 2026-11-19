@@ -7,6 +7,7 @@ import type { DbResult } from "@/lib/db/dashboard";
 import { getTimeZone, getToday } from "@/lib/db/settings";
 import { requireUser } from "@/lib/auth/dal";
 import {
+  dateInZone,
   earned,
   LOG_THRESHOLDS,
   logMilestoneId,
@@ -24,9 +25,11 @@ import {
 //   getEarnedMilestoneIds()  which are earned -- the dashboard. Three
 //                            queries (log count, imports, goals), nothing
 //                            per milestone.
-//   getEarnedMilestones()    the same set WITH dates -- Settings > Your
-//                            Sorrel only. Adds one query per earned log
-//                            threshold, for that log's created_at.
+//   getYourSorrel()          the same set WITH dates, plus "with Sorrel
+//                            since" -- the Your Sorrel panel only, read
+//                            when the panel OPENS (GET /dashboard/your-sorrel).
+//                            Adds one query per earned log threshold, for
+//                            that log's created_at.
 
 // A LOG is a transaction a person made: hand-logged or confirmed from the
 // queue, never imported, a transfer counted once (its Expense leg). The same
@@ -113,8 +116,15 @@ export async function getEarnedMilestoneIds(): Promise<DbResult<{ id: MilestoneI
   return { data: earnedIds(facts.data).map((id) => ({ id, label: milestoneLabel(id) })), error: null };
 }
 
-/** Every milestone earned so far, with its date, oldest first. Settings > Your Sorrel only. */
-export async function getEarnedMilestones(): Promise<DbResult<EarnedMilestone[]>> {
+/** What the Your Sorrel panel shows: the account's start day and every milestone earned, oldest first. */
+export type YourSorrel = {
+  /** The user's calendar day the account was created, "YYYY-MM-DD"; null if unreadable. */
+  since: string | null;
+  milestones: EarnedMilestone[];
+};
+
+/** Read when the Your Sorrel panel opens -- never on a page load. Read-only. */
+export async function getYourSorrel(): Promise<DbResult<YourSorrel>> {
   const facts = await readFacts();
   if (facts.error !== null) return { data: null, error: facts.error };
   const f = facts.data;
@@ -130,7 +140,7 @@ export async function getEarnedMilestones(): Promise<DbResult<EarnedMilestone[]>
   list.push(...earned("first-goal", f.goalCreated[0] ?? null, f.timeZone));
   list.push(...earned("first-goal-reached", f.goalCompleted[0] ?? null, f.timeZone));
 
-  return { data: sortEarned(list), error: null };
+  return { data: { since: dateInZone(f.createdAt, f.timeZone), milestones: sortEarned(list) }, error: null };
 }
 
 /**

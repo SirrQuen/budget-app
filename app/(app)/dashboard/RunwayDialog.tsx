@@ -151,7 +151,7 @@ export function RunwayDialog({
           </button>
           {!whatIfOpen ? (
             <button type="button" onClick={() => setWhatIfOpen(true)} className={textButton}>
-              What if…
+              What if I spend…
             </button>
           ) : null}
         </div>

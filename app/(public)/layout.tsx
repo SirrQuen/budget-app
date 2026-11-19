@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { SorrelMark } from "@/components/SorrelMark";
 import { Wordmark } from "@/components/Wordmark";
-import { LegalLinks } from "@/components/legal/LegalLinks";
+import { PublicFooter } from "@/components/footer/PublicFooter";
 
 // Public documents, readable signed out (both paths are in the proxy's
 // PUBLIC_PATHS). Static: nothing here reads a session, so the pages
@@ -26,11 +26,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
 
       <main className="flex-1 px-4 py-12 sm:px-6 sm:py-16">{children}</main>
 
-      <footer className="border-t border-hairline">
-        <div className="mx-auto w-full max-w-[68ch] px-4 py-6 sm:px-6">
-          <LegalLinks />
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }

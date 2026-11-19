@@ -17,6 +17,8 @@ import { IdleTimeout, announceSignOut } from "@/components/IdleTimeout";
 import { PageArrival } from "@/components/PageArrival";
 import { RippleHost } from "@/components/RippleHost";
 import { GoalCompletionProvider } from "@/components/GoalCompletionHost";
+import { YourSorrelPanel } from "@/components/YourSorrelPanel";
+import { requestYourSorrel } from "@/lib/yourSorrel";
 import type { TransactionAccountOption } from "@/app/(app)/transactions/AddTransactionForm";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 
@@ -82,6 +84,9 @@ export function AppShell({
       <GoalCompletionProvider>
       {sessionId ? <IdleTimeout sessionId={sessionId} /> : null}
       <RippleHost />
+      {/* The one Your Sorrel panel; the greeting link, the milestone toast and
+          the account block below open it. Nothing is read until it opens. */}
+      <YourSorrelPanel />
       <div className="min-h-dvh bg-page text-ink md:flex">
         {/* First tab stop on every authenticated page -- jumps past the nav
             straight to the page content. Visually hidden until focused. */}
@@ -131,6 +136,13 @@ export function AppShell({
               <ThemeToggle variant="compact" />
             </div>
             <p className="truncate px-3 text-sm text-ink-secondary">{accountName}</p>
+            <button
+              type="button"
+              onClick={(e) => requestYourSorrel(e.currentTarget)}
+              className="min-h-11 w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-secondary transition-colors duration-150 hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page"
+            >
+              Your Sorrel
+            </button>
             {/* Before the action runs, the session's other tabs are told
                 (announceSignOut): Log out ends every session, and a tab
                 left on its page would otherwise only find out on a save. */}

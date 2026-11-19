@@ -1985,3 +1985,47 @@ body {
   stroke-width: 2;
   rx: 6px;
 }
+
+/* ---------------------------------------------------------------------------
+   YOUR SORREL PANEL (components/YourSorrelPanel.tsx)
+   One native dialog: a bottom sheet on a phone, a side panel from 640px up.
+   Position and shape live here (a dialog brings UA margins and a max-size
+   that utilities cannot all undo); colour and type are utilities on the
+   element. The slide exists only under no-preference -- with reduced motion
+   the panel is simply there. Same curve as every other motion.
+   ------------------------------------------------------------------------- */
+.your-sorrel-panel {
+  margin: 0;
+  inset: auto 0 0 0;
+  width: 100%;
+  max-width: none;
+  max-height: 85dvh;
+  border-radius: 1rem 1rem 0 0;
+}
+@media (min-width: 640px) {
+  .your-sorrel-panel {
+    inset: 0 0 0 auto;
+    width: 24rem;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 1rem 0 0 1rem;
+  }
+}
+@keyframes your-sorrel-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes your-sorrel-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .your-sorrel-panel[open] {
+    animation: your-sorrel-up 240ms var(--icon-anim-ease) both;
+  }
+}
+@media (prefers-reduced-motion: no-preference) and (min-width: 640px) {
+  .your-sorrel-panel[open] {
+    animation-name: your-sorrel-in;
+  }
+}

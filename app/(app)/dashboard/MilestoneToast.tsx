@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { LeafIcon } from "@/components/ui/LeafIcon";
 import { SaveLeaves } from "@/components/ui/SaveToast";
+import { requestYourSorrel, YOUR_SORREL_LINK_ID } from "@/lib/yourSorrel";
 import { syncCelebrations } from "@/lib/milestonesCelebrated";
 import type { MilestoneId } from "@/lib/milestones";
 
@@ -50,6 +51,18 @@ export function MilestoneToast({ earned }: { earned: { id: MilestoneId; label: s
             {label}
           </span>
         ))}
+        {/* Back to the greeting's link when the panel closes: the toast will
+            have gone by then. */}
+        <button
+          type="button"
+          onClick={() => {
+            requestYourSorrel(document.getElementById(YOUR_SORREL_LINK_ID));
+            setLabels([]);
+          }}
+          className="inline-flex min-h-11 items-center rounded-full px-3 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised"
+        >
+          See all
+        </button>
       </div>
     </div>
   );

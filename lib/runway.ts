@@ -125,7 +125,7 @@ export function whatIfView(answer: WhatIfAnswer, cents: number, date: string, to
   return {
     kind: "figure",
     safeToSpend: answer.after.safeToSpend,
-    line: `With ${amount} ${onChosenDay(date, today)}, safe to spend would be ${formatCurrencyInSentence(answer.after.safeToSpend)}.`,
+    line: `If you spend ${amount} ${onChosenDay(date, today)}, you'd still have ${formatCurrencyInSentence(answer.after.safeToSpend)} safe to spend.`,
     tightest,
   };
 }

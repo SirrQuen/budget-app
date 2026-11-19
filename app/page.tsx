@@ -4,7 +4,7 @@ import { SorrelMark } from "@/components/SorrelMark";
 import { Wordmark } from "@/components/Wordmark";
 import { WaitlistForm } from "@/components/WaitlistForm";
 import { buttonClass } from "@/components/ui/Button";
-import { PRIVACY_PATH, TERMS_PATH } from "@/lib/legal";
+import { PublicFooter } from "@/components/footer/PublicFooter";
 
 // What a stranger who types the domain sees. Not a marketing page: no feature
 // list, no screenshots, no funnel -- it says what Sorrel is, takes an address
@@ -24,8 +24,6 @@ const FOCUS =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page";
 
 const BUTTON = `inline-flex min-h-11 items-center justify-center rounded-full px-5 py-2 text-sm font-semibold transition-all duration-150 ease-out hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.97] motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100 ${FOCUS}`;
-
-const FOOTER_LINK = `rounded transition-colors duration-150 hover:text-ink hover:underline underline-offset-2 ${FOCUS}`;
 
 export default function Home() {
   return (
@@ -77,6 +75,7 @@ export default function Home() {
           </div>
 
           <section
+            id="waitlist"
             aria-labelledby="waitlist-heading"
             className="mt-12 flex flex-col gap-4 rounded-xl border border-hairline bg-surface p-5"
           >
@@ -101,31 +100,7 @@ export default function Home() {
         </div>
       </main>
 
-      <footer className="border-t border-hairline">
-        <div className="mx-auto w-full max-w-xl px-4 py-6 sm:px-6">
-          <ul className="flex flex-wrap items-center gap-x-2 gap-y-2 text-sm text-ink-muted">
-            <li>
-              <Link href={PRIVACY_PATH} className={FOOTER_LINK}>
-                Privacy
-              </Link>
-            </li>
-            <li aria-hidden="true">·</li>
-            <li>
-              <Link href={TERMS_PATH} className={FOOTER_LINK}>
-                Terms
-              </Link>
-            </li>
-            <li aria-hidden="true">·</li>
-            <li>
-              <a href="mailto:hello@mysorrel.com" className={`${FOOTER_LINK} break-all`}>
-                hello@mysorrel.com
-              </a>
-            </li>
-            <li aria-hidden="true">·</li>
-            <li>&copy; 2026 MW Cyber Architects LLC</li>
-          </ul>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }
