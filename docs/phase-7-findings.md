@@ -611,7 +611,7 @@ Source: `docs/legal/privacy-and-terms.md` (rendered by `lib/legal.ts`).
   adds a cookie or a localStorage key lists it in its report and updates this
   paragraph in the same branch.
 - **Privacy policy, revised 2026-11-18 (beta tester application,
-  migration 75, branch `beta-application`; not merged).** New section "If
+  migration 75, branch `beta-application`).** New section "If
   you apply to be a beta tester" for /beta (docs/Beta-Application.md):
   name, email and coded answers, collected to choose testers and email
   them about the beta, not shared, removed on request to
@@ -650,6 +650,12 @@ Source: `docs/legal/privacy-and-terms.md` (rendered by `lib/legal.ts`).
   Harness: rls-isolation-test.sql on sorrel-dev (tztbebdzlezlhvsbylsf)
   after migration 75, section 2m included, run by Matt 2026-11-18: 482
   rows, 0 false, ALL PASS.
+  Merged 2026-11-18: `29155c2` (beta-application, fast-forward; the
+  feature is `c915b0e`). Deployed 2026-11-18: migration 75 on production
+  (sorrel-prod, ybdwqyihvbokowocvlgq; checked read-only, latest migration
+  20261118000075, table and function present), main deployed, and
+  mysorrel.com serves /beta, the landing button and the policy dated
+  November 18, 2026. No tester note: no number a tester sees moved.
 - **Terms of service:** published 2026-10-12, unchanged since.
 - **Operator:** MW Cyber Architects LLC. **Contact:** hello@mysorrel.com.
 
