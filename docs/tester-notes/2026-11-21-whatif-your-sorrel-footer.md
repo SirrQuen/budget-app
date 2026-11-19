@@ -1,7 +1,7 @@
 Sent:      not yet
 Migration: none
 Merge:     3448e54 (display-whatif-sorrelpanel-footer, fast-forward)
-Deployed:  not yet
+Deployed:  2026-11-19
 
 ---
 
