@@ -647,6 +647,9 @@ Source: `docs/legal/privacy-and-terms.md` (rendered by `lib/legal.ts`).
   address today (22023 and P0001 messages are fixed strings, and its
   insert can't violate a constraint the function hasn't already
   checked), so it was left as it is.
+  Harness: rls-isolation-test.sql on sorrel-dev (tztbebdzlezlhvsbylsf)
+  after migration 75, section 2m included, run by Matt 2026-11-18: 482
+  rows, 0 false, ALL PASS.
 - **Terms of service:** published 2026-10-12, unchanged since.
 - **Operator:** MW Cyber Architects LLC. **Contact:** hello@mysorrel.com.
 
