@@ -15,6 +15,7 @@ import { ConfirmPulseProvider } from "@/components/ui/ConfirmPulse";
 import { SorrelMark } from "@/components/SorrelMark";
 import { IdleTimeout, announceSignOut } from "@/components/IdleTimeout";
 import { PageArrival } from "@/components/PageArrival";
+import { SocialLinks } from "@/components/footer/SocialLinks";
 import { RippleHost } from "@/components/RippleHost";
 import { GoalCompletionProvider } from "@/components/GoalCompletionHost";
 import { YourSorrelPanel } from "@/components/YourSorrelPanel";
@@ -159,6 +160,8 @@ export function AppShell({
                 Log out
               </button>
             </form>
+            <p className="mt-3 px-3 text-xs font-medium text-ink-secondary">Follow Sorrel</p>
+            <SocialLinks className="-mt-0.5 px-1" />
           </div>
         </aside>
 
