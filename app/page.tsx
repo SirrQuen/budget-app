@@ -3,6 +3,7 @@ import Link from "next/link";
 import { SorrelMark } from "@/components/SorrelMark";
 import { Wordmark } from "@/components/Wordmark";
 import { WaitlistForm } from "@/components/WaitlistForm";
+import { buttonClass } from "@/components/ui/Button";
 import { PRIVACY_PATH, TERMS_PATH } from "@/lib/legal";
 
 // What a stranger who types the domain sees. Not a marketing page: no feature
@@ -86,7 +87,16 @@ export default function Home() {
               Sorrel is in private beta right now, so sign-ups are invite-only &mdash; but you
               can be first to know when it&rsquo;s live.
             </h2>
-            <WaitlistForm />
+            <WaitlistForm
+              secondaryAction={
+                // A second door, not the main one: the outline beside the
+                // waitlist's gold. The application lives at /beta
+                // (docs/Beta-Application.md).
+                <Link href="/beta" className={buttonClass("secondary")}>
+                  Become a beta tester
+                </Link>
+              }
+            />
           </section>
         </div>
       </main>

@@ -19,6 +19,7 @@ export function FormField({
   hint,
   error,
   required,
+  errorTone = "critical",
   children,
 }: {
   label: string;
@@ -26,6 +27,11 @@ export function FormField({
   hint?: string;
   error?: string;
   required?: boolean;
+  /**
+   * "neutral" for a form a stranger fills in (/beta): the message is
+   * guidance in secondary ink, not validation red.
+   */
+  errorTone?: "critical" | "neutral";
   children: React.ReactNode;
 }) {
   const generatedId = useId();
@@ -68,7 +74,11 @@ export function FormField({
       </label>
       {enhancedChildren}
       {error ? (
-        <p id={errorId} role="alert" className="text-sm text-critical">
+        <p
+          id={errorId}
+          role="alert"
+          className={`text-sm ${errorTone === "neutral" ? "text-ink-secondary" : "text-critical"}`}
+        >
           {error}
         </p>
       ) : hint ? (

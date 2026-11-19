@@ -21,7 +21,11 @@ const NOTICE_LINK =
 // address was new or already on the list -- the server can't tell this form
 // which, by design (lib/db/waitlist.ts). A failure keeps what was typed and
 // never shows the success line.
-export function WaitlistForm() {
+//
+// `secondaryAction` sits beside the submit button (the landing page's
+// "Become a beta tester"), and stays below the success line once the form
+// has gone, so joining the list doesn't take the other door away.
+export function WaitlistForm({ secondaryAction }: { secondaryAction?: React.ReactNode } = {}) {
   const [state, action, pending, submit] = useActionForm<WaitlistActionState>(
     joinWaitlistAction,
     undefined,
@@ -45,17 +49,20 @@ export function WaitlistForm() {
   // motion the flower simply arrives open.
   if (state?.joined) {
     return (
-      <div
-        ref={successRef}
-        tabIndex={-1}
-        role="status"
-        className="flex items-center gap-4 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-      >
-        <SorrelFlower size={48} state="bloom" />
-        <p className="min-w-0 text-base text-ink">
-          You&rsquo;re on the list. Sorrel will send an email to{" "}
-          <span className="font-semibold break-all">{state.joined}</span> once it launches.
-        </p>
+      <div className="flex flex-col gap-4">
+        <div
+          ref={successRef}
+          tabIndex={-1}
+          role="status"
+          className="flex items-center gap-4 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        >
+          <SorrelFlower size={48} state="bloom" />
+          <p className="min-w-0 text-base text-ink">
+            You&rsquo;re on the list. Sorrel will send an email to{" "}
+            <span className="font-semibold break-all">{state.joined}</span> once it launches.
+          </p>
+        </div>
+        {secondaryAction ? <div className="flex flex-col sm:flex-row">{secondaryAction}</div> : null}
       </div>
     );
   }
@@ -109,9 +116,13 @@ export function WaitlistForm() {
 
       {formError ? <ErrorMessage message={formError} /> : null}
 
-      <Button type="submit" disabled={pending} className="self-start">
-        {pending ? "Adding you…" : "Join waitlist"}
-      </Button>
+      {/* Stacked full width on a phone, side by side from sm up. */}
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Button type="submit" disabled={pending}>
+          {pending ? "Adding you…" : "Join waitlist"}
+        </Button>
+        {secondaryAction}
+      </div>
     </form>
   );
 }

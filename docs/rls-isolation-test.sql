@@ -25,6 +25,7 @@
 -- passing on stale rows. Cleanup check after a run (must be 0):
 --   select count(*) from auth.users where email like 'rls-test-%@example.invalid';
 --   select count(*) from public.waitlist where email like 'rls-test-%@example.invalid';
+--   select count(*) from public.beta_applications where email like 'rls-test-%@example.invalid';
 --
 -- Impersonation is the PostgREST pattern: request.jwt.claims carries the
 -- user's sub, and the role becomes `authenticated`, so auth.uid() and
@@ -53,6 +54,11 @@
 --   2e Waitlist   operator-only table (migration 51): anon and
 --                 authenticated can't read or touch it; join_waitlist()
 --                 answers a duplicate exactly as it answers a new address
+--   2m Beta applications
+--                 operator-only table (migration 75), the 2e pattern:
+--                 no role can touch it; submit_beta_application() is
+--                 anon-only, answers a repeat email as a new one, and
+--                 its check constraints refuse any code off the list
 --   2f Definer write functions
 --                 link_transaction_to_schedule() (migration 60): B can't
 --                 link A's transaction, link to A's schedule, or learn
@@ -1021,6 +1027,262 @@ $$;
 
 
 -- ---------------------------------------------------------------------
+-- 2m -- Beta applications (migration 75)
+--
+-- The waitlist's pattern (2e), for /beta's application. Not user data:
+-- no userid, no policy, the operator its only reader. What must hold:
+--   - RLS on with no policy; no table privilege for anon, authenticated
+--     or service_role, and an actual attempt is refused
+--   - submit_beta_application(): SECURITY DEFINER, search_path pinned,
+--     EXECUTE for anon and nobody else
+--   - as anon, a new email and the same email again (different answers,
+--     different case) answer identically and leave ONE row, normalised,
+--     holding the second set of answers
+--   - a code not on its list -- a single answer, or one element of the
+--     "pick all" array -- is refused by the check constraint (23514),
+--     identically for a new and a repeat email
+--   - an implausible email, a 101-character name, or no consent: 22023
+--   - the honeypot filled: the normal answer, nothing stored
+--   - no column for an IP address or user agent: the column set is
+--     exactly the form's answers and three timestamps
+--   - at the hourly ceiling, a repeat and a new email are refused
+--     identically
+-- ---------------------------------------------------------------------
+
+-- One submission as anon, the way PostgREST runs an unauthenticated rpc.
+-- Defaults are a complete, valid application; p_set overrides any of
+-- them. Returns 'ok' or the SQLSTATE.
+create function pg_temp.beta_try(p_set jsonb) returns text language plpgsql as $$
+declare
+  v jsonb := jsonb_build_object(
+    'email', 'rls-test-beta@example.invalid', 'full_name', 'RLS Test Beta',
+    'age_range', 'age_25_34', 'describes', 'describes_other', 'experience', 'experience_some',
+    'money_methods', jsonb_build_array('method_paper', 'method_other'),
+    'challenge', 'challenge_bills', 'want', 'want_safe_to_spend',
+    'availability', 'available_yes', 'comfortable', 'comfortable_yes',
+    'frequency', 'frequency_daily', 'reason', 'reason_other',
+    'consent', true, 'website', '') || p_set;
+  v_state text;
+begin
+  begin
+    perform pg_temp.become_anon();
+    perform public.submit_beta_application(
+      v->>'email', v->>'full_name', v->>'age_range', v->>'describes', v->>'experience',
+      array(select jsonb_array_elements_text(v->'money_methods')),
+      v->>'challenge', v->>'want', v->>'availability', v->>'comfortable',
+      v->>'frequency', v->>'reason', (v->>'consent')::boolean, v->>'website');
+  exception when others then
+    v_state := sqlstate;
+  end;
+  perform pg_temp.unbecome();
+  return coalesce(v_state, 'ok');
+end
+$$;
+
+do $$
+declare
+  c_fn constant text :=
+    'public.submit_beta_application(text,text,text,text,text,text[],text,text,text,text,text,text,boolean,text)';
+  c_email constant text := 'rls-test-beta@example.invalid';
+  c_new constant text := 'rls-test-beta-new@example.invalid';
+  c_cols constant text :=
+    'age_range,availability,challenge,comfortable,consented_at,created_at,describes,email,experience,frequency,full_name,id,money_methods,reason,updated_at,want';
+  v_role text;
+  v_priv text;
+  v_has boolean;
+  v_sql text;
+  v_state text;
+  v_msg text;
+  v_first text;
+  v_second text;
+  v_n bigint;
+  v_txt text;
+  v_row public.beta_applications;
+begin
+  -- The table: RLS on, no policy, no privilege.
+  select c.relrowsecurity into v_has from pg_class c where c.oid = 'public.beta_applications'::regclass;
+  perform pg_temp.rec('2m beta applications', 'beta_applications', 'RLS enabled',
+    'true', coalesce(v_has::text, 'null'), v_has is true);
+  select count(*) into v_n from pg_policy where polrelid = 'public.beta_applications'::regclass;
+  perform pg_temp.rec('2m beta applications', 'beta_applications', 'policies', '0', v_n::text, v_n = 0);
+
+  foreach v_role in array array['anon', 'authenticated', 'service_role'] loop
+    foreach v_priv in array array['SELECT', 'INSERT', 'UPDATE', 'DELETE'] loop
+      v_has := has_table_privilege(v_role, 'public.beta_applications', v_priv);
+      perform pg_temp.rec('2m beta applications', 'beta_applications', v_role || ' ' || v_priv || ' granted',
+        'false', v_has::text, not v_has);
+    end loop;
+  end loop;
+
+  -- The function: definer, pinned search_path, anon only.
+  select p.prosecdef, array_to_string(p.proconfig, ',') into v_has, v_txt
+    from pg_proc p where p.oid = c_fn::regprocedure;
+  perform pg_temp.rec('2m beta applications', 'submit_beta_application()', 'SECURITY DEFINER',
+    'true', coalesce(v_has::text, 'null'), v_has is true);
+  perform pg_temp.rec('2m beta applications', 'submit_beta_application()', 'search_path pinned',
+    'search_path=""', coalesce(v_txt, 'null'), v_txt = 'search_path=""');
+
+  foreach v_role in array array['anon', 'authenticated', 'service_role'] loop
+    v_has := has_function_privilege(v_role, c_fn::regprocedure, 'execute');
+    perform pg_temp.rec('2m beta applications', 'submit_beta_application()', v_role || ' EXECUTE',
+      (v_role = 'anon')::text, v_has::text, v_has = (v_role = 'anon'));
+  end loop;
+
+  -- Nothing about the sender: the columns are the answers and three times.
+  select string_agg(column_name::text, ',' order by column_name::text) into v_txt
+    from information_schema.columns
+   where table_schema = 'public' and table_name = 'beta_applications';
+  perform pg_temp.rec('2m beta applications', 'beta_applications',
+    'columns: the answers and timestamps, no IP or user agent',
+    c_cols, coalesce(v_txt, 'null'), v_txt = c_cols);
+
+  -- Apply, then apply again: other case and spacing, other answers.
+  v_first := pg_temp.beta_try(jsonb_build_object('email', '  RLS-Test-Beta@Example.invalid '));
+  v_second := pg_temp.beta_try(jsonb_build_object(
+    'age_range', 'age_45_54',
+    'money_methods', jsonb_build_array('method_app', 'method_app', 'method_spreadsheet')));
+  perform pg_temp.rec('2m beta applications', 'submit_beta_application()', 'new email as anon',
+    'ok', v_first, v_first = 'ok');
+  perform pg_temp.rec('2m beta applications', 'submit_beta_application()', 'same email again: identical answer',
+    v_first, v_second, v_second = v_first);
+
+  select count(*) into v_n from public.beta_applications where email like 'rls-test-%@example.invalid';
+  perform pg_temp.rec('2m beta applications', 'beta_applications', 'owner: one row for the email, normalised',
+    '1', v_n::text, v_n = 1);
+  select * into v_row from public.beta_applications where email = c_email;
+  perform pg_temp.rec('2m beta applications', 'beta_applications',
+    'owner: the repeat replaced the answers, repeats dropped',
+    'age_45_54 {method_app,method_spreadsheet}',
+    coalesce(v_row.age_range || ' ' || v_row.money_methods::text, 'null'),
+    v_row.age_range = 'age_45_54' and v_row.money_methods = array['method_app', 'method_spreadsheet']);
+
+  -- Every direct statement, as anon and as a signed-in user.
+  foreach v_role in array array['anon', 'authenticated'] loop
+    foreach v_sql in array array[
+      'select count(*) from public.beta_applications',
+      format('insert into public.beta_applications (email, full_name, age_range, describes, experience, '
+             'money_methods, challenge, want, availability, comfortable, frequency, reason, consented_at) '
+             'values (%L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, now())',
+             'rls-test-beta-direct@example.invalid', 'x', 'age_25_34', 'describes_other', 'experience_some',
+             '{method_other}', 'challenge_other', 'want_other', 'available_yes', 'comfortable_yes',
+             'frequency_daily', 'reason_other'),
+      format('update public.beta_applications set full_name = %L where email = %L', 'changed', c_email),
+      format('delete from public.beta_applications where email = %L', c_email)
+    ] loop
+      v_state := null;
+      begin
+        if v_role = 'anon' then
+          perform pg_temp.become_anon();
+        else
+          perform pg_temp.become(pg_temp.fx('A'));
+        end if;
+        execute v_sql;
+      exception when others then
+        v_state := sqlstate;
+      end;
+      perform pg_temp.unbecome();
+      perform pg_temp.rec('2m beta applications', 'beta_applications',
+        v_role || ': ' || split_part(v_sql, ' ', 1) || ' refused',
+        '42501', coalesce(v_state, 'ran'), v_state = '42501');
+    end loop;
+  end loop;
+
+  select count(*) into v_n from public.beta_applications where email like 'rls-test-%@example.invalid';
+  perform pg_temp.rec('2m beta applications', 'beta_applications', 'owner: still one test row after the refusals',
+    '1', v_n::text, v_n = 1);
+
+  -- Codes off their list: the constraint refuses them, for a repeat email
+  -- exactly as for a new one.
+  foreach v_txt in array array['repeat', 'new'] loop
+    v_state := pg_temp.beta_try(jsonb_build_object(
+      'email', case v_txt when 'repeat' then c_email else c_new end,
+      'age_range', 'age_12_17'));
+    perform pg_temp.rec('2m beta applications', 'beta_applications',
+      'invalid code refused (' || v_txt || ' email)', '23514', v_state, v_state = '23514');
+    v_state := pg_temp.beta_try(jsonb_build_object(
+      'email', case v_txt when 'repeat' then c_email else c_new end,
+      'money_methods', jsonb_build_array('method_paper', 'method_crypto')));
+    perform pg_temp.rec('2m beta applications', 'beta_applications',
+      'invalid array element refused (' || v_txt || ' email)', '23514', v_state, v_state = '23514');
+  end loop;
+  v_state := pg_temp.beta_try(jsonb_build_object('money_methods', jsonb_build_array()));
+  perform pg_temp.rec('2m beta applications', 'beta_applications', 'empty "pick all" refused',
+    '23514', v_state, v_state = '23514');
+  v_state := pg_temp.beta_try(jsonb_build_object('want', 'challenge_debt'));
+  perform pg_temp.rec('2m beta applications', 'beta_applications', 'another question''s code refused',
+    '23514', v_state, v_state = '23514');
+
+  select * into v_row from public.beta_applications where email = c_email;
+  select count(*) into v_n from public.beta_applications where email = c_new;
+  perform pg_temp.rec('2m beta applications', 'beta_applications',
+    'owner: refusals changed nothing, stored nothing',
+    'age_45_54, 0 new', coalesce(v_row.age_range, 'null') || ', ' || v_n || ' new',
+    v_row.age_range = 'age_45_54' and v_n = 0);
+
+  -- The function's own checks.
+  v_state := pg_temp.beta_try(jsonb_build_object('email', 'rls-test-beta-new@'));
+  perform pg_temp.rec('2m beta applications', 'submit_beta_application()', 'implausible email rejected',
+    '22023', v_state, v_state = '22023');
+  v_state := pg_temp.beta_try(jsonb_build_object('full_name', repeat('x', 101)));
+  perform pg_temp.rec('2m beta applications', 'submit_beta_application()', '101-character name rejected',
+    '22023', v_state, v_state = '22023');
+  v_state := pg_temp.beta_try(jsonb_build_object('full_name', '   '));
+  perform pg_temp.rec('2m beta applications', 'submit_beta_application()', 'blank name rejected',
+    '22023', v_state, v_state = '22023');
+  v_state := pg_temp.beta_try(jsonb_build_object('consent', false));
+  perform pg_temp.rec('2m beta applications', 'submit_beta_application()', 'no consent rejected',
+    '22023', v_state, v_state = '22023');
+
+  -- The honeypot: the normal answer, nothing stored -- even with an
+  -- invalid code, so a bot learns nothing from the answer.
+  v_state := pg_temp.beta_try(jsonb_build_object(
+    'email', 'rls-test-beta-bot@example.invalid', 'website', 'http://spam.example'));
+  perform pg_temp.rec('2m beta applications', 'submit_beta_application()', 'honeypot: normal answer',
+    'ok', v_state, v_state = 'ok');
+  v_state := pg_temp.beta_try(jsonb_build_object(
+    'email', 'rls-test-beta-bot@example.invalid', 'website', 'x', 'age_range', 'nonsense'));
+  perform pg_temp.rec('2m beta applications', 'submit_beta_application()',
+    'honeypot: normal answer with an invalid code', 'ok', v_state, v_state = 'ok');
+  select count(*) into v_n from public.beta_applications where email = 'rls-test-beta-bot@example.invalid';
+  perform pg_temp.rec('2m beta applications', 'beta_applications', 'honeypot: nothing stored',
+    '0', v_n::text, v_n = 0);
+
+  -- The hourly ceiling (100), counted on updated_at. Fill to it as the
+  -- owner; now() is fixed for the transaction, so every filler row is
+  -- inside the window.
+  insert into public.beta_applications (email, full_name, age_range, describes, experience,
+    money_methods, challenge, want, availability, comfortable, frequency, reason, consented_at)
+  select format('rls-test-beta-fill-%s@example.invalid', g), 'RLS Fill', 'age_25_34', 'describes_other',
+         'experience_some', '{method_other}', 'challenge_other', 'want_other', 'available_yes',
+         'comfortable_yes', 'frequency_daily', 'reason_other', now()
+    from generate_series(1, 100 - (select count(*) from public.beta_applications
+                                    where updated_at > now() - interval '1 hour')::int) g;
+
+  foreach v_txt in array array['repeat', 'new'] loop
+    v_state := null;
+    v_msg := null;
+    begin
+      perform pg_temp.become_anon();
+      perform public.submit_beta_application(
+        case v_txt when 'repeat' then c_email else c_new end,
+        'RLS Test Beta', 'age_25_34', 'describes_other', 'experience_some', array['method_other'],
+        'challenge_other', 'want_other', 'available_yes', 'comfortable_yes', 'frequency_daily',
+        'reason_other', true, '');
+    exception when others then
+      v_state := sqlstate;
+      v_msg := sqlerrm;
+    end;
+    perform pg_temp.unbecome();
+    perform pg_temp.rec('2m beta applications', 'submit_beta_application()',
+      'at the ceiling: ' || v_txt || ' email refused',
+      'P0001 beta_rate_limited', coalesce(v_state || ' ' || v_msg, 'ok'),
+      v_state = 'P0001' and v_msg = 'beta_rate_limited');
+  end loop;
+end
+$$;
+
+
+-- ---------------------------------------------------------------------
 -- 2 views -- v_recurring_amounts reads as the caller
 --
 -- The read checks above prove B sees none of A's rows today; this pins
@@ -1069,6 +1331,8 @@ begin
         when r.relname = 'bank_holidays' then 'exempt: global reference data, SELECT using (true)'
         when r.relname = 'waitlist' and exists (select 1 from rls_results where section = '2e waitlist')
           then 'tested in 2e' || case when not r.relrowsecurity then ', but RLS DISABLED' else '' end
+        when r.relname = 'beta_applications' and exists (select 1 from rls_results where section = '2m beta applications')
+          then 'tested in 2m' || case when not r.relrowsecurity then ', but RLS DISABLED' else '' end
         when r.relname in (select object from rls_results where section in ('1 reads', '2 views'))
           then 'tested' || case when r.relkind in ('r', 'p') and not r.relrowsecurity then ', but RLS DISABLED' else '' end
         else 'NOT TESTED'
@@ -1076,6 +1340,8 @@ begin
       r.relname = 'bank_holidays'
         or (r.relname = 'waitlist' and r.relrowsecurity
             and exists (select 1 from rls_results where section = '2e waitlist'))
+        or (r.relname = 'beta_applications' and r.relrowsecurity
+            and exists (select 1 from rls_results where section = '2m beta applications'))
         or (r.relname in (select object from rls_results where section in ('1 reads', '2 views'))
             and (r.relkind not in ('r', 'p') or r.relrowsecurity)));
   end loop;
@@ -1808,7 +2074,7 @@ with expected_sections(s) as (
   select unnest(array['1 reads', '2 views', '2c money functions', '2d function grants',
                       '2e waitlist', '2f definer writes', '2g same-bill answers',
                       '2h import', '2i goal links', '2j card goals', '2k month story',
-                      '2l goal pace', '3 writes', '4 cross-tenant refs', '5 coverage',
+                      '2l goal pace', '2m beta applications', '3 writes', '4 cross-tenant refs', '5 coverage',
                       '6 same-user writes', '7 trigger oracles', '8 composite FKs'])
 ),
 tally as (

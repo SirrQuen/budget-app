@@ -85,6 +85,63 @@ export type Database = {
         }
         Relationships: []
       }
+      beta_applications: {
+        Row: {
+          age_range: string
+          availability: string
+          challenge: string
+          comfortable: string
+          consented_at: string
+          created_at: string
+          describes: string
+          email: string
+          experience: string
+          frequency: string
+          full_name: string
+          id: string
+          money_methods: string[]
+          reason: string
+          updated_at: string
+          want: string
+        }
+        Insert: {
+          age_range: string
+          availability: string
+          challenge: string
+          comfortable: string
+          consented_at: string
+          created_at?: string
+          describes: string
+          email: string
+          experience: string
+          frequency: string
+          full_name: string
+          id?: string
+          money_methods: string[]
+          reason: string
+          updated_at?: string
+          want: string
+        }
+        Update: {
+          age_range?: string
+          availability?: string
+          challenge?: string
+          comfortable?: string
+          consented_at?: string
+          created_at?: string
+          describes?: string
+          email?: string
+          experience?: string
+          frequency?: string
+          full_name?: string
+          id?: string
+          money_methods?: string[]
+          reason?: string
+          updated_at?: string
+          want?: string
+        }
+        Relationships: []
+      }
       budgets: {
         Row: {
           budget_amount: number
@@ -1915,6 +1972,25 @@ export type Database = {
         Returns: number
       }
       spendable_cash_balance: { Args: never; Returns: number }
+      submit_beta_application: {
+        Args: {
+          p_age_range: string
+          p_availability: string
+          p_challenge: string
+          p_comfortable: string
+          p_consent: boolean
+          p_describes: string
+          p_email: string
+          p_experience: string
+          p_frequency: string
+          p_full_name: string
+          p_money_methods: string[]
+          p_reason: string
+          p_want: string
+          p_website: string
+        }
+        Returns: undefined
+      }
       suggested_safe_to_spend_cushion: { Args: never; Returns: number }
       sync_card_goal_completion: {
         Args: { p_goal_id: string; p_reassess: boolean; p_touched: string[] }

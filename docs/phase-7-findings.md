@@ -610,6 +610,43 @@ Source: `docs/legal/privacy-and-terms.md` (rendered by `lib/legal.ts`).
   process, so the rule now sits in CLAUDE.md's merge gate: a branch that
   adds a cookie or a localStorage key lists it in its report and updates this
   paragraph in the same branch.
+- **Privacy policy, revised 2026-11-18 (beta tester application,
+  migration 75, branch `beta-application`; not merged).** New section "If
+  you apply to be a beta tester" for /beta (docs/Beta-Application.md):
+  name, email and coded answers, collected to choose testers and email
+  them about the beta, not shared, removed on request to
+  hello@mysorrel.com. A bullet under "What is not deleted" says account
+  deletion doesn't remove an application (as for the waitlist). "Last
+  updated" November 18, 2026 -- the day the branch's migration went to
+  sorrel-dev; bump it to the production deploy date if that's later.
+  **Retention confirmed by Matt 2026-11-18:** not selected -- deleted 6
+  months after applying or at public launch, whichever comes first;
+  selected testers -- deleted when the beta ends. The TO CONFIRM line is
+  removed. Deleting is the operator's job in the dashboard; nothing
+  automates it yet. **Not a material change; no tester email.**
+  Reasoning, so the judgment can be reviewed: it is none of the three
+  triggers. No processor is added -- applications live in the same
+  Supabase database, served by the same Vercel app, and no email is sent
+  (so not Resend either). No bank connection. Deletion behaviour for
+  users is unchanged: every account deletion still removes exactly what
+  it removed before. What's new is a kind of data from people who are not
+  users yet, held by a form they choose to fill in, under terms stated
+  before they send it -- it changes nothing about how any existing
+  user's information is handled, which is what the notice clause
+  protects. The form adds no cookie, no localStorage or sessionStorage
+  key, no third-party script and no dependency, so the cookie paragraph
+  is unchanged. Not stored: IP address, user agent, referrer. (Vercel's
+  own request logs are the platform's, as for every page; the policy's
+  sentence is about what the application stores.)
+  A failed submit is logged by SQLSTATE code only (the import rule,
+  lib/db/imports.ts): a constraint error's detail repeats the submitted
+  row, name and email included. lib/db/betaApplicationErrors.ts, pinned
+  by its test. Found 2026-11-18 in review: the first draft used
+  logDbError(), which logs the whole error. join_waitlist()'s path
+  (lib/db/waitlist.ts) still uses logDbError(); its errors carry no
+  address today (22023 and P0001 messages are fixed strings, and its
+  insert can't violate a constraint the function hasn't already
+  checked), so it was left as it is.
 - **Terms of service:** published 2026-10-12, unchanged since.
 - **Operator:** MW Cyber Architects LLC. **Contact:** hello@mysorrel.com.
 

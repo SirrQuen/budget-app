@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated: November 17, 2026**
+**Last updated: November 18, 2026**
 
 Sorrel is a personal budgeting app operated by **MW Cyber Architects LLC**. This policy explains what we collect, where it lives, who can see it, and what happens when you leave.
 
@@ -37,6 +37,14 @@ The waitlist on our home page collects **your email address** and nothing else â
 We use it to send you one email when Sorrel opens. We don't use it for anything else, and we don't add it to any other list. Only we can see it; it's held in the same Supabase database described below.
 
 Your waitlist entry is held separately from any Sorrel account, including one you create later with the same address. Deleting an account doesn't remove it. To be removed from the waitlist, email hello@mysorrel.com and we'll delete your address.
+
+## If you apply to be a beta tester
+
+The beta tester application at mysorrel.com/beta collects **your name, your email address and your answers** to its questions, such as your age range, how you manage money today and how much time you have to test. Every answer apart from your name and email is picked from a fixed list. The application doesn't store your IP address, your browser or where you came from, and it doesn't create a Sorrel account.
+
+We use it to choose beta testers and to email you about the beta. We don't share your answers with anyone, we don't use them for anything else, and we don't add your address to any other list. Only we can see them; they're held in the same Supabase database described below. Sending the application again with the same email address replaces your earlier answers.
+
+If you aren't selected, your application is deleted 6 months after you send it or when Sorrel launches publicly, whichever comes first. If you are selected, it's deleted when the beta ends. It's held separately from any Sorrel account, including one you create later with the same address. To have it deleted sooner, email hello@mysorrel.com.
 
 ## Where your information is stored
 
@@ -76,6 +84,7 @@ You can delete your account at any time from Settings. Deletion is immediate and
 
 - **Security audit records.** Supabase keeps an authentication log recording events such as sign-ins and password changes. Depending on the event, an entry may contain your account's internal identifier, your email address and the IP address the request came from. It does not contain your financial data, your name, or anything you entered into Sorrel. We retain it because it is how account security incidents get investigated. Entries are kept for seven days, then removed automatically.
 - **A waitlist entry**, if you joined the waitlist. It's separate from your account; email hello@mysorrel.com to have it removed.
+- **A beta tester application**, if you sent one. It's separate from your account and kept as described above; email hello@mysorrel.com to have it removed sooner.
 - **Backup copies**, until the backup they're in expires â€” at most seven days.
 - **Error logs**, which may reference your account identifier, for a limited period.
 

@@ -23,13 +23,18 @@ const PUBLIC_PATHS = new Set([
   // The legal documents (app/(public)/), readable before signing up.
   "/privacy",
   "/terms",
+  // The beta tester application (docs/Beta-Application.md). For people
+  // without an account; it signs nobody up.
+  "/beta",
 ]);
 
 // Paths an authenticated user should be bounced away from. /account-deleted
 // is here too: a signed-in user hitting it directly hasn't deleted anything,
 // and the page would wrongly tell them they had. "/" is the signed-out
 // landing page; it's static, so the signed-in fork to the dashboard lives here.
-const AUTH_REDIRECT_PATHS = new Set(["/", "/login", "/signup", "/account-deleted"]);
+// /beta likewise: submit_beta_application() is anon-only (migration 75), so a
+// signed-in visitor's submission would be refused -- and they're in already.
+const AUTH_REDIRECT_PATHS = new Set(["/", "/login", "/signup", "/account-deleted", "/beta"]);
 
 function redirectTo(request: NextRequest, pathname: string, supabaseResponse: NextResponse) {
   const url = request.nextUrl.clone();
