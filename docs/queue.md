@@ -199,6 +199,10 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 - Log again (deployed 2026-11-16): draft in
   docs/tester-notes/2026-11-16-log-again.md. Goes in the next What's new
   card with a new dated cookie, beside the goal features. Not before-deploy.
+- Visitors (no migration, merged `a334c1b`, deployed 2026-11-20): draft in
+  docs/tester-notes/2026-11-22-visitors.md. No number moves. Three on-device keys
+  (`visitor-seen`, `visitor-away`, `visitors-off`) covered by the privacy
+  policy's existing wording. Next What's new card. Not before-deploy.
 
 ## Held
 
