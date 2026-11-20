@@ -2265,3 +2265,22 @@ body {
     opacity: 0;
   }
 }
+
+/* What's new, phone: the lines past the first three appear when "Show all"
+   is pressed -- a short fade and rise on opacity and transform, once, on the
+   press (the class is only on after it). Reduced motion: they just appear. */
+@media (prefers-reduced-motion: no-preference) {
+  .whats-new-reveal {
+    animation: whats-new-reveal var(--motion-fast) var(--ease-out) both;
+  }
+}
+@keyframes whats-new-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -242,6 +242,8 @@ function SortableCard({
   return (
     <div
       ref={setNodeRef}
+      // A place for a link to land (the What's new card's "Coming up").
+      id={`dash-card-${id}`}
       style={{
         // Translate only: the sorting strategy also offers a scale for cards
         // of different sizes, which would squash a card's content mid-drag.
@@ -260,7 +262,7 @@ function SortableCard({
               .filter(Boolean)
               .join(", "),
       }}
-      className={`card-lift group relative min-w-0 ${SPAN[sizeOf(id)]} ${
+      className={`card-lift group relative min-w-0 scroll-mt-6 ${SPAN[sizeOf(id)]} ${
         isDragging ? (reducedMotion ? "z-20 opacity-90" : "card-lift--on z-20") : ""
       }`}
     >

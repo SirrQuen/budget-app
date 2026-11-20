@@ -52,7 +52,8 @@ import { VariableAmountPrompt } from "./VariableAmountPrompt";
 import { ConfirmationQueue } from "../recurring/ConfirmationQueue";
 import { SafeToSpendHero } from "./SafeToSpendHero";
 import { WhatsNewCard } from "./WhatsNewCard";
-import { whatsNewVisible } from "@/lib/whatsNew";
+import { accountExistedBefore, whatsNewItems, whatsNewVisible } from "@/lib/whatsNew";
+import { dismissWhatsNewAction } from "@/lib/actions/whatsNew";
 import { getWhatsNewSeen } from "@/lib/whatsNewDismissed";
 import { cookies } from "next/headers";
 import { MonthRecap } from "./MonthRecap";
@@ -94,7 +95,12 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   const season = seasonAt(timeZone, renderedAt);
   const range = resolveDashboardRange(params, today);
   // Read-only: a cookie says whether "Got it" was pressed. Nothing is written on render.
-  const showWhatsNew = whatsNewVisible(today, await getWhatsNewSeen());
+  // Only for accounts older than the card's first day (their creation day in
+  // their own zone): someone who just went through onboarding is shown no list
+  // of "new" things.
+  const showWhatsNew =
+    whatsNewVisible(today, await getWhatsNewSeen()) &&
+    accountExistedBefore((await getUser())?.created_at, timeZone);
 
   // The month recap (lib/monthStory.ts): last month, in the first 7 days of
   // this one, until Done or close sets its month's cookie (client-side).
@@ -654,7 +660,13 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
 
           {/* Directly below the hero, never above it. Not part of the layout:
               not draggable and not hideable from the card menu. */}
-          {showWhatsNew ? <WhatsNewCard /> : null}
+          {showWhatsNew ? (
+            <WhatsNewCard
+              items={whatsNewItems(today)}
+              runwayAvailable={safeToSpendResult.data != null}
+              dismiss={dismissWhatsNewAction}
+            />
+          ) : null}
 
           {billsCard}
 

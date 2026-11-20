@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type {
   SafeToSpend,
   SafeToSpendCommitment,
@@ -25,6 +25,7 @@ import {
 import { ChevronDownIcon, PlusIcon } from "@/components/ui/icons";
 import { AmountBasisTag } from "@/components/AmountBasisTag";
 import { RunwayDialog } from "./RunwayDialog";
+import { OPEN_RUNWAY_EVENT, type OpenRunwayDetail } from "@/lib/runwayRequest";
 
 const heroLink =
   "inline-flex min-h-11 items-center rounded-full px-2 text-sm font-medium text-ink-secondary underline-offset-2 transition-colors duration-150 hover:text-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
@@ -175,6 +176,17 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
   // The runway (F1) or the question alone (F2). Mounted only while open.
   const [runway, setRunway] = useState<"runway" | "whatif" | null>(null);
   const panelId = useId();
+
+  // Asked from the What's new card (lib/runwayRequest.ts): the same runway
+  // the "See your runway" button opens.
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      (event as CustomEvent<OpenRunwayDetail>).detail.handled = true;
+      setRunway("runway");
+    };
+    window.addEventListener(OPEN_RUNWAY_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_RUNWAY_EVENT, onOpen);
+  }, []);
 
   // The figure rolls only when it CHANGES while on screen (a paycheck
   // confirmed, an expense added): up for a rise, with a glow behind it; down
