@@ -160,7 +160,7 @@ export function AppShell({
                 Log out
               </button>
             </form>
-            <p className="mt-3 px-3 text-xs font-medium text-ink-secondary">Follow Sorrel</p>
+            <p className="mt-3 px-3 text-xs font-medium text-ink-secondary">Connect with us</p>
             <SocialLinks className="-mt-0.5 px-1" />
           </div>
         </aside>
