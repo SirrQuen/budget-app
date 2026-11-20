@@ -4,6 +4,7 @@ import { welcomeMessage } from "@/lib/displayName";
 import { markStateAt, seasonAt, timeBandAt } from "@/lib/timeOfDay";
 import { TimeOfDayGlow } from "@/components/TimeOfDayGlow";
 import { YourSorrelLink } from "./YourSorrelLink";
+import { Visitor } from "@/components/Visitor";
 import {
   getDashboardOnboarding,
   classifyDashboardStage,
@@ -616,7 +617,12 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         ) : null}
         {/* ── Right now: as-of-today and forward-looking; not scoped by the filter ── */}
         <section className="flex flex-col gap-6" aria-labelledby="dash-right-now">
-          <PageHeader title="Dashboard" description={welcome} descriptionAfter={<YourSorrelLink season={season} />} />
+          <PageHeader
+            title="Dashboard"
+            description={welcome}
+            descriptionAfter={<YourSorrelLink season={season} />}
+            ornament={<Visitor band={band} today={today} />}
+          />
           {pageLevelError ? <LoadError message="We couldn’t load parts of your dashboard." /> : null}
           {/* The mark is ambient -- day/night for "right now" -- and kept out
               of the hero's row so nothing competes with that figure. */}

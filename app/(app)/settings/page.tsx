@@ -9,6 +9,7 @@ import { getSafeToSpendWindowPref, getSafeToSpendCushion } from "@/lib/db/settin
 import { getIncomeSchedules, paycheckState } from "@/lib/db/dashboard";
 import { DeleteAccountSection } from "./DeleteAccountSection";
 import { SafeToSpendWindowToggle } from "./SafeToSpendWindowToggle";
+import { VisitorsToggle } from "./VisitorsToggle";
 import { SafeToSpendCushionForm } from "./SafeToSpendCushionForm";
 import { ProfileForm } from "./ProfileForm";
 import { ImportsSection } from "./ImportsSection";
@@ -99,6 +100,8 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
         {/* The control reads and writes through ThemeProvider, mounted in
             app/(app)/layout.tsx, so this and the nav copy stay in step. */}
         <ThemeToggle className="mt-4" />
+
+        <VisitorsToggle className="mt-4 border-t border-hairline pt-4" />
       </section>
 
       <section

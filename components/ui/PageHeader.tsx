@@ -4,6 +4,7 @@ export function PageHeader({
   descriptionAdornment,
   descriptionAfter,
   action,
+  ornament,
 }: {
   title: string;
   description?: string;
@@ -12,9 +13,14 @@ export function PageHeader({
   /** Beside the description, after it (the dashboard's "Your Sorrel" link). */
   descriptionAfter?: React.ReactNode;
   action?: React.ReactNode;
+  /** Absolutely placed in the header's empty right end (the dashboard's visitor). */
+  ornament?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 border-b border-hairline pb-4 sm:flex-row sm:items-end sm:justify-between">
+    <div
+      data-page-header=""
+      className="relative flex flex-col gap-3 border-b border-hairline pb-4 sm:flex-row sm:items-end sm:justify-between"
+    >
       <div>
         {/* Focusable by script only: where focus lands when the thing that
             had it is removed (a deleted row -- see ConfirmDialog returnFocus). */}
@@ -34,6 +40,7 @@ export function PageHeader({
         ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
+      {ornament}
     </div>
   );
 }

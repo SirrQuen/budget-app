@@ -2029,3 +2029,239 @@ body {
     animation-name: your-sorrel-in;
   }
 }
+
+/* ── VISITORS (components/Visitor.tsx, docs/Visitors.md) ──────────────────────
+   A one-shot arrival, then still. Transform and opacity only; every
+   animation lives inside no-preference, so reduced motion is the perched
+   end state with nothing started. The class that starts an arrival
+   (.visitor--arrive) is never removed into a loop: each keyframe set ends
+   on the resting style below. Positions are offsets from the perch (0,0),
+   kept within the header's own gutter on the right so nothing scrolls. */
+.visitor {
+  transform-origin: 50% 100%;
+}
+.visitor__body {
+  transform-origin: 50% 100%;
+}
+.visitor__wing {
+  transform-box: fill-box;
+  transform-origin: 20% 60%;
+}
+.visitor__wings {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+.visitor__halo {
+  opacity: 0.55; /* the steady glow */
+}
+.visitor__lid {
+  transform-box: fill-box;
+  transform-origin: 50% 0;
+  transform: scaleY(0); /* open */
+}
+@media (prefers-reduced-motion: no-preference) {
+  .visitor--arrive[data-visitor="songbird"] {
+    animation: visitor-fly-songbird 1100ms linear both;
+  }
+  .visitor--arrive[data-visitor="songbird"] .visitor__body {
+    animation: visitor-settle 100ms var(--icon-anim-ease) 1100ms both;
+  }
+  .visitor--arrive[data-visitor="songbird"] .visitor__wing {
+    animation: visitor-flap 157ms ease-in-out 7;
+  }
+
+  .visitor--arrive[data-visitor="butterfly"] {
+    animation: visitor-fly-butterfly 1200ms linear both;
+  }
+  .visitor--arrive[data-visitor="butterfly"] .visitor__wings {
+    /* beating in flight, then open and close once, slowly, then rest open */
+    animation:
+      visitor-beat 150ms ease-in-out 8,
+      visitor-close-once 1000ms ease-in-out 1300ms 1 forwards;
+  }
+
+  .visitor--arrive[data-visitor="firefly"] {
+    animation: visitor-fly-firefly 1200ms linear both;
+  }
+  .visitor--arrive[data-visitor="firefly"] .visitor__halo {
+    animation: visitor-flicker 1200ms linear both;
+  }
+
+  .visitor--arrive[data-visitor="owl"] {
+    animation: visitor-fly-owl 1200ms linear both;
+  }
+  .visitor--arrive[data-visitor="owl"] .visitor__body {
+    animation: visitor-settle 100ms var(--icon-anim-ease) 1200ms both;
+  }
+  .visitor--arrive[data-visitor="owl"] .visitor__lid {
+    /* one blink, about 0.6s after landing (1200ms + 100ms settle + ~500ms) */
+    animation: visitor-blink 240ms ease-in-out 1800ms 1 forwards;
+  }
+
+  /* A tap: a short flight up and away, fading out. */
+  .visitor.visitor--away[data-visitor] {
+    animation: visitor-away 600ms ease-in both;
+    pointer-events: none;
+  }
+}
+@keyframes visitor-fly-songbird {
+  0% {
+    transform: translate(12px, -52px);
+    opacity: 0;
+    animation-timing-function: var(--icon-anim-ease);
+  }
+  15% {
+    opacity: 1;
+  }
+  60% {
+    transform: translate(-8px, -14px);
+    animation-timing-function: var(--icon-anim-ease);
+  }
+  100% {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+}
+@keyframes visitor-fly-butterfly {
+  0% {
+    transform: translate(12px, -6px);
+    opacity: 0;
+    animation-timing-function: ease-in-out;
+  }
+  12% {
+    opacity: 1;
+  }
+  25% {
+    transform: translate(-22px, -26px);
+    animation-timing-function: ease-in-out;
+  }
+  50% {
+    transform: translate(-8px, 2px);
+    animation-timing-function: ease-in-out;
+  }
+  75% {
+    transform: translate(-16px, -10px);
+    animation-timing-function: var(--icon-anim-ease);
+  }
+  100% {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+}
+@keyframes visitor-fly-firefly {
+  0% {
+    transform: translate(-48px, 18px);
+    opacity: 0;
+    animation-timing-function: ease-in-out;
+  }
+  20% {
+    opacity: 1;
+  }
+  40% {
+    transform: translate(-26px, 6px);
+    animation-timing-function: ease-in-out;
+  }
+  70% {
+    transform: translate(-10px, -6px);
+    animation-timing-function: var(--icon-anim-ease);
+  }
+  100% {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+}
+@keyframes visitor-fly-owl {
+  0% {
+    transform: translate(-48px, -44px) rotate(-12deg);
+    opacity: 0;
+    animation-timing-function: var(--icon-anim-ease);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+}
+@keyframes visitor-settle {
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+  50% {
+    transform: scale(1.04, 0.94);
+  }
+}
+@keyframes visitor-flap {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-40deg);
+  }
+  75% {
+    transform: rotate(25deg);
+  }
+}
+@keyframes visitor-beat {
+  0%,
+  100% {
+    transform: scaleX(1);
+  }
+  50% {
+    transform: scaleX(0.25);
+  }
+}
+@keyframes visitor-close-once {
+  0%,
+  100% {
+    transform: scaleX(1);
+  }
+  50% {
+    transform: scaleX(0.25);
+  }
+}
+@keyframes visitor-flicker {
+  0% {
+    opacity: 0.3;
+  }
+  14% {
+    opacity: 0.9;
+  }
+  28% {
+    opacity: 0.35;
+  }
+  44% {
+    opacity: 0.85;
+  }
+  60% {
+    opacity: 0.4;
+  }
+  78% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0.55;
+  }
+}
+@keyframes visitor-blink {
+  0%,
+  100% {
+    transform: scaleY(0);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+@keyframes visitor-away {
+  from {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translate(18px, -70px) scale(0.9);
+    opacity: 0;
+  }
+}
