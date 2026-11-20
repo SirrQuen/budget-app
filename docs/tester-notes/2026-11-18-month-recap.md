@@ -1,4 +1,4 @@
-Sent:      not yet
+Sent:      Not emailed. Announced in-app (What's new), 2026-11-20
 Migration: 71
 Merge:     cf1308f (feat/motion-and-delight-e, fast-forward)
 Deployed:  2026-11-17

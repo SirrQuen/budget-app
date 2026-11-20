@@ -169,24 +169,9 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 - Dashboard layout, deployed 2026-11-14: "You can now rearrange your
   dashboard: hold the grip on any card and drag it, or use the card's
   menu." Status: not yet sent.
-- Goal links (migration 69, deployed 2026-11-16): draft in
-  docs/tester-notes/2026-11-16-goal-links.md. Moves safe to spend. Next
-  What's new card, with debt goals that follow a card. Not before-deploy.
-- Debt goals that follow a card (migration 70, merged `24ba18c`, deployed 2026-11-17): draft in
-  docs/tester-notes/2026-11-17-debt-goals-follow-card.md. Can move safe to
-  spend (a linked goal's monthly hold goes). Next What's new card. Not
-  before-deploy.
-- Motion batch E, your month as a story (migration 71, merged `cf1308f`,
-  deployed 2026-11-17): draft in
-  docs/tester-notes/2026-11-18-month-recap.md. No number moves. Names the
-  goal-funding-schedule gap (auto-link queued). Next What's new card. Not
-  before-deploy.
 - Batch G, onboarding (no migration, merged `b5d2cf2`, deployed 2026-11-18):
   draft in docs/tester-notes/2026-11-17-onboarding.md. No number moves for
   existing users. Next What's new card. Not before-deploy.
-- Batch F, the runway and "What if…" (no migration, merged `922e4d3`,
-  deployed 2026-11-17): draft in docs/tester-notes/2026-11-17-runway-and-what-if.md.
-  No number moves. Next What's new card. Not before-deploy.
 - Motion batch D, seasons and time of day (merged `e1db401`, deployed 2026-11-17): draft in
   docs/tester-notes/2026-11-17-seasons-and-time-of-day.md. No number moves. Next What's new
   card. Not before-deploy.
@@ -196,13 +181,6 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 - Motion batch A (merged `571b1f1`, deployed 2026-11-16): draft in
   docs/tester-notes/2026-11-16-motion-and-delight.md. No number moves. Next
   What's new card. Not before-deploy.
-- Log again (deployed 2026-11-16): draft in
-  docs/tester-notes/2026-11-16-log-again.md. Goes in the next What's new
-  card with a new dated cookie, beside the goal features. Not before-deploy.
-- Visitors (no migration, merged `a334c1b`, deployed 2026-11-20): draft in
-  docs/tester-notes/2026-11-22-visitors.md. No number moves. Three on-device keys
-  (`visitor-seen`, `visitor-away`, `visitors-off`) covered by the privacy
-  policy's existing wording. Next What's new card. Not before-deploy.
 
 ## Held
 

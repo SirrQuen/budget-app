@@ -1,4 +1,4 @@
-Sent:      not yet
+Sent:      Not emailed. Announced in-app (What's new), 2026-11-20
 Migration: 70
 Merge:     24ba18c (feat/debt-goals)
 Deployed:  2026-11-17

@@ -1,4 +1,4 @@
-Sent:      not yet
+Sent:      Not emailed. Announced in-app (What's new), 2026-11-20
 Migration: 69
 Merge:     8570469 (feat/transaction-goal-links)
 Deployed:  2026-11-16

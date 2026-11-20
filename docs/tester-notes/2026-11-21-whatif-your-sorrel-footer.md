@@ -1,4 +1,4 @@
-Sent:      not yet
+Sent:      Not emailed. Announced in-app (What's new), 2026-11-20
 Migration: none
 Merge:     3448e54 (display-whatif-sorrelpanel-footer, fast-forward)
 Deployed:  2026-11-19
