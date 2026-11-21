@@ -2762,7 +2762,18 @@ Matt:
   Matt; section 2n and the coverage rows for the two new tables
   included).
 
+Live send on sorrel-dev, 2026-11-21. Recipient `delivered@resend.dev`,
+a sending-only Resend key in Vault, one waitlist signup
+(`zz-alert-test@example.invalid`) at 15:45:40 UTC:
+- **15:45 run:** the row came 40 seconds after it, so it wasn't counted.
+- **15:50 run:** status `sending`, pg_net request 9 queued.
+- **15:55 run:** `sent (HTTP 200)`. `last_checked_at` moved to 15:45:40,
+  the row's own `created_at`, so it won't be sent again.
+
+Matt to confirm the email shows in Resend's Emails log. Every cron run so
+far succeeded.
+
 Still to do:
-- the live dev send to delivered@resend.dev;
+- set dev's `signup_alerts_mode` back to `log`;
 - the production Vault secrets and push;
 - the merge.
