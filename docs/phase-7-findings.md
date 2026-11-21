@@ -2727,3 +2727,42 @@ Known edges, not fixed:
 - **A joined row can't take a schedule's occurrence (v1).** If a joined
   entry is in fact a scheduled card payment, its queue item still asks
   until it's answered.
+
+## Signup alerts: no notice of a new waitlist signup or beta application (2026-11-21)
+
+**Status:** built on `signup-alerts` (migration 77). On sorrel-dev; not on
+production, not merged. Raised 2026-11-20: the operator got no alert when
+someone joined the waitlist or applied to be a tester.
+
+Ruled 2026-11-20:
+- A pg_cron job runs every 5 minutes, with no trigger, so nothing is
+  added to the submission path.
+- Postgres calls Resend's API directly through pg_net, with the key in
+  Vault.
+- At most one email per type per 15 minutes; later rows are summarised.
+- The email holds counts, the type and a Supabase link, and nothing else.
+
+No privacy-policy change: Resend is already a listed processor, and no
+applicant data leaves Supabase. docs/signup-alerts-test.sql section 10
+pins the email text.
+
+Setup is recorded in docs/supabase-config.md, "Vault and scheduled jobs":
+- the three Vault secrets;
+- the `net` schema's PUBLIC usage, which leaves the key briefly in
+  pg_net's request queue.
+
+Test runs on sorrel-dev (tztbebdzlezlhvsbylsf), migration 77 pushed by
+Matt:
+- signup-alerts-test.sql, 2026-11-21: 59 rows, 0 false, ALL PASS (run by
+  Matt). The first run was NOT PASSED, with 1 false row: the check
+  expected `pg_get_function_identity_arguments()` without the OUT
+  parameters. The test's expectation was wrong, not the signature. Fixed
+  in `19264d2`.
+- rls-isolation-test.sql, 2026-11-21: 542 rows, 0 false, ALL PASS (run by
+  Matt; section 2n and the coverage rows for the two new tables
+  included).
+
+Still to do:
+- the live dev send to delivered@resend.dev;
+- the production Vault secrets and push;
+- the merge.
