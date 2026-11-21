@@ -1,7 +1,7 @@
 Sent:      not yet
 Migration: 76
-Merge:     not yet
-Deployed:  not yet
+Merge:     37a6416 (fast-forward of import-categories-transfers; no merge commit)
+Deployed:  2026-11-20
 
 ---
 

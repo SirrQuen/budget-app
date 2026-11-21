@@ -182,16 +182,6 @@ docs/tester-notes/README.md). Move a line out when it's sent.
   docs/tester-notes/2026-11-16-motion-and-delight.md. No number moves. Next
   What's new card. Not before-deploy.
 
-## In verification
-
-| Item | Branch | Where |
-|---|---|---|
-| Import fixes A + B: a category per row, and transfers (migration 76). Built 2026-11-20. Waits on the dev push, both test scripts ALL PASS, the RLS harness ALL PASS, and the browser checks | `import-categories-transfers` | Findings, "Import: transfers came in as spending"; docs/Import-CSV.md, 9 and 9b |
-
-The Deferred "Bloom after an import that completes a goal" is built on that
-branch (`importTransactionsAction` returns the completion) and comes off the
-list when it merges.
-
 ## Held
 
 | Item | Since | Held until | Where |
@@ -225,6 +215,16 @@ list when it merges.
 ## Done, still named in conversation
 
 Listed so they aren't queued again.
+
+- **Import: a category per row, and transfers (migration 76).** Deployed
+  2026-11-20. Main was fast-forwarded to `37a6416`
+  (`import-categories-transfers`); 76 was on sorrel-dev and production
+  before the push. Each row gets its own category, suggested on the device
+  from the person's own history. A file row can be a transfer: it joins a
+  plain entry already on the other account, or creates both legs. Undo
+  restores joined rows. This also delivered the deferred "Bloom after an
+  import that completes a goal". Findings, "Import: transfers came in as
+  spending"; docs/Import-CSV.md, 9 and 9b.
 
 - **A transaction can be for a goal (migration 69).** Merged to main
   2026-11-16 (`8570469`, `feat/transaction-goal-links`); 69 on sorrel-dev

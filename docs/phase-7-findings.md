@@ -2601,8 +2601,11 @@ asserted in the harness's 2d.
 
 ## Import: transfers came in as spending (2026-11-20)
 
-**Status:** built on `import-categories-transfers` (migration 76),
-2026-11-20. Not merged. Raised 2026-11-20 (a checking -> savings transfer
+**Status:** deployed 2026-11-20. Migration 76 is on sorrel-dev and on
+production; checked read-only before the merge: the latest migration is
+20261120000076 and import_pairings is present. Main was fast-forwarded to
+`37a6416` (`import-categories-transfers`) and pushed. Tester note:
+docs/tester-notes/2026-11-20-import-transfers.md (Sent: not yet). Raised 2026-11-20 (a checking -> savings transfer
 imported as an Expense) together with "a file with no category column gets
 one category picker for every row".
 
