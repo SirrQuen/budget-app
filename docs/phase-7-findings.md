@@ -2615,10 +2615,10 @@ Matt:
   before the FK under test. Two 2h join rows checked a category that
   section 6 edits earlier in the run. The 2h control used a category
   section 6 archives, which 76 now refuses. All fixed in `6a0f116`.
-- import-transfers-test.sql: ALL PASS, run by Matt 2026-11-20 (row
-  figures not yet given -- record them before this counts).
-- import-test.sql: ALL PASS, run by Matt 2026-11-20 (row figures not yet
-  given -- record them before this counts).
+- import-transfers-test.sql, 2026-11-20: 53 rows, 0 false, ALL PASS
+  (sections 1-11 present; run by Matt).
+- import-test.sql, 2026-11-20: 79 rows, 0 false, ALL PASS (sections 1-12
+  present; its first run with a SUMMARY row; run by Matt).
 
 Browser checks on localhost against sorrel-dev, 2026-11-20, with ZZ test
 accounts (ZZ Checking, ZZ Savings with a 10 Nov balance date, ZZ Visa):
@@ -2657,8 +2657,16 @@ accounts (ZZ Checking, ZZ Savings with a 10 Nov balance date, ZZ Visa):
   resize):**
   - Rows stack as cards with full-width selects, and there's no
     horizontal scroll (371 of 386px).
-  - Minor: the description truncates on a phone ("ZZ TESC…") with no way
-  to see the rest. Not fixed.
+  - The description used to truncate on a phone ("ZZ TESC…") with no way
+    to see the rest. **Fixed 2026-11-20** (`RowDescription`, ImportFlow):
+    on a phone the description takes its own full-width line and wraps to
+    two lines. Longer text is clamped there, with "Show all" / "Show less"
+    on tap and `aria-expanded`. Short text stays plain, not a button.
+    Checked at 390px: clamped at 2 lines, expands to the full text,
+    collapses back, no horizontal scroll, no console errors. A first
+    version paired `block` with `line-clamp-2`, which unclamps the text, and
+    looped ("Maximum update depth exceeded"). Caught in that check and
+    fixed before commit.
 - **Re-importing the same file** flagged all 6 rows as duplicates.
   "Imported through" read Nov 17 for ZZ Checking.
 

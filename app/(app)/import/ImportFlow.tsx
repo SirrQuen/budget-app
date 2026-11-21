@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { getImportContextAction, importTransactionsAction } from "@/lib/actions/import";
 import type { ImportContext, OtherAccount } from "@/lib/db/imports";
 import {
@@ -1099,6 +1099,59 @@ function ColumnSelect({
  * one is the file's (date, description, amount); line two is the person's
  * (type, then a category or the transfer's other account).
  */
+/**
+ * A row's description. Never cut off with no way to read it: on a phone it
+ * takes its own full-width line and wraps to two lines; anything longer is
+ * clamped there and a tap shows all of it (and a second tap folds it back).
+ * The toggle exists only when the text is actually clamped, so a short
+ * description is plain text, not a button that does nothing.
+ */
+function RowDescription({ text }: { text: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [open, setOpen] = useState(false);
+  const [clamped, setClamped] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      // Measured while clamped: the full text is taller than two lines.
+      if (!open) setClamped(el.scrollHeight > el.clientHeight + 1);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+    // `clamped` swaps the plain span for the button, so the element measured changes.
+  }, [open, text, clamped]);
+
+  const shared = "order-last basis-full break-words text-left text-ink sm:order-none sm:basis-0 sm:min-w-0 sm:flex-1";
+  const clampClass = open ? "" : "line-clamp-2";
+
+  if (!clamped && !open) {
+    return (
+      <span ref={ref} className={`${shared} ${clampClass}`}>
+        {text}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setOpen((o) => !o)}
+      aria-expanded={open}
+      className={`${shared} rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action`}
+    >
+      {/* No `block` here: line-clamp sets its own display (-webkit-box), and a
+          display class would override it and unclamp the text. */}
+      <span ref={ref} className={open ? "block" : clampClass}>
+        {text}
+      </span>
+      <span className="text-xs text-ink-muted">{open ? "Show less" : "Show all"}</span>
+    </button>
+  );
+}
+
 function RowItem({
   v,
   dup,
@@ -1148,8 +1201,8 @@ function RowItem({
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <span className="text-xs text-ink-muted">Row {r.row}</span>
         <span>{formatDate(r.date)}</span>
-        <span className="min-w-0 flex-1 truncate text-ink">{r.description}</span>
-        <Amount amount={dollars(r.cents)} type={v.type} />
+        <RowDescription text={r.description} />
+        <Amount amount={dollars(r.cents)} type={v.type} className="ml-auto sm:ml-0" />
       </div>
 
       {dup ? (
