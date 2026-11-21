@@ -2615,8 +2615,52 @@ Matt:
   before the FK under test. Two 2h join rows checked a category that
   section 6 edits earlier in the run. The 2h control used a category
   section 6 archives, which 76 now refuses. All fixed in `6a0f116`.
-- import-transfers-test.sql: not yet recorded.
-- import-test.sql: not yet recorded.
+- import-transfers-test.sql: ALL PASS, run by Matt 2026-11-20 (row
+  figures not yet given -- record them before this counts).
+- import-test.sql: ALL PASS, run by Matt 2026-11-20 (row figures not yet
+  given -- record them before this counts).
+
+Browser checks on localhost against sorrel-dev, 2026-11-20, with ZZ test
+accounts (ZZ Checking, ZZ Savings with a 10 Nov balance date, ZZ Visa):
+- **A file with no category column, categorised per row:**
+  - A 6-row file got Groceries ×2 (the second through "Apply Groceries to
+    1 other ZZ TESCO row?"), Gasoline/Fuel, and Paychecks/Salary (through
+    "Set all 1 income row…").
+  - Import stayed disabled until every non-transfer row had a category.
+  - A later file's TESCO row came up "Suggested from your past entries".
+- **Checking -> savings transfers, created as two legs:**
+  - Both transfer rows were flagged "Looks like a transfer".
+  - As Transfer out to ZZ Savings, each became an Expense leg plus an
+    Income leg, with no category, both carrying the import.
+  - The 5 Nov leg was asked savings' own pre-anchor question. "No, add
+    it" is stored on the savings leg only.
+  - The preview's two balance lines matched the result: Checking $2,684.35
+    and Savings $900.
+- **A card payment joined to an existing Visa row:**
+  - The other account defaulted to ZZ Visa from the match. The question
+    read "This matches +$250.00 already on ZZ Visa… Make them one
+    transfer?"
+  - After "Yes", the Visa row became the Income leg. It kept 16 Nov
+    against checking's 17 Nov, and its category moved to import_pairings.
+  - Checking fell $250 once and the Visa balance didn't move.
+  - The transfer editor showed the two-day sentence.
+- **Undo of both, newest first:**
+  - Each confirm was read in its own open dialog first. The Visa undo
+    said "1 entry you already had stays, and goes back to how it was".
+  - The Visa row came back as a plain Other Income row.
+  - The ZZ accounts returned to $2,000 / $500 / $550 owed, and no
+    pairings remained.
+- **Network:** before Import, the one request carried the account id and
+  the file's distinct dates only. Checked with a fetch wrapper on the page,
+  for both files.
+- **Phone width (390px iframe; the window was maximized and couldn't
+  resize):**
+  - Rows stack as cards with full-width selects, and there's no
+    horizontal scroll (371 of 386px).
+  - Minor: the description truncates on a phone ("ZZ TESC…") with no way
+  to see the rest. Not fixed.
+- **Re-importing the same file** flagged all 6 rows as duplicates.
+  "Imported through" read Nov 17 for ZZ Checking.
 
 What was wrong. Import (68) wrote every row as Income or Expense on the
 chosen account. Three things followed:
