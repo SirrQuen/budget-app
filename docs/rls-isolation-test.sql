@@ -790,6 +790,17 @@ declare
   v_goal_linked uuid := gen_random_uuid();
   v_goal_funded uuid := gen_random_uuid();
   v_row record;
+  -- A transaction of each user that no pairing names yet (the fixture
+  -- pairs A_txn and B_txn), so import_pairings_transactionid_key can't
+  -- refuse first and hide the FK under test.
+  v_a_free uuid := (select t.id from public.transactions t
+                     where t.userid = pg_temp.fx('A')
+                       and not exists (select 1 from public.import_pairings p where p.transactionid = t.id)
+                     order by t.id limit 1);
+  v_b_free uuid := (select t.id from public.transactions t
+                     where t.userid = pg_temp.fx('B')
+                       and not exists (select 1 from public.import_pairings p where p.transactionid = t.id)
+                     order by t.id limit 1);
 begin
   for r in
     select * from (values
@@ -839,11 +850,11 @@ begin
       -- Migration 76: a pairing is about its own user's import, transaction
       -- and category.
       ('import_pairings_import_fkey',
-        format('insert into public.import_pairings (userid, import_id, transactionid, prior_categoryid, transfer_group_id) values (%L, %L, %L, %L, gen_random_uuid())', b, pg_temp.fx('A_imp'), pg_temp.fx('B_txn'), pg_temp.fx('B_groceries'))),
+        format('insert into public.import_pairings (userid, import_id, transactionid, prior_categoryid, transfer_group_id) values (%L, %L, %L, %L, gen_random_uuid())', b, pg_temp.fx('A_imp'), v_b_free, pg_temp.fx('B_groceries'))),
       ('import_pairings_transaction_fkey',
-        format('insert into public.import_pairings (userid, import_id, transactionid, prior_categoryid, transfer_group_id) values (%L, %L, %L, %L, gen_random_uuid())', b, pg_temp.fx('B_imp'), pg_temp.fx('A_txn'), pg_temp.fx('B_groceries'))),
+        format('insert into public.import_pairings (userid, import_id, transactionid, prior_categoryid, transfer_group_id) values (%L, %L, %L, %L, gen_random_uuid())', b, pg_temp.fx('B_imp'), v_a_free, pg_temp.fx('B_groceries'))),
       ('import_pairings_prior_category_fkey',
-        format('insert into public.import_pairings (userid, import_id, transactionid, prior_categoryid, transfer_group_id) values (%L, %L, %L, %L, gen_random_uuid())', b, pg_temp.fx('B_imp'), pg_temp.fx('B_txn'), pg_temp.fx('A_groceries'))),
+        format('insert into public.import_pairings (userid, import_id, transactionid, prior_categoryid, transfer_group_id) values (%L, %L, %L, %L, gen_random_uuid())', b, pg_temp.fx('B_imp'), v_b_free, pg_temp.fx('A_groceries'))),
       -- Migration 66: an answer is about its own user's schedule and entry.
       ('same_bill_answers_recurringid_fkey',
         format('insert into public.same_bill_answers (userid, recurringid, transactionid, answer, occurrence_due_date) values (%L, %L, %L, ''different'', current_date)', b, pg_temp.fx('A_recur'), pg_temp.fx('B_txn'))),
@@ -1752,10 +1763,16 @@ declare
   v_pass boolean;
   v_import uuid;
   v_seen bigint;
+  v_hash text;
 begin
+  -- An ACTIVE Expense category of A's: section 6 archives one of A's
+  -- earlier in the run, and migration 76 refuses an archived category.
   v_rows := jsonb_build_array(jsonb_build_object(
     'row', 2, 'date', (current_date + 1)::text, 'cents', 100, 'type', 'Expense',
-    'description', 'rls import', 'categoryid', pg_temp.fx('A_rent')));
+    'description', 'rls import', 'categoryid',
+    (select c.id from public.categories c
+      where c.userid = a and c.category_type = 'Expense' and c.is_active
+      order by c.category_name limit 1)));
   v_before_txns := (select count(*) from public.transactions where userid = a);
   v_before_imports := (select count(*) from public.imports where userid = a);
 
@@ -1799,14 +1816,15 @@ begin
       ('B joins a made-up transaction (the oracle baseline)', gen_random_uuid())
     ) as t(what, target)
   loop
+    v_hash := pg_temp.row_hash('transactions', 'id', pg_temp.fx('A_txn'));
     select * into v_try from pg_temp.try_as(b, format(
       'select * from public.import_transactions(%L, %L::jsonb, null, null)', pg_temp.fx('B_acct'),
       jsonb_build_array(jsonb_build_object('row', 2, 'date', current_date::text, 'cents', 2500, 'type', 'Income',
         'description', 'rls pair', 'transfer', jsonb_build_object('other_accountid', pg_temp.fx('B_invacct'),
         'pair_with', v_case.target)))::text));
     v_pass := v_try.state = 'SIP01'
-      and (select transfer_group_id is null and categoryid = pg_temp.fx('A_groceries')
-             from public.transactions where id = pg_temp.fx('A_txn'))
+      and v_hash is not null
+      and pg_temp.row_hash('transactions', 'id', pg_temp.fx('A_txn')) = v_hash
       and not exists (select 1 from public.import_pairings where transactionid = pg_temp.fx('A_txn') and userid = b);
     perform pg_temp.rec('2h import', 'import_transactions() pair_with', v_case.what,
       'SIP01; A''s transaction untouched',
