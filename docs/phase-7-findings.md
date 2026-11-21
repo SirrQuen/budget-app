@@ -2784,6 +2784,7 @@ Matt to confirm the email shows in Resend's Emails log. Every cron run so
 far succeeded.
 
 Still to do:
-- set dev's `signup_alerts_mode` back to `log` (Matt; not confirmed here);
+- ~~set dev's `signup_alerts_mode` back to `log`~~ -- done, confirmed by
+  Matt 2026-11-21;
 - the first real production alert: check `signup_alerts.last_status`
   reads `sent (HTTP 200)` after it.
