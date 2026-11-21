@@ -75,8 +75,9 @@ dashboard (Authentication / Settings), then keep this file current.
     invite): TODO -- record whether each is default or custom.
 - **SMTP** -- custom SMTP via Resend (`smtp.resend.com:465`, user
   `resend`), sender "Sorrel" <hello@mysorrel.com>. Read from production
-  2026-10-12. SPF/DKIM/DMARC on mysorrel.com not yet verified here --
-  launch blocker 5 until they are.
+  2026-10-12. DMARC exists (below); SPF and DKIM are awaiting Matt's
+  confirmation that Resend shows them Verified -- launch blocker 5 until
+  then. Sending and receiving for mysorrel.com: "Outside Supabase" below.
 - **Rate limits** (emails/hour, sign-ups, token refreshes, verifications)
   -- TODO.
 - **Providers enabled** -- TODO (the app uses email + password only).
@@ -138,5 +139,20 @@ dashboard (Authentication / Settings), then keep this file current.
 
 ### Outside Supabase
 
+- **DNS for mysorrel.com** -- on Cloudflare (stated by Matt 2026-11-21).
+- **Receiving: hello@mysorrel.com** -- Cloudflare Email Routing. The MX
+  records are `route1.mx.cloudflare.net`, `route2.mx.cloudflare.net` and
+  `route3.mx.cloudflare.net`. Mail to hello@ is forwarded to Matt's
+  personal Gmail; the address itself is deliberately not written in the
+  repo. The privacy policy names hello@ for deletion requests, so that's
+  where they arrive.
+- **Sending** -- Resend, both Supabase Auth's SMTP (above) and the signup
+  alerts' HTTP API (migration 77), from hello@mysorrel.com.
+- **DMARC** -- exists: `v=DMARC1; p=none; rua=mailto:<Matt's personal
+  Gmail>` (stated by Matt 2026-11-21). `p=none` only monitors: mail
+  failing SPF/DKIM is reported to that address, not rejected.
+- **SPF and DKIM** -- not yet confirmed. Matt to check that Resend's
+  Domains page shows both Verified for mysorrel.com; launch blocker 5
+  (docs/phase-7-findings.md) is marked done only then.
 - **API keys** in the hosting environment: `NEXT_PUBLIC_SUPABASE_URL`,
   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SITE_URL` (see `.env.example`).
