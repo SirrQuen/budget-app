@@ -997,6 +997,63 @@ export type Database = {
           },
         ]
       }
+      signup_alert_log: {
+        Row: {
+          body: string
+          created_at: string
+          id: number
+          kind: string
+          subject: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: never
+          kind: string
+          subject: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: never
+          kind?: string
+          subject?: string
+        }
+        Relationships: []
+      }
+      signup_alerts: {
+        Row: {
+          kind: string
+          last_checked_at: string
+          last_sent_at: string | null
+          last_status: string
+          pending_request_id: number | null
+          pending_sent_at: string | null
+          pending_through: string | null
+          updated_at: string
+        }
+        Insert: {
+          kind: string
+          last_checked_at: string
+          last_sent_at?: string | null
+          last_status?: string
+          pending_request_id?: number | null
+          pending_sent_at?: string | null
+          pending_through?: string | null
+          updated_at?: string
+        }
+        Update: {
+          kind?: string
+          last_checked_at?: string
+          last_sent_at?: string | null
+          last_status?: string
+          pending_request_id?: number | null
+          pending_sent_at?: string | null
+          pending_through?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           created_at: string
@@ -2036,6 +2093,7 @@ export type Database = {
         Args: { p_userid: string }
         Returns: undefined
       }
+      send_signup_alerts: { Args: { p_now?: string }; Returns: undefined }
       set_goal_funding: {
         Args: { p_goalid?: string; p_recurringid: string }
         Returns: undefined
@@ -2043,6 +2101,29 @@ export type Database = {
       signed_amount: {
         Args: { p_amount: number; p_type: string }
         Returns: number
+      }
+      signup_alert_text: {
+        Args: {
+          p_kind: string
+          p_minutes: number
+          p_new: number
+          p_total: number
+        }
+        Returns: Record<string, unknown>
+      }
+      signup_alerts_run: {
+        Args: { p_key: string; p_mode: string; p_now: string; p_to: string }
+        Returns: undefined
+      }
+      signup_alerts_settle: {
+        Args: {
+          p_error: string
+          p_kind: string
+          p_now: string
+          p_status_code: number
+          p_timed_out: boolean
+        }
+        Returns: undefined
       }
       spendable_cash_balance: { Args: never; Returns: number }
       submit_beta_application: {
