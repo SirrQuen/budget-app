@@ -304,8 +304,10 @@ begin
    where url = 'https://api.resend.com/emails'
      and convert_from(body, 'utf8') ~* '(sa-test|testname|example\.invalid)';
   perform pg_temp.rec('10 no queued request to Resend holds an address or name from the rows', '0', v_n::text);
+  -- The identity arguments list the OUT parameters too: what goes in is a
+  -- type and three numbers; what comes out is the subject and body.
   perform pg_temp.rec('10 signup_alert_text() is given numbers only, never a row',
-    'p_kind text, p_new integer, p_total bigint, p_minutes integer',
+    'p_kind text, p_new integer, p_total bigint, p_minutes integer, OUT subject text, OUT body text',
     pg_get_function_identity_arguments('public.signup_alert_text(text,integer,bigint,integer)'::regprocedure));
 end
 $$;
