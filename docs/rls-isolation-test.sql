@@ -1318,6 +1318,112 @@ $$;
 
 
 -- ---------------------------------------------------------------------
+-- 2m (continued) -- beta_applications_readable (migration 78)
+--
+-- The operator's plain-English view of the applications. Owner only: no
+-- privilege for anon, authenticated or service_role, and a real SELECT as
+-- anon and as a signed-in user is refused. security_invoker set. As the
+-- owner, one known application reads in the /beta form's exact words, in
+-- America/New_York time; a code the form doesn't have shows as
+-- "[unknown: <code>]" (checked inside a sub-block that drops the column
+-- checks to store one, then rolls itself back).
+-- ---------------------------------------------------------------------
+do $$
+declare
+  c_view  constant text := 'beta_applications_readable';
+  c_email constant text := 'rls-test-readable@example.invalid';
+  v_role  text;
+  v_priv  text;
+  v_has   boolean;
+  v_state text;
+  v_txt   text;
+  v_age   text;
+  v_money text;
+begin
+  select coalesce('security_invoker=true' = any (c.reloptions), false) into v_has
+    from pg_class c where c.oid = 'public.beta_applications_readable'::regclass;
+  perform pg_temp.rec('2m beta applications', c_view, 'security_invoker set', 'true',
+    coalesce(v_has::text, 'null'), v_has is true);
+
+  foreach v_role in array array['anon', 'authenticated', 'service_role'] loop
+    foreach v_priv in array array['SELECT', 'INSERT', 'UPDATE', 'DELETE'] loop
+      v_has := has_table_privilege(v_role, 'public.beta_applications_readable', v_priv);
+      perform pg_temp.rec('2m beta applications', c_view, v_role || ' ' || v_priv || ' granted',
+        'false', v_has::text, not v_has);
+    end loop;
+  end loop;
+
+  -- A real read, as anon and as a signed-in user: refused, not empty.
+  foreach v_role in array array['anon', 'authenticated'] loop
+    v_state := null;
+    begin
+      if v_role = 'anon' then
+        perform pg_temp.become_anon();
+      else
+        perform pg_temp.become(pg_temp.fx('A'));
+      end if;
+      perform count(*) from public.beta_applications_readable;
+    exception when others then
+      v_state := sqlstate;
+    end;
+    perform pg_temp.unbecome();
+    perform pg_temp.rec('2m beta applications', c_view, v_role || ': select refused', '42501',
+      coalesce(v_state, 'ok'), v_state = '42501');
+  end loop;
+
+  -- One known application, written as the table owner. 20:42 UTC on
+  -- 21 Nov 2026 is 3:42 PM in New York (EST).
+  insert into public.beta_applications (email, full_name, age_range, describes, experience, money_methods,
+    challenge, want, availability, comfortable, frequency, reason, consented_at, created_at, updated_at)
+  values (c_email, 'Readable Test', 'age_25_34', 'describes_household', 'experience_very',
+    array['method_paper', 'method_spreadsheet'], 'challenge_safe_to_spend', 'want_plan_bills',
+    'available_possibly', 'comfortable_yes', 'frequency_few_weekly', 'reason_safe_to_spend',
+    timestamptz '2026-11-21 20:42:00+00', timestamptz '2026-11-21 20:42:00+00', timestamptz '2026-11-21 20:45:00+00');
+
+  select concat_ws(' | ', submitted, last_updated, full_name, age_range, describes_you, budgeting_experience,
+                   manages_money, biggest_challenge, wants_help_with, can_commit_3_4_weeks,
+                   comfortable_giving_feedback, expected_use, why_join, consented_at)
+    into v_txt from public.beta_applications_readable where email = c_email;
+  perform pg_temp.rec('2m beta applications', c_view, 'owner: an application in the form''s words, New York time',
+    '2026-11-21 3:42 PM | 2026-11-21 3:45 PM | Readable Test | 25–34 | Parent or managing household finances'
+      || ' | Very experienced | Paper or notebook, Spreadsheet | Knowing how much I can safely spend'
+      || ' | Plan ahead for upcoming bills | Possibly | Yes | A few times a week'
+      || ' | The “safe to spend” idea caught my eye | 2026-11-21 3:42 PM',
+    coalesce(v_txt, 'null'),
+    v_txt = '2026-11-21 3:42 PM | 2026-11-21 3:45 PM | Readable Test | 25–34 | Parent or managing household finances'
+      || ' | Very experienced | Paper or notebook, Spreadsheet | Knowing how much I can safely spend'
+      || ' | Plan ahead for upcoming bills | Possibly | Yes | A few times a week'
+      || ' | The “safe to spend” idea caught my eye | 2026-11-21 3:42 PM');
+
+  -- A code the form doesn't have: shown, never hidden or null. The checks
+  -- refuse one, so this sub-block drops them, stores one, reads it, and
+  -- then raises to roll all three back.
+  begin
+    alter table public.beta_applications drop constraint beta_applications_age_range_check;
+    alter table public.beta_applications drop constraint beta_applications_money_methods_check;
+    update public.beta_applications
+       set age_range = 'age_99_plus', money_methods = array['method_paper', 'method_mystery']
+     where email = c_email;
+    select age_range, manages_money into v_age, v_money
+      from public.beta_applications_readable where email = c_email;
+    raise exception 'roll back' using errcode = 'ZZ078';
+  exception when sqlstate 'ZZ078' then
+    null;
+  end;
+  perform pg_temp.rec('2m beta applications', c_view, 'owner: an unknown code shows as [unknown: <code>]',
+    '[unknown: age_99_plus] / Paper or notebook, [unknown: method_mystery]',
+    coalesce(v_age, 'null') || ' / ' || coalesce(v_money, 'null'),
+    v_age = '[unknown: age_99_plus]' and v_money = 'Paper or notebook, [unknown: method_mystery]');
+  select count(*) into v_txt from pg_constraint
+   where conrelid = 'public.beta_applications'::regclass
+     and conname in ('beta_applications_age_range_check', 'beta_applications_money_methods_check');
+  perform pg_temp.rec('2m beta applications', c_view, 'owner: ... and the checks are back afterwards', '2',
+    v_txt, v_txt = '2');
+end
+$$;
+
+
+-- ---------------------------------------------------------------------
 -- 2 views -- v_recurring_amounts reads as the caller
 --
 -- The read checks above prove B sees none of A's rows today; this pins
@@ -1425,6 +1531,9 @@ begin
           then 'tested in 2e' || case when not r.relrowsecurity then ', but RLS DISABLED' else '' end
         when r.relname = 'beta_applications' and exists (select 1 from rls_results where section = '2m beta applications')
           then 'tested in 2m' || case when not r.relrowsecurity then ', but RLS DISABLED' else '' end
+        when r.relname = 'beta_applications_readable'
+             and exists (select 1 from rls_results where section = '2m beta applications' and object = r.relname)
+          then 'tested in 2m (operator-only view)'
         when r.relname in ('signup_alerts', 'signup_alert_log')
              and exists (select 1 from rls_results where section = '2n signup alerts' and object = r.relname)
           then 'tested in 2n' || case when not r.relrowsecurity then ', but RLS DISABLED' else '' end
@@ -1437,6 +1546,8 @@ begin
             and exists (select 1 from rls_results where section = '2e waitlist'))
         or (r.relname = 'beta_applications' and r.relrowsecurity
             and exists (select 1 from rls_results where section = '2m beta applications'))
+        or (r.relname = 'beta_applications_readable'
+            and exists (select 1 from rls_results where section = '2m beta applications' and object = r.relname))
         or (r.relname in ('signup_alerts', 'signup_alert_log') and r.relrowsecurity
             and exists (select 1 from rls_results where section = '2n signup alerts' and object = r.relname))
         or (r.relname in (select object from rls_results where section in ('1 reads', '2 views'))

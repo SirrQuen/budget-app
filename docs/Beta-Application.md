@@ -188,3 +188,24 @@ VERIFY in the browser on dev (no sign-in needed):
     ZZ-prefixed names only).
 tsc, eslint, full npm test. Report, then stop. Don't merge.
 ```
+
+---
+
+## Reading the applications (migration 78)
+
+`public.beta_applications_readable` shows each application in plain
+English, newest first:
+- Every code appears in the /beta form's exact words.
+- Times are in America/New_York.
+- A code the form doesn't have shows as `[unknown: <code>]`.
+
+Who can read it:
+- Only the owner, the `postgres` role the Supabase dashboard runs as.
+- anon, authenticated and service_role hold no privilege on it, so it's
+  never reachable through the API.
+- That's a deliberate exception to CLAUDE.md's view grant block, named in
+  docs/view-acl-check.sql.
+
+The wording lives in two places, `BETA_QUESTIONS` (lib/betaApplication.ts)
+and the view's labels list. lib/betaApplicationReadable.test.ts fails on
+any difference: change a label, change both, in one commit.
