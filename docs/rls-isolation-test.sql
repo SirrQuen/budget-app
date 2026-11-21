@@ -67,6 +67,9 @@
 --   2k Month recap (migration 71): month_story() as B shows only B's
 --                 logs and goal money, none of A's goals or cards; A's
 --                 own call is the control
+--   2n Signup alerts (migration 77): signup_alerts and signup_alert_log
+--                 have RLS on, no policy and no privilege for any API
+--                 role; the four functions are executable by none of them
 --   2l Goal pace (migration 72): goal_pace() as B lists only B's goals,
 --                 never A's, and B's pace is B's own money; A's own call
 --                 (A's pace from A's two months) is the control
@@ -1338,6 +1341,63 @@ $$;
 
 
 -- ---------------------------------------------------------------------
+-- 2n -- Signup alerts (migration 77)
+--
+-- Operator-only, like 2e and 2m: signup_alerts and signup_alert_log hold
+-- counts and times, read in the dashboard. RLS on, no policy, no table
+-- privilege for anon, authenticated or service_role; the four functions
+-- are executable by none of them (pg_cron runs the job as postgres).
+-- docs/signup-alerts-test.sql covers the behaviour.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  v_rel  text;
+  v_role text;
+  v_priv text;
+  v_fn   text;
+  v_has  boolean;
+  v_n    bigint;
+begin
+  foreach v_rel in array array['signup_alerts', 'signup_alert_log'] loop
+    select c.relrowsecurity into v_has from pg_class c where c.oid = ('public.' || v_rel)::regclass;
+    perform pg_temp.rec('2n signup alerts', v_rel, 'RLS enabled', 'true', coalesce(v_has::text, 'null'), v_has is true);
+    select count(*) into v_n from pg_policy where polrelid = ('public.' || v_rel)::regclass;
+    perform pg_temp.rec('2n signup alerts', v_rel, 'policies', '0', v_n::text, v_n = 0);
+    foreach v_role in array array['anon', 'authenticated', 'service_role'] loop
+      foreach v_priv in array array['SELECT', 'INSERT', 'UPDATE', 'DELETE'] loop
+        v_has := has_table_privilege(v_role, 'public.' || v_rel, v_priv);
+        perform pg_temp.rec('2n signup alerts', v_rel, v_role || ' ' || v_priv || ' granted',
+          'false', v_has::text, not v_has);
+      end loop;
+    end loop;
+  end loop;
+
+  foreach v_fn in array array[
+    'public.send_signup_alerts(timestamptz)',
+    'public.signup_alerts_run(timestamptz,text,text,text)',
+    'public.signup_alerts_settle(text,integer,boolean,text,timestamptz)',
+    'public.signup_alert_text(text,integer,bigint,integer)'] loop
+    foreach v_role in array array['anon', 'authenticated', 'service_role'] loop
+      v_has := has_function_privilege(v_role, v_fn, 'EXECUTE');
+      perform pg_temp.rec('2n signup alerts', v_fn, v_role || ' EXECUTE', 'false', v_has::text, not v_has);
+    end loop;
+  end loop;
+
+  -- The three that act are definers with search_path pinned to ''.
+  foreach v_fn in array array[
+    'public.send_signup_alerts(timestamptz)',
+    'public.signup_alerts_run(timestamptz,text,text,text)',
+    'public.signup_alerts_settle(text,integer,boolean,text,timestamptz)'] loop
+    select p.prosecdef and coalesce('search_path=""' = any (p.proconfig), false) into v_has
+      from pg_proc p where p.oid = v_fn::regprocedure;
+    perform pg_temp.rec('2n signup alerts', v_fn, 'SECURITY DEFINER, search_path pinned', 'true',
+      coalesce(v_has::text, 'null'), v_has is true);
+  end loop;
+end
+$$;
+
+
+-- ---------------------------------------------------------------------
 -- 5 Coverage
 --
 -- Fails when a migration adds a table or view this file doesn't test.
@@ -1365,6 +1425,9 @@ begin
           then 'tested in 2e' || case when not r.relrowsecurity then ', but RLS DISABLED' else '' end
         when r.relname = 'beta_applications' and exists (select 1 from rls_results where section = '2m beta applications')
           then 'tested in 2m' || case when not r.relrowsecurity then ', but RLS DISABLED' else '' end
+        when r.relname in ('signup_alerts', 'signup_alert_log')
+             and exists (select 1 from rls_results where section = '2n signup alerts' and object = r.relname)
+          then 'tested in 2n' || case when not r.relrowsecurity then ', but RLS DISABLED' else '' end
         when r.relname in (select object from rls_results where section in ('1 reads', '2 views'))
           then 'tested' || case when r.relkind in ('r', 'p') and not r.relrowsecurity then ', but RLS DISABLED' else '' end
         else 'NOT TESTED'
@@ -1374,6 +1437,8 @@ begin
             and exists (select 1 from rls_results where section = '2e waitlist'))
         or (r.relname = 'beta_applications' and r.relrowsecurity
             and exists (select 1 from rls_results where section = '2m beta applications'))
+        or (r.relname in ('signup_alerts', 'signup_alert_log') and r.relrowsecurity
+            and exists (select 1 from rls_results where section = '2n signup alerts' and object = r.relname))
         or (r.relname in (select object from rls_results where section in ('1 reads', '2 views'))
             and (r.relkind not in ('r', 'p') or r.relrowsecurity)));
   end loop;
@@ -2145,7 +2210,7 @@ with expected_sections(s) as (
   select unnest(array['1 reads', '2 views', '2c money functions', '2d function grants',
                       '2e waitlist', '2f definer writes', '2g same-bill answers',
                       '2h import', '2i goal links', '2j card goals', '2k month story',
-                      '2l goal pace', '2m beta applications', '3 writes', '4 cross-tenant refs', '5 coverage',
+                      '2l goal pace', '2m beta applications', '2n signup alerts', '3 writes', '4 cross-tenant refs', '5 coverage',
                       '6 same-user writes', '7 trigger oracles', '8 composite FKs'])
 ),
 tally as (

@@ -106,6 +106,36 @@ dashboard (Authentication / Settings), then keep this file current.
   created with `supabase branches create`, and do not apply migrations
   by themselves).
 
+### Vault and scheduled jobs (migration 77)
+
+- **Signup alerts** -- an email to the operator for new waitlist signups
+  and beta applications. pg_cron job `signup-alerts`, every 5 minutes,
+  runs `public.send_signup_alerts()`, which POSTs to Resend's API through
+  pg_net. At most one email per type per 15 minutes, later rows
+  summarised. Counts, type and a Supabase link only. State is in
+  `public.signup_alerts` (`last_status` says why the last run did what it
+  did).
+- **Vault secrets, set by Matt in the dashboard, never in the repo:**
+  - `signup_alerts_resend_key`: a Resend API key, sending access only,
+    limited to mysorrel.com. Kept separate from the SMTP key.
+  - `signup_alerts_to`: the operator's address. On dev it's
+    `delivered@resend.dev` for a live test, or unset.
+  - `signup_alerts_mode`: `log` writes `public.signup_alert_log` instead
+    of sending (dev). Unset, or anything else, sends.
+  - Missing key or recipient: nothing is sent and `last_status` says
+    which. The rows go out once it's set.
+- **pg_net's `net` schema grants USAGE to PUBLIC** (Supabase docs, read
+  2026-11-20), so `anon` and `authenticated` hold SELECT on
+  `net.http_request_queue` and `net._http_response`.
+  - The queue row carries the Authorization header, the Resend key,
+    until pg_net's worker sends it, usually within seconds of the
+    commit.
+  - `net` is not exposed through the Data API, and both roles are
+    NOLOGIN, so neither can reach it. Recorded so the exposure is known
+    if either of those changes.
+  - Status: `pg_net` 0.20.4 and `pg_cron` 1.6.4 were available, not
+    installed, on both projects (2026-11-20). Migration 77 installs them.
+
 ### Outside Supabase
 
 - **API keys** in the hosting environment: `NEXT_PUBLIC_SUPABASE_URL`,
