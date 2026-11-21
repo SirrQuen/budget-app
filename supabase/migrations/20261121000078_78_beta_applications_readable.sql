@@ -3,7 +3,8 @@
 --
 -- public.beta_applications_readable: one row per application, newest
 -- first, every stored code shown as the /beta form's EXACT wording, times
--- in America/New_York ("2026-11-21 3:42 PM"). Read-only by nature (a view
+-- in America/New_York ("2026-11-21 3:42 PM"), plus submitted_at (the raw
+-- timestamp) for sorting in the Table Editor. Read-only by nature (a view
 -- over a join of a values list); no data changes, no new table.
 --
 -- WHO CAN READ IT: only the owner, the postgres role the Supabase
@@ -86,6 +87,9 @@ with labels(field, code, label) as (
 )
 select
   to_char(b.created_at at time zone 'America/New_York', 'YYYY-MM-DD FMHH12:MI AM') as submitted,
+  -- The same moment as a real timestamp, so the Table Editor's Sort orders
+  -- it correctly ("submitted" is text: "3:42 PM" sorts before "9:10 AM").
+  b.created_at as submitted_at,
   to_char(b.updated_at at time zone 'America/New_York', 'YYYY-MM-DD FMHH12:MI AM') as last_updated,
   b.full_name,
   b.email,

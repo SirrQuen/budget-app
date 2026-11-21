@@ -1395,6 +1395,13 @@ begin
       || ' | Plan ahead for upcoming bills | Possibly | Yes | A few times a week'
       || ' | The “safe to spend” idea caught my eye | 2026-11-21 3:42 PM');
 
+  -- submitted_at: the raw moment, a real timestamp, so the Table Editor's
+  -- Sort orders it correctly ("submitted" is text).
+  select pg_typeof(submitted_at)::text || ' ' || (submitted_at = timestamptz '2026-11-21 20:42:00+00')::text
+    into v_txt from public.beta_applications_readable where email = c_email;
+  perform pg_temp.rec('2m beta applications', c_view, 'owner: submitted_at is the raw timestamp, for sorting',
+    'timestamp with time zone true', coalesce(v_txt, 'null'), v_txt = 'timestamp with time zone true');
+
   -- A code the form doesn't have: shown, never hidden or null. The checks
   -- refuse one, so this sub-block drops them, stores one, reads it, and
   -- then raises to roll all three back.

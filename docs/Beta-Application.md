@@ -196,7 +196,9 @@ tsc, eslint, full npm test. Report, then stop. Don't merge.
 `public.beta_applications_readable` shows each application in plain
 English, newest first:
 - Every code appears in the /beta form's exact words.
-- Times are in America/New_York.
+- Times are in America/New_York. `submitted_at` holds the same moment as
+  a real timestamp: sort by it in the Table Editor, since `submitted` is
+  text and would put "3:42 PM" before "9:10 AM".
 - A code the form doesn't have shows as `[unknown: <code>]`.
 
 Who can read it:

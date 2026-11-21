@@ -735,6 +735,11 @@ roles, then grant exactly what the baseline views carry:
     grant select, references, trigger, truncate, maintain on table public.v_x to authenticated;
     grant references, trigger, truncate, maintain on table public.v_x to service_role;
 
+The one exception: an operator-only view (today `beta_applications_readable`,
+migration 78) gets the revoke and NO grants, so only its owner (the
+dashboard) reads it. It's listed in `docs/view-acl-check.sql`'s
+operator-only set.
+
 Never 59's two-line form (`revoke ... from public, anon; grant select ...
 to authenticated`). A new object picks up the PROJECT's default
 privileges, and those differ between our projects (`pg_default_acl`,
