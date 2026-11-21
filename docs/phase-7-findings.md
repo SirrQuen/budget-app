@@ -2606,6 +2606,18 @@ asserted in the harness's 2d.
 imported as an Expense) together with "a file with no category column gets
 one category picker for every row".
 
+Test runs on sorrel-dev (tztbebdzlezlhvsbylsf), migration 76 pushed by
+Matt:
+- rls-isolation-test.sql, 2026-11-20: 497 rows, 0 false, ALL PASS (run by
+  Matt). The first run was NOT PASSED with 7 false rows. All seven were
+  the harness's own new fixtures, not isolation failures. Three section 8
+  `import_pairings` FK rows were refused by the unique transactionid
+  before the FK under test. Two 2h join rows checked a category that
+  section 6 edits earlier in the run. The 2h control used a category
+  section 6 archives, which 76 now refuses. All fixed in `6a0f116`.
+- import-transfers-test.sql: not yet recorded.
+- import-test.sql: not yet recorded.
+
 What was wrong. Import (68) wrote every row as Income or Expense on the
 chosen account. Three things followed:
 - A transfer to savings lowered Spendable Cash and left savings
