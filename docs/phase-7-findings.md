@@ -2730,9 +2730,19 @@ Known edges, not fixed:
 
 ## Signup alerts: no notice of a new waitlist signup or beta application (2026-11-21)
 
-**Status:** built on `signup-alerts` (migration 77). On sorrel-dev; not on
-production, not merged. Raised 2026-11-20: the operator got no alert when
-someone joined the waitlist or applied to be a tester.
+**Status:** deployed 2026-11-21. Main was fast-forwarded to `307b692`
+(`signup-alerts`) and pushed. Raised 2026-11-20: the operator got no alert
+when someone joined the waitlist or applied to be a tester.
+
+Production (ybdwqyihvbokowocvlgq), checked read-only before the merge,
+2026-11-21:
+- the latest migration is 20261120000077;
+- job `signup-alerts` is active, every 5 minutes, running as postgres;
+- both types are seeded at 16:08:59 UTC, so earlier signups aren't
+  announced;
+- the first run (16:10) succeeded;
+- Vault holds `signup_alerts_resend_key` and `signup_alerts_to` (checked
+  by name only) and no mode, so it sends.
 
 Ruled 2026-11-20:
 - A pg_cron job runs every 5 minutes, with no trigger, so nothing is
@@ -2774,6 +2784,6 @@ Matt to confirm the email shows in Resend's Emails log. Every cron run so
 far succeeded.
 
 Still to do:
-- set dev's `signup_alerts_mode` back to `log`;
-- the production Vault secrets and push;
-- the merge.
+- set dev's `signup_alerts_mode` back to `log` (Matt; not confirmed here);
+- the first real production alert: check `signup_alerts.last_status`
+  reads `sent (HTTP 200)` after it.
