@@ -21,6 +21,7 @@ import { PaymentNote } from "@/components/PaymentNote";
 import { EditScopeChoice } from "@/components/EditScopeChoice";
 import { paymentPayee } from "@/lib/accountOptions";
 import { amountChanged } from "@/lib/recurringEditScope";
+import { formatDate } from "@/lib/format";
 import { transferEffect, transferEffectLine } from "@/lib/transferEdit";
 import { GoalField } from "@/components/GoalField";
 import { SameMoneyQuestion } from "@/components/SameMoneyQuestion";
@@ -77,22 +78,24 @@ export function TransferEditForm({
   //
   // A leg is asked only when its date, amount or account changed -- what
   // the database asks about. An untouched leg says what's stored instead.
-  const dateOrAmountChanged =
-    date !== transfer.date || (Number(amount) > 0 && amountChanged(transfer.amount, Number(amount)));
+  // Each leg against its OWN date: legs an import joined can sit on two
+  // days (migration 76), and saving moves the other one onto this date.
+  const amountMoved = Number(amount) > 0 && amountChanged(transfer.amount, Number(amount));
   const legs = [
     {
       account: from,
       legId: transfer.fromLeg.id,
       stored: fromAccountId === transfer.fromLeg.accountId ? transfer.fromLeg.anchorAnswer : undefined,
-      asks: dateOrAmountChanged || fromAccountId !== transfer.fromLeg.accountId,
+      asks: date !== transfer.fromLeg.date || amountMoved || fromAccountId !== transfer.fromLeg.accountId,
     },
     {
       account: to,
       legId: transfer.toLeg.id,
       stored: toAccountId === transfer.toLeg.accountId ? transfer.toLeg.anchorAnswer : undefined,
-      asks: dateOrAmountChanged || toAccountId !== transfer.toLeg.accountId,
+      asks: date !== transfer.toLeg.date || amountMoved || toAccountId !== transfer.toLeg.accountId,
     },
   ];
+  const twoDays = transfer.fromLeg.date !== transfer.toLeg.date;
 
   const originalFrom = accounts.find((a) => a.id === transfer.fromLeg.accountId);
   const originalTo = accounts.find((a) => a.id === transfer.toLeg.accountId);
@@ -186,6 +189,13 @@ export function TransferEditForm({
           />
         </FormField>
       </div>
+
+      {twoDays ? (
+        <p className="text-sm text-ink-secondary">
+          The two accounts recorded this on different days ({formatDate(transfer.fromLeg.date)} and{" "}
+          {formatDate(transfer.toLeg.date)}). Saving puts both on the date shown.
+        </p>
+      ) : null}
 
       {transfer.schedule && Number(amount) > 0 && amountChanged(transfer.amount, Number(amount)) ? (
         <EditScopeChoice

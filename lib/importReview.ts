@@ -202,6 +202,8 @@ export type ImportSummary = {
   spentCents: number;
   receivedCount: number;
   receivedCents: number;
+  /** Rows the person made transfers: neither spent nor received (migration 76). */
+  transferCount: number;
   /** Rows dated before the account's balance date -- the question's subject. */
   beforeAnchorCount: number;
   /** Rows dated after today: they count on their dates. */
@@ -221,7 +223,7 @@ export type ImportSummary = {
  * only thing decided here is which of the database's two answers to read.
  */
 export function summarizeImport(
-  rows: readonly { date: string; cents: number; type: ImportType }[],
+  rows: readonly { date: string; cents: number; type: ImportType; transfer?: boolean }[],
   treatments: ReadonlyMap<string, DateTreatment>,
   answer: PreAnchorChoice,
 ): ImportSummary {
@@ -231,6 +233,7 @@ export function summarizeImport(
     spentCents: 0,
     receivedCount: 0,
     receivedCents: 0,
+    transferCount: 0,
     beforeAnchorCount: 0,
     futureCount: 0,
     countedCount: 0,
@@ -241,7 +244,9 @@ export function summarizeImport(
 
   for (const r of rows) {
     s.count++;
-    if (r.type === "Expense") {
+    if (r.transfer) {
+      s.transferCount++;
+    } else if (r.type === "Expense") {
       s.spentCount++;
       s.spentCents += r.cents;
     } else {

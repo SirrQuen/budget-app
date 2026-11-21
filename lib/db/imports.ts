@@ -7,6 +7,7 @@ import { getConfirmationQueue } from "@/lib/db/dashboard";
 import { getSameBillCycle } from "@/lib/db/recurring";
 import { getSameBillDeletePreviews } from "@/lib/db/sameBill";
 import { addDaysISO } from "@/lib/date";
+import { formatDate } from "@/lib/format";
 import {
   MAX_DESCRIPTION,
   MAX_IMPORT_ROWS,
@@ -23,10 +24,19 @@ import {
   type ExistingTransaction,
 } from "@/lib/importReview";
 import { findImportSameBill, sameBillDeleteNote, type ImportSameBillItem } from "@/lib/sameBill";
+import {
+  TRANSFER_MATCH_DAYS,
+  buildCategoryHistory,
+  sameBillRows,
+  type CategoryHistoryEntry,
+  type TransferCandidate,
+} from "@/lib/importTransfers";
 
-// Import's reads and writes (migration 68, docs/Import-CSV.md). The file
-// itself never gets here: a read takes an account and a list of DATES; the
-// one write takes only the rows a person confirmed in the preview.
+// Import's reads and writes (migrations 68 and 76, docs/Import-CSV.md). The
+// file itself never gets here. Before Import, a read takes an account and
+// the file's DATES -- no descriptions, no amounts -- and sends back the
+// person's own data for the browser to match against. The one write takes
+// only the rows a person confirmed in the preview.
 
 export type DbResult<T> = { data: T; error: null } | { data: null; error: string };
 
@@ -45,7 +55,7 @@ const ISO = /^\d{4}-\d{2}-\d{2}$/;
 // logs the whole error, so import doesn't use it.
 //
 // What a person is TOLD is likewise either a fixed sentence or one of
-// migration 68's own messages, which name a row number and never its
+// migration 68/76's own messages, which name a row number and never its
 // content -- and only those, recognised by their exact shape. Anything else
 // Postgres said is never shown.
 // ---------------------------------------------------------------------
@@ -59,6 +69,8 @@ const OWN_MESSAGE = [
 
 const IMPORT_STALE =
   "A bill you matched has changed since you started, so nothing was imported. Go back and review the preview again.";
+const IMPORT_PAIR_STALE =
+  "An entry you joined to a transfer has changed since you started, so nothing was imported. Go back and review the preview again.";
 const IMPORT_DUPLICATES =
   "Some rows look like transactions you already have and weren't ticked to include, so nothing was imported. Go back and review the preview again.";
 const IMPORT_GENERIC = "That didn't import, and nothing was saved. It's not something you did. Try again in a moment.";
@@ -75,8 +87,16 @@ function describeImportError(error: DbError, what: string): string {
       break;
   }
   if (error.code === "SIM01") return IMPORT_STALE;
+  if (error.code === "SIP01") return IMPORT_PAIR_STALE;
+  // undo_import(): a later import joined one of this one's rows (migration 76).
+  if (error.code === "SIU01") {
+    const day = /\d{4}-\d{2}-\d{2}/.exec(error.message)?.[0];
+    return day
+      ? `Undo the import from ${formatDate(day)} first. It made one of these transactions part of a transfer.`
+      : "Undo the later import first. It made one of these transactions part of a transfer.";
+  }
   if (error.code === "SRA01" || error.code === "SRA02") {
-    return "Your balance date changed while you were importing, so nothing was imported. Start the preview again.";
+    return "A balance date changed while you were importing, so nothing was imported. Start the preview again.";
   }
   if (error.code === "P0002") return "That account isn't available to import into.";
   if (OWN_MESSAGE.some((re) => re.test(error.message))) return error.message;
@@ -86,6 +106,17 @@ function describeImportError(error: DbError, what: string): string {
 // ---------------------------------------------------------------------
 // The preview's context: what the database knows
 // ---------------------------------------------------------------------
+
+export type OtherAccount = {
+  id: string;
+  name: string;
+  type: string;
+  openingDate: string;
+  openingBalance: number;
+  balance: number;
+  /** import_preview() on THIS account: a transfer's other leg answers to its balance date. */
+  treatments: ({ date: string } & DateTreatment)[];
+};
 
 export type ImportContext = {
   today: string;
@@ -103,16 +134,27 @@ export type ImportContext = {
   existing: ExistingTransaction[];
   /** Active categories -- what a row can be matched to or put in. */
   categories: CategoryOption[];
-  /** Occurrences waiting in the confirmation queue on this account. */
+  /** Occurrences waiting in the confirmation queue on this account (a transfer at either end). */
   queue: ImportSameBillItem[];
+  /** The person's other active accounts (migration 76). */
+  otherAccounts: OtherAccount[];
+  /**
+   * Plain entries on those accounts around the file's dates: the other side
+   * a transfer row may already have. The browser matches against them.
+   */
+  transferCandidates: TransferCandidate[];
+  /** Each merchant's usual category, from the person's own entries (capped). */
+  categoryHistory: CategoryHistoryEntry[];
 };
 
 const PAGE = 1000;
 const MAX_PAGES = 50;
 
+type Client = Awaited<ReturnType<typeof createClient>>;
+
 /** The account's transactions from `from` to `to`, for the duplicate check -- the preview's and the server's re-run. */
 async function readExisting(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Client,
   accountId: string,
   from: string,
   to: string,
@@ -177,9 +219,23 @@ export async function getImportContext(
   const account = accountRes.data;
   if (!account.is_active) return { data: null, error: "This account is archived, so nothing can be imported into it." };
 
-  const existingRes = await readExisting(supabase, accountId, from, to);
+  const activeCategoryIds = new Set(categoriesRes.data.map((c) => c.id));
+  const [existingRes, othersRes, historyRes] = await Promise.all([
+    readExisting(supabase, accountId, from, to),
+    readOtherAccounts(supabase, accountId, distinct),
+    readCategoryHistory(supabase, addDaysISO(today, -365), activeCategoryIds),
+  ]);
   if (existingRes.error !== null) return { data: null, error: existingRes.error };
-  const existing = existingRes.data;
+  if (othersRes.error !== null) return { data: null, error: othersRes.error };
+  if (historyRes.error !== null) return { data: null, error: historyRes.error };
+
+  const candidatesRes = await readTransferCandidates(
+    supabase,
+    othersRes.data.map((a) => a.id),
+    addDaysISO(distinct[0], -TRANSFER_MATCH_DAYS),
+    addDaysISO(distinct[distinct.length - 1], TRANSFER_MATCH_DAYS),
+  );
+  if (candidatesRes.error !== null) return { data: null, error: candidatesRes.error };
 
   return {
     data: {
@@ -198,19 +254,152 @@ export async function getImportContext(
         countsIfIncluded: t.counts_if_included,
         countsIfAdded: t.counts_if_added,
       })),
-      existing,
+      existing: existingRes.data,
       categories: categoriesRes.data.map((c) => ({
         id: c.id,
         name: c.category_name,
         type: c.category_type as ImportType,
       })),
       queue: importQueueItems(queueRes.data, accountId),
+      otherAccounts: othersRes.data,
+      transferCandidates: candidatesRes.data,
+      categoryHistory: historyRes.data,
     },
     error: null,
   };
 }
 
-/** The queue items an imported row can be the same bill as: "to confirm", this account, no transfer, not already recorded. */
+/** Every other active account, its balance, and how each of the file's dates sits against ITS balance date. */
+async function readOtherAccounts(supabase: Client, accountId: string, dates: string[]): Promise<DbResult<OtherAccount[]>> {
+  const { data: accounts, error } = await supabase
+    .from("accounts")
+    .select("id, account_name, account_type, opening_date, opening_balance")
+    .eq("is_active", true)
+    .neq("id", accountId)
+    .order("account_name");
+  if (error) return { data: null, error: describeReadError(error, "accounts") };
+  if (accounts.length === 0) return { data: [], error: null };
+
+  const ids = accounts.map((a) => a.id);
+  const [balancesRes, ...previews] = await Promise.all([
+    supabase.from("v_account_balances").select("account_id, balance").in("account_id", ids),
+    // Dates only, as for the import's own account: no descriptions, no amounts.
+    ...ids.map((id) => supabase.rpc("import_preview", { p_accountid: id, p_dates: dates })),
+  ]);
+  if (balancesRes.error) return { data: null, error: describeReadError(balancesRes.error, "accounts") };
+  const balance = new Map(balancesRes.data.map((b) => [b.account_id, Number(b.balance ?? 0)]));
+  const out: OtherAccount[] = [];
+  for (let i = 0; i < accounts.length; i++) {
+    const a = accounts[i];
+    const p = previews[i];
+    if (p.error) return { data: null, error: describeReadError(p.error, "import preview") };
+    out.push({
+      id: a.id,
+      name: a.account_name,
+      type: a.account_type,
+      openingDate: a.opening_date,
+      openingBalance: Number(a.opening_balance),
+      balance: balance.get(a.id) ?? 0,
+      treatments: p.data.map((t) => ({
+        date: t.transaction_date,
+        treatment: t.treatment as DateTreatment["treatment"],
+        countsIfIncluded: t.counts_if_included,
+        countsIfAdded: t.counts_if_added,
+      })),
+    });
+  }
+  return { data: out, error: null };
+}
+
+/**
+ * Plain entries (not a transfer leg) on the other accounts between `from`
+ * and `to` -- what a transfer row's other side may already be. Read by
+ * (accountid, transaction_date): idx_tx_account_date covers it. Whether
+ * each can be JOINED is migration 76's rule, said here so the preview asks
+ * only what the server will accept; the server checks it again.
+ */
+async function readTransferCandidates(
+  supabase: Client,
+  accountIds: string[],
+  from: string,
+  to: string,
+): Promise<DbResult<TransferCandidate[]>> {
+  if (accountIds.length === 0) return { data: [], error: null };
+  const rows: TransferCandidate[] = [];
+  const flags: { recurringid: string | null; goalid: string | null }[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("id, accountid, transaction_date, amount, description, transaction_type, recurringid, goalid")
+      .in("accountid", accountIds)
+      .is("transfer_group_id", null)
+      .gte("transaction_date", from)
+      .lte("transaction_date", to)
+      .order("transaction_date")
+      .order("id")
+      .range(page * PAGE, page * PAGE + PAGE - 1);
+    if (error) return { data: null, error: describeReadError(error, "transactions") };
+    for (const t of data) {
+      rows.push({
+        id: t.id,
+        accountId: t.accountid,
+        date: t.transaction_date,
+        cents: Math.round(Number(t.amount) * 100),
+        type: t.transaction_type as ImportType,
+        description: t.description,
+        pairable: false,
+      });
+      flags.push({ recurringid: t.recurringid, goalid: t.goalid });
+    }
+    if (data.length < PAGE) break;
+  }
+  // A row with a same-bill answer of either kind isn't joinable.
+  const answered = new Set<string>();
+  for (let i = 0; i < rows.length; i += 200) {
+    const ids = rows.slice(i, i + 200).map((r) => r.id);
+    const { data, error } = await supabase.from("same_bill_answers").select("transactionid").in("transactionid", ids);
+    if (error) return { data: null, error: describeReadError(error, "same-bill answers") };
+    for (const a of data) answered.add(a.transactionid);
+  }
+  rows.forEach((r, i) => {
+    r.pairable = flags[i].recurringid === null && !answered.has(r.id) && !(r.type === "Income" && flags[i].goalid !== null);
+  });
+  return { data: rows, error: null };
+}
+
+const HISTORY_PAGES = 20;
+
+/** The person's own categorised entries since `since`, newest first, as a capped merchant -> category map. */
+async function readCategoryHistory(
+  supabase: Client,
+  since: string,
+  activeCategoryIds: ReadonlySet<string>,
+): Promise<DbResult<CategoryHistoryEntry[]>> {
+  const rows: { description: string; categoryId: string; type: ImportType }[] = [];
+  for (let page = 0; page < HISTORY_PAGES; page++) {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("description, categoryid, transaction_type")
+      .is("transfer_group_id", null)
+      .not("categoryid", "is", null)
+      .gte("transaction_date", since)
+      .order("transaction_date", { ascending: false })
+      .order("id")
+      .range(page * PAGE, page * PAGE + PAGE - 1);
+    if (error) return { data: null, error: describeReadError(error, "transactions") };
+    for (const t of data) {
+      if (t.categoryid) rows.push({ description: t.description, categoryId: t.categoryid, type: t.transaction_type as ImportType });
+    }
+    if (data.length < PAGE) break;
+  }
+  return { data: buildCategoryHistory(rows, activeCategoryIds), error: null };
+}
+
+/**
+ * The queue items an imported row can be the same bill as: "to confirm",
+ * not already recorded, on this account -- a transfer schedule at either
+ * end (migration 76; findImportSameBill matches both ends).
+ */
 function importQueueItems(
   queue: Awaited<ReturnType<typeof getConfirmationQueue>> extends { data: infer D } ? NonNullable<D> : never,
   accountId: string,
@@ -219,9 +408,7 @@ function importQueueItems(
     .filter(
       (i) =>
         i.state === "to-confirm" &&
-        i.accountId === accountId &&
-        i.kind !== "Transfer" &&
-        i.toAccountId === null &&
+        (i.accountId === accountId || i.toAccountId === accountId) &&
         i.alreadyRecorded === null,
     )
     .map((i) => ({
@@ -250,7 +437,15 @@ export type ImportRowInput = {
   notes: string | null;
   merchant: string | null;
   paymentMethod: string | null;
-  categoryId: string;
+  /** Required on every row but a transfer, which has none. */
+  categoryId: string | null;
+  /**
+   * A transfer between the import's account and another (migration 76).
+   * `type` says which way. pairWith: an existing entry on the other account
+   * to make the other leg, else both legs are created. countsDespiteAnchor:
+   * the OTHER account's pre-anchor answer for a created leg.
+   */
+  transfer: { otherAccountId: string; pairWith: string | null; countsDespiteAnchor: boolean | null } | null;
   isEstimated: boolean;
   /**
    * true only where the person ticked "Include" on a possible duplicate. The
@@ -272,11 +467,30 @@ export type ImportInput = {
 
 const BAD_SHAPE = "We couldn't read the rows for that import. Nothing was saved. Try choosing the file again.";
 
+function validTransfer(r: ImportRowInput, accountId: string): boolean {
+  const t = r.transfer;
+  if (t === null) return typeof r.categoryId === "string" && UUID.test(r.categoryId);
+  return (
+    r.categoryId === null &&
+    typeof t === "object" &&
+    typeof t.otherAccountId === "string" &&
+    UUID.test(t.otherAccountId) &&
+    t.otherAccountId !== accountId &&
+    (t.pairWith === null || (typeof t.pairWith === "string" && UUID.test(t.pairWith))) &&
+    (t.countsDespiteAnchor === null || typeof t.countsDespiteAnchor === "boolean") &&
+    // A joined row can't also take a schedule's occurrence (v1).
+    !(t.pairWith !== null && r.sameBill !== null)
+  );
+}
+
 function validShape(input: ImportInput): boolean {
   if (!UUID.test(input.accountId) || !UUID.test(input.idempotencyKey)) return false;
   if (!Array.isArray(input.rows) || input.rows.length < 1 || input.rows.length > MAX_IMPORT_ROWS) return false;
   if (input.countsDespiteAnchor !== null && typeof input.countsDespiteAnchor !== "boolean") return false;
   const textOk = (v: string | null, max: number) => v === null || (typeof v === "string" && v.length <= max);
+  const pairs = input.rows.flatMap((r) => (r.transfer?.pairWith ? [r.transfer.pairWith] : []));
+  // An entry is joined to one row at most (the server locks and checks it too).
+  if (new Set(pairs).size !== pairs.length) return false;
   return input.rows.every(
     (r) =>
       Number.isInteger(r.row) &&
@@ -292,7 +506,8 @@ function validShape(input: ImportInput): boolean {
       textOk(r.notes, MAX_NOTES) &&
       textOk(r.merchant, MAX_MERCHANT) &&
       textOk(r.paymentMethod, MAX_PAYMENT_METHOD) &&
-      UUID.test(r.categoryId) &&
+      r.transfer !== undefined &&
+      validTransfer(r, input.accountId) &&
       typeof r.isEstimated === "boolean" &&
       typeof r.includeDuplicate === "boolean" &&
       (r.sameBill === null ||
@@ -309,8 +524,8 @@ export type ImportOutcome = { importId: string; rowCount: number };
  * against the queue as it stands NOW (the ids come from the browser): a row
  * that matches an occurrence must carry an answer, and an answer must be for
  * a match that still exists -- else nothing is written and the person
- * reviews the preview again. Then migration 68's import_transactions() writes
- * every row, link and cursor move in one transaction, or none.
+ * reviews the preview again. Then import_transactions() writes every row,
+ * transfer leg, join, link and cursor move in one transaction, or none.
  */
 export async function importTransactions(input: ImportInput): Promise<DbResult<ImportOutcome>> {
   if (!validShape(input)) return { data: null, error: BAD_SHAPE };
@@ -335,11 +550,7 @@ export async function importTransactions(input: ImportInput): Promise<DbResult<I
 
   const queueRes = await getConfirmationQueue();
   if (queueRes.error !== null) return { data: null, error: queueRes.error };
-  const matches = findImportSameBill(
-    input.rows.map((r) => ({ row: r.row, type: r.type, date: r.date, cents: r.cents })),
-    importQueueItems(queueRes.data, input.accountId),
-    input.accountId,
-  );
+  const matches = findImportSameBill(sameBillRows(input.rows), importQueueItems(queueRes.data, input.accountId), input.accountId);
   const matchByRow = new Map(matches.map((m) => [m.row, m]));
   for (const r of input.rows) {
     const m = matchByRow.get(r.row);
@@ -362,9 +573,17 @@ export async function importTransactions(input: ImportInput): Promise<DbResult<I
       notes: r.notes,
       merchant: r.merchant,
       payment_method: r.paymentMethod,
-      categoryid: r.categoryId,
       is_estimated: r.isEstimated,
     };
+    if (r.transfer === null) {
+      base.categoryid = r.categoryId;
+    } else {
+      base.transfer = {
+        other_accountid: r.transfer.otherAccountId,
+        pair_with: r.transfer.pairWith,
+        counts_despite_anchor: r.transfer.countsDespiteAnchor,
+      };
+    }
     if (r.sameBill?.answer === "same") {
       const cycle = await getSameBillCycle(r.sameBill.recurringId, r.sameBill.dueDate);
       if (cycle.error !== null) return { data: null, error: cycle.error };
@@ -428,6 +647,8 @@ export async function listImports(): Promise<DbResult<ImportListItem[]>> {
 export type UndoPreview = {
   remaining: number;
   edited: number;
+  /** Entries this import joined into a transfer: they go back to how they were (migration 76). */
+  restored: number;
   /** What undoing does to each schedule a row was matched to (item 4's delete handling). */
   scheduleNotes: string[];
 };
@@ -436,12 +657,14 @@ export type UndoPreview = {
 export async function getUndoPreview(importId: string): Promise<DbResult<UndoPreview>> {
   if (!UUID.test(importId)) return { data: null, error: "We couldn't find that import." };
   const supabase = await createClient();
-  const [listRes, idsRes] = await Promise.all([
+  const [listRes, idsRes, pairedRes] = await Promise.all([
     listImports(),
     supabase.from("transactions").select("id").eq("import_id", importId),
+    supabase.from("import_pairings").select("id", { count: "exact", head: true }).eq("import_id", importId),
   ]);
   if (listRes.error !== null) return { data: null, error: listRes.error };
   if (idsRes.error) return { data: null, error: describeReadError(idsRes.error, "transactions") };
+  if (pairedRes.error) return { data: null, error: describeReadError(pairedRes.error, "imports") };
   const item = listRes.data.find((i) => i.importId === importId);
   if (!item) return { data: null, error: "We couldn't find that import." };
 
@@ -451,6 +674,7 @@ export async function getUndoPreview(importId: string): Promise<DbResult<UndoPre
     data: {
       remaining: item.remainingCount,
       edited: item.editedCount,
+      restored: pairedRes.count ?? 0,
       scheduleNotes: previews.data.map(sameBillDeleteNote),
     },
     error: null,
@@ -484,6 +708,9 @@ export async function getImportedAt(transactionId: string): Promise<DbResult<str
 // imported rows (import_id not null) -- not the import's created_at, because
 // the question is which bank dates are covered. Derived on read: no column,
 // and it recomputes after an Undo. An account never imported into is absent.
+// Only rows from an import INTO that account count: a transfer's other leg,
+// created on Savings by a Checking import, says nothing about which of the
+// Savings bank's dates are covered (migration 76).
 export async function getImportedThrough(accountIds: readonly string[]): Promise<DbResult<Map<string, string>>> {
   const supabase = await createClient();
   const found = new Map<string, string>();
@@ -491,8 +718,9 @@ export async function getImportedThrough(accountIds: readonly string[]): Promise
     accountIds.map((id) =>
       supabase
         .from("transactions")
-        .select("transaction_date")
+        .select("transaction_date, imports!transactions_import_fkey!inner(accountid)")
         .eq("accountid", id)
+        .eq("imports.accountid", id)
         .not("import_id", "is", null)
         .order("transaction_date", { ascending: false })
         .limit(1)

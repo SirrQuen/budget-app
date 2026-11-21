@@ -8,10 +8,10 @@
 
 - **CSV only.** PapaParse in the browser. If someone picks an `.xlsx` file, tell them how to save it as CSV: *"Sorrel reads CSV files. In Excel: File › Save As › CSV UTF-8."*
 - **One account per import.** A bank file describes one account.
-- **No transfer pairing.** Rows come in as income or expense on the chosen account.
+- **Transfers (migration 76).** A row can be spending, income or a transfer. A transfer either joins an entry already on the other account or creates both legs. See "Transfers" below.
 - **Undo for every import.** One import is one batch, and the whole batch can be undone.
 
-What v1 isn't: Excel parsing, bank connections, auto-categorising, or more than one account per file.
+What v1 isn't: Excel parsing, bank connections, silent auto-categorising (a suggestion is shown as one and can be changed), or more than one account per file.
 
 ## Recent activity, not statements
 
@@ -35,11 +35,15 @@ Import doesn't need to wait for a statement. Most banks let you download recent 
 
 ---
 
-## Privacy: the file never leaves the device
+## Privacy: descriptions and amounts stay on the device until the user confirms
 
-The file is parsed in the browser. **The raw file is never uploaded, stored or logged.** Only the rows the user confirms in the preview are sent, and only the columns Sorrel uses.
+The file is parsed in the browser. **The raw file is never uploaded, stored or logged.** Its descriptions and amounts stay on the device until the user confirms; before that, Sorrel only checks the file's dates against the user's balance dates. Only the rows the user confirms in the preview are sent, and only the columns Sorrel uses.
 
-A bank export can contain account numbers, full card numbers in descriptions, and more history than the user meant to share. Being able to say "the file never reaches our server" is worth the small cost.
+*Corrected 2026-11-20 (migration 76).* This section, the import screen, Settings › Import and the privacy policy used to say the file "never leaves the device" until Import. The distinct dates have gone to `import_preview()` since migration 68, so that was never quite true. It's a correction, like the cookie paragraph's (docs/phase-7-findings.md, "Import: transfers came in as spending").
+
+Before Import, the server sends the user's **own** data to the browser: balances, how each date sits against each account's balance date, recent plain entries on their other accounts (a transfer's possible other side), and a capped merchant-to-category map of their past entries. The file is matched against those **on the device** (`lib/importTransfers.ts`). Nothing from the file travels the other way except its dates.
+
+A bank export can contain account numbers, full card numbers in descriptions, and more history than the user meant to share. Being able to say "the file itself never reaches our server, and its descriptions and amounts only do once you confirm" is worth the small cost.
 
 - Don't store the filename. It can carry an account number. Label the batch *"Imported 14 Nov · 140 transactions"*.
 - No row content in logs, error reports or analytics, including on failure.
@@ -55,7 +59,7 @@ A bank export can contain account numbers, full card numbers in descriptions, an
 
 ### 2. Columns
 
-- **Sorrel's own export is recognised by its exact headers.** Mapping is skipped, and only the rows for the chosen account are taken. Rows for other accounts are counted as *"not for this account"*. Transfers are skipped and counted: *"12 transfers skipped. Add those by hand."*
+- **Sorrel's own export is recognised by its exact headers.** Mapping is skipped, and only the rows for the chosen account are taken. Rows for other accounts are counted as *"not for this account"*. A transfer leg comes in as a **transfer** (migration 76). Its other account is the partner row in the same file (same `transfer_group_id`), mapped to one of the user's accounts by id, else by exact name. If there's no partner, or it doesn't map, the user picks the other account.
 - **Any other file:** guess the Date, Description and Amount columns from common header names, then show the guess with the first five rows so the user can correct it. Category and Notes are optional.
 - **Amount comes in two shapes.** Either one signed column, or separate Debit and Credit columns. The user confirms which.
 
@@ -88,8 +92,9 @@ Required, with no default. The preview in step 6 shows the result, so a wrong an
 Nothing is saved before this screen, and it shows the consequence, not just the rows.
 
 > **140 transactions into Checking**
-> 112 spent · $6,204.18 28 received · $5,080.00
+> 108 spent · $5,704.18, 28 received · $5,080.00, 4 transfers
 > **Checking goes from $3,934.10 to $2,810.92**
+> **Savings goes from $1,200.00 to $1,450.00**
 >
 > 4 look like ones you already have. Skipped unless you include them
 > 2 rows couldn't be read: rows 17 and 88
@@ -98,11 +103,12 @@ Nothing is saved before this screen, and it shows the consequence, not just the 
 - **The balance change updates live** as the user answers questions and ticks rows.
 - **Couldn't-read rows** are listed by row number with their raw date and amount text, in neutral ink. Not red, and not an error state.
 - **Future-dated rows** are unusual in a bank file. If there are any, say so and treat them as future-dated, with the existing ghosting.
-- A table of every row, with the duplicate rows shown first.
+- **Every account the import touches gets its own balance line.** That's the import's account, plus each account a created transfer leg lands on. A transfer joined to an existing entry changes nothing on the other account (the entry was already there), and the preview says so.
+- Every row, with the duplicate rows shown first. Each row is a card on a phone and a two-line row on a wider screen: the file's date, description and amount, then the user's type and category (or other account).
 
-### 7. The pre-anchor question, asked once
+### 7. The pre-anchor question, asked once per account
 
-Importing history means many rows dated before the balance date. The trigger from migration 62 rejects each of those without an answer, so ask once for the batch:
+Importing history means many rows dated before the balance date. The trigger from migration 62 rejects each of those without an answer, so ask once for the batch. A created transfer leg on another account is asked about against **that account's** balance date, in its own question (migration 76). A joined entry isn't asked: its date, amount and account don't change.
 
 > **118 of these are dated before your balance of $3,934.10 on 3 November.**
 > Was that balance already including them?
@@ -122,11 +128,30 @@ A row is flagged if an existing transaction on **the same account** has **the sa
 - Each flagged row shows the existing transaction it matched. The user can include it.
 - This matcher is acceptable where the fuzzy duplicate detector was ruled out because it **only flags in a preview the user controls**. Nothing is merged or deleted.
 
-### 9. Categories
+### 9. Categories, one per row (migration 76)
 
-- Matched to the user's existing categories by name, ignoring case.
-- Unmatched rows come in uncategorised. The preview lists the unmatched names with counts: *"Groceries (14), Gas (6) don't match a category. They'll come in uncategorised."*
-- **No categories are created silently.** Auto-creating categories is a v2 question.
+- **Every row has its own category select**, listing only categories of the row's type. Changing a row's type clears its category. A transfer has no category, and every bulk category action skips it.
+- **Where a row's category comes from, in order:** the user's own choice; else the file's category name, if it matches exactly one of theirs (ignoring case); else a **suggestion** from their own history. A suggestion is shown as *"Suggested from your past entries"* and can be changed.
+- **The history** is each merchant's most-used active category per type, from the user's own categorised entries over the last 12 months, capped at 2,000 merchants. A merchant is the description with card words, store numbers and punctuation removed, cut to its first two words (`merchantKey`). The map is sent to the browser and matched there.
+- **Same-merchant shortcut.** After a row is set by hand: *"Apply Groceries to 4 other TESCO STORES rows?"*
+- **"Set all N rows to…"** for each group the file's names didn't match (one per type and name, including "no category in the file").
+- **Import waits until every row but a transfer has a category.** The database requires one anyway (`transactions_category_required`).
+- The server re-checks each category by row: it must be the user's own, active, and of the row's type. Each failure has its own row-numbered message, not the generic error.
+- **No categories are created.** Auto-creating categories is a v2 question.
+
+### 9b. Transfers (migration 76)
+
+- **Per-row Type: Spending / Income / Transfer.** The direction of a transfer is the file's own sign: money out of this account is *Transfer out*, the source.
+- **"Looks like a transfer"** is a hint, never a decision. It shows when the description reads like one (TRANSFER, XFER, ONLINE TRANSFER, PAYMENT THANK YOU, AUTOPAY PAYMENT, CARD PAYMENT…), or when there's an entry on another active account that goes the opposite way, for the exact amount, within **5 days**. The match runs on the device, against plain entries on the user's other accounts loaded with the context (`idx_tx_account_date` covers the read). Each entry is claimed by one row at most, closest first.
+- **The other leg already exists** (hand-logged, or from an earlier import), and it's a *plain* row (not a leg, no schedule, no same-bill answer) going the opposite way for the same amount: *"This matches $500.00 already on Visa (Payment, Nov 3). Make them one transfer?"* That answer is required.
+  - **Yes** joins them. The entry becomes the other leg. Its date, amount, account and anchor answer stay as they were, so each bank keeps its own day. Its category is cleared and kept in `import_pairings` for undo.
+  - **No** creates a new entry there.
+  - An entry that matches but isn't plain is described, and can't be joined.
+  - The ruling's "no goal if it would become the Income leg" already holds by construction: `transactions_goal_expense_only` refuses a goal on any Income row. The function checks it anyway.
+- **No other leg:** both legs are created, inline in `import_transactions()`, and both carry the import.
+- **A transfer schedule's occurrence:** a created transfer whose two ends match a transfer schedule gets the same-bill question. A joined transfer can't take an occurrence in v1.
+- **Undo** puts every joined entry back as it was (not a leg, its prior category; edits since are kept), then deletes what the import created. An earlier import whose row a later import joined can't be undone first: *"Undo the import from 18 Nov first."*
+- **Legs on two days.** The transfer editor shows *"The two accounts recorded this on different days (3 Nov and 4 Nov). Saving puts both on the date shown."* Each leg is asked the anchor question against its own date. The list places the pair at its later leg and pulls the partner onto the same page.
 
 ### 10. Saving
 
@@ -160,6 +185,15 @@ Each imported transaction shows a quiet *Imported* label when opened. Six months
 - **`transactions.import_id`**: nullable, with a composite FK to `imports`. **ON DELETE RESTRICT, not CASCADE.** Deleting an import row must never silently delete transactions. Undo deletes the transactions explicitly, then the import row.
 - Added to the RLS isolation harness. A new test script, `import-test.sql`, covers atomic insert, undo, cross-user rejection and the pre-anchor answer.
 
+## Data model: migration 76
+
+- **`import_pairings`**: userid, import_id, transactionid (unique), prior_categoryid, transfer_group_id. Composite FKs: RESTRICT from `imports`, CASCADE from the transaction (delete the transfer and there's nothing to restore). RLS select-own. Migration 68's grant block. Deleted first by `delete_own_account()`.
+- **`import_transactions()`**: same signature. A row may carry `transfer: {other_accountid, pair_with, counts_despite_anchor}`. Every `pair_with` is re-checked under a row lock (SIP01). Categories are checked by row.
+- **`undo_import()`**: refuses with SIU01 while a later import has joined one of its rows. Restores pairings, then deletes.
+- **`list_imports()`**: counts occurrences, `distinct coalesce(transfer_group_id, id)`.
+- **`getImportedThrough()`** counts only rows from imports into that account: a created leg on Savings says nothing about the Savings bank's dates.
+- Tests: `docs/import-transfers-test.sql` (SUMMARY row), and the RLS harness's `import_pairings` rows and 2h cases.
+
 ---
 
 ## The privacy policy changes, so testers hear first
@@ -167,6 +201,8 @@ Each imported transaction shows a quiet *Imported* label when opened. Six months
 The policy currently says *"Everything financial in Sorrel is information you typed in yourself."* With import, that's false.
 
 New wording: *"Everything financial in Sorrel is information you typed in or imported from a file yourself. The file is read on your device and never uploaded. Sorrel never connects to your bank."*
+
+Corrected 2026-11-20 (migration 76) to: *"If you import a CSV file, it is read on your device and the file itself is never uploaded. Its descriptions and amounts stay on your device until you confirm; before that, Sorrel only checks the file's dates against your balance dates."* A correction, not a material change: no tester email (ruling 2026-11-20).
 
 The policy promises to tell people before a change. **Email testers before deploying**, individually or BCC, and record it in `docs/tester-notes/` with its Sent date. Import also moves balances and Safe to Spend for anyone who uses it, so the note says that too.
 

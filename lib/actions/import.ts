@@ -11,6 +11,8 @@ import {
   type ImportOutcome,
   type UndoPreview,
 } from "@/lib/db/imports";
+import type { GoalCompletion } from "@/lib/goalCompletion";
+import { completedSince, completionSnapshot } from "@/lib/goalCompletionCheck";
 
 // Import's server actions (docs/Import-CSV.md). The browser reads the file
 // and keeps it; what comes here is an account and the file's DATES (the
@@ -27,12 +29,22 @@ export async function getImportContextAction(accountId: string, dates: string[])
   return result.error !== null ? { error: result.error } : ok(result.data);
 }
 
-/** The one write. Every balance, Safe to Spend and the queue read it afterwards. */
-export async function importTransactionsAction(input: ImportInput): Promise<ActionResult<ImportOutcome>> {
+/**
+ * The one write. Every balance, Safe to Spend and the queue read it
+ * afterwards. A card payment in the file can finish a goal that follows
+ * that card, so the action takes the completion snapshot like any other
+ * transaction write and returns the completion, which plays the bloom
+ * (lib/goalCompletionCheck.ts).
+ */
+export async function importTransactionsAction(
+  input: ImportInput,
+): Promise<ActionResult<ImportOutcome & { completion?: GoalCompletion }>> {
+  const before = await completionSnapshot();
   const result = await importTransactions(input);
   if (result.error !== null) return { error: result.error };
   revalidatePath("/", "layout");
-  return ok(result.data);
+  const completion = await completedSince(before);
+  return ok({ ...result.data, ...(completion ? { completion } : {}) });
 }
 
 export async function previewUndoImportAction(importId: string): Promise<ActionResult<UndoPreview>> {

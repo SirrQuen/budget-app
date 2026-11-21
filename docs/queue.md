@@ -182,6 +182,16 @@ docs/tester-notes/README.md). Move a line out when it's sent.
   docs/tester-notes/2026-11-16-motion-and-delight.md. No number moves. Next
   What's new card. Not before-deploy.
 
+## In verification
+
+| Item | Branch | Where |
+|---|---|---|
+| Import fixes A + B: a category per row, and transfers (migration 76). Built 2026-11-20. Waits on the dev push, both test scripts ALL PASS, the RLS harness ALL PASS, and the browser checks | `import-categories-transfers` | Findings, "Import: transfers came in as spending"; docs/Import-CSV.md, 9 and 9b |
+
+The Deferred "Bloom after an import that completes a goal" is built on that
+branch (`importTransactionsAction` returns the completion) and comes off the
+list when it merges.
+
 ## Held
 
 | Item | Since | Held until | Where |
@@ -195,7 +205,7 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 |---|---|---|---|
 | A real "last day of the month" option and a semi-monthly frequency, together. Today onboarding's "Last day of the month" anchors a Monthly schedule's start_date on a 31st (it clamps to every month's end), and "twice a month" is two Monthly schedules. Both work with no migration but read as "Monthly on the 31st" and as two schedules. A proper frequency needs rectx_frequency_check, the cadence (lib/recurringCadence.ts) and its wording | 2026-11-17 | Unscheduled | `lib/onboarding.ts` (`lastDayAnchor`, `paycheckPlans`); docs/Decide-and-Grow.md, rulings for G |
 | Hemisphere setting for the seasonal leaf. Batch D picks the season from the month, northern hemisphere; a southern-hemisphere user sees the wrong one. Needs a setting (a settings column, so a migration) and a Settings control. The doc's own note ("Note a hemisphere setting in the queue") | 2026-11-17 | Unscheduled | `lib/timeOfDay.ts` (`seasonForMonth`); docs/Motion-and-Delight.md, step 8 |
-| Bloom after an import that completes a goal. 70 records the completion (a followed card paid to zero by imported rows, or reopened by them) but no panel shows: import's response doesn't run the completion check. Edits, deletes and balance resets also complete quietly, by ruling (2026-11-17) | 2026-11-17 | Unscheduled | `lib/goalCompletionCheck.ts`; `lib/actions/import.ts` |
+| "Turn into a transfer" on a single existing row: pick the other account; if a plain entry there matches (opposite direction, exact amount, 5 days), join it, else create the other leg. Reuses migration 76's pairing write and its `import_pairings`-style restore. For rows imported as spending before 76 (ruling 2026-11-20: left alone, the tester note explains undo-and-reimport) | 2026-11-20 | After `import-categories-transfers` merges | Findings, "Import: transfers came in as spending" |
 | Auto-link a goal-funding schedule's confirmed occurrences to its goal (goals.funding_recurringid), so the goal's progress moves when the transfer is confirmed. Today the hold already skips a funded goal, but confirming writes no link | 2026-11-16 | After 69 and 70 merge | Findings, "A transfer for a goal came off safe to spend twice" |
 | Drag-and-drop library: classic `@dnd-kit/core` 6.3.1 + `@dnd-kit/sortable` 10.0.0, pinned exactly (chosen 2026-11-14: stable over active, one sortable list, small footprint; the new `@dnd-kit/react` line is 0.x). Revisit: move to the new line if classic breaks on a React upgrade, or when the new line reaches 1.0 | 2026-11-14 | On a React upgrade, or `@dnd-kit/react` 1.0 | `package.json`; `app/(app)/dashboard/DashboardSections.tsx` |
 | "Every number is a door", the rest: an upcoming line opens its schedule; "(average of last 3)" opens the three confirmations it averaged; a goal's progress opens its contributions. The first three (budget spent, a category, the low-point item) shipped with #1 + #2 | 2026-11-14 | After #5 export | docs/Views-Search-Import-Layout.md, "Suggest other views" |

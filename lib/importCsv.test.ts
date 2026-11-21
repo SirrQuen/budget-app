@@ -230,7 +230,7 @@ test("Sorrel's own export is recognised by its exact headers", () => {
   assert.equal(isSorrelExport(["date", ...EXPORT_COLUMNS.slice(1)]), false);
 });
 
-test("a Sorrel export reads back: guarded text restored, transfers counted and left out", () => {
+test("a Sorrel export reads back: guarded text restored, transfer legs kept with their group id", () => {
   const text = buildTransactionsCsv([
     exportRow({}),
     exportRow({ id: "2", description: "=SUM(A1)", notes: "+note", amount: "1850.00", transaction_type: "Income", category_name: "Pay", is_estimated: true }),
@@ -240,19 +240,19 @@ test("a Sorrel export reads back: guarded text restored, transfers counted and l
   const records = Papa.parse(text, { skipEmptyLines: false }).data;
 
   const r = readSorrelExport(records, { today: TODAY });
-  assert.equal(r.transfersSkipped, 1);
   assert.equal(r.unreadable.length, 0);
   assert.deepEqual(
-    r.rows.map((x) => [x.row, x.date, x.type, x.cents, x.description, x.notes, x.categoryName, x.isEstimated, x.merchant, x.paymentMethod]),
+    r.rows.map((x) => [x.row, x.date, x.type, x.cents, x.description, x.notes, x.categoryName, x.isEstimated, x.merchant, x.paymentMethod, x.transferGroupId]),
     [
-      [2, "2026-11-02", "Expense", 575, "Coffee", null, null, false, null, null],
-      [3, "2026-11-02", "Income", 185000, "=SUM(A1)", "+note", "Pay", true, null, null],
-      [4, "2026-11-02", "Expense", 575, 'Rent, "June"', null, null, false, "Landlord", "ACH"],
+      [2, "2026-11-02", "Expense", 575, "Coffee", null, null, false, null, null, null],
+      [3, "2026-11-02", "Income", 185000, "=SUM(A1)", "+note", "Pay", true, null, null, null],
+      [4, "2026-11-02", "Expense", 575, 'Rent, "June"', null, null, false, "Landlord", "ACH", null],
+      [5, "2026-11-02", "Expense", 575, "Move", null, null, false, null, null, "99999999-9999-4999-8999-999999999999"],
     ],
   );
 
   const accounts = accountsInExport(records);
-  assert.deepEqual(accounts.map((a) => [a.name, a.count]), [["Checking", 2], ["Savings", 1]]);
+  assert.deepEqual(accounts.map((a) => [a.name, a.count]), [["Checking", 3], ["Savings", 1]]);
 });
 
 test("which file account maps to the chosen one: id, else exact name, else nothing", () => {

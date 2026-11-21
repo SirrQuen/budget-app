@@ -74,8 +74,10 @@
 --                 same_goal_money() shows B nothing of A's;
 --                 replace_contribution_with_link() can't delete A's
 --                 contribution; A's own pair is the control
---   2h Import (migration 68): import_transactions(), import_preview() and
+--   2h Import (migrations 68, 76): import_transactions(), import_preview() and
 --                 undo_import() refuse another user's account and import;
+--                 a transfer to A's account and a join of A's transaction
+--                 are refused exactly as a made-up id is (76);
 --                 list_imports() shows only your own; the control (A imports
 --                 into A's account and undoes it) works
 --                 confirm_same_bill() and record_different_bill() refuse
@@ -218,7 +220,8 @@ select u.k || '_' || v.k,
   from rls_fx u
  cross join (values ('acct','01'), ('invacct','02'), ('txn','03'), ('budget','04'),
                     ('goal','05'), ('contrib','06'), ('invest','07'), ('notif','08'),
-                    ('recur','09'), ('sub','0a'), ('sba','0b'), ('imp','0c')) as v(k, n)
+                    ('recur','09'), ('sub','0a'), ('sba','0b'), ('imp','0c'),
+                    ('ipair','0d')) as v(k, n)
  where u.k in ('A', 'B');
 
 do $$
@@ -285,6 +288,13 @@ begin
     insert into public.imports (id, userid, accountid, row_count)
     values (pg_temp.fx(u || '_imp'), uid, pg_temp.fx(u || '_acct'), 1);
 
+    -- A pairing (migration 76), written as the table owner: the app can
+    -- only write it through import_transactions(). A record only -- the
+    -- transaction itself isn't made a leg here.
+    insert into public.import_pairings (id, userid, import_id, transactionid, prior_categoryid, transfer_group_id)
+    values (pg_temp.fx(u || '_ipair'), uid, pg_temp.fx(u || '_imp'), pg_temp.fx(u || '_txn'),
+            pg_temp.fx(u || '_groceries'), gen_random_uuid());
+
     insert into public.subscriptions (id, userid, stripe_customer_id, stripe_subscription_id,
                                       plan, status, renewal_date)
     values (pg_temp.fx(u || '_sub'), uid, 'cus_rls_' || u, 'sub_rls_' || u, 'Pro', 'Active',
@@ -325,6 +335,7 @@ begin
       ('1 reads', 'notifications',          format('userid = %L', a),                            format('userid <> %L', b)),
       ('1 reads', 'profiles',               format('id = %L', a),                                format('id <> %L', b)),
       ('1 reads', 'imports',                format('userid = %L', a),                            format('userid <> %L', b)),
+      ('1 reads', 'import_pairings',        format('userid = %L', a),                            format('userid <> %L', b)),
       ('1 reads', 'recurring_transactions', format('userid = %L', a),                            format('userid <> %L', b)),
       ('1 reads', 'same_bill_answers',      format('userid = %L', a),                            format('userid <> %L', b)),
       ('1 reads', 'settings',               format('userid = %L', a),                            format('userid <> %L', b)),
@@ -394,6 +405,7 @@ begin
       ('goal_contributions',     'id', pg_temp.fx('A_contrib'),  pg_temp.fx('B_contrib'),  'goalid', 'amount = 999'),
       ('goals',                  'id', pg_temp.fx('A_goal'),     pg_temp.fx('B_goal'),     'userid', 'goal_name = ''rls-b-was-here'''),
       ('imports',                'id', pg_temp.fx('A_imp'),      pg_temp.fx('B_imp'),      'userid', 'row_count = 999'),
+      ('import_pairings',        'id', pg_temp.fx('A_ipair'),    pg_temp.fx('B_ipair'),    'userid', 'transfer_group_id = gen_random_uuid()'),
       ('investments',            'id', pg_temp.fx('A_invest'),   pg_temp.fx('B_invest'),   'userid', 'ticker = ''HACK'''),
       ('notifications',          'id', pg_temp.fx('A_notif'),    pg_temp.fx('B_notif'),    'userid', 'is_read = true'),
       ('profiles',               'id', a,                        b,                        'id',     'first_name = ''rls-b-was-here'''),
@@ -450,6 +462,7 @@ begin
       ('goal_contributions',     format('insert into public.goal_contributions (userid, goalid, amount, date, funding_method) values (%L, %L, 1, current_date, ''manual'')', a, pg_temp.fx('A_goal'))),
       ('goals',                  format('insert into public.goals (userid, goal_name, goal_type, target_amount) values (%L, ''rls'', ''Custom'', 1)', a)),
       ('imports',                format('insert into public.imports (userid, accountid, row_count) values (%L, %L, 1)', a, pg_temp.fx('B_acct'))),
+      ('import_pairings',        format('insert into public.import_pairings (userid, import_id, transactionid, prior_categoryid, transfer_group_id) values (%L, %L, %L, %L, gen_random_uuid())', a, pg_temp.fx('B_imp'), pg_temp.fx('B_txn'), pg_temp.fx('B_groceries'))),
       ('investments',            format('insert into public.investments (userid, accountid, ticker, shares, average_cost, asset_type) values (%L, %L, ''RLS2'', 1, 1, ''Stock'')', a, pg_temp.fx('B_invacct'))),
       ('notifications',          format('insert into public.notifications (userid, title, message, notification_type) values (%L, ''rls'', ''rls'', ''info'')', a)),
       ('profiles',               format('insert into public.profiles (id, first_name, last_name) values (%L, ''rls'', ''rls'')', a)),
@@ -823,6 +836,14 @@ begin
         format('insert into public.imports (userid, accountid, row_count) values (%L, %L, 1)', b, pg_temp.fx('A_acct'))),
       ('transactions_import_fkey',
         format('update public.transactions set import_id = %L where id = %L', pg_temp.fx('A_imp'), pg_temp.fx('B_txn'))),
+      -- Migration 76: a pairing is about its own user's import, transaction
+      -- and category.
+      ('import_pairings_import_fkey',
+        format('insert into public.import_pairings (userid, import_id, transactionid, prior_categoryid, transfer_group_id) values (%L, %L, %L, %L, gen_random_uuid())', b, pg_temp.fx('A_imp'), pg_temp.fx('B_txn'), pg_temp.fx('B_groceries'))),
+      ('import_pairings_transaction_fkey',
+        format('insert into public.import_pairings (userid, import_id, transactionid, prior_categoryid, transfer_group_id) values (%L, %L, %L, %L, gen_random_uuid())', b, pg_temp.fx('B_imp'), pg_temp.fx('A_txn'), pg_temp.fx('B_groceries'))),
+      ('import_pairings_prior_category_fkey',
+        format('insert into public.import_pairings (userid, import_id, transactionid, prior_categoryid, transfer_group_id) values (%L, %L, %L, %L, gen_random_uuid())', b, pg_temp.fx('B_imp'), pg_temp.fx('B_txn'), pg_temp.fx('A_groceries'))),
       -- Migration 66: an answer is about its own user's schedule and entry.
       ('same_bill_answers_recurringid_fkey',
         format('insert into public.same_bill_answers (userid, recurringid, transactionid, answer, occurrence_due_date) values (%L, %L, %L, ''different'', current_date)', b, pg_temp.fx('A_recur'), pg_temp.fx('B_txn'))),
@@ -1747,7 +1768,17 @@ begin
       ('B previews against A''s account',
        format('select * from public.import_preview(%L, array[current_date])', pg_temp.fx('A_acct'))),
       ('B undoes A''s import',
-       format('select * from public.undo_import(%L)', pg_temp.fx('A_imp')))
+       format('select * from public.undo_import(%L)', pg_temp.fx('A_imp'))),
+      -- Migration 76: a transfer to A's account is refused like one to a
+      -- made-up account.
+      ('B imports a transfer to A''s account',
+       format('select * from public.import_transactions(%L, %L::jsonb, null, null)', pg_temp.fx('B_acct'),
+         jsonb_build_array(jsonb_build_object('row', 2, 'date', (current_date + 1)::text, 'cents', 100, 'type', 'Expense',
+           'description', 'rls xfer', 'transfer', jsonb_build_object('other_accountid', pg_temp.fx('A_acct'))))::text)),
+      ('B imports a transfer to a made-up account (the oracle baseline)',
+       format('select * from public.import_transactions(%L, %L::jsonb, null, null)', pg_temp.fx('B_acct'),
+         jsonb_build_array(jsonb_build_object('row', 2, 'date', (current_date + 1)::text, 'cents', 100, 'type', 'Expense',
+           'description', 'rls xfer', 'transfer', jsonb_build_object('other_accountid', gen_random_uuid())))::text))
     ) as t(what, sql)
   loop
     select * into v_try from pg_temp.try_as(b, v_case.sql);
@@ -1757,6 +1788,28 @@ begin
       and exists (select 1 from public.imports where id = pg_temp.fx('A_imp'));
     perform pg_temp.rec('2h import', 'import_transactions() / import_preview() / undo_import()', v_case.what,
       'P0002; A''s rows and import intact',
+      coalesce(v_try.state, 'no error') || coalesce(': ' || v_try.msg, ''), v_pass);
+  end loop;
+
+  -- Migration 76: B joins A's transaction into B's transfer. Refused the
+  -- same way as a made-up id (SIP01), and A's row is untouched.
+  for v_case in
+    select * from (values
+      ('B joins A''s transaction to a transfer', pg_temp.fx('A_txn')),
+      ('B joins a made-up transaction (the oracle baseline)', gen_random_uuid())
+    ) as t(what, target)
+  loop
+    select * into v_try from pg_temp.try_as(b, format(
+      'select * from public.import_transactions(%L, %L::jsonb, null, null)', pg_temp.fx('B_acct'),
+      jsonb_build_array(jsonb_build_object('row', 2, 'date', current_date::text, 'cents', 2500, 'type', 'Income',
+        'description', 'rls pair', 'transfer', jsonb_build_object('other_accountid', pg_temp.fx('B_invacct'),
+        'pair_with', v_case.target)))::text));
+    v_pass := v_try.state = 'SIP01'
+      and (select transfer_group_id is null and categoryid = pg_temp.fx('A_groceries')
+             from public.transactions where id = pg_temp.fx('A_txn'))
+      and not exists (select 1 from public.import_pairings where transactionid = pg_temp.fx('A_txn') and userid = b);
+    perform pg_temp.rec('2h import', 'import_transactions() pair_with', v_case.what,
+      'SIP01; A''s transaction untouched',
       coalesce(v_try.state, 'no error') || coalesce(': ' || v_try.msg, ''), v_pass);
   end loop;
 

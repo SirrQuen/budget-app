@@ -749,13 +749,18 @@ export async function getScheduleSummary(recurringid: string | null): Promise<Db
 
 export type TransferForEdit = {
   transferGroupId: string;
-  /** The Expense leg -- money leaves this account. It carries the goal, if any. */
-  fromLeg: { id: string; accountId: string; anchorAnswer: AnchorAnswerColumns };
+  /**
+   * The Expense leg -- money leaves this account. It carries the goal, if
+   * any. Each leg's own date: a transfer an import joined to an existing
+   * entry keeps both banks' days (migration 76), so they can differ.
+   */
+  fromLeg: { id: string; accountId: string; date: string; anchorAnswer: AnchorAnswerColumns };
   /** The goal this transfer is for (on the Expense leg, migration 69). */
   goalid: string | null;
   /** The Income leg -- money lands here. */
-  toLeg: { id: string; accountId: string; anchorAnswer: AnchorAnswerColumns };
+  toLeg: { id: string; accountId: string; date: string; anchorAnswer: AnchorAnswerColumns };
   amount: number;
+  /** The date the editor shows: the Expense leg's. Saving puts both legs on it. */
   date: string;
   description: string;
   notes: string | null;
@@ -794,9 +799,9 @@ export async function getTransferForEdit(groupId: string): Promise<DbResult<Tran
   return {
     data: {
       transferGroupId: groupId,
-      fromLeg: { id: fromLeg.id, accountId: fromLeg.accountid, anchorAnswer: legAnswer(fromLeg) },
+      fromLeg: { id: fromLeg.id, accountId: fromLeg.accountid, date: fromLeg.transaction_date, anchorAnswer: legAnswer(fromLeg) },
       goalid: fromLeg.goalid,
-      toLeg: { id: toLeg.id, accountId: toLeg.accountid, anchorAnswer: legAnswer(toLeg) },
+      toLeg: { id: toLeg.id, accountId: toLeg.accountid, date: toLeg.transaction_date, anchorAnswer: legAnswer(toLeg) },
       amount: Number(fromLeg.amount),
       date: fromLeg.transaction_date,
       description: fromLeg.description,

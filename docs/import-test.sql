@@ -16,6 +16,10 @@
 -- the sign question and the duplicate flag are TypeScript, pinned by
 -- lib/importCsv.test.ts and lib/importReview.test.ts):
 --
+-- A run counts as passed only when its LAST row, SUMMARY, says ALL PASS.
+-- Transfers and per-row categories (migration 76) are in
+-- docs/import-transfers-test.sql.
+--
 --   1  import_preview() describes each date from counts_in_balance():
 --      counts / before_anchor / future.
 --   2  After a real import the balance equals the preview EXACTLY, for
@@ -446,6 +450,26 @@ begin
 end
 $$;
 
-select seq, check_, expected, actual, pass from ic_results order by seq;
+-- The summary is the LAST row. A run counts as passed only when it says
+-- ALL PASS (CLAUDE.md): every row true AND sections 1-12 all present. A
+-- run that errors part-way returns no rows at all. (Added with migration
+-- 76, which changes the functions this script calls.)
+with expected(s) as (select unnest(array['1','2','3','4','5','6','7','8','9','10','11','12'])),
+tally as (
+  select (select count(*) from ic_results)                as total,
+         (select count(*) from ic_results where not pass) as failed,
+         (select string_agg(e.s, ', ' order by e.s::int) from expected e
+           where not exists (select 1 from ic_results r where split_part(r.check_, ' ', 1) = e.s)) as missing
+)
+select check_ as check, expected, actual, pass
+  from (select seq, check_, expected, actual, pass from ic_results
+        union all
+        select 2147483647, 'SUMMARY', 'ALL PASS (every row true, sections 1-12 present)',
+               t.total || ' rows, ' || t.failed || ' false'
+                 || coalesce(', missing sections: ' || t.missing, '')
+                 || ' -- ' || case when t.failed = 0 and t.missing is null then 'ALL PASS' else 'NOT PASSED' end,
+               t.failed = 0 and t.missing is null
+          from tally t) x
+ order by seq;
 
 rollback;

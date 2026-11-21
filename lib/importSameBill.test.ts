@@ -60,3 +60,34 @@ test("one row per schedule and one schedule per row, the closest first", () => {
   const both = findImportSameBill([ROW, { ...ROW, row: 6 }], two, "chk");
   assert.deepEqual(both.map((x) => [x.row, x.recurringId]), [[5, "a"], [6, "b"]]);
 });
+
+// Migration 76: a transfer row that creates both legs is asked about a
+// transfer schedule whose two ends are this account and the row's other
+// account, in the row's direction.
+const CARD_PAY: ImportSameBillItem = {
+  recurringId: "visa-pay",
+  name: "Visa payment",
+  kind: "Transfer",
+  accountId: "chk",
+  toAccountId: "visa",
+  amount: 500,
+  dueDate: "2026-11-03",
+  dateToleranceDays: 0,
+};
+
+test("a transfer row matches a transfer schedule on both ends, in its direction", () => {
+  const out = { row: 7, type: "Expense" as const, date: "2026-11-03", cents: 50000, transferOtherAccountId: "visa" };
+  assert.equal(findImportSameBill([out], [CARD_PAY], "chk").length, 1);
+  // The wrong other end, or the wrong way round, or not a transfer at all.
+  assert.equal(findImportSameBill([{ ...out, transferOtherAccountId: "sav" }], [CARD_PAY], "chk").length, 0);
+  assert.equal(findImportSameBill([{ ...out, type: "Income" }], [CARD_PAY], "chk").length, 0);
+  assert.equal(findImportSameBill([{ ...out, transferOtherAccountId: null }], [CARD_PAY], "chk").length, 0);
+  // Imported from the card's side: money in, from checking.
+  const onVisa = { row: 8, type: "Income" as const, date: "2026-11-03", cents: 50000, transferOtherAccountId: "chk" };
+  assert.equal(findImportSameBill([onVisa], [CARD_PAY], "visa").length, 1);
+});
+
+test("a transfer row never matches a plain bill", () => {
+  const out = { row: 7, type: "Expense" as const, date: "2026-11-01", cents: 185000, transferOtherAccountId: "sav" };
+  assert.equal(findImportSameBill([out], [RENT], "chk").length, 0);
+});

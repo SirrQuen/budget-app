@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated: November 18, 2026**
+**Last updated: November 20, 2026**
 
 Sorrel is a personal budgeting app operated by **MW Cyber Architects LLC**. This policy explains what we collect, where it lives, who can see it, and what happens when you leave.
 
@@ -21,7 +21,7 @@ Sorrel is currently in beta testing. This policy describes what we do today, not
 - Budgets, savings goals, recurring schedules and investment holdings
 - Any notes or labels you add
 
-**Sorrel does not connect to your bank.** Everything financial in Sorrel is information you typed in or imported from a file yourself. If you import a CSV file, it is read on your device and never uploaded: we receive only the transactions you confirm in the preview, and we do not keep the file or its name. We have no access to your bank accounts, cards or credentials, and Sorrel never asks for them.
+**Sorrel does not connect to your bank.** Everything financial in Sorrel is information you typed in or imported from a file yourself. If you import a CSV file, it is read on your device and the file itself is never uploaded. Its descriptions and amounts stay on your device until you confirm; before that, Sorrel only checks the file's dates against your balance dates. We receive only the transactions you confirm in the preview, and we do not keep the file or its name. We have no access to your bank accounts, cards or credentials, and Sorrel never asks for them.
 
 **Technical information**
 

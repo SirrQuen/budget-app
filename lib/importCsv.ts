@@ -2,10 +2,12 @@
 // without a browser or a database (lib/importCsv.test.ts).
 // docs/Import-CSV.md is the spec.
 //
-// The file is parsed in the browser and never leaves the device. What this
-// file produces is rows for the PREVIEW; nothing here saves anything, and
-// the only rows that ever reach the server are the ones a person confirmed
-// there.
+// The file is parsed in the browser and the file itself never leaves the
+// device. Its descriptions and amounts stay there until the person
+// confirms; before that, only the file's dates go to the server, to be
+// checked against balance dates. What this file produces is rows for the
+// PREVIEW; nothing here saves anything, and the only rows that ever reach
+// the server are the ones a person confirmed there.
 //
 // Rules a reader can rely on:
 // - Money is integer CENTS, parsed from text. Never a float, never summed
@@ -263,6 +265,12 @@ export type ReadRow = {
   isEstimated: boolean;
   /** Own export only: which account's row it is (account_id, else the name). */
   accountKey: string | null;
+  /**
+   * Own export only: the transfer this row is a leg of (the export's
+   * transfer_group_id), else null. Its partner is the row in the same file
+   * with the same id on another account (migration 76).
+   */
+  transferGroupId: string | null;
 };
 
 export type UnreadableRow = {
@@ -277,8 +285,6 @@ export type ReadResult = {
   rows: ReadRow[];
   unreadable: UnreadableRow[];
   zeroSkipped: number;
-  /** Own export only: transfer legs, counted and left out (v1 has no transfers). */
-  transfersSkipped: number;
 };
 
 const cell = (record: readonly string[], i: number | null): string => (i === null ? "" : (record[i] ?? ""));
@@ -325,7 +331,6 @@ type Pending = {
   rows: ReadRow[];
   unreadable: UnreadableRow[];
   zeroSkipped: number;
-  transfersSkipped: number;
 };
 
 const fail = (p: Pending, row: number, rawDate: string, rawAmount: string, reason: string) =>
@@ -341,7 +346,7 @@ export function readRows(
   moneyOut: MoneyOut | null,
   opts: ReadOptions,
 ): ReadResult {
-  const p: Pending = { rows: [], unreadable: [], zeroSkipped: 0, transfersSkipped: 0 };
+  const p: Pending = { rows: [], unreadable: [], zeroSkipped: 0 };
 
   for (let i = 1; i < records.length; i++) {
     const rec = records[i];
@@ -434,6 +439,7 @@ export function readRows(
       paymentMethod: null,
       isEstimated: false,
       accountKey: null,
+      transferGroupId: null,
     });
   }
   return p;
@@ -460,7 +466,7 @@ export type ExportAccount = {
   key: string;
   id: string | null;
   name: string;
-  /** Rows of this account that aren't transfer legs. */
+  /** Rows of this account, transfer legs included. */
   count: number;
 };
 
@@ -477,9 +483,8 @@ export function accountsInExport(records: Records): ExportAccount[] {
     const rec = records[i];
     if (isBlank(rec)) continue;
     const a = accountKeyOf(rec);
-    const isTransfer = cell(rec, col("transfer_group_id")).trim() !== "";
     const found = byKey.get(a.key) ?? { key: a.key, id: a.id, name: a.name, count: 0 };
-    if (!isTransfer) found.count++;
+    found.count++;
     byKey.set(a.key, found);
   }
   return [...byKey.values()].sort((x, y) => x.name.localeCompare(y.name));
@@ -499,9 +504,9 @@ export function preselectExportAccount(
   return byName ? byName.key : null;
 }
 
-/** Sorrel's own export: no mapping, no sign question, transfers left out. */
+/** Sorrel's own export: no mapping, no sign question; transfer legs come in as transfers. */
 export function readSorrelExport(records: Records, opts: Pick<ReadOptions, "today">): ReadResult {
-  const p: Pending = { rows: [], unreadable: [], zeroSkipped: 0, transfersSkipped: 0 };
+  const p: Pending = { rows: [], unreadable: [], zeroSkipped: 0 };
 
   for (let i = 1; i < records.length; i++) {
     const rec = records[i];
@@ -509,11 +514,9 @@ export function readSorrelExport(records: Records, opts: Pick<ReadOptions, "toda
     const row = i + 1;
     const rawDate = cell(rec, col("date")).trim();
     const rawAmount = cell(rec, col("amount")).trim();
-
-    if (cell(rec, col("transfer_group_id")).trim() !== "") {
-      p.transfersSkipped++;
-      continue;
-    }
+    // A transfer leg comes in as a transfer (migration 76): no category, its
+    // partner found by this id elsewhere in the file.
+    const transferGroupId = cell(rec, col("transfer_group_id")).trim() || null;
 
     const date = parseDate(rawDate, null);
     if (date === null) {
@@ -578,6 +581,7 @@ export function readSorrelExport(records: Records, opts: Pick<ReadOptions, "toda
       paymentMethod,
       isEstimated: cell(rec, col("is_estimated")).trim() === "true",
       accountKey: accountKeyOf(rec).key,
+      transferGroupId,
     });
   }
   return p;

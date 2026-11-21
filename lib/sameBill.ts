@@ -240,6 +240,14 @@ export type ImportSameBillRow = {
   type: "Income" | "Expense";
   date: string;
   cents: number;
+  /**
+   * A row the person made a transfer that CREATES both legs: the other
+   * account. It matches a transfer schedule whose two ends are this
+   * account and that one, in the row's direction (migration 76). A row
+   * joined to an existing entry is never passed with this -- it can't take
+   * an occurrence in v1 -- and neither is a non-transfer row.
+   */
+  transferOtherAccountId?: string | null;
 };
 
 export type ImportSameBillMatch = {
@@ -258,14 +266,27 @@ export function findImportSameBill(
 ): ImportSameBillMatch[] {
   const candidates: { r: ImportSameBillRow; s: ImportSameBillItem; gap: number }[] = [];
   for (const s of items) {
-    if (s.kind === "Transfer" || s.toAccountId !== null || s.accountId !== accountId) continue;
+    const isTransfer = s.kind === "Transfer" || s.toAccountId !== null;
+    // A transfer schedule touches this account at one end; anything else is
+    // on this account.
+    if (isTransfer ? s.accountId !== accountId && s.toAccountId !== accountId : s.accountId !== accountId) continue;
     // Wider than the queue's own window (see the note above): the schedule's
     // tolerance or IMPORT_SAME_BILL_DAYS, whichever is more. Import only.
     const reach = Math.max(s.dateToleranceDays, IMPORT_SAME_BILL_DAYS);
     const from = confirmationOpensOn(s.dueDate, reach);
     const to = paydayWindowEnd(s.dueDate, reach);
     for (const r of rows) {
-      if (r.type !== s.kind || cents(s.amount) !== r.cents) continue;
+      if (cents(s.amount) !== r.cents) continue;
+      if (isTransfer) {
+        // Both ends, in the row's direction: money out of this account is
+        // the schedule's source, money in is its destination.
+        const other = r.transferOtherAccountId ?? null;
+        if (other === null) continue;
+        const [src, dst] = r.type === "Expense" ? [accountId, other] : [other, accountId];
+        if (s.accountId !== src || s.toAccountId !== dst) continue;
+      } else {
+        if ((r.transferOtherAccountId ?? null) !== null || r.type !== s.kind) continue;
+      }
       if (r.date < from || r.date > to) continue;
       candidates.push({ r, s, gap: gapDays(s.dueDate, r.date) });
     }

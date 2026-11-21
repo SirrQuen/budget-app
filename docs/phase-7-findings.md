@@ -656,6 +656,32 @@ Source: `docs/legal/privacy-and-terms.md` (rendered by `lib/legal.ts`).
   20261118000075, table and function present), main deployed, and
   mysorrel.com serves /beta, the landing button and the policy dated
   November 18, 2026. No tester note: no number a tester sees moved.
+- **Privacy policy, corrected 2026-11-20 (import wording, migration 76,
+  branch `import-categories-transfers`).** The import sentence said a CSV
+  file "is read on your device and never uploaded: we receive only the
+  transactions you confirm". The file is never uploaded, but its distinct
+  DATES have gone to the server before Import since migration 68
+  (`import_preview()`, to check them against balance dates). Now: "it is
+  read on your device and the file itself is never uploaded. Its
+  descriptions and amounts stay on your device until you confirm; before
+  that, Sorrel only checks the file's dates against your balance dates."
+  The import screen, Settings › Import and docs/Import-CSV.md were
+  corrected to the same words. "Last updated" November 20, 2026 (bump it
+  to the production deploy date if that's later). **A correction, like the
+  cookie paragraph's; no tester email** (ruled 2026-11-20). Reasoning: it
+  is none of the three triggers. No processor, no bank connection, and
+  nothing new leaves the device: the dates were always sent, and what
+  migration 76 adds before Import goes the other way (the user's own
+  entries and category history, sent to their own browser).
+  **Undo now restores rows as well as deleting them** (an entry a
+  transfer joined goes back to how it was). Ruled 2026-11-20 that this
+  isn't "changing deletion behaviour" in the policy's sense, so no
+  email. Reasoning: that trigger protects how a person's data is removed
+  when they delete it or leave. Undoing your own import is an edit you
+  make to your own entries, and it removes nothing beyond what the import
+  added. Account deletion is unchanged: `delete_own_account()` gains one
+  line, deleting `import_pairings` before transactions, which removes no
+  more data than it did before. No cookie or browser-storage key is added.
 - **Terms of service:** published 2026-10-12, unchanged since.
 - **Operator:** MW Cyber Architects LLC. **Contact:** hello@mysorrel.com.
 
@@ -2572,3 +2598,65 @@ taken?" for anyone holding the anon key, with no caller (its wrapper,
 checkUsernameAvailable(), is imported nowhere). Ruled 2026-11-18:
 revoke from anon and authenticated, keep the function -- migration 74,
 asserted in the harness's 2d.
+
+## Import: transfers came in as spending (2026-11-20)
+
+**Status:** built on `import-categories-transfers` (migration 76),
+2026-11-20. Not merged. Raised 2026-11-20 (a checking -> savings transfer
+imported as an Expense) together with "a file with no category column gets
+one category picker for every row".
+
+What was wrong. Import (68) wrote every row as Income or Expense on the
+chosen account. Three things followed:
+- A transfer to savings lowered Spendable Cash and left savings
+  unchanged.
+- A card payment lowered checking while the card's balance owed stayed
+  the same, so a payment schedule estimated from that balance counted it
+  a second time.
+- Both inflated category spending.
+
+The phase 1 report is in the conversation of 2026-11-20. The rulings:
+- Joined legs keep their own dates.
+- Only plain rows can be joined.
+- Undo goes in order.
+- The match window is 5 days.
+- No tester email.
+- Rows already misimported are left alone.
+
+What 76 does:
+- A file row can be a transfer: it joins an existing plain entry, or
+  creates both legs.
+- `import_pairings` keeps a joined entry's prior category for undo.
+- Each account a created leg lands on gets its own pre-anchor question.
+- A transfer schedule's occurrence gets the same-bill question.
+- `list_imports()` counts occurrences, not rows.
+- Categories are checked by row number.
+- Categories are per row, with on-device suggestions.
+- The import's response carries a goal completion, so the bloom plays.
+  That closes the queue's deferred "Bloom after an import that completes
+  a goal".
+
+A card payment imported as a transfer is counted once. Spendable Cash
+minus the card schedule's `card_balance_owed` doesn't move.
+docs/import-transfers-test.sql, section 9, pins it, with the old
+as-spending import as the control.
+
+A second transfer insert path: `import_transactions()` inserts both legs
+inline, beside `createTransfer()`. It's noted in CLAUDE.md's transfer
+bullet.
+
+**Rows imported before 76 stay as they are** (ruling 2026-11-20). The
+tester note explains undo and re-import. A "Turn into a transfer" action
+for a single existing row, reusing the pairing write, is in docs/queue.md
+under Deferred.
+
+Known edges, not fixed:
+- **The list shows a transfer at one date.** A joined transfer's two
+  legs can sit on two days. The list places the pair at its later leg and
+  shows that leg's date, even on the other account's page.
+- **An undo leaves `updated_at` moved.** Undoing B restores a joined row
+  from an earlier import A exactly, except `updated_at`. That row then
+  counts as "edited" in A's undo confirmation.
+- **A joined row can't take a schedule's occurrence (v1).** If a joined
+  entry is in fact a scheduled card payment, its queue item still asks
+  until it's answered.

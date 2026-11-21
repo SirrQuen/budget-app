@@ -20,8 +20,9 @@ export async function ImportsSection() {
         Import
       </h2>
       <p className="mt-1 max-w-prose text-sm text-ink-secondary">
-        Bring in a CSV file from your bank. It&apos;s read on your device and never uploaded, and you see what it does to your
-        balance before anything is saved. Every import can be undone.
+        Bring in a CSV file from your bank. It&apos;s read on your device: descriptions and amounts stay there until you
+        confirm, and before that Sorrel only checks the file&apos;s dates against your balance dates. You see what it does
+        to your balances before anything is saved. Every import can be undone.
       </p>
       <Link href="/import" className={buttonClass("primary", "mt-4")}>
         Import transactions

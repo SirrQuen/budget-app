@@ -61,6 +61,10 @@ export function UndoImportButton({
         preview.edited > 0
           ? `${preview.edited} of ${preview.edited === 1 ? "them has" : "them have"} been edited since the import. ${preview.edited === 1 ? "It" : "They"}'ll be removed too.`
           : "",
+        // Entries this import joined into a transfer stay, as they were before it (migration 76).
+        preview.restored > 0
+          ? `${preview.restored === 1 ? "1 entry you already had" : `${preview.restored} entries you already had`} stay${preview.restored === 1 ? "s" : ""}, and go${preview.restored === 1 ? "es" : ""} back to how ${preview.restored === 1 ? "it was" : "they were"} before the import joined ${preview.restored === 1 ? "it" : "them"} to a transfer. Any edits since are kept.`
+          : "",
         ...preview.scheduleNotes,
       ]
         .filter(Boolean)

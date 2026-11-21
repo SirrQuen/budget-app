@@ -456,6 +456,79 @@ export type Database = {
           },
         ]
       }
+      import_pairings: {
+        Row: {
+          created_at: string
+          id: string
+          import_id: string
+          prior_categoryid: string
+          transactionid: string
+          transfer_group_id: string
+          userid: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          import_id: string
+          prior_categoryid: string
+          transactionid: string
+          transfer_group_id: string
+          userid: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          import_id?: string
+          prior_categoryid?: string
+          transactionid?: string
+          transfer_group_id?: string
+          userid?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_pairings_import_fkey"
+            columns: ["userid", "import_id"]
+            isOneToOne: false
+            referencedRelation: "imports"
+            referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "import_pairings_prior_category_fkey"
+            columns: ["userid", "prior_categoryid"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "import_pairings_prior_category_fkey"
+            columns: ["userid", "prior_categoryid"]
+            isOneToOne: false
+            referencedRelation: "v_category_activity"
+            referencedColumns: ["userid", "category_id"]
+          },
+          {
+            foreignKeyName: "import_pairings_transaction_fkey"
+            columns: ["userid", "transactionid"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "import_pairings_transaction_fkey"
+            columns: ["userid", "transactionid"]
+            isOneToOne: false
+            referencedRelation: "v_future_transactions"
+            referencedColumns: ["userid", "transaction_id"]
+          },
+          {
+            foreignKeyName: "import_pairings_userid_fkey"
+            columns: ["userid"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       imports: {
         Row: {
           accountid: string
