@@ -1,16 +1,24 @@
 // Runner for docs/recurring-ends-test.sql -- the database test of the
-// recurring end rule (migration 79) plus parity with its TypeScript twin.
+// recurring end rule (migration 79) and its parity with the TypeScript
+// twin (lib/recurringEnds.ts).
 //
 //   npm run test:parity:ends
 //   npm run test:parity:ends -- --with supabase/migrations/<file>.sql
 //
-// The SQL file passes on its own when its SUMMARY row says ALL PASS. This
-// runner also takes every 'state' row -- a schedule's raw end fields after
-// a scenario, and the SQL answer, recurring_is_finished() and
-// recurring_occurrences_remaining() -- and recomputes both with
-// lib/recurringEnds.ts. Any disagreement fails, so the two rules can't
-// drift. It also checks that the non_business_day_rule values the
-// database saves are exactly NON_BUSINESS_DAY_RULES (migration 79).
+// It evaluates the TS rule over a grid of cases -- every order of the
+// next date against the end date (or none), every limit a scenario uses,
+// 0..6 done -- and pastes the answers, with NON_BUSINESS_DAY_RULES, into
+// the file's __TS_ENDS_RULE__ marker. The SQL compares them with
+// recurring_is_finished() (P1), with every scenario's state (P2) and with
+// the timing rules the database saves (R1). So the verdict is the file's
+// own SUMMARY row: ALL PASS, or it isn't a pass.
+//
+// The CLI's default text output, with stdin, stdout and stderr all the
+// terminal's: the test writes then rolls back, so the pinned CLI (3.x)
+// asks before running it, and it can only ask in text output (with
+// --output-format json it refuses -- HostedMutationConsentRequiredError,
+// 2026-11-22). You see the Target line, check the ref, and answer. Never
+// add --yes here.
 //
 // --with runs a migration inside the test's own transaction first, so the
 // rule can be checked on sorrel-dev before `db push`. Everything still
@@ -23,8 +31,32 @@ import { isFinished, remainingOccurrences } from "../lib/recurringEnds";
 import { NON_BUSINESS_DAY_RULES } from "../lib/businessDays";
 
 const TEST_FILE = resolve(__dirname, "../docs/recurring-ends-test.sql");
+// The whole dollar-quoted literal, so the mention in the header comment is not it.
+const MARKER = "$ts$__TS_ENDS_RULE__$ts$";
+
+// The same concrete dates the SQL's P1 uses for each order.
+const NEXT = "2026-12-01";
+const END_FOR: Record<string, string | null> = { "-1": "2026-12-02", "0": "2026-12-01", "1": "2026-11-30", null: null };
+
+const cases = [null, -1, 0, 1].flatMap((rel) =>
+  [null, 1, 2, 3, 5].flatMap((lim) =>
+    [0, 1, 2, 3, 4, 5, 6].map((done) => {
+      const end = {
+        endDate: END_FOR[String(rel)],
+        occurrencesRemaining: remainingOccurrences(lim, done),
+      };
+      return { rel, lim, done, finished: isFinished(end, NEXT), remaining: end.occurrencesRemaining };
+    }),
+  ),
+);
+
+const payload = JSON.stringify({ cases, rules: [...NON_BUSINESS_DAY_RULES] });
 
 let sql = readFileSync(TEST_FILE, "utf8");
+if (!sql.includes(MARKER)) {
+  throw new Error(`${TEST_FILE} has no ${MARKER} marker`);
+}
+sql = sql.replace(MARKER, () => `$ts$${payload}$ts$`);
 
 const withIndex = process.argv.indexOf("--with");
 if (withIndex !== -1) {
@@ -34,6 +66,7 @@ if (withIndex !== -1) {
   }
   const migration = readFileSync(resolve(migrationPath), "utf8");
   // Directly after the test's own `begin;`, so the ROLLBACK undoes it too.
+  // A function replacer: a string one would read the migration's `$$` as a pattern.
   sql = sql.replace(/^begin;$/m, () => `begin;\n\n${migration}\n`);
 }
 
@@ -41,75 +74,12 @@ const dir = mkdtempSync(join(tmpdir(), "ends-parity-"));
 const sqlPath = join(dir, "ends.sql");
 writeFileSync(sqlPath, sql);
 
-// Same terms as scripts/leaves-spendable-set-parity.ts: sorrel-dev by REF,
-// the CLI's confirmation on the terminal (you read the Target line and
-// answer), only stdout captured. Never add --yes here.
+// sorrel-dev by REF, never the link: the link can point at production.
 const DEV_REF = "tztbebdzlezlhvsbylsf";
-const run = spawnSync(`npx supabase db query --remote=${DEV_REF} --output-format json -f "${sqlPath}"`, {
-  encoding: "utf8",
+console.log(`${cases.length} TS cases. The verdict is the SUMMARY row (the last row): ALL PASS, or not a pass.\n`);
+const run = spawnSync(`npx supabase db query --remote=${DEV_REF} -f "${sqlPath}"`, {
   shell: true,
-  stdio: ["inherit", "pipe", "inherit"],
+  stdio: "inherit",
 });
 rmSync(dir, { recursive: true, force: true });
-
-if (run.status !== 0) {
-  process.stderr.write(run.stdout ?? "");
-  process.exit(run.status ?? 1);
-}
-
-type Row = {
-  scenario: string;
-  consumer: string;
-  expected: string;
-  actual: string;
-  pass: boolean;
-  next_run_date: string | null;
-  end_date: string | null;
-  occurrence_limit: number | null;
-  occurrences_done: number | string | null;
-  sql_finished: boolean | null;
-  sql_remaining: number | string | null;
-};
-const rows: Row[] = JSON.parse(run.stdout.slice(run.stdout.indexOf("{"))).rows ?? [];
-
-const summary = rows.find((r) => r.scenario === "SUMMARY");
-if (!summary) {
-  console.error("No SUMMARY row -- the test errored or stopped early. Not a pass.");
-  process.exit(1);
-}
-console.log(`docs/recurring-ends-test.sql: ${summary.consumer}, ${summary.expected}, ${summary.actual}`);
-
-const asNumber = (v: number | string | null) => (v === null ? null : Number(v));
-const date = (v: string | null) => (v === null ? null : v.slice(0, 10));
-
-const disagreements = rows
-  .filter((r) => r.consumer === "state")
-  .flatMap((r) => {
-    const end = {
-      endDate: date(r.end_date),
-      occurrencesRemaining: remainingOccurrences(r.occurrence_limit, asNumber(r.occurrences_done) ?? 0),
-    };
-    const tsFinished = isFinished(end, date(r.next_run_date)!);
-    const sqlRemaining = asNumber(r.sql_remaining);
-    return tsFinished === r.sql_finished && end.occurrencesRemaining === sqlRemaining
-      ? []
-      : [{ scenario: r.scenario, sql_finished: r.sql_finished, ts_finished: tsFinished, sql_remaining: sqlRemaining, ts_remaining: end.occurrencesRemaining }];
-  });
-const stateRows = rows.filter((r) => r.consumer === "state").length;
-
-console.log(`parity: ${stateRows} state rows, ${disagreements.length} disagree`);
-if (disagreements.length > 0) {
-  console.table(disagreements);
-}
-
-const ruleRow = rows.find((r) => r.consumer === "rule-values");
-const tsRules = [...NON_BUSINESS_DAY_RULES].sort().join(",");
-const rulesAgree = ruleRow !== undefined && ruleRow.actual === tsRules;
-console.log(`timing rules: database saves ${ruleRow?.actual ?? "<no row>"}, NON_BUSINESS_DAY_RULES is ${tsRules}`);
-
-if (stateRows === 0 || disagreements.length > 0 || !rulesAgree || summary.actual !== "ALL PASS") {
-  if (summary.actual !== "ALL PASS") console.table(rows.filter((r) => r.pass === false));
-  console.error("\nNOT PASSED");
-  process.exit(1);
-}
-console.log("\nALL PASS");
+process.exit(run.status ?? 1);

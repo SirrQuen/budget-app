@@ -2843,9 +2843,20 @@ Checks after the pushes, 2026-11-22, all read-only:
 - **rls-isolation-test.sql on sorrel-dev (tztbebdzlezlhvsbylsf), run by
   Matt, 2026-11-22:** 570 rows, 0 false, ALL PASS. That covers
   `v_recurring_state` in section 2 and both rule functions in 2d.
-- **Not yet recorded:** recurring-ends-test.sql via `npm run
-  test:parity:ends`. Matt reported it passed; its SUMMARY figures are
-  still to be pasted.
+- **`npm run test:parity:ends` never ran.** Matt's run on 2026-11-22
+  was refused with HostedMutationConsentRequiredError. The runner asked
+  for `--output-format json`, and the pinned CLI (3.0.0) can't ask for
+  confirmation in JSON output; the only way past is `--yes`, which is
+  ruled out. Nothing was written. The earlier "both passed" covered only
+  the RLS run. Fixed on the branch: the runner now pastes the TS answers
+  (140 grid cases and NON_BUSINESS_DAY_RULES) into the file, the SQL
+  compares them (P1 grid, P2 every scenario's state, R1 rules), and the
+  CLI prints its own text output, prompt included. The verdict is the
+  SUMMARY row. Not yet run.
+- **`npm run test:parity` probably fails the same way.**
+  `scripts/leaves-spendable-set-parity.ts` also passes
+  `--output-format json` to a statement that writes. Not checked or
+  changed here; raised once.
 - **Side effect:** the CLI's `--read-only` role (`supabase_read_only_user`)
   has no EXECUTE on `recurring_is_finished`, so read-only queries can no
   longer select from `v_upcoming_recurring` or `v_recurring_state`.

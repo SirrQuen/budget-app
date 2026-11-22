@@ -1,9 +1,19 @@
 -- =====================================================================
 -- Recurring "Ends" test (migration 79)
 --
---   npx supabase db query --remote=tztbebdzlezlhvsbylsf -f docs/recurring-ends-test.sql
---   npm run test:parity:ends            -- the same file, plus the TS rule
+-- Run it through the runner, never directly:
+--
+--   npm run test:parity:ends
 --   npm run test:parity:ends -- --with supabase/migrations/<file>.sql
+--
+-- scripts/recurring-ends-parity.ts evaluates the TypeScript rule
+-- (lib/recurringEnds.ts) over a grid of cases and NON_BUSINESS_DAY_RULES
+-- (lib/businessDays.ts), pastes them into the __TS_ENDS_RULE__ marker
+-- below, and runs this file against sorrel-dev by ref. The comparison
+-- happens here, in the P rows, so the CLI's own text output -- with its
+-- confirmation prompt -- is the whole result. Run directly, the marker is
+-- not valid JSON and the file errors at once rather than passing on
+-- nothing.
 --
 -- It writes, then rolls back, so it isn't --read-only and the CLI asks
 -- for confirmation: Matt runs it. Self-cleaning: one throwaway user, one
@@ -39,10 +49,14 @@
 -- form's "earlier" / "later" timing used to be refused by a second,
 -- contradictory CHECK.
 --
--- Rows whose consumer is 'state' carry the schedule's raw end fields
--- and the SQL answer (sql_finished, sql_remaining). The parity runner
--- (scripts/recurring-ends-parity.ts) recomputes each with
--- lib/recurringEnds.ts and fails on any disagreement.
+-- Parity with the TypeScript rule:
+--   P1  every TS case, recomputed by recurring_is_finished() and
+--       recurring_occurrences_remaining() on the same inputs.
+--   P2  every 'state' row (each scenario's end fields after its
+--       answers, and the R cases) against the TS answer for its inputs:
+--       the order of next_run_date and end_date, the limit, and the
+--       occurrences done.
+--   R1  the timing rules the database saves = NON_BUSINESS_DAY_RULES.
 -- =====================================================================
 
 begin;
@@ -63,6 +77,15 @@ create temp table er (
 );
 grant insert, select on er to authenticated;
 grant usage on sequence er_seq_seq to authenticated;
+
+-- What the TS side said. Shape:
+--   { "cases": [ { "rel": -1 | 0 | 1 | null,  -- sign(next_run_date - end_date); null: no end date
+--                  "lim": n | null, "done": n,
+--                  "finished": bool, "remaining": n | null }, ... ],
+--     "rules": [...NON_BUSINESS_DAY_RULES] }
+create temp table ends_ts as
+select $ts$__TS_ENDS_RULE__$ts$::jsonb as payload;
+grant select on ends_ts to authenticated;
 
 create function pg_temp.rec(p_scen text, p_cons text, p_expected text, p_actual text)
 returns void language sql as $$
@@ -383,7 +406,8 @@ begin
           case when rule in ('forward', 'backward') then 'refused' else 'saves' end, 'refused');
       end;
     end loop;
-    perform pg_temp.rec('R1 the rules that save', 'rule-values', 'after,before,none',
+    perform pg_temp.rec('R1 the rules that save = NON_BUSINESS_DAY_RULES', 'rule-values',
+      (select string_agg(v, ',' order by v) from ends_ts, jsonb_array_elements_text(payload->'rules') v),
       array_to_string(array(select unnest(saved) order by 1), ','));
   end;
 
@@ -428,6 +452,43 @@ select 'R ' || label, 'state', case when want then 'finished' else 'open' end,
     ('both, limit binds',           date '2026-12-01', date '2027-12-01', 2,             2,         true),
     ('both, date binds',            date '2026-12-01', date '2026-11-01', 5,             1,         true)
   ) as c(label, nr, ed, lim, done, want);
+
+-- P1 every TS case, recomputed by the SQL rule on the same inputs.
+insert into er (scenario, consumer, expected, actual, pass)
+select 'P1 next ' || case c.rel when -1 then 'before end' when 0 then 'on end' when 1 then 'after end' else 'no end' end
+         || ' / limit ' || coalesce(c.lim::text, 'none') || ' / done ' || c.done,
+       'parity grid',
+       c.finished::text || ' ' || coalesce(c.remaining::text, 'null'),
+       x.f::text || ' ' || coalesce(x.rm::text, 'null'),
+       x.f = c.finished and x.rm is not distinct from c.remaining::bigint
+  from ends_ts,
+       jsonb_to_recordset(payload->'cases') as c(rel integer, lim integer, done integer, finished boolean, remaining integer)
+ cross join lateral (
+   select public.recurring_is_finished(
+            date '2026-12-01',
+            case c.rel when -1 then date '2026-12-02' when 0 then date '2026-12-01' when 1 then date '2026-11-30' end,
+            c.lim, c.done) as f,
+          public.recurring_occurrences_remaining(c.lim, c.done) as rm
+ ) x;
+
+-- P2 every state row against the TS answer for its inputs. The grid's
+-- done runs 0..6, past the largest limit any case uses, so capping at 6
+-- changes no answer.
+insert into er (scenario, consumer, expected, actual, pass)
+select 'P2 ' || e.scenario, 'parity state',
+       coalesce(c.finished::text || ' ' || coalesce(c.remaining::text, 'null'), '<no TS case>'),
+       e.sql_finished::text || ' ' || coalesce(e.sql_remaining::text, 'null'),
+       coalesce(c.finished = e.sql_finished and c.remaining::bigint is not distinct from e.sql_remaining, false)
+  from er e
+  left join (
+    select c.*
+      from ends_ts,
+           jsonb_to_recordset(payload->'cases') as c(rel integer, lim integer, done integer, finished boolean, remaining integer)
+  ) c
+    on c.rel is not distinct from sign(e.next_run_date - e.end_date)::integer
+   and c.lim is not distinct from e.occurrence_limit
+   and c.done = least(e.occurrences_done, 6)
+ where e.consumer = 'state';
 
 set local role none;
 
