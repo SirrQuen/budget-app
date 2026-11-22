@@ -2824,8 +2824,29 @@ Checks, 2026-11-21:
 
 ## Recurring "Ends" not honoured everywhere (2026-11-22)
 
-**Status:** fix on branch `recurring-ends` (migration 79), not pushed or
-merged. Raised 2026-11-22: a schedule set to "Ends after 1 occurrence"
+**Status:** migration 79 is on sorrel-dev and production (pushed by
+Matt, 2026-11-22). The branch `recurring-ends` is not merged: until it
+is, main's Recurring page still lists a finished schedule with a due
+date.
+
+Checks after the pushes, 2026-11-22, all read-only:
+- **view-acl-check.sql:** sorrel-dev: 19 views checked, 0 failed, 0
+  operator-only missing. Production (ybdwqyihvbokowocvlgq): the same,
+  19 / 0 / 0. `v_recurring_state` and `v_upcoming_recurring` have
+  `authenticated=rDxtm`, `service_role=Dxtm` and security_invoker set.
+- **Production catalog:** `recurring_nbd_rule_valid` is gone and
+  `rectx_non_business_day_rule_valid` remains. Both rule functions
+  exist: authenticated can execute them, anon can't.
+- **Production rows:** 1 schedule is finished but active (the Income
+  "After 1" one), so it is out of the forecast. 0 schedules are in C1 or
+  C3, and 0 timing rules are anything but 'none'. No Safe to Spend moved.
+- **Not yet recorded:** recurring-ends-test.sql (via `npm run
+  test:parity:ends`) and rls-isolation-test.sql on sorrel-dev.
+- **Side effect:** the CLI's `--read-only` role (`supabase_read_only_user`)
+  has no EXECUTE on `recurring_is_finished`, so read-only queries can no
+  longer select from `v_upcoming_recurring` or `v_recurring_state`.
+  Users aren't affected. Read-only checks go through the tables instead.
+  Granting that role EXECUTE needs a ruling. Raised 2026-11-22: a schedule set to "Ends after 1 occurrence"
 came back on the Recurring page for the next month after one confirm.
 
 Phase 1 (2026-11-22) found four end comparisons that disagreed. The view
