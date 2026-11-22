@@ -444,6 +444,13 @@ export type Database = {
             foreignKeyName: "goals_funding_recurringid_fkey"
             columns: ["userid", "funding_recurringid"]
             isOneToOne: false
+            referencedRelation: "v_recurring_state"
+            referencedColumns: ["userid", "recurring_id"]
+          },
+          {
+            foreignKeyName: "goals_funding_recurringid_fkey"
+            columns: ["userid", "funding_recurringid"]
+            isOneToOne: false
             referencedRelation: "v_upcoming_recurring"
             referencedColumns: ["userid", "recurring_id"]
           },
@@ -909,6 +916,13 @@ export type Database = {
             foreignKeyName: "same_bill_answers_recurringid_fkey"
             columns: ["userid", "recurringid"]
             isOneToOne: false
+            referencedRelation: "v_recurring_state"
+            referencedColumns: ["userid", "recurring_id"]
+          },
+          {
+            foreignKeyName: "same_bill_answers_recurringid_fkey"
+            columns: ["userid", "recurringid"]
+            isOneToOne: false
             referencedRelation: "v_upcoming_recurring"
             referencedColumns: ["userid", "recurring_id"]
           },
@@ -1240,6 +1254,13 @@ export type Database = {
             foreignKeyName: "transactions_recurringid_fkey"
             columns: ["userid", "recurringid"]
             isOneToOne: false
+            referencedRelation: "v_recurring_state"
+            referencedColumns: ["userid", "recurring_id"]
+          },
+          {
+            foreignKeyName: "transactions_recurringid_fkey"
+            columns: ["userid", "recurringid"]
+            isOneToOne: false
             referencedRelation: "v_upcoming_recurring"
             referencedColumns: ["userid", "recurring_id"]
           },
@@ -1433,13 +1454,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "transactions_accountid_fkey"
-            columns: ["userid", "accountid"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["userid", "id"]
-          },
-          {
-            foreignKeyName: "transactions_accountid_fkey"
             columns: ["userid", "to_accountid"]
             isOneToOne: false
             referencedRelation: "accounts"
@@ -1448,13 +1462,20 @@ export type Database = {
           {
             foreignKeyName: "transactions_accountid_fkey"
             columns: ["userid", "accountid"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "transactions_accountid_fkey"
+            columns: ["userid", "to_accountid"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
             referencedColumns: ["userid", "account_id"]
           },
           {
             foreignKeyName: "transactions_accountid_fkey"
-            columns: ["userid", "to_accountid"]
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
             referencedColumns: ["userid", "account_id"]
@@ -2085,10 +2106,6 @@ export type Database = {
           previous_login_at: string
         }[]
       }
-      replace_contribution_with_link: {
-        Args: { p_contribution_id: string; p_transaction_id: string }
-        Returns: undefined
-      }
       recurring_is_finished: {
         Args: {
           p_end_date: string
@@ -2101,6 +2118,10 @@ export type Database = {
       recurring_occurrences_remaining: {
         Args: { p_occurrence_limit: number; p_occurrences_done: number }
         Returns: number
+      }
+      replace_contribution_with_link: {
+        Args: { p_contribution_id: string; p_transaction_id: string }
+        Returns: undefined
       }
       resolve_recurring_due_date: {
         Args: { anchor: string; offset_days: number; rule: string }
