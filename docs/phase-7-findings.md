@@ -2840,8 +2840,12 @@ Checks after the pushes, 2026-11-22, all read-only:
 - **Production rows:** 1 schedule is finished but active (the Income
   "After 1" one), so it is out of the forecast. 0 schedules are in C1 or
   C3, and 0 timing rules are anything but 'none'. No Safe to Spend moved.
-- **Not yet recorded:** recurring-ends-test.sql (via `npm run
-  test:parity:ends`) and rls-isolation-test.sql on sorrel-dev.
+- **rls-isolation-test.sql on sorrel-dev (tztbebdzlezlhvsbylsf), run by
+  Matt, 2026-11-22:** 570 rows, 0 false, ALL PASS. That covers
+  `v_recurring_state` in section 2 and both rule functions in 2d.
+- **Not yet recorded:** recurring-ends-test.sql via `npm run
+  test:parity:ends`. Matt reported it passed; its SUMMARY figures are
+  still to be pasted.
 - **Side effect:** the CLI's `--read-only` role (`supabase_read_only_user`)
   has no EXECUTE on `recurring_is_finished`, so read-only queries can no
   longer select from `v_upcoming_recurring` or `v_recurring_state`.
