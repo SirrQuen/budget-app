@@ -2791,9 +2791,10 @@ Still to do:
 
 ## Beta applications in plain English for the dashboard (2026-11-21)
 
-**Status:** migration 78 is on sorrel-dev and on production. Main was
-fast-forwarded to `ead6ac0` (`beta-applications-readable`); not pushed at
-the time of writing. Asked for 2026-11-21: the operator had no readable
+**Status:** deployed 2026-11-21. Migration 78 is on sorrel-dev and on
+production. Main was fast-forwarded to `ead6ac0`
+(`beta-applications-readable`) and pushed, with `dd65ffd` (this entry) on
+top. Asked for 2026-11-21: the operator had no readable
 way to see applications, which are stored as codes.
 
 `public.beta_applications_readable` shows one row per application, newest
