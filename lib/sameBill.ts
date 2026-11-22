@@ -22,6 +22,7 @@
 import { daysBetweenInclusive } from "./date";
 import { confirmationOpensOn, paydayWindowEnd } from "./recurringSchedule";
 import { formatDayMonth } from "./format";
+import { isFinished } from "./recurringEnds";
 
 export type SameBillSchedule = {
   recurringId: string;
@@ -89,8 +90,8 @@ export function findSameBillPairs(
 ): SameBillPair[] {
   const candidates: { s: SameBillSchedule; e: SameBillEntry; gap: number }[] = [];
   for (const s of schedules) {
-    if (s.occurrencesRemaining !== null && s.occurrencesRemaining <= 0) continue;
-    if (s.endDate !== null && s.endDate < s.nextDueDate) continue;
+    // The end rule (lib/recurringEnds.ts): the next occurrence's SCHEDULED date.
+    if (isFinished(s, s.nextRunDate)) continue;
     for (const e of entries) {
       if (e.linked || e.date <= today) continue;
       if (e.kind !== s.kind || e.accountId !== s.accountId) continue;

@@ -405,6 +405,9 @@ export function RecurringForm({
   const [ends, setEnds] = useState<Ends>(
     recurring ? endsFromRecord(recurring.occurrence_limit, recurring.end_date) : "never",
   );
+  // Tracked only for the hint: "Make recurring" with one occurrence ends
+  // the schedule at once (the source is that occurrence).
+  const [occurrenceCount, setOccurrenceCount] = useState(String(recurring?.occurrence_limit ?? ""));
   const [intervalCount, setIntervalCount] = useState(
     String(recurring ? intervalFromFrequency(recurring.frequency, recurring.interval_count) : 1),
   );
@@ -851,9 +854,11 @@ export function RecurringForm({
             label="Occurrences"
             htmlFor={fieldId("occurrence_count")}
             hint={
-              source
-                ? `How many times this happens before it stops, counting the one on ${formatDate(source.sourceDate)}.`
-                : "How many times this posts before it stops."
+              source && Number(occurrenceCount) === 1
+                ? "This transaction counts as the first time, so the schedule ends straight away."
+                : source
+                  ? `How many times this happens before it stops, counting the one on ${formatDate(source.sourceDate)}.`
+                  : "How many times this posts before it stops."
             }
           >
             <Input
@@ -864,6 +869,7 @@ export function RecurringForm({
               min="1"
               required
               defaultValue={recurring?.occurrence_limit ?? undefined}
+              onChange={(e) => setOccurrenceCount(e.target.value)}
               className="w-24"
             />
           </FormField>

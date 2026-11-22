@@ -361,6 +361,8 @@ begin
       ('2 views', 'v_portfolio_summary',    format('userid = %L', a),                            format('userid <> %L', b)),
       -- Every schedule's amount and basis (migration 59); A_recur gives A a row.
       ('2 views', 'v_recurring_amounts',    format('userid = %L', a),                            format('userid <> %L', b)),
+      -- Every schedule's end state (migration 79); A_recur gives A a row.
+      ('2 views', 'v_recurring_state',      format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_upcoming_recurring',   format('userid = %L', a),                            format('userid <> %L', b))
     ) as t(section, rel, a_rows, not_b_rows)
   loop
@@ -1751,6 +1753,11 @@ begin
       ('public.resolve_recurring_due_date(date,integer,text)',   'authenticated', true),
       ('public.signed_amount(numeric,text)',                     'anon',          false),
       ('public.signed_amount(numeric,text)',                     'authenticated', true),
+      -- The end rule (migration 79): read by views, signed in only.
+      ('public.recurring_is_finished(date,date,integer,bigint)', 'anon',          false),
+      ('public.recurring_is_finished(date,date,integer,bigint)', 'authenticated', true),
+      ('public.recurring_occurrences_remaining(integer,bigint)', 'anon',          false),
+      ('public.recurring_occurrences_remaining(integer,bigint)', 'authenticated', true),
       -- Migration 74 (ruled 2026-11-18): no username login, so nobody
       -- calls this; it answered "is this username taken?" for anyone.
       ('public.username_is_available(text)',                     'anon',          false),

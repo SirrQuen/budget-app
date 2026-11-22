@@ -10,6 +10,7 @@
     "test": "node --import tsx --test \"lib/**/*.test.ts\" \"app/**/*.test.tsx\" \"components/**/*.test.tsx\" \"postcss/**/*.test.ts\"",
     "check:recap-preview": "next build && tsx scripts/check-recap-preview.ts",
     "test:parity":"tsx scripts/leaves-spendable-set-parity.ts",
+    "test:parity:ends": "tsx scripts/recurring-ends-parity.ts",
     "types:dev": "tsx scripts/gen-types.ts"
   },
   "dependencies": {

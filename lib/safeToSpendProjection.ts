@@ -42,6 +42,7 @@ import type { AmountBasis } from "@/lib/amountBasis";
 import { addDaysISO, daysBetweenInclusive } from "@/lib/date";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
 import { nextOccurrenceISO } from "@/lib/recurringCadence";
+import { isScheduledOccurrence } from "@/lib/recurringEnds";
 import { expenseCommitmentDate, paydayWindowEnd, statementDateForCycle } from "@/lib/recurringSchedule";
 import { isSafeToSpendCommitment, isSafeToSpendIncome } from "@/lib/safeToSpend";
 
@@ -360,21 +361,21 @@ export type Occurrence = {
 
 // Every occurrence of a schedule, starting with its stored next_due_date,
 // until one passes `until`: the raw cursor steps, the resolved date is
-// derived, end_date is checked against the raw cursor. The one expansion --
-// the confirmation queue (lib/confirmationQueue.ts) counts outstanding
-// cycles with it too, so the queue and the projection can't disagree
-// about which occurrences exist.
+// derived, and whether each one belongs to the schedule at all is THE end
+// rule (isScheduledOccurrence, lib/recurringEnds.ts -- the scheduled
+// date, never the resolved one). The one expansion -- the confirmation
+// queue (lib/confirmationQueue.ts) counts outstanding cycles with it too,
+// so the queue and the projection can't disagree about which occurrences
+// exist.
 export function expandOccurrences(s: ProjectionSchedule, until: string, holidays: ReadonlySet<string>): Occurrence[] {
   const out: Occurrence[] = [];
   let cursor = s.nextRunDate;
   let due = s.nextDueDate;
-  let remaining = s.occurrencesRemaining ?? Infinity;
 
-  while (remaining > 0 && out.length < MAX_OCCURRENCES_PER_SCHEDULE) {
-    if (s.endDate && cursor > s.endDate) break;
+  while (out.length < MAX_OCCURRENCES_PER_SCHEDULE) {
+    if (!isScheduledOccurrence(s, cursor, out.length)) break;
     if (due > until) break;
     out.push({ cursor, due });
-    remaining -= 1;
     cursor = nextOccurrenceISO(cursor, s.frequency, s.intervalCount, s.anchorDate);
     due = resolveDueDate(cursor, s.businessDayOffset, s.nonBusinessDayRule, holidays);
   }

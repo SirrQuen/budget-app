@@ -18,6 +18,9 @@ import {
 import { getTransaction } from "@/lib/db/transactions";
 import { confirmationKey } from "@/lib/confirmationQueue";
 import { statementDayIsDueDay } from "@/lib/recurringSchedule";
+import { parseTiming } from "@/lib/recurringTiming";
+import { endDateOrderError } from "@/lib/recurringEnds";
+import type { NonBusinessDayRule } from "@/lib/businessDays";
 import { addNotYetKey } from "@/lib/confirmationLater";
 import { addDismissedComingUpKey } from "@/lib/comingUpDismissed";
 import { getToday } from "@/lib/db/settings";
@@ -43,14 +46,6 @@ export type OneTapState = { error?: string; needsAnswer?: boolean; completed?: G
 const FREQUENCIES = ["Monthly", "Weekly", "Yearly"] as const;
 const ENDS_MODES = ["never", "count", "date"] as const;
 const KINDS = ["Expense", "Income", "Transfer"] as const;
-
-// RecurringForm's plain-language timing control -- see its own
-// TIMING_MODE_OPTIONS/NEAREST_DIRECTION_OPTIONS. Absent entirely when the
-// "Adjust timing" panel is collapsed (the fields it holds aren't rendered,
-// so they aren't submitted); "exact" here means exactly that, same as an
-// explicit choice of it.
-const TIMING_MODES = ["exact", "nearest", "after"] as const;
-const NEAREST_DIRECTIONS = ["earlier", "later"] as const;
 
 type ParsedRecurringFields = {
   description: string;
@@ -86,7 +81,7 @@ type ParsedRecurringFields = {
   // -- derived from RecurringForm's timing_mode/timing_direction/timing_count
   // below, never read directly from those raw field names past this function.
   business_day_offset: number;
-  non_business_day_rule: string;
+  non_business_day_rule: NonBusinessDayRule;
 };
 
 // Shared by create and update -- both forms offer the exact same fields.
@@ -235,34 +230,21 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
     if (!end_date) {
       return { error: "Choose an end date." };
     }
-    if (end_date < next_run_date) {
-      return { error: "The end date can't be before the next date." };
-    }
+    // Its order against the next date is checked by the caller
+    // (endDateOrderError): only when either is being set.
   }
 
-  // "exact" (the collapsed-panel default) maps to offset 0 / rule 'none' --
-  // identical to what every row already meant before this control existed.
-  const timingMode = String(formData.get("timing_mode") ?? "exact");
-  if (!TIMING_MODES.includes(timingMode as (typeof TIMING_MODES)[number])) {
-    return { error: "Choose a valid timing option." };
+  // The timing control (lib/recurringTiming.ts): one of
+  // NON_BUSINESS_DAY_RULES, the set the database accepts (migration 79).
+  const timing = parseTiming(
+    String(formData.get("timing_mode") ?? "exact"),
+    String(formData.get("timing_direction") ?? "earlier"),
+    String(formData.get("timing_count") ?? ""),
+  );
+  if ("error" in timing) {
+    return timing;
   }
-
-  let business_day_offset = 0;
-  let non_business_day_rule = "none";
-
-  if (timingMode === "after") {
-    const countInput = String(formData.get("timing_count") ?? "").trim();
-    business_day_offset = Math.trunc(Number(countInput));
-    if (!Number.isFinite(business_day_offset) || business_day_offset < 1 || business_day_offset > 10) {
-      return { error: "Enter how many business days, from 1 to 10." };
-    }
-  } else if (timingMode === "nearest") {
-    const direction = String(formData.get("timing_direction") ?? "earlier");
-    if (!NEAREST_DIRECTIONS.includes(direction as (typeof NEAREST_DIRECTIONS)[number])) {
-      return { error: "Choose a valid shift direction." };
-    }
-    non_business_day_rule = direction === "earlier" ? "before" : "after";
-  }
+  const { business_day_offset, non_business_day_rule } = timing;
 
   return {
     description,
@@ -301,6 +283,10 @@ export async function createRecurringAction(
   const parsed = parseRecurringFields(formData);
   if ("error" in parsed) {
     return parsed;
+  }
+  const orderError = endDateOrderError(parsed, null);
+  if (orderError !== null) {
+    return { error: orderError };
   }
 
   const goalLink = goalLinkAnswer(formData);
@@ -399,6 +385,13 @@ export async function updateRecurringAction(
   const current = await getRecurring(id);
   if (current.data === null) {
     return { error: current.error };
+  }
+
+  // Asked only when the end date or the next date changes: renaming an
+  // ended schedule (next date already past its end) must still save.
+  const orderError = endDateOrderError(parsed, current.data);
+  if (orderError !== null) {
+    return { error: orderError };
   }
 
   let clearPendingConfirmation = !parsed.amount_is_variable;

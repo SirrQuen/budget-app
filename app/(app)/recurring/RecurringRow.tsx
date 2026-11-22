@@ -32,6 +32,7 @@ export function RecurringRow({
   holidays = [],
   amount,
   today,
+  ended = false,
 }: {
   recurring: RecurringWithRelations;
   incomeCategories: CategoryWithGroup[];
@@ -47,6 +48,12 @@ export function RecurringRow({
   amount: RecurringAmount;
   /** getToday(), for deciding whether an unconfirmed variable schedule is already overdue. */
   today: string;
+  /**
+   * Its end condition is met (v_recurring_state.is_finished, migration 79):
+   * shown as Ended, with no due date and nothing to pause or enter.
+   * Editing the end condition brings it back.
+   */
+  ended?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -85,7 +92,7 @@ export function RecurringRow({
   // payment; the payment itself is confirmed in the queue like anything
   // else.
   const needsConfirmation =
-    isTransfer && recurring.amount_is_variable && recurring.next_amount_confirmed_at === null;
+    !ended && isTransfer && recurring.amount_is_variable && recurring.next_amount_confirmed_at === null;
   const isOverdueNeedsAmount = needsConfirmation && recurring.next_due_date <= today;
   if (editing) {
     const editable: EditableRecurring = {
@@ -163,7 +170,11 @@ export function RecurringRow({
                 {/* Wraps below @4xl, truncates from @4xl up: beside the
                     amount, a 320px viewport cut the description to ~130px. */}
                 <span title={recurring.description ?? undefined} className="min-w-0 break-words text-sm font-medium text-ink @4xl:truncate">{recurring.description}</span>
-                {!recurring.is_active ? (
+                {ended ? (
+                  <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
+                    Ended
+                  </span>
+                ) : !recurring.is_active ? (
                   <span className="shrink-0 rounded-full bg-surface-raised px-2 py-0.5 text-xs font-medium text-ink-muted">
                     Paused
                   </span>
@@ -206,8 +217,14 @@ export function RecurringRow({
         </span>
 
         <div className="text-sm text-ink-secondary @4xl:col-start-3 @4xl:justify-self-start">
-          <p>Due {formatDate(recurring.next_due_date)}</p>
-          {endCondition ? <p className="text-xs text-ink-muted">{endCondition}</p> : null}
+          {ended ? (
+            <p>{endCondition}</p>
+          ) : (
+            <>
+              <p>Due {formatDate(recurring.next_due_date)}</p>
+              {endCondition ? <p className="text-xs text-ink-muted">{endCondition}</p> : null}
+            </>
+          )}
         </div>
       </div>
 
@@ -221,19 +238,21 @@ export function RecurringRow({
         >
           Edit
         </button>
-        <button
-          type="button"
-          onClick={handleToggle}
-          disabled={isToggling}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50 @4xl:px-0"
-        >
-          {recurring.is_active ? (
-            <PauseIcon className="h-3.5 w-3.5" aria-hidden="true" />
-          ) : (
-            <PlayIcon className="h-3.5 w-3.5" aria-hidden="true" />
-          )}
-          {isToggling ? "Saving…" : recurring.is_active ? "Pause" : "Resume"}
-        </button>
+        {ended ? null : (
+          <button
+            type="button"
+            onClick={handleToggle}
+            disabled={isToggling}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50 @4xl:px-0"
+          >
+            {recurring.is_active ? (
+              <PauseIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <PlayIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            {isToggling ? "Saving…" : recurring.is_active ? "Pause" : "Resume"}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setConfirmingDelete(true)}

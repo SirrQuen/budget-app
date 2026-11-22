@@ -1726,6 +1726,24 @@ export type Database = {
           },
         ]
       }
+      v_recurring_state: {
+        Row: {
+          is_finished: boolean | null
+          occurrences_done: number | null
+          occurrences_remaining: number | null
+          recurring_id: string | null
+          userid: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_transactions_userid_fkey"
+            columns: ["userid"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_upcoming_recurring: {
         Row: {
           account_color: string | null
@@ -2070,6 +2088,19 @@ export type Database = {
       replace_contribution_with_link: {
         Args: { p_contribution_id: string; p_transaction_id: string }
         Returns: undefined
+      }
+      recurring_is_finished: {
+        Args: {
+          p_end_date: string
+          p_next_run_date: string
+          p_occurrence_limit: number
+          p_occurrences_done: number
+        }
+        Returns: boolean
+      }
+      recurring_occurrences_remaining: {
+        Args: { p_occurrence_limit: number; p_occurrences_done: number }
+        Returns: number
       }
       resolve_recurring_due_date: {
         Args: { anchor: string; offset_days: number; rule: string }

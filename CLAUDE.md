@@ -910,6 +910,22 @@ migration 62). A one-tap "It landed" can't answer it, so the queue opens
 the sheet instead; Confirm all leaves those items and says how many
 ("2 items need an answer").
 
+**When a schedule ends is ONE rule** (migration 79, ruled 2026-11-22):
+an occurrence belongs when its SCHEDULED date (the cursor, never the
+business-day-adjusted `next_due_date`) is on or before `end_date`, and
+fewer than `occurrence_limit` are done. Done = linked occurrences
+(`recurringid`, a transfer's legs once): "Not happening" never counts,
+deleting a confirmed transaction brings its occurrence back. Never
+compared to today: the last occurrence on or before the end date stays
+in the queue and the forecast until answered. Finished is derived,
+never stored -- raising N or extending the date revives it; a finished
+schedule sits in the Recurring page's "Ended" section, counted nowhere.
+SQL: `recurring_is_finished()`, exposed by `v_recurring_state` and
+filtered on by `v_upcoming_recurring`. TS: `lib/recurringEnds.ts`, used
+by `expandOccurrences` and same-bill. Never write an end comparison
+anywhere else. `npm run test:parity:ends` runs
+docs/recurring-ends-test.sql and checks the twins agree.
+
 - `transactions.recurringid` non-null means the row was confirmed from a
   schedule -- or is the row the schedule was made from (below). Nothing
   else distinguishes them.

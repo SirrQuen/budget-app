@@ -400,6 +400,26 @@ export async function listRecurringAmounts(): Promise<DbResult<Map<string, Recur
   };
 }
 
+// Every schedule's id whose end condition is met -- from v_recurring_state
+// (migration 79), which applies THE end rule (recurring_is_finished), the
+// same one v_upcoming_recurring filters on. The Recurring page's Ended
+// section; nothing here compares a date or a count.
+export async function listFinishedRecurringIds(): Promise<DbResult<Set<string>>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("v_recurring_state")
+    .select("recurring_id")
+    .eq("is_finished", true)
+    .returns<{ recurring_id: string }[]>();
+
+  if (error) {
+    return { data: null, error: describeReadError(error, "recurring transactions") };
+  }
+
+  return { data: new Set(data.map((r) => r.recurring_id)), error: null };
+}
+
 // The schedule fields a confirmation needs. Read from v_upcoming_recurring,
 // not the base table, so "landed as expected" writes the same predicted
 // amount the queue showed -- the view is where that figure is decided (the

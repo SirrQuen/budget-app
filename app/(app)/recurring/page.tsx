@@ -1,4 +1,4 @@
-import { listRecurring, listRecurringAmounts } from "@/lib/db/recurring";
+import { listFinishedRecurringIds, listRecurring, listRecurringAmounts } from "@/lib/db/recurring";
 import { listAccounts } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { getBankHolidays } from "@/lib/db/holidays";
@@ -47,6 +47,7 @@ export default async function RecurringPage() {
     holidaysResult,
     confirmationResult,
     goalsResult,
+    finishedResult,
   ] = await Promise.all([
     listRecurring(),
     listAccounts({ is_active: true }),
@@ -56,6 +57,7 @@ export default async function RecurringPage() {
     getBankHolidays(),
     getConfirmationQueue(),
     listGoalOptions(),
+    listFinishedRecurringIds(),
   ]);
 
   // RecurringForm's live timing preview degrades to "weekend-aware only"
@@ -76,7 +78,8 @@ export default async function RecurringPage() {
     incomeCategoriesResult.error !== null ||
     expenseCategoriesResult.error !== null ||
     confirmationResult.error !== null ||
-    goalsResult.error !== null
+    goalsResult.error !== null ||
+    finishedResult.error !== null
   ) {
     return (
       <RecurringLoadError
@@ -88,6 +91,7 @@ export default async function RecurringPage() {
           expenseCategoriesResult.error ??
           confirmationResult.error ??
           goalsResult.error ??
+          finishedResult.error ??
           "We couldn't load your recurring transactions. Refresh the page to try again."
         }
       />
@@ -104,6 +108,12 @@ export default async function RecurringPage() {
   const incomeCategories = incomeCategoriesResult.data;
   const expenseCategories = expenseCategoriesResult.data;
   const schedules = recurringResult.data;
+  // Finished by THE end rule (v_recurring_state, migration 79): listed
+  // under Ended, with no due date, and counted nowhere -- v_upcoming_recurring
+  // leaves them out. Raising N or moving the end date brings one back.
+  const finished = finishedResult.data;
+  const live = schedules.filter((r) => !finished.has(r.id));
+  const ended = schedules.filter((r) => finished.has(r.id));
 
   // Every row's amount and its label come from v_recurring_amounts --
   // paused schedules included -- the same view the dashboard's figures come
@@ -142,6 +152,25 @@ export default async function RecurringPage() {
     );
   }
 
+  const renderRow = (recurring: (typeof schedules)[number], isEnded: boolean) => {
+    const shown = amounts.get(recurring.id);
+    if (!shown) return null;
+    return (
+      <RecurringRow
+        key={recurring.id}
+        recurring={recurring}
+        incomeCategories={incomeCategories}
+        expenseCategories={expenseCategories}
+        accounts={accounts}
+        goals={goalsResult.data}
+        holidays={holidays}
+        amount={shown}
+        today={today}
+        ended={isEnded}
+      />
+    );
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -163,29 +192,30 @@ export default async function RecurringPage() {
           than dropping out of sight behind a toggle (AccountsPage hides
           archived accounts this way -- a paused schedule is meant to be
           easy to find again and resume). */}
-      <div className="@container">
-      <ul
-        className={`divide-y divide-gridline rounded-2xl border border-hairline bg-surface ${RECURRING_ROW_GRID}`}
-      >
-        {schedules.map((recurring) => {
-          const shown = amounts.get(recurring.id);
-          if (!shown) return null;
-          return (
-            <RecurringRow
-              key={recurring.id}
-              recurring={recurring}
-              incomeCategories={incomeCategories}
-              expenseCategories={expenseCategories}
-              accounts={accounts}
-              goals={goalsResult.data}
-              holidays={holidays}
-              amount={shown}
-              today={today}
-            />
-          );
-        })}
-      </ul>
-      </div>
+      {live.length > 0 ? (
+        <div className="@container">
+          <ul
+            className={`divide-y divide-gridline rounded-2xl border border-hairline bg-surface ${RECURRING_ROW_GRID}`}
+          >
+            {live.map((recurring) => renderRow(recurring, false))}
+          </ul>
+        </div>
+      ) : null}
+
+      {ended.length > 0 ? (
+        <section aria-labelledby="recurring-ended" className="flex flex-col gap-2">
+          <h2 id="recurring-ended" className="text-sm font-medium text-ink-secondary">
+            Ended
+          </h2>
+          <div className="@container">
+            <ul
+              className={`divide-y divide-gridline rounded-2xl border border-hairline bg-surface ${RECURRING_ROW_GRID}`}
+            >
+              {ended.map((recurring) => renderRow(recurring, true))}
+            </ul>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

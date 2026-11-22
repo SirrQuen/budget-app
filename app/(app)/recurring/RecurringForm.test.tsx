@@ -295,3 +295,22 @@ test("a new schedule without a source still starts today, with no source field",
   assert.equal(q<HTMLInputElement>(c, 'input[name="next_run_date"]')!.value, "2026-10-31");
   assert.equal(q(c, 'input[name="source_transaction_id"]'), null);
 });
+
+test('from a transaction, "After 1" says the schedule ends straight away', async () => {
+  const c = await render({ prefill: SOURCE });
+  await click(q<HTMLInputElement>(c, 'input[name="ends"][value="count"]')!);
+  const count = q<HTMLInputElement>(c, 'input[name="occurrence_count"]')!;
+  await setValue(count, "3");
+  assert.ok((c.textContent ?? "").includes("counting the one on"));
+  await setValue(count, "1");
+  assert.ok((c.textContent ?? "").includes("This transaction counts as the first time, so the schedule ends straight away."));
+});
+
+test('without a source, "After 1" keeps the plain hint', async () => {
+  const c = await render();
+  await click(q<HTMLInputElement>(c, 'input[name="ends"][value="count"]')!);
+  await setValue(q<HTMLInputElement>(c, 'input[name="occurrence_count"]')!, "1");
+  const text = c.textContent ?? "";
+  assert.ok(text.includes("How many times this posts before it stops."));
+  assert.ok(!text.includes("ends straight away"));
+});

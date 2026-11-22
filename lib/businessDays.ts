@@ -21,7 +21,15 @@
 // fixed).
 import { addDaysISO } from "@/lib/date";
 
-export type NonBusinessDayRule = "none" | "before" | "after";
+// THE set of non_business_day_rule values: the database's only CHECK on
+// the column (rectx_non_business_day_rule_valid -- migration 79 dropped
+// the contradictory recurring_nbd_rule_valid), what the recurring form
+// writes (lib/recurringTiming.ts) and what resolveDueDate and
+// resolve_recurring_due_date() read. docs/recurring-ends-test.sql saves
+// each one, and npm run test:parity:ends checks the database accepts
+// exactly this set.
+export const NON_BUSINESS_DAY_RULES = ["none", "before", "after"] as const;
+export type NonBusinessDayRule = (typeof NON_BUSINESS_DAY_RULES)[number];
 
 function dayOfWeek(dateISO: string): number {
   const [year, month, day] = dateISO.split("-").map(Number);

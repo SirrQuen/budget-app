@@ -2821,3 +2821,63 @@ Checks, 2026-11-21:
   (ybdwqyihvbokowocvlgq):** 18 views checked, 0 failed, 0 operator-only
   missing. `beta_applications_readable` passes with
   `{postgres=arwdDxtm/postgres}` and security_invoker set.
+
+## Recurring "Ends" not honoured everywhere (2026-11-22)
+
+**Status:** fix on branch `recurring-ends` (migration 79), not pushed or
+merged. Raised 2026-11-22: a schedule set to "Ends after 1 occurrence"
+came back on the Recurring page for the next month after one confirm.
+
+Phase 1 (2026-11-22) found four end comparisons that disagreed. The view
+compared end_date with today. The projection compared it with the
+cursor. Same-bill compared it with the adjusted due date. The Recurring
+page had no check. Repro on sorrel-dev, run by Matt: 26 rows, 3 open,
+9 false, NOT PASSED. Production (ybdwqyihvbokowocvlgq, read-only): 91
+schedules; 3 use After N and 2 use On date. 1 was finished but still
+listed: Income, After 1, one confirmed. It was already out of
+v_upcoming_recurring, so no Safe to Spend was wrong.
+
+Rulings, 2026-11-22: "Not happening" doesn't count toward N. Deleting
+a confirmed transaction brings the occurrence back. A finished schedule
+goes to an "Ended" section and is counted nowhere; raising N or
+extending the date revives it. The last occurrence on or before the end
+date stays until it's answered. Inclusion is decided on the scheduled
+(cursor) date.
+
+Migration 79 adds `recurring_is_finished()` and the view
+`v_recurring_state`; `v_upcoming_recurring` filters on them.
+`lib/recurringEnds.ts` is the TypeScript twin. Both are checked by
+docs/recurring-ends-test.sql and `npm run test:parity:ends`.
+
+Further rulings, 2026-11-22:
+- No last-scheduled-date column; cadence stays in TypeScript.
+- The form's "end date can't be before the next date" check runs only
+  when the end date or the next date changes, so renaming an ended
+  schedule saves (`endDateOrderError`).
+- "Make recurring" with "After 1" says "This transaction counts as the
+  first time, so the schedule ends straight away."
+- Tester note drafted: docs/tester-notes/2026-11-22-recurring-ends.md
+  (Sent: not yet; not before-deploy).
+
+## Two CHECKs on non_business_day_rule: "earlier/later" can't save (2026-11-22)
+
+**Status:** fixed in migration 79 on branch `recurring-ends`, not
+pushed. Found 2026-11-22 while writing docs/recurring-ends-test.sql;
+ruled the same day: keep none / before / after and drop
+`recurring_nbd_rule_valid`. `NON_BUSINESS_DAY_RULES` (lib/businessDays.ts)
+is the one set: the form maps onto it (lib/recurringTiming.ts), and
+docs/recurring-ends-test.sql R1 saves each value. The parity runner
+checks the database accepts exactly that set.
+
+`recurring_transactions` has two CHECK constraints on
+`non_business_day_rule`, both in the baseline and both present on
+sorrel-dev and production (read-only, 2026-11-22):
+
+- `rectx_non_business_day_rule_valid`: none / before / after
+- `recurring_nbd_rule_valid`: none / forward / backward
+
+Only 'none' satisfies both. The recurring form maps "earlier" and "later"
+to 'before' and 'after' (`lib/actions/recurring.ts:264`), so saving
+either should fail. `resolve_recurring_due_date()` reads before/after.
+Production has 0 schedules with a rule other than 'none'. The
+business-day OFFSET (`business_day_offset`) is unaffected.
