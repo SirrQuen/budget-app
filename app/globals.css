@@ -2466,3 +2466,17 @@ body {
     }
   }
 }
+
+/* The pale petals vanish into a light page; the board's 35% hairline is for
+   dark. Light theme only: a deeper blush edge, thicker so it survives the
+   ~0.36 scale. Same two selectors the theme tokens use. */
+:root[data-theme="light"] .roselle__petal {
+  stroke: rgba(150, 82, 68, 0.8);
+  stroke-width: 1.5;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .roselle__petal {
+    stroke: rgba(150, 82, 68, 0.8);
+    stroke-width: 1.5;
+  }
+}

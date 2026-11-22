@@ -21,7 +21,9 @@ import { afterWelcome } from "@/lib/welcomeSignals";
 // The slot is the old flower's 56px, so the row (and the hero under it) sits
 // where it always has. The plant is taller than the slot and rises out of its
 // top, over the empty space above the row -- never down over the hero. Height
-// is ~100px from 640px up, 88px on a phone; the calyces are drawn 1.4x so
+// is ~100px from 640px up, 88px on a phone. From 640px up the header's
+// bottom-right holds the visitor's perch and flight, so the plant stands 72px
+// in from the edge, clear of both; the calyces are drawn 1.4x so
 // every one is >= 14px (>= 12px on a phone). See docs/Roselle.md.
 const ROW_PX = 56;
 
@@ -163,12 +165,12 @@ export function DayNightMark({
   }, [timeZone]);
 
   return (
-    <span aria-hidden="true" className="relative block w-[75px] shrink-0 sm:w-[86px]" style={{ height: size }}>
+    <span aria-hidden="true" className="relative block w-[75px] shrink-0 sm:w-[158px]" style={{ height: size }}>
       <Roselle
         pose={pose}
         motion={motion}
         height={100}
-        className="absolute bottom-0 right-0 h-[88px] w-[75.4px] sm:h-[100px] sm:w-[85.7px]"
+        className="absolute bottom-0 right-0 h-[88px] w-[75.4px] sm:right-[72px] sm:h-[100px] sm:w-[85.7px]"
       />
     </span>
   );
