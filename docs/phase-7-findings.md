@@ -2788,3 +2788,35 @@ Still to do:
   Matt 2026-11-21;
 - the first real production alert: check `signup_alerts.last_status`
   reads `sent (HTTP 200)` after it.
+
+## Beta applications in plain English for the dashboard (2026-11-21)
+
+**Status:** migration 78 is on sorrel-dev and on production. Main was
+fast-forwarded to `ead6ac0` (`beta-applications-readable`); not pushed at
+the time of writing. Asked for 2026-11-21: the operator had no readable
+way to see applications, which are stored as codes.
+
+`public.beta_applications_readable` shows one row per application, newest
+first:
+- every code in the /beta form's exact words;
+- `[unknown: <code>]` for a code the form doesn't have;
+- times in America/New_York, plus `submitted_at` (the raw timestamp) for
+  the Table Editor's Sort.
+
+It's an operator-only view: the revoke and no grants, so only the
+dashboard's owner role reads it. That is now the one named exception in
+CLAUDE.md's view grant rule and in docs/view-acl-check.sql.
+lib/betaApplicationReadable.test.ts fails if the view's labels and
+BETA_QUESTIONS differ in either direction. Usage is in
+docs/Beta-Application.md, "Reading the applications".
+
+Checks, 2026-11-21:
+- **rls-isolation-test.sql on sorrel-dev (tztbebdzlezlhvsbylsf), run by
+  Matt:** 562 rows, 0 false, ALL PASS. It includes the view's rows in 2m:
+  no API privilege, real reads refused, the form's wording and New York
+  time as owner, unknown codes, `submitted_at` a real timestamp, and the
+  view's coverage row.
+- **view-acl-check.sql, read-only, on sorrel-dev and on production
+  (ybdwqyihvbokowocvlgq):** 18 views checked, 0 failed, 0 operator-only
+  missing. `beta_applications_readable` passes with
+  `{postgres=arwdDxtm/postgres}` and security_invoker set.
