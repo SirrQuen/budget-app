@@ -1269,6 +1269,27 @@ export type Database = {
       }
     }
     Views: {
+      beta_applications_readable: {
+        Row: {
+          age_range: string | null
+          biggest_challenge: string | null
+          budgeting_experience: string | null
+          can_commit_3_4_weeks: string | null
+          comfortable_giving_feedback: string | null
+          consented_at: string | null
+          describes_you: string | null
+          email: string | null
+          expected_use: string | null
+          full_name: string | null
+          last_updated: string | null
+          manages_money: string | null
+          submitted: string | null
+          submitted_at: string | null
+          wants_help_with: string | null
+          why_join: string | null
+        }
+        Relationships: []
+      }
       v_account_balances: {
         Row: {
           account_icon: string | null
@@ -1412,13 +1433,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "transactions_accountid_fkey"
-            columns: ["userid", "to_accountid"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["userid", "id"]
-          },
-          {
-            foreignKeyName: "transactions_accountid_fkey"
             columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "accounts"
@@ -1427,13 +1441,20 @@ export type Database = {
           {
             foreignKeyName: "transactions_accountid_fkey"
             columns: ["userid", "to_accountid"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "transactions_accountid_fkey"
+            columns: ["userid", "accountid"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
             referencedColumns: ["userid", "account_id"]
           },
           {
             foreignKeyName: "transactions_accountid_fkey"
-            columns: ["userid", "accountid"]
+            columns: ["userid", "to_accountid"]
             isOneToOne: false
             referencedRelation: "v_account_balances"
             referencedColumns: ["userid", "account_id"]
