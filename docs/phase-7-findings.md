@@ -2824,10 +2824,10 @@ Checks, 2026-11-21:
 
 ## Recurring "Ends" not honoured everywhere (2026-11-22)
 
-**Status:** migration 79 is on sorrel-dev and production (pushed by
-Matt, 2026-11-22). The branch `recurring-ends` is not merged: until it
-is, main's Recurring page still lists a finished schedule with a due
-date.
+**Status:** deployed 2026-11-22. Migration 79 is on sorrel-dev and on
+production. Main was fast-forwarded to `1a3bffb` (`recurring-ends`) and
+pushed, and Matt checked it live the same day. The tester note,
+docs/tester-notes/2026-11-22-recurring-ends.md, is not sent yet.
 
 Checks after the pushes, 2026-11-22, all read-only:
 - **view-acl-check.sql:** sorrel-dev: 19 views checked, 0 failed, 0

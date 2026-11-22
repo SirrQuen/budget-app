@@ -1,13 +1,14 @@
 Sent:      not yet
 Migration: 79
-Merge:     not yet
-Deployed:  not yet
+Merge:     1a3bffb (fast-forward of recurring-ends; no merge commit)
+Deployed:  2026-11-22
 
 ---
 
 **Draft. Not before-deploy: no processor, bank connection or deletion
-change, and no cookie or on-device key is added. Named by today's date
-until it merges; rename to the merge date (README). One number can move:
+change, and no cookie or on-device key is added. Named by its merge
+date (2026-11-22) until it's sent; rename to the date it goes out
+(README). One number can move:
 a schedule set to end "On" a date whose last occurrence before that date
 isn't answered yet now stays in Safe to Spend and the confirmation list
 until it's answered -- before, it dropped out the day after the end
