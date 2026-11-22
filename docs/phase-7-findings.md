@@ -2852,7 +2852,12 @@ Checks after the pushes, 2026-11-22, all read-only:
   (140 grid cases and NON_BUSINESS_DAY_RULES) into the file, the SQL
   compares them (P1 grid, P2 every scenario's state, R1 rules), and the
   CLI prints its own text output, prompt included. The verdict is the
-  SUMMARY row. Not yet run.
+  SUMMARY row.
+- **recurring-ends-test.sql via `npm run test:parity:ends` on sorrel-dev
+  (tztbebdzlezlhvsbylsf), run by Matt, 2026-11-22, after `4d5147c`:**
+  247 rows, 0 false, ALL PASS. That includes the 140 P1 grid cases, P2
+  on every scenario's state, and R1 (the database saves exactly
+  none / before / after).
 - **`npm run test:parity` probably fails the same way.**
   `scripts/leaves-spendable-set-parity.ts` also passes
   `--output-format json` to a statement that writes. Not checked or
