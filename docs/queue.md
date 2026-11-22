@@ -5,7 +5,7 @@ lives in its findings entry (docs/phase-7-findings.md) or spec. "Do this
 next" means editing this file. Launch blockers live in the findings'
 authoritative list, not here.
 
-Last updated 2026-11-17.
+Last updated 2026-11-22.
 
 ## Next
 
@@ -208,6 +208,7 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 | Amount window with a lead time (1c): optional update of a variable amount before it's due, in the queue | not dated in the repo | Unscheduled | docs/Recurring-Amounts-and-Transfer-Editing.md, 1c. **No findings entry yet**: needs one with the dates it was raised |
 | A statement date has no tolerance: the "enter the amount" window opens on `statement_day` wherever the statement actually posted | 2026-10-31 | When a tester hits it | Findings, "Recurring dates: what each one means" |
 | Goal money columns are bare `numeric` | 2026-11-03 | After 52 is decided (it touches the views 52 replaces) | Findings, same title |
+| Retire the `sorrel_signed_in` cookie. Nothing reads it for the sign-in fold any more (removed with the roselle, 2026-11-22); only the login form's "redirect never landed" check does, and nothing clears it on arrival, so it just expires after 60s. Replace that check, drop the cookie from `login()` and `/auth/confirm`, and **update the privacy policy's cookie paragraph in the same branch** (it lists the sign-in-support cookies; cookie change, so the merge-gate rule applies) | 2026-11-22 | Unscheduled | `lib/auth/signedInFlag.ts`; `app/(auth)/login/login-form.tsx`; docs/legal/privacy-and-terms.md |
 | In-app "what changed" surface | 2026-11-03 | At commercial launch | Findings, "Commercial launch, not beta" |
 | Forms require JavaScript | 2026-10-27 | After the beta | Findings, "Known limitation: forms require JavaScript" |
 | `record_login()` writes on render, and the streak rebuilt as days opened: one job | 2026-10-10 | After the launch blockers | Findings, "`record_login()` writes on every page load" and "Streak: redefined as days opened" |

@@ -26,6 +26,10 @@ import { afterWelcome } from "@/lib/welcomeSignals";
 // in from the edge, clear of both; the calyces are drawn 1.4x so
 // every one is >= 14px (>= 12px on a phone). See docs/Roselle.md.
 const ROW_PX = 56;
+/** The reveal fade (app/globals.css, .roselle-slot). */
+const REVEAL_MS = 150;
+/** No decision by now: show the resting pose. */
+const REVEAL_FALLBACK_MS = 2000;
 
 /**
  * The dashboard's living plant (docs/Roselle.md): a roselle, open
@@ -61,6 +65,10 @@ export function DayNightMark({
   const initial: PlantState = initialState === "open" ? "open" : "closed";
   const [pose, setPose] = useState<PlantState>(initial);
   const [motion, setMotion] = useState<RoselleMotion>(null);
+  // False until the client has decided the pose (play or rest): the server's
+  // pose is a guess about this device, so it is never shown. Then it fades in
+  // already in the pose it starts from.
+  const [ready, setReady] = useState(false);
   // What the effects below last drew, for comparing against the clock
   // without re-subscribing on every change.
   const poseRef = useRef<PlantState>(initial);
@@ -70,10 +78,14 @@ export function DayNightMark({
     const frames: number[] = [];
     let boundaryTimer: ReturnType<typeof setTimeout> | undefined;
     let playTimer: ReturnType<typeof setTimeout> | undefined;
+    let revealTimer: ReturnType<typeof setTimeout> | undefined;
     let busy = false;
 
+    let decided = false;
     const draw = (next: PlantState, play: boolean) => {
+      decided = true;
       poseRef.current = next;
+      setReady(true);
       setPose(next);
       setMotion(play ? (next === "open" ? "opening" : "closing") : null);
     };
@@ -98,6 +110,13 @@ export function DayNightMark({
     // visitor (a sibling) reads the answer from a frame callback, after
     // every effect has run.
     const state = target();
+    // If the decision is somehow still pending after 2s, show the resting
+    // pose rather than keep the plant hidden (and never hold the visitor).
+    const fallback = setTimeout(() => {
+      if (decided) return;
+      draw(target(), false);
+      release();
+    }, REVEAL_FALLBACK_MS);
     const plan = planPlant(readPlantSeen(), stampNow(), prefersReducedMotion());
     if (plan === "play") {
       busy = true;
@@ -105,21 +124,25 @@ export function DayNightMark({
       // Held in the pose it is changing from, drawn before anything plays,
       // so it never shows the new pose and then jumps back to animate.
       frames.push(requestAnimationFrame(() => draw(otherPlantState(state), false)));
+      // After the welcome, and a beat after the reveal fade, so the plant
+      // is on screen in its starting pose before anything moves.
       cleanups.push(
         afterWelcome(() => {
-          frames.push(
-            requestAnimationFrame(() => {
-              const current = target();
-              // Storage that takes no write can't remember a play: rest.
-              if (!writePlantSeen(stampNow())) {
-                draw(current, false);
-                release();
-                return;
-              }
-              draw(current, true);
-              playFor();
-            }),
-          );
+          revealTimer = setTimeout(() => {
+            frames.push(
+              requestAnimationFrame(() => {
+                const current = target();
+                // Storage that takes no write can't remember a play: rest.
+                if (!writePlantSeen(stampNow())) {
+                  draw(current, false);
+                  release();
+                  return;
+                }
+                draw(current, true);
+                playFor();
+              }),
+            );
+          }, REVEAL_MS);
         }),
       );
     } else {
@@ -159,13 +182,19 @@ export function DayNightMark({
       cleanups.forEach((fn) => fn());
       clearTimeout(boundaryTimer);
       clearTimeout(playTimer);
+      clearTimeout(revealTimer);
+      clearTimeout(fallback);
       document.removeEventListener("visibilitychange", onVisible);
       release();
     };
   }, [timeZone]);
 
   return (
-    <span aria-hidden="true" className="relative block w-[75px] shrink-0 sm:w-[158px]" style={{ height: size }}>
+    <span
+      aria-hidden="true"
+      className="roselle-slot relative block w-[75px] shrink-0 sm:w-[158px]"
+      style={{ height: size, opacity: ready ? 1 : 0 }}
+    >
       <Roselle
         pose={pose}
         motion={motion}

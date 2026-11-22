@@ -2315,6 +2315,13 @@ body {
   transform-origin: 50% 50%;
 }
 
+/* Two palette layers (components/Roselle.tsx). At rest only the pose's own
+   is visible. */
+.roselle--open .roselle__layer--closed,
+.roselle--closed .roselle__layer--open {
+  opacity: 0;
+}
+
 .roselle--open .roselle__pt {
   transform: rotate(var(--a));
 }
@@ -2369,6 +2376,42 @@ body {
   }
   .roselle--closing .roselle__lv--r {
     animation-name: roselle-close-leaf-r;
+  }
+
+  /* The palette cross-fade, on the same duration as the transforms: the
+     incoming layer (painted last) fades in over the outgoing one, which
+     holds opaque until the end and then drops out beneath it -- no dip in
+     the middle. */
+  .roselle--opening .roselle__layer--open,
+  .roselle--closing .roselle__layer--closed {
+    animation: roselle-layer-in var(--roselle-duration) both;
+  }
+  .roselle--opening .roselle__layer--closed,
+  .roselle--closing .roselle__layer--open {
+    animation: roselle-layer-hold var(--roselle-duration) both;
+  }
+  @keyframes roselle-layer-in {
+    0% {
+      opacity: 0;
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+  @keyframes roselle-layer-hold {
+    0%,
+    99.9% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  /* The slot's reveal once the client has decided the pose (DayNightMark). */
+  .roselle-slot {
+    transition: opacity 150ms var(--icon-anim-ease);
   }
 
   /* Opening: leaves lift, petals and sepals spiral out of the twisted bud
