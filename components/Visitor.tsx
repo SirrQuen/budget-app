@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useReducedMotion } from "@/components/ui/useReducedMotion";
 import type { TimeBand } from "@/lib/timeOfDay";
+import { afterPlant } from "@/lib/plantSignals";
 import { afterWelcome } from "@/lib/welcomeSignals";
 import {
   VISITOR_AWAY_KEY,
@@ -27,8 +28,9 @@ import {
 // transform or opacity (app/globals.css, "VISITORS"). The perch is the
 // header's empty right end (PageHeader's `ornament`).
 
-/** The arrival never starts before this: the sign-in fold (~1.4s) plays first. */
-const START_DELAY_MS = 1600;
+/** The arrival's floor after mount. It used to be 1.6s, to let the sign-in fold play; the
+ *  plant (lib/plantSignals.ts) is waited on directly now, so nothing is guessed. */
+const START_DELAY_MS = 0;
 /** A beat after the welcome or a dialog closes, so nothing overlaps its exit. */
 const BEAT_MS = 400;
 
@@ -133,8 +135,8 @@ export function Visitor({
       if (plan === "none") return setStage("idle");
       if (plan === "perched") return setStage("perched");
 
-      // Arrival: after the welcome bloom, after the sign-in fold, and with
-      // no dialog open. Never two arrivals at once.
+      // Arrival: after the welcome bloom, after the dashboard plant has
+      // opened or closed, and with no dialog open. Never two arrivals at once.
       setStage("idle");
       const dialogOpen = () => document.querySelector("dialog[open]") !== null;
       const start = () => {
@@ -155,10 +157,16 @@ export function Visitor({
         setLanded(false);
         setStage("arrive");
       };
+      // The plant decides whether it will play in its own effect, before
+      // this frame runs, and it only starts after the welcome ends.
       cleanups.push(
         afterWelcome(() => {
-          const sinceMount = Date.now() - mountedAt.current;
-          later(start, Math.max(BEAT_MS, startDelayMs - sinceMount));
+          cleanups.push(
+            afterPlant(() => {
+              const sinceMount = Date.now() - mountedAt.current;
+              later(start, Math.max(BEAT_MS, startDelayMs - sinceMount));
+            }),
+          );
         }),
       );
     });

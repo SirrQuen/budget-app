@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Round 3 · The sorrel, alive</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&amp;family=Figtree:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+.eb{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#A5A2B4}
+.panel{position:relative;overflow:hidden;height:560px;border-radius:20px;border:1px solid rgba(255,255,255,.12);background:#0B0B12;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:22px;box-sizing:border-box}
+.pt,.lv{transform-box:fill-box;transform-origin:50% 100%}
+.eye{transform-box:fill-box;transform-origin:50% 50%}
+/* DAY: rests open; the demo loop shows the morning opening */
+.day .pt{transform:rotate(var(--a));animation:dP 6s cubic-bezier(.34,.02,.24,1) infinite}
+@keyframes dP{0%,22%{transform:rotate(calc(var(--a) * .08 - 10deg)) scaleX(.34) scaleY(.92)}64%{transform:rotate(calc(var(--a) * 1.04)) scaleX(1.05)}72%,100%{transform:rotate(var(--a))}}
+.day .eye{opacity:1;animation:dE 6s ease-out infinite}
+@keyframes dE{0%,40%{opacity:0;transform:scale(.4)}68%,100%{opacity:1;transform:none}}
+.day .lv-l{transform:none;animation:dLl 6s cubic-bezier(.34,.02,.24,1) infinite}
+.day .lv-r{transform:none;animation:dLr 6s cubic-bezier(.34,.02,.24,1) infinite}
+@keyframes dLl{0%,8%{transform:rotate(-14deg)}40%,100%{transform:none}}
+@keyframes dLr{0%,8%{transform:rotate(14deg)}40%,100%{transform:none}}
+/* NIGHT: rests closed; the demo loop shows it closing */
+.night .pt{transform:rotate(calc(var(--a) * .08 - 10deg)) scaleX(.34) scaleY(.92);animation:nP 6s cubic-bezier(.45,.05,.3,1) infinite}
+@keyframes nP{0%,16%{transform:rotate(var(--a))}58%,100%{transform:rotate(calc(var(--a) * .08 - 10deg)) scaleX(.34) scaleY(.92)}}
+.night .eye{opacity:0;animation:nE 6s ease-in infinite}
+@keyframes nE{0%,16%{opacity:1;transform:none}40%,100%{opacity:0;transform:scale(.4)}}
+.night .lv-l{transform:rotate(-14deg);animation:nLl 6s cubic-bezier(.45,.05,.3,1) infinite}
+.night .lv-r{transform:rotate(14deg);animation:nLr 6s cubic-bezier(.45,.05,.3,1) infinite}
+@keyframes nLl{0%,30%{transform:none}72%,100%{transform:rotate(-14deg)}}
+@keyframes nLr{0%,30%{transform:none}72%,100%{transform:rotate(14deg)}}
+.rm *,.rm *::before,.rm *::after{animation:none!important;transition:none!important}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="width:1840px;height:1000px;box-sizing:border-box;background:#0B0B12;color:#F6F4F8;font-family:Figtree,system-ui,sans-serif;padding:40px;display:flex;flex-direction:column;gap:26px;overflow:hidden">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div class="eb">Round 3 · The sorrel, alive</div>
+    <h1 style="margin:0;font-family:'Bricolage Grotesque',Figtree,sans-serif;font-weight:800;font-size:38px;letter-spacing:-.03em;line-height:1.1">Roselle, the Jamaican sorrel</h1>
+    <p style="margin:0;color:#A5A2B4;font-size:15.5px;line-height:1.5;max-width:1200px">Pale, ruffled petals around a crimson eye and a gold centre, beside the glossy deep-red calyx, the "bulb" that makes the sorrel drink. Roselle flowers open with the morning and twist shut later in the day, while the red calyx stays. So the dashboard plant opens and closes with the user's day, and stays recognisably sorrel even when closed.</p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:26px;flex:1;min-height:0">
+
+    <div class="panel day">
+      <div style="position:absolute;inset:0;background:radial-gradient(70% 60% at 30% 10%, rgba(232,180,74,.22) 0%, rgba(232,180,74,0) 70%)" aria-hidden="true"></div>
+      <div class="eb" style="position:absolute;left:22px;top:20px">Morning · opening</div>
+      <svg width="340" height="397" viewBox="0 0 240 280" role="img" aria-label="Roselle in flower, open" style="position:relative;overflow:visible">
+        <defs>
+          <linearGradient id="dLf" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#3F7A48"></stop><stop offset="100%" stop-color="#86B97E"></stop></linearGradient>
+          <radialGradient id="dPt" cx="50%" cy="100%" r="100%"><stop offset="0%" stop-color="#E49C8C"></stop><stop offset="45%" stop-color="#F1C6B3"></stop><stop offset="100%" stop-color="#F7DEC9"></stop></radialGradient>
+          <radialGradient id="dEye"><stop offset="0%" stop-color="#5E0716"></stop><stop offset="55%" stop-color="#B0122A"></stop><stop offset="100%" stop-color="#D62A36"></stop></radialGradient>
+          <linearGradient id="dCx" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#6E0A1C"></stop><stop offset="55%" stop-color="#A8132B"></stop><stop offset="100%" stop-color="#D3263A"></stop></linearGradient>
+        </defs>
+        <path d="M120 280 C116 230 124 170 118 110 C114 80 118 50 122 30" stroke="#6E1424" stroke-width="4" fill="none" stroke-linecap="round"></path>
+        <path d="M119 122 C135 110 150 98 158 86" stroke="#6E1424" stroke-width="2.6" fill="none" stroke-linecap="round"></path>
+        <path d="M118 152 C104 142 92 128 86 114" stroke="#6E1424" stroke-width="2.4" fill="none" stroke-linecap="round"></path>
+        <path d="M120 194 C134 190 146 180 152 170" stroke="#6E1424" stroke-width="2.2" fill="none" stroke-linecap="round"></path>
+        <path d="M119 214 C104 212 86 206 74 200 M121 228 C140 228 160 222 172 216 M119 262 C104 262 82 256 66 250" stroke="#8A2233" stroke-width="1.8" fill="none" stroke-linecap="round"></path>
+
+        <g transform="translate(74 200) rotate(-62)"><g class="lv lv-l"><path d="M0 0 C-4 -6 -6 -14 -14 -26 C-20 -34 -22 -40 -16 -40 C-10 -40 -6 -32 -3 -26 C-4 -38 -4 -48 0 -56 C4 -48 4 -38 3 -26 C6 -32 10 -40 16 -40 C22 -40 20 -34 14 -26 C6 -14 4 -6 0 0 Z" fill="url(#dLf)"></path><path d="M0 0 L0 -52 M0 -6 L-15 -37 M0 -6 L15 -37" stroke="#8A2233" stroke-width=".9" fill="none" opacity=".75"></path></g></g>
+        <g transform="translate(172 216) rotate(64)"><g class="lv lv-r"><path d="M0 0 C-4 -6 -6 -14 -14 -26 C-20 -34 -22 -40 -16 -40 C-10 -40 -6 -32 -3 -26 C-4 -38 -4 -48 0 -56 C4 -48 4 -38 3 -26 C6 -32 10 -40 16 -40 C22 -40 20 -34 14 -26 C6 -14 4 -6 0 0 Z" fill="url(#dLf)"></path><path d="M0 0 L0 -52 M0 -6 L-15 -37 M0 -6 L15 -37" stroke="#8A2233" stroke-width=".9" fill="none" opacity=".75"></path></g></g>
+        <g transform="translate(66 250) rotate(-78) scale(.85)"><g class="lv lv-l"><path d="M0 0 C-4 -6 -6 -14 -14 -26 C-20 -34 -22 -40 -16 -40 C-10 -40 -6 -32 -3 -26 C-4 -38 -4 -48 0 -56 C4 -48 4 -38 3 -26 C6 -32 10 -40 16 -40 C22 -40 20 -34 14 -26 C6 -14 4 -6 0 0 Z" fill="url(#dLf)"></path><path d="M0 0 L0 -52 M0 -6 L-15 -37 M0 -6 L15 -37" stroke="#8A2233" stroke-width=".9" fill="none" opacity=".75"></path></g></g>
+        <g transform="translate(122 34) rotate(-8) scale(.7)"><g class="lv lv-r"><path d="M0 0 C-3 -10 -5 -26 0 -48 C5 -26 3 -10 0 0 Z" fill="url(#dLf)"></path></g></g>
+
+        <g transform="translate(86 116) rotate(-22) scale(.92)">
+          <path d="M-10 -2 L-17 4 M10 -2 L17 4 M-6 1 L-11 9 M6 1 L11 9 M0 2 L0 10" stroke="#8A1426" stroke-width="1.6" stroke-linecap="round"></path>
+          <path d="M0 0 C-12 -2 -16 -14 -12 -26 L-14 -40 L-7 -30 L-4 -44 L0 -32 L4 -44 L7 -30 L14 -40 L12 -26 C16 -14 12 -2 0 0 Z" fill="url(#dCx)"></path>
+          <path d="M-6 -8 C-8 -14 -7 -20 -4 -24" stroke="rgba(255,255,255,.45)" stroke-width="2" fill="none" stroke-linecap="round"></path>
+        </g>
+        <g transform="translate(152 172) rotate(26) scale(.68)">
+          <path d="M-10 -2 L-17 4 M10 -2 L17 4 M-6 1 L-11 9 M6 1 L11 9 M0 2 L0 10" stroke="#8A1426" stroke-width="1.6" stroke-linecap="round"></path>
+          <path d="M0 0 C-12 -2 -16 -14 -12 -26 L-14 -40 L-7 -30 L-4 -44 L0 -32 L4 -44 L7 -30 L14 -40 L12 -26 C16 -14 12 -2 0 0 Z" fill="url(#dCx)"></path>
+          <path d="M-6 -8 C-8 -14 -7 -20 -4 -24" stroke="rgba(255,255,255,.45)" stroke-width="2" fill="none" stroke-linecap="round"></path>
+        </g>
+
+        <g transform="translate(160 92) scale(.55)">
+          <path d="M0 0 C-12 -2 -16 -14 -12 -26 L-14 -40 L-7 -30 L-4 -44 L0 -32 L4 -44 L7 -30 L14 -40 L12 -26 C16 -14 12 -2 0 0 Z" fill="url(#dCx)"></path>
+        </g>
+        <g transform="translate(160 74)">
+          <path class="pt" style="--a:36deg" d="M0 0 C-5 -10 -7 -24 -4 -34 L0 -52 L4 -34 C7 -24 5 -10 0 0 Z" fill="url(#dCx)"></path>
+          <path class="pt" style="--a:108deg" d="M0 0 C-5 -10 -7 -24 -4 -34 L0 -52 L4 -34 C7 -24 5 -10 0 0 Z" fill="url(#dCx)"></path>
+          <path class="pt" style="--a:180deg" d="M0 0 C-5 -10 -7 -24 -4 -34 L0 -52 L4 -34 C7 -24 5 -10 0 0 Z" fill="url(#dCx)"></path>
+          <path class="pt" style="--a:252deg" d="M0 0 C-5 -10 -7 -24 -4 -34 L0 -52 L4 -34 C7 -24 5 -10 0 0 Z" fill="url(#dCx)"></path>
+          <path class="pt" style="--a:324deg" d="M0 0 C-5 -10 -7 -24 -4 -34 L0 -52 L4 -34 C7 -24 5 -10 0 0 Z" fill="url(#dCx)"></path>
+          <path class="pt" style="--a:0deg" d="M0 0 C-14 -6 -22 -22 -16 -36 C-12 -44 -4 -46 0 -42 C4 -46 12 -44 16 -36 C22 -22 14 -6 0 0 Z" fill="url(#dPt)" stroke="rgba(190,140,125,.35)" stroke-width=".6"></path>
+          <path class="pt" style="--a:72deg" d="M0 0 C-14 -6 -22 -22 -16 -36 C-12 -44 -4 -46 0 -42 C4 -46 12 -44 16 -36 C22 -22 14 -6 0 0 Z" fill="url(#dPt)" stroke="rgba(190,140,125,.35)" stroke-width=".6"></path>
+          <path class="pt" style="--a:144deg" d="M0 0 C-14 -6 -22 -22 -16 -36 C-12 -44 -4 -46 0 -42 C4 -46 12 -44 16 -36 C22 -22 14 -6 0 0 Z" fill="url(#dPt)" stroke="rgba(190,140,125,.35)" stroke-width=".6"></path>
+          <path class="pt" style="--a:216deg" d="M0 0 C-14 -6 -22 -22 -16 -36 C-12 -44 -4 -46 0 -42 C4 -46 12 -44 16 -36 C22 -22 14 -6 0 0 Z" fill="url(#dPt)" stroke="rgba(190,140,125,.35)" stroke-width=".6"></path>
+          <path class="pt" style="--a:288deg" d="M0 0 C-14 -6 -22 -22 -16 -36 C-12 -44 -4 -46 0 -42 C4 -46 12 -44 16 -36 C22 -22 14 -6 0 0 Z" fill="url(#dPt)" stroke="rgba(190,140,125,.35)" stroke-width=".6"></path>
+          <g class="eye">
+            <circle r="16" fill="url(#dEye)"></circle>
+            <path d="M0 -16 L0 -9 M15.2 -4.9 L8.6 -2.8 M9.4 12.9 L5.3 7.3 M-9.4 12.9 L-5.3 7.3 M-15.2 -4.9 L-8.6 -2.8" stroke="#5E0716" stroke-width="1.4" stroke-linecap="round" opacity=".7"></path>
+            <circle cx="-5" cy="-6" r="3" fill="rgba(255,255,255,.28)"></circle>
+            <circle r="4.4" fill="#E8B44A"></circle>
+            <circle cx="-1.6" cy="-1.4" r=".9" fill="#F3CF7A"></circle><circle cx="1.8" cy="-1" r=".9" fill="#F3CF7A"></circle><circle cx="0" cy="1.8" r=".9" fill="#F3CF7A"></circle>
+          </g>
+        </g>
+      </svg>
+      <span style="position:relative;margin-top:10px;font-size:13.5px;color:#A5A2B4">The leaves lift, the petals spiral open, and the crimson eye appears.</span>
+    </div>
+
+    <div class="panel night">
+      <div style="position:absolute;inset:0;background:radial-gradient(70% 60% at 70% 10%, rgba(90,120,230,.18) 0%, rgba(90,120,230,0) 70%)" aria-hidden="true"></div>
+      <svg width="100%" height="100%" style="position:absolute;inset:0" aria-hidden="true"><circle cx="18%" cy="16%" r="1.2" fill="#D9DCEB" opacity=".7"></circle><circle cx="74%" cy="11%" r="1" fill="#D9DCEB" opacity=".6"></circle><circle cx="88%" cy="26%" r="1.4" fill="#D9DCEB" opacity=".5"></circle><circle cx="40%" cy="8%" r=".9" fill="#D9DCEB" opacity=".5"></circle></svg>
+      <div class="eb" style="position:absolute;left:22px;top:20px">Evening · closing</div>
+      <svg width="340" height="397" viewBox="0 0 240 280" role="img" aria-label="Roselle, flower closed for the night" style="position:relative;overflow:visible">
+        <defs>
+          <linearGradient id="nLf" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#2F5B44"></stop><stop offset="100%" stop-color="#6A9677"></stop></linearGradient>
+          <radialGradient id="nPt" cx="50%" cy="100%" r="100%"><stop offset="0%" stop-color="#C48678"></stop><stop offset="45%" stop-color="#D9AE9D"></stop><stop offset="100%" stop-color="#E6CBB9"></stop></radialGradient>
+          <radialGradient id="nEye"><stop offset="0%" stop-color="#6A0A1B"></stop><stop offset="70%" stop-color="#A51A2C"></stop><stop offset="100%" stop-color="#BC3D37"></stop></radialGradient>
+          <linearGradient id="nCx" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#5A0817"></stop><stop offset="55%" stop-color="#8E1126"></stop><stop offset="100%" stop-color="#B42235"></stop></linearGradient>
+        </defs>
+        <path d="M120 280 C116 230 124 170 118 110 C114 80 118 50 122 30" stroke="#5A1220" stroke-width="4" fill="none" stroke-linecap="round"></path>
+        <path d="M119 122 C135 110 150 98 158 86" stroke="#5A1220" stroke-width="2.6" fill="none" stroke-linecap="round"></path>
+        <path d="M118 152 C104 142 92 128 86 114" stroke="#5A1220" stroke-width="2.4" fill="none" stroke-linecap="round"></path>
+        <path d="M120 194 C134 190 146 180 152 170" stroke="#5A1220" stroke-width="2.2" fill="none" stroke-linecap="round"></path>
+        <path d="M119 214 C104 212 86 206 74 200 M121 228 C140 228 160 222 172 216 M119 262 C104 262 82 256 66 250" stroke="#741D2C" stroke-width="1.8" fill="none" stroke-linecap="round"></path>
+
+        <g transform="translate(74 200) rotate(-62)"><g class="lv lv-l"><path d="M0 0 C-4 -6 -6 -14 -14 -26 C-20 -34 -22 -40 -16 -40 C-10 -40 -6 -32 -3 -26 C-4 -38 -4 -48 0 -56 C4 -48 4 -38 3 -26 C6 -32 10 -40 16 -40 C22 -40 20 -34 14 -26 C6 -14 4 -6 0 0 Z" fill="url(#nLf)"></path><path d="M0 0 L0 -52 M0 -6 L-15 -37 M0 -6 L15 -37" stroke="#741D2C" stroke-width=".9" fill="none" opacity=".75"></path></g></g>
+        <g transform="translate(172 216) rotate(64)"><g class="lv lv-r"><path d="M0 0 C-4 -6 -6 -14 -14 -26 C-20 -34 -22 -40 -16 -40 C-10 -40 -6 -32 -3 -26 C-4 -38 -4 -48 0 -56 C4 -48 4 -38 3 -26 C6 -32 10 -40 16 -40 C22 -40 20 -34 14 -26 C6 -14 4 -6 0 0 Z" fill="url(#nLf)"></path><path d="M0 0 L0 -52 M0 -6 L-15 -37 M0 -6 L15 -37" stroke="#741D2C" stroke-width=".9" fill="none" opacity=".75"></path></g></g>
+        <g transform="translate(66 250) rotate(-78) scale(.85)"><g class="lv lv-l"><path d="M0 0 C-4 -6 -6 -14 -14 -26 C-20 -34 -22 -40 -16 -40 C-10 -40 -6 -32 -3 -26 C-4 -38 -4 -48 0 -56 C4 -48 4 -38 3 -26 C6 -32 10 -40 16 -40 C22 -40 20 -34 14 -26 C6 -14 4 -6 0 0 Z" fill="url(#nLf)"></path><path d="M0 0 L0 -52 M0 -6 L-15 -37 M0 -6 L15 -37" stroke="#741D2C" stroke-width=".9" fill="none" opacity=".75"></path></g></g>
+        <g transform="translate(122 34) rotate(-8) scale(.7)"><g class="lv lv-r"><path d="M0 0 C-3 -10 -5 -26 0 -48 C5 -26 3 -10 0 0 Z" fill="url(#nLf)"></path></g></g>
+
+        <g transform="translate(86 116) rotate(-22) scale(.92)">
+          <path d="M-10 -2 L-17 4 M10 -2 L17 4 M-6 1 L-11 9 M6 1 L11 9 M0 2 L0 10" stroke="#74101F" stroke-width="1.6" stroke-linecap="round"></path>
+          <path d="M0 0 C-12 -2 -16 -14 -12 -26 L-14 -40 L-7 -30 L-4 -44 L0 -32 L4 -44 L7 -30 L14 -40 L12 -26 C16 -14 12 -2 0 0 Z" fill="url(#nCx)"></path>
+          <path d="M-6 -8 C-8 -14 -7 -20 -4 -24" stroke="rgba(217,220,235,.45)" stroke-width="2" fill="none" stroke-linecap="round"></path>
+        </g>
+        <g transform="translate(152 172) rotate(26) scale(.68)">
+          <path d="M-10 -2 L-17 4 M10 -2 L17 4 M-6 1 L-11 9 M6 1 L11 9 M0 2 L0 10" stroke="#74101F" stroke-width="1.6" stroke-linecap="round"></path>
+          <path d="M0 0 C-12 -2 -16 -14 -12 -26 L-14 -40 L-7 -30 L-4 -44 L0 -32 L4 -44 L7 -30 L14 -40 L12 -26 C16 -14 12 -2 0 0 Z" fill="url(#nCx)"></path>
+          <path d="M-6 -8 C-8 -14 -7 -20 -4 -24" stroke="rgba(217,220,235,.45)" stroke-width="2" fill="none" stroke-linecap="round"></path>
+        </g>
+
+        <g transform="translate(160 92) scale(.55)">
+          <path d="M0 0 C-12 -2 -16 -14 -12 -26 L-14 -40 L-7 -30 L-4 -44 L0 -32 L4 -44 L7 -30 L14 -40 L12 -26 C16 -14 12 -2 0 0 Z" fill="url(#nCx)"></path>
+        </g>
+        <g transform="translate(160 74)">
+          <path class="pt" style="--a:36deg" d="M0 0 C-5 -10 -7 -24 -4 -34 L0 -52 L4 -34 C7 -24 5 -10 0 0 Z" fill="url(#nCx)"></path>
+          <path class="pt" style="--a:108deg" d="M0 0 C-5 -10 -7 -24 -4 -34 L0 -52 L4 -34 C7 -24 5 -10 0 0 Z" fill="url(#nCx)"></path>
+          <path class="pt" style="--a:180deg" d="M0 0 C-5 -10 -7 -24 -4 -34 L0 -52 L4 -34 C7 -24 5 -10 0 0 Z" fill="url(#nCx)"></path>
+          <path class="pt" style="--a:252deg" d="M0 0 C-5 -10 -7 -24 -4 -34 L0 -52 L4 -34 C7 -24 5 -10 0 0 Z" fill="url(#nCx)"></path>
+          <path class="pt" style="--a:324deg" d="M0 0 C-5 -10 -7 -24 -4 -34 L0 -52 L4 -34 C7 -24 5 -10 0 0 Z" fill="url(#nCx)"></path>
+          <path class="pt" style="--a:0deg" d="M0 0 C-14 -6 -22 -22 -16 -36 C-12 -44 -4 -46 0 -42 C4 -46 12 -44 16 -36 C22 -22 14 -6 0 0 Z" fill="url(#nPt)" stroke="rgba(170,130,120,.35)" stroke-width=".6"></path>
+          <path class="pt" style="--a:72deg" d="M0 0 C-14 -6 -22 -22 -16 -36 C-12 -44 -4 -46 0 -42 C4 -46 12 -44 16 -36 C22 -22 14 -6 0 0 Z" fill="url(#nPt)" stroke="rgba(170,130,120,.35)" stroke-width=".6"></path>
+          <path class="pt" style="--a:144deg" d="M0 0 C-14 -6 -22 -22 -16 -36 C-12 -44 -4 -46 0 -42 C4 -46 12 -44 16 -36 C22 -22 14 -6 0 0 Z" fill="url(#nPt)" stroke="rgba(170,130,120,.35)" stroke-width=".6"></path>
+          <path class="pt" style="--a:216deg" d="M0 0 C-14 -6 -22 -22 -16 -36 C-12 -44 -4 -46 0 -42 C4 -46 12 -44 16 -36 C22 -22 14 -6 0 0 Z" fill="url(#nPt)" stroke="rgba(170,130,120,.35)" stroke-width=".6"></path>
+          <path class="pt" style="--a:288deg" d="M0 0 C-14 -6 -22 -22 -16 -36 C-12 -44 -4 -46 0 -42 C4 -46 12 -44 16 -36 C22 -22 14 -6 0 0 Z" fill="url(#nPt)" stroke="rgba(170,130,120,.35)" stroke-width=".6"></path>
+          <g class="eye">
+            <circle r="16" fill="url(#nEye)"></circle>
+            <circle r="4.4" fill="#D9A43F"></circle>
+          </g>
+        </g>
+      </svg>
+      <span style="position:relative;margin-top:10px;font-size:13.5px;color:#A5A2B4">The petals twist shut into a pale bud and the leaves relax. The red calyx stays.</span>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:18px;padding-top:6px">
+      <div style="display:flex;flex-direction:column;gap:4px"><span style="font-weight:700;font-size:15px">True to the plant</span><span style="color:#A5A2B4;font-size:14px;line-height:1.5">Pale cream petals with a blush at the base, a crimson eye and a gold centre. Glossy deep-red calyces with pointed lobes and a spiky collar, maroon stems, and lobed green leaves with red veins.</span></div>
+      <div style="display:flex;flex-direction:column;gap:4px"><span style="font-weight:700;font-size:15px">When it moves</span><span style="color:#A5A2B4;font-size:14px;line-height:1.5">Once, on the first dashboard visit after its clock changes: opening from 7am, closing from 7pm, on the same clock as today. Otherwise it rests open or closed. Motion means something changed.</span></div>
+      <div style="display:flex;flex-direction:column;gap:4px"><span style="font-weight:700;font-size:15px">In turn with everything else</span><span style="color:#A5A2B4;font-size:14px;line-height:1.5">Welcome bloom first, then the sorrel opens or closes (about 1.6s), then the visitor arrives. Never two at once.</span></div>
+      <div style="display:flex;flex-direction:column;gap:4px"><span style="font-weight:700;font-size:15px">The logo stays the logo</span><span style="color:#A5A2B4;font-size:14px;line-height:1.5">The three-leaflet mark keeps icons, sign-in and the brand. This is the dashboard's own living plant. It's an illustration, not data, so the reds here never describe money.</span></div>
+      <div style="display:flex;flex-direction:column;gap:4px"><span style="font-weight:700;font-size:15px">Calm version</span><span style="color:#A5A2B4;font-size:14px;line-height:1.5">With reduced motion it simply shows open or closed for the time of day. Turn on Reduce motion in this board's Tweaks to see it.</span></div>
+      <p style="margin:0;color:#A5A2B4;font-size:12.5px">Looped here so you can watch. In the app each change plays once.</p>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"reduceMotion":{"editor":"boolean","default":false,"section":"Preview"},"$preview":{"width":1840,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { rootClass: this.props.reduceMotion ? 'rm' : '' };
+  }
+}
+</script>
+</body>
+</html>

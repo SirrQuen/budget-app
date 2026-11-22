@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { cookies } from "next/headers";
 import { getSessionId, requireUser } from "@/lib/auth/dal";
 import { recordLogin } from "@/lib/db/profile";
 import { listAccounts } from "@/lib/db/accounts";
@@ -11,21 +10,13 @@ import { AppShell } from "@/components/app-shell/AppShell";
 import { identityName } from "@/lib/displayName";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { TodayProvider } from "@/components/TodayProvider";
-import { SessionFlags } from "@/components/SessionFlags";
 import { SorrelLoader } from "@/components/SorrelLoader";
-import { SIGNED_IN_COOKIE } from "@/lib/auth/signedInFlag";
 
 // The welcome overlay is NOT here: it has one host, in the root layout
-// (components/WelcomeBloom). This layout only consumes the sign-in flag,
-// read on the server before any of the app's data, so the frame below
-// streams in behind whatever is showing.
+// (components/WelcomeBloom).
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const jar = await cookies();
-  const signedIn = jar.get(SIGNED_IN_COOKIE)?.value === "1";
-
   return (
     <>
-      <SessionFlags signedIn={signedIn} />
       {/* What the root app/loading.tsx used to show while this layout
           awaited its reads. That boundary sat ABOVE this layout, so a slow
           first render painted the loader before the overlay; it's gone,

@@ -2284,3 +2284,185 @@ body {
     transform: translateY(0);
   }
 }
+
+/* ROSELLE -- the dashboard's living plant (docs/Roselle.md; components/
+   Roselle.tsx). The board's looping keyframes (docs/design/roselle-
+   reference.html) made single-play: one change, ~1.6s, then it rests in
+   the pose it ended in. Transform and opacity only. The calyces on the
+   stems have no animation at all -- they are the constant.
+
+   Resting poses sit outside any media query, so reduced motion renders the
+   right pose for the hour; the animation exists only under no-preference.
+
+   Timing. The board's opening spends 8%-72% of its 6s loop moving (leaves
+   8-40%, petals 22-64% with the overshoot settling by 72%, eye 40-68%);
+   closing spends 16%-72% (petals 16-58%, eye 16-40%, leaves 30-72%). Each
+   window is stretched onto the whole ~1.6s, so the keyframe percentages
+   below are positions within that window, not the board's. The curve is
+   --icon-anim-ease (the app's one curve) where the board used its own;
+   postcss/inline-keyframe-easing.cjs inlines it inside @keyframes. */
+:root {
+  --roselle-duration: 1600ms;
+}
+
+.roselle__pt,
+.roselle__lv {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+.roselle__eye {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+
+.roselle--open .roselle__pt {
+  transform: rotate(var(--a));
+}
+.roselle--open .roselle__eye {
+  opacity: 1;
+}
+.roselle--closed .roselle__pt {
+  transform: rotate(calc(var(--a) * 0.08 - 10deg)) scaleX(0.34) scaleY(0.92);
+}
+.roselle--closed .roselle__eye {
+  opacity: 0;
+  transform: scale(0.4);
+}
+.roselle--closed .roselle__lv--l {
+  transform: rotate(-14deg);
+}
+.roselle--closed .roselle__lv--r {
+  transform: rotate(14deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .roselle--opening .roselle__pt,
+  .roselle--opening .roselle__eye,
+  .roselle--opening .roselle__lv,
+  .roselle--closing .roselle__pt,
+  .roselle--closing .roselle__eye,
+  .roselle--closing .roselle__lv {
+    animation-duration: var(--roselle-duration);
+    animation-fill-mode: both;
+    animation-timing-function: linear;
+  }
+  .roselle--opening .roselle__pt {
+    animation-name: roselle-open-petal;
+  }
+  .roselle--opening .roselle__eye {
+    animation-name: roselle-open-eye;
+  }
+  .roselle--opening .roselle__lv--l {
+    animation-name: roselle-open-leaf-l;
+  }
+  .roselle--opening .roselle__lv--r {
+    animation-name: roselle-open-leaf-r;
+  }
+  .roselle--closing .roselle__pt {
+    animation-name: roselle-close-petal;
+  }
+  .roselle--closing .roselle__eye {
+    animation-name: roselle-close-eye;
+  }
+  .roselle--closing .roselle__lv--l {
+    animation-name: roselle-close-leaf-l;
+  }
+  .roselle--closing .roselle__lv--r {
+    animation-name: roselle-close-leaf-r;
+  }
+
+  /* Opening: leaves lift, petals and sepals spiral out of the twisted bud
+     with a small overshoot and settle, the eye fades and grows in. */
+  @keyframes roselle-open-petal {
+    0%,
+    22% {
+      transform: rotate(calc(var(--a) * 0.08 - 10deg)) scaleX(0.34) scaleY(0.92);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    87.5% {
+      transform: rotate(calc(var(--a) * 1.04)) scaleX(1.05);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    100% {
+      transform: rotate(var(--a));
+    }
+  }
+  @keyframes roselle-open-eye {
+    0%,
+    50% {
+      opacity: 0;
+      transform: scale(0.4);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    94%,
+    100% {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes roselle-open-leaf-l {
+    0% {
+      transform: rotate(-14deg);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    50%,
+    100% {
+      transform: none;
+    }
+  }
+  @keyframes roselle-open-leaf-r {
+    0% {
+      transform: rotate(14deg);
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    50%,
+    100% {
+      transform: none;
+    }
+  }
+
+  /* Closing: the eye fades, petals and sepals twist shut into a pale bud
+     in its red calyx, the leaves relax about 14deg. */
+  @keyframes roselle-close-petal {
+    0% {
+      transform: rotate(var(--a));
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    75%,
+    100% {
+      transform: rotate(calc(var(--a) * 0.08 - 10deg)) scaleX(0.34) scaleY(0.92);
+    }
+  }
+  @keyframes roselle-close-eye {
+    0% {
+      opacity: 1;
+      transform: none;
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    43%,
+    100% {
+      opacity: 0;
+      transform: scale(0.4);
+    }
+  }
+  @keyframes roselle-close-leaf-l {
+    0%,
+    25% {
+      transform: none;
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    100% {
+      transform: rotate(-14deg);
+    }
+  }
+  @keyframes roselle-close-leaf-r {
+    0%,
+    25% {
+      transform: none;
+      animation-timing-function: var(--icon-anim-ease);
+    }
+    100% {
+      transform: rotate(14deg);
+    }
+  }
+}

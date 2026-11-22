@@ -44,8 +44,9 @@ export async function login(
 
   const jar = await cookies();
 
-  // The dashboard's mark plays its sign-in fold once, on this flag --
-  // unless a welcome bloom plays, which supersedes it (SessionFlags).
+  // Short-lived "signed in" marker. Only the login form reads it now (to
+  // notice a redirect that never landed); the sign-in fold it used to drive
+  // is gone (docs/Roselle.md).
   jar.set(SIGNED_IN_COOKIE, "1", {
     maxAge: SIGNED_IN_MAX_AGE_S,
     path: "/",

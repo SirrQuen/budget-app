@@ -69,7 +69,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           The welcome (docs/Goal-Completion.md): one host, here only, on
           every page -- hidden by its `hidden` attribute until something
           shows it. Before the page content, so its layout effect runs
-          before the authenticated layout's SessionFlags.
+          before the plant's and the visitor's.
 
           WELCOME_SCRIPT follows it directly, so the element is parsed when
           the script runs: it reveals the host before first paint when the

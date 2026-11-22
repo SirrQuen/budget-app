@@ -80,8 +80,8 @@ export function WelcomeBloom() {
   const reason: WelcomeReason | null = showing?.reason ?? null;
 
   // B. A layout effect, before the first paint after hydration -- and,
-  // because the host renders before the page content, before
-  // SessionFlags decides whether to offer the sign-in fold.
+  // because the host renders before the page content, before the plant
+  // and the visitor ask whether a welcome is playing.
   useLayoutEffect(() => {
     // Whatever it says, the one-shot is spent on this load: a daily value
     // found here (its sign-in already over) shows nothing.

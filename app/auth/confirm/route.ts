@@ -146,11 +146,9 @@ export async function POST(request: NextRequest) {
   return seeOther(linkOutcomePath(outcome, isRecovery));
 }
 
-// A confirmed signup is a brand-new user's first sight of the app, so the
-// dashboard mark plays its sign-in fold -- superseded by the welcome bloom,
-// which this route always queues for a signup, so in practice the flag
-// here only says "signed in" to the layout (components/SessionFlags.tsx). A recovery link does not: someone
-// resetting a password is mid-task, and the flourish would be noise.
+// A confirmed signup sets the short-lived "signed in" marker the login form
+// reads. A recovery link does not: someone resetting a password is
+// mid-task.
 //
 // This route opens a session without going through login(), so it
 // captures first-session state too -- for a new signup it's the usual
