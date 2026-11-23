@@ -1,4 +1,4 @@
-Sent:      not yet
+Sent:      Not emailed. Announced in-app (What's new), 2026-11-23
 Migration: 76
 Merge:     37a6416 (fast-forward of import-categories-transfers; no merge commit)
 Deployed:  2026-11-20

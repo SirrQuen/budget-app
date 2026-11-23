@@ -1,4 +1,4 @@
-Sent:      not yet
+Sent:      Not emailed. Announced in-app (What's new), 2026-11-23
 Migration: 79
 Merge:     1a3bffb (fast-forward of recurring-ends; no merge commit)
 Deployed:  2026-11-22

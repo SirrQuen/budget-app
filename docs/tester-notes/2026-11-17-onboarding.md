@@ -1,4 +1,4 @@
-Sent:      not yet
+Sent:      Not announced: affects new users only (2026-11-23)
 Migration: none
 Merge:     b5d2cf2 (feat/onboarding-grows, fast-forward)
 Deployed:  2026-11-18
