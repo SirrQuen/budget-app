@@ -1,6 +1,6 @@
 Sent:      not yet
 Migration: none
-Merge:     not merged (branch budget-drilldown)
+Merge:     549848c (budget-drilldown, fast-forward; no merge commit)
 Deployed:  not yet
 
 ---
