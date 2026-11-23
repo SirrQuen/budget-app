@@ -1,7 +1,7 @@
 Sent:      not yet
 Migration: none
 Merge:     549848c (budget-drilldown, fast-forward; no merge commit)
-Deployed:  not yet
+Deployed:  2026-11-23
 
 ---
 
