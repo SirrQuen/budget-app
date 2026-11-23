@@ -14,7 +14,7 @@ import { carriedFromLabel, formatMonthName } from "@/lib/budgetMonth";
 import type { ChronicOverBudget } from "@/lib/budgetInsights";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import { callAction } from "@/components/useActionForm";
-import { buildListHref, monthRange } from "@/lib/transactionFilters";
+import { budgetDrillHref } from "@/lib/transactionFilters";
 
 // True once the month after monthISO has started -- the viewed month is
 // fully in the books, not still accumulating spend.
@@ -125,10 +125,7 @@ export function BudgetRow({
   const spent = budget.actual_spend ?? 0;
   // "Every number is a door": the spent figure opens the rows behind it --
   // this category, this month.
-  const spentHref = buildListHref("/transactions", {
-    categoryid: budget.category_id,
-    ...monthRange(budget.budget_month),
-  });
+  const spentHref = budgetDrillHref(budget.category_id, budget.budget_month);
   const remaining = budget.remaining ?? 0;
   const isOver = budget.is_over_budget ?? false;
   // A $0 budget is a budget ("not spending on this"), never "unbudgeted".
@@ -146,7 +143,9 @@ export function BudgetRow({
         <div className="flex min-w-0 items-center gap-3 sm:flex-1">
           <CategoryIcon icon={budget.category_icon} className="h-4 w-4 shrink-0 text-ink-secondary" />
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">
-            {budget.category_name}
+            <Link href={spentHref} className="rounded py-3.5 text-action sm:py-0 transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
+              {budget.category_name}
+            </Link>
             {/* Says where an untouched amount came from, so it doesn't read
                 as something set for this month and forgotten. */}
             {budget.carried_from ? (
@@ -184,17 +183,19 @@ export function BudgetRow({
         {isZero ? (
           <span>
             {spent > 0 ? (
-              <Link href={spentHref} className="rounded underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
+              <Link href={spentHref} className="rounded py-3.5 text-action sm:py-0 transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
                 {formatCurrency(spent)} spent against a $0 budget this month
               </Link>
             ) : (
-              "$0 budgeted, nothing spent this month"
+              <Link href={spentHref} className="rounded py-3.5 text-action sm:py-0 transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
+                $0 budgeted, nothing spent this month
+              </Link>
             )}
           </span>
         ) : (
           <>
             <span>
-              <Link href={spentHref} className="rounded underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
+              <Link href={spentHref} className="rounded py-3.5 text-action sm:py-0 transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
                 {formatCurrency(spent)}
               </Link>{" "}
               of {formatCurrency(budgeted)}

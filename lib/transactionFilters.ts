@@ -125,3 +125,26 @@ export function buildSearchOr(
   if (matchedAccountIds.length > 0) parts.push(`accountid.in.(${matchedAccountIds.join(",")})`);
   return parts.join(",");
 }
+
+// ---- Budget drill-down ----------------------------------------------------
+
+/**
+ * The month a filter set is a budget's drill-down for, or null. A budget's
+ * "spent" is one category's Expense rows, no transfer legs, in one calendar
+ * month (budget_progress_for_month). The list is that drill-down only while
+ * its filters are exactly those -- category, Expense, the whole month, and
+ * nothing else (no search, no account) -- so the budget's figure can head
+ * it and be true of every row beneath. Any other filter and it's just a
+ * list. The one place that decision is made.
+ */
+export function budgetDrillMonth(f: TransactionFilters): string | null {
+  if (!f.categoryid || f.type !== "Expense" || f.q || f.accountid) return null;
+  if (!f.dateFrom || !f.dateFrom.endsWith("-01")) return null;
+  const range = monthRange(f.dateFrom);
+  return range.dateTo === f.dateTo ? f.dateFrom : null;
+}
+
+/** The drill-down link a budget's name and spent figure open. */
+export function budgetDrillHref(categoryid: string, month: string): string {
+  return buildListHref("/transactions", { categoryid, type: "Expense", ...monthRange(month) });
+}

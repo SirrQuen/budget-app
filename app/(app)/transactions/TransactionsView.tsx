@@ -7,10 +7,14 @@ import { LoadError } from "@/components/ui/LoadError";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { InfoIcon } from "@/components/ui/icons";
 import { FIELD_EDGE } from "@/components/ui/Input";
+import { getBudgetsForMonth } from "@/lib/db/budgets";
+import { formatMonthYear } from "@/lib/budgetMonth";
+import { formatCurrency } from "@/lib/format";
 import { getSameBillDeletePreviews } from "@/lib/db/sameBill";
 import { sameBillDeleteNotes } from "@/lib/sameBill";
 import { exportLabel } from "@/lib/transactionExport";
 import {
+  budgetDrillMonth,
   buildListHref,
   hasActiveFilters,
   MAX_SEARCH_LENGTH,
@@ -47,6 +51,10 @@ export async function TransactionsView({
   if (lockedAccountId) filters.accountid = "";
   const page = parsePage(searchParams);
   const accountid = lockedAccountId ?? filters.accountid;
+  // A budget's drill-down reads the budget's own rule -- Expense, no transfer
+  // legs, this category, this month -- and its total comes from the same
+  // function the Budgets page does, never a sum made here.
+  const drillMonth = lockedAccountId ? null : budgetDrillMonth(filters);
 
   const [
     transactionsResult,
@@ -56,6 +64,7 @@ export async function TransactionsView({
     expenseCategoriesResult,
     goalsResult,
     followedGoalsResult,
+    drillBudgetsResult,
   ] = await Promise.all([
     listTransactions({
       ...(filters.dateFrom ? { dateFrom: filters.dateFrom } : {}),
@@ -63,6 +72,7 @@ export async function TransactionsView({
       ...(filters.categoryid ? { categoryid: filters.categoryid } : {}),
       ...(accountid ? { accountid } : {}),
       ...(filters.type ? { transaction_type: filters.type } : {}),
+      ...(drillMonth ? { excludeTransfers: true } : {}),
       ...(filters.q ? { q: filters.q } : {}),
       page,
     }),
@@ -72,6 +82,7 @@ export async function TransactionsView({
     listCategoriesForType("Expense"),
     listGoalOptions(),
     listFollowedGoals(),
+    drillMonth ? getBudgetsForMonth(drillMonth) : Promise.resolve(null),
   ]);
 
   if (
@@ -113,6 +124,18 @@ export async function TransactionsView({
   // hit the project's row ceiling, the matching rows it couldn't reach.
   const exportCount = truncation ? truncation.transactionsTotal : totalCount;
 
+  // The budget's own figure for this category and month, or nothing when
+  // the budget can't be read -- the list still stands without its header.
+  const drillBudget =
+    drillMonth && drillBudgetsResult?.data
+      ? (drillBudgetsResult.data.find((b) => b.category_id === filters.categoryid) ?? null)
+      : null;
+  const drillCategoryName =
+    drillBudget?.category_name ?? categories.find((c) => c.id === filters.categoryid)?.category_name ?? "this category";
+  const budgetDrill = drillMonth
+    ? { categoryName: drillCategoryName, monthLabel: formatMonthYear(drillMonth) }
+    : undefined;
+
   const incomeCategories = categories.filter((c) => c.category_type === "Income");
   const expenseCategories = categories.filter((c) => c.category_type === "Expense");
   // An archived account's page still lists its history, but nothing new can
@@ -144,6 +167,20 @@ export async function TransactionsView({
           followedGoals={followedGoalsResult.data ?? []}
           prefill={lockedAccountId ? { accountid: lockedAccountId } : undefined}
         />
+      ) : null}
+
+      {drillMonth && drillBudget ? (
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          <h2 className="text-lg font-semibold text-ink">
+            {drillCategoryName} · {formatMonthYear(drillMonth)} · {formatCurrency(drillBudget.actual_spend ?? 0)} spent
+          </h2>
+          <Link
+            href={`/budgets?month=${drillMonth}`}
+            className="inline-flex min-h-11 items-center rounded text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page"
+          >
+            ← Back to budgets
+          </Link>
+        </div>
       ) : null}
 
       <form
@@ -321,6 +358,7 @@ export async function TransactionsView({
         basePath={basePath}
         lockedAccountId={lockedAccountId}
         hasFilters={hasFilters}
+        budgetDrill={budgetDrill}
         canLog={canAddHere}
         accounts={activeAccounts}
         incomeCategories={incomeCategoriesResult.data}

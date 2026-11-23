@@ -17,3 +17,8 @@ export function formatMonthName(monthISO: string, relativeTo?: string): string {
 export function carriedFromLabel(carriedFrom: string, viewedMonth: string): string {
   return `carried from ${formatMonthName(carriedFrom, viewedMonth)}`;
 }
+
+/** "November 2026" -- a budget month, always with its year. */
+export function formatMonthYear(monthISO: string): string {
+  return parseLocalDate(monthISO).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}

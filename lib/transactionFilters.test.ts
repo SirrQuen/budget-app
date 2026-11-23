@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  budgetDrillHref,
+  budgetDrillMonth,
   buildListHref,
   buildSearchOr,
   escapeLike,
@@ -117,4 +119,22 @@ test("search: commas, parens and quotes can't change the filter's shape", () => 
 test("search: a literal % is escaped through both layers", () => {
   // LIKE wants \%, and PostgREST's quoting wants that backslash doubled.
   assert.equal(buildSearchOr("50%", [], []), 'description.ilike."%50\\\\%%",notes.ilike."%50\\\\%%"');
+});
+
+test("budget drill-down: the link round-trips to its month", () => {
+  const href = budgetDrillHref(ID, "2026-02-01");
+  const params = Object.fromEntries(new URL(href, "http://x").searchParams);
+  assert.equal(budgetDrillMonth(parseTransactionFilters(params)), "2026-02-01");
+  assert.equal(params.dateTo, "2026-02-28");
+});
+
+test("budget drill-down: any other filter, or a part-month, is just a list", () => {
+  const base = parseTransactionFilters(Object.fromEntries(new URL(budgetDrillHref(ID, "2026-11-01"), "http://x").searchParams));
+  assert.equal(budgetDrillMonth(base), "2026-11-01");
+  assert.equal(budgetDrillMonth({ ...base, q: "milk" }), null);
+  assert.equal(budgetDrillMonth({ ...base, accountid: ID }), null);
+  assert.equal(budgetDrillMonth({ ...base, type: "" }), null);
+  assert.equal(budgetDrillMonth({ ...base, dateTo: "2026-11-15" }), null);
+  assert.equal(budgetDrillMonth({ ...base, dateFrom: "2026-11-02" }), null);
+  assert.equal(budgetDrillMonth({ ...base, categoryid: "" }), null);
 });

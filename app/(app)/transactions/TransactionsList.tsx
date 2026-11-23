@@ -242,6 +242,7 @@ export function TransactionsList({
   basePath,
   lockedAccountId,
   hasFilters,
+  budgetDrill,
   canLog,
   accounts,
   incomeCategories,
@@ -261,6 +262,8 @@ export function TransactionsList({
   /** Set on an account page: the account is the page, so it's not a filter to clear. */
   lockedAccountId?: string;
   hasFilters: boolean;
+  /** Set when the filters are one budget's drill-down: names what's empty. */
+  budgetDrill?: { categoryName: string; monthLabel: string };
   /** False when there's no active account yet -- the add-transaction form
    * isn't shown above, so the empty state has to point at /accounts. */
   canLog: boolean;
@@ -413,14 +416,18 @@ export function TransactionsList({
         <EmptyState
           icon={<SearchLeafIllustration />}
           heading={
-            filters.q
-              ? `Nothing matches "${filters.q}"${scopeAccountName ? ` in ${scopeAccountName}` : ""}`
-              : "Nothing matches these filters"
+            budgetDrill
+              ? `Nothing in ${budgetDrill.categoryName} for ${budgetDrill.monthLabel}`
+              : filters.q
+                ? `Nothing matches "${filters.q}"${scopeAccountName ? ` in ${scopeAccountName}` : ""}`
+                : "Nothing matches these filters"
           }
           message={
-            filters.q
-              ? "Try another word, or clear the filters."
-              : "Try a wider date range, or clear a filter to see more."
+            budgetDrill
+              ? "Nothing has been spent here this month."
+              : filters.q
+                ? "Try another word, or clear the filters."
+                : "Try a wider date range, or clear a filter to see more."
           }
           action={
             <Link
