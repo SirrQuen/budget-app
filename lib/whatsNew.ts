@@ -12,11 +12,11 @@ import { RECAP_DAYS } from "@/lib/monthStory";
 // the window, an earlier one lengthens it. Change it, its test and nothing
 // else when the push day moves.
 //
-// This is the November card. The first one (from 2026-11-16, cookie
-// sorrel_whats_new_seen_2026-11-16) is replaced by it; its cookie is a
-// different name, so dismissing that one never hides this one.
+// This is the second November card. The earlier ones (from 2026-11-16 and
+// 2026-11-20, cookies sorrel_whats_new_seen_<date>) are replaced by it; its
+// cookie is a different name, so dismissing either never hides this one.
 
-export const WHATS_NEW_FROM = "2026-11-20";
+export const WHATS_NEW_FROM = "2026-11-23";
 export const WHATS_NEW_DAYS = 30;
 
 /** Last day the card shows. */
@@ -53,48 +53,47 @@ export function accountExistedBefore(
 export type WhatsNewAction =
   | { kind: "none" }
   | { kind: "href"; href: string }
-  /** The Coming up card: a hash link to its place on the dashboard. */
+  /** A hash link to a card's place on the dashboard. */
   | { kind: "card"; href: string }
   | { kind: "runway" }
   | { kind: "yourSorrel" };
 
 export type WhatsNewItem = { id: string; text: string; action: WhatsNewAction };
 
-/** The id the dashboard gives Coming up's card (DashboardSections). */
-export const COMING_UP_CARD_HREF = "#dash-card-upcoming";
-
 // Six lines at most, in this order, one sentence or two each. Neutral:
 // no exclamation marks.
 export const WHATS_NEW_ITEMS: readonly WhatsNewItem[] = [
   {
     id: "recap",
-    text: "Your month in review arrives December 1st: a short look back at November.",
+    text: "On December 1st, Sorrel shows a short look back at November, if you logged at least five times.",
     action: { kind: "none" },
   },
   {
-    id: "runway",
-    text: "See your runway on Safe to Spend, or ask “What if I spend…” before you buy.",
-    action: { kind: "runway" },
+    // Safe to Spend is the hero just above this card: nothing to open.
+    id: "safe-to-spend",
+    text: "Safe to Spend rolls to its new figure, saving gives you a few leaves, and Sorrel can live on your home screen.",
+    action: { kind: "none" },
   },
   {
     id: "goals",
-    text: "Goals now show when they’ll bloom. Link a transaction to a goal, or let a debt goal follow your card.",
+    text: "Goals now grow as stems, with leaves at a quarter, halfway and three-quarters.",
     action: { kind: "href", href: "/goals" },
   },
   {
-    id: "coming-up",
-    text: "Coming up has a timeline view, and Log again repeats any transaction in two taps.",
-    action: { kind: "card", href: COMING_UP_CARD_HREF },
+    id: "import",
+    text: "Imports get a category for every row, and transfers and card payments come in as transfers, so Safe to Spend may move.",
+    action: { kind: "href", href: "/import?from=transactions" },
   },
   {
-    id: "your-sorrel",
-    text: "Your Sorrel keeps your milestones, and a small visitor stops by each part of the day.",
-    action: { kind: "yourSorrel" },
+    id: "budgets",
+    text: "Tap a budget to see its transactions. Finished schedules now move to Ended.",
+    action: { kind: "href", href: "/budgets" },
   },
   {
-    id: "privacy",
-    text: "Our privacy policy was clarified, and you can find us on TikTok, Instagram and Facebook.",
-    action: { kind: "href", href: "/privacy" },
+    // The plant is on this page: nothing to open.
+    id: "plant",
+    text: "The dashboard plant is now a roselle that opens in the morning and closes at night, and the light follows your day.",
+    action: { kind: "none" },
   },
 ];
 

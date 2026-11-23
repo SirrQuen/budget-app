@@ -44,6 +44,15 @@ beforeEach(async () => {
 });
 after(() => dom.window.close());
 
+// The component still supports lines that open the runway or Your Sorrel, and
+// a hash link to a dashboard card, though this card's six lines use none of
+// them: these stand-ins keep that wiring covered.
+const ACTION_ITEMS = [
+  { id: "runway", text: "See your runway", action: { kind: "runway" } },
+  { id: "your-sorrel", text: "Your Sorrel", action: { kind: "yourSorrel" } },
+  { id: "coming-up", text: "Coming up", action: { kind: "card", href: "#dash-card-upcoming" } },
+];
+
 async function mount(props: { items?: unknown; runwayAvailable?: boolean; dismiss?: () => Promise<void> } = {}) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -62,22 +71,29 @@ const li = (c: HTMLElement, id: string) => c.querySelector(`[data-whats-new="${i
 const showButton = (c: HTMLElement, label: string) =>
   [...c.querySelectorAll("button")].find((b) => b.textContent === label) as HTMLButtonElement;
 
-test("six lines in order, the recap line plain text, the rest links in the pill style", async () => {
+test("six lines in order: the ones with nothing to open are plain text, the rest links in the pill style", async () => {
   const c = await mount();
   const items = [...c.querySelectorAll("li")];
-  assert.deepEqual(items.map((i) => i.dataset.whatsNew), ["recap", "runway", "goals", "coming-up", "your-sorrel", "privacy"]);
-  assert.equal(li(c, "recap").querySelector("a,button"), null, "nothing to open until the 1st");
+  assert.deepEqual(items.map((i) => i.dataset.whatsNew), ["recap", "safe-to-spend", "goals", "import", "budgets", "plant"]);
+  for (const id of ["recap", "safe-to-spend", "plant"]) {
+    assert.equal(li(c, id).querySelector("a,button"), null, `${id}: nothing to open`);
+  }
   assert.match(li(c, "recap").textContent!, /December 1st/);
   assert.equal(li(c, "goals").querySelector("a")!.getAttribute("href"), "/goals");
-  assert.equal(li(c, "privacy").querySelector("a")!.getAttribute("href"), "/privacy");
-  assert.equal(li(c, "coming-up").querySelector("a")!.getAttribute("href"), "#dash-card-upcoming");
-  for (const id of ["runway", "goals", "coming-up", "your-sorrel", "privacy"]) {
+  assert.equal(li(c, "import").querySelector("a")!.getAttribute("href"), "/import?from=transactions");
+  assert.equal(li(c, "budgets").querySelector("a")!.getAttribute("href"), "/budgets");
+  for (const id of ["goals", "import", "budgets"]) {
     assert.match(li(c, id).querySelector("a,button")!.className, /rounded-2xl/, id);
   }
 });
 
+test("a line can still be a hash link to a dashboard card", async () => {
+  const c = await mount({ items: ACTION_ITEMS });
+  assert.equal(li(c, "coming-up").querySelector("a")!.getAttribute("href"), "#dash-card-upcoming");
+});
+
 test("the runway line asks the Safe to Spend card to open its runway", async () => {
-  const c = await mount();
+  const c = await mount({ items: ACTION_ITEMS });
   let asked = 0;
   const onOpen = (e: Event) => {
     asked++;
@@ -90,13 +106,13 @@ test("the runway line asks the Safe to Spend card to open its runway", async () 
 });
 
 test("no Safe to Spend card on the page: the runway line is plain text, not a dead button", async () => {
-  const c = await mount({ runwayAvailable: false });
+  const c = await mount({ items: ACTION_ITEMS, runwayAvailable: false });
   assert.equal(li(c, "runway").querySelector("a,button"), null);
   assert.match(li(c, "runway").textContent!, /runway/);
 });
 
 test("the Your Sorrel line opens the Your Sorrel panel", async () => {
-  const c = await mount();
+  const c = await mount({ items: ACTION_ITEMS });
   let asked = 0;
   const onOpen = () => asked++;
   window.addEventListener(OPEN_YOUR_SORREL_EVENT, onOpen);
@@ -111,14 +127,14 @@ test("phone: lines four to six are hidden below md until 'Show all 6' expands th
   assert.ok(button, "a real button");
   assert.equal(button.getAttribute("aria-expanded"), "false");
   assert.match(button.className, /md:hidden/, "not on desktop");
-  for (const id of ["recap", "runway", "goals"]) assert.doesNotMatch(li(c, id).className, /hidden/, id);
-  for (const id of ["coming-up", "your-sorrel", "privacy"]) {
+  for (const id of ["recap", "safe-to-spend", "goals"]) assert.doesNotMatch(li(c, id).className, /hidden/, id);
+  for (const id of ["import", "budgets", "plant"]) {
     assert.match(li(c, id).className, /\bhidden\b.*md:list-item/, `${id} hidden on a phone, shown from md`);
   }
   await act(async () => button.click());
   assert.equal(button.getAttribute("aria-expanded"), "true");
   assert.equal(button.textContent, "Show fewer");
-  for (const id of ["coming-up", "your-sorrel", "privacy"]) assert.doesNotMatch(li(c, id).className, /\bhidden\b/, id);
+  for (const id of ["import", "budgets", "plant"]) assert.doesNotMatch(li(c, id).className, /\bhidden\b/, id);
   assert.equal(button.getAttribute("aria-controls"), c.querySelector("ul")!.id);
 });
 
@@ -134,6 +150,11 @@ test("the expand control is a native button, so Enter and Space work from the ke
 test("with five lines (after the recap week) the button says Show all 5", async () => {
   const c = await mount({ items: whatsNewItems("2026-12-10") });
   assert.ok(showButton(c, "Show all 5"));
+});
+
+test("(and the same on the recap week's last day: six)", async () => {
+  const c = await mount({ items: whatsNewItems("2026-12-07") });
+  assert.ok(showButton(c, "Show all 6"));
 });
 
 test("three lines or fewer: no expand button at all", async () => {
