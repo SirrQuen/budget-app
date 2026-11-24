@@ -685,8 +685,17 @@ check anything taken from it against the migrations. The contract:
   an imported transfer's two legs inline in the import's one transaction,
   both carrying `import_id`. It can also make an existing PLAIN row the
   other leg (keeping that leg's own date). It keeps the row's prior
-  category in `import_pairings` so `undo_import()` can restore it. Any
-  other new transfer still goes through `createTransfer()`.
+  category in `import_pairings` so `undo_import()` can restore it. A
+  third: `make_transfer()` (migration 80, "Turn into a transfer") makes
+  an existing plain entry a leg, joining a plain entry on the other
+  account or inserting the other leg, and keeps the categories in
+  `transfer_conversions` for `undo_make_transfer()`; an added leg is
+  asked import's "same bill?" question. Separating an IMPORT-joined
+  transfer (`separate_import_transfer()`) never deletes the imported
+  side -- it's bank data; it takes a category the person picks. Which rows can
+  become a leg, or be joined, is ONE check, `transfer_leg_refusal()`,
+  read by both import and conversion -- never restate it. Any other new
+  transfer still goes through `createTransfer()`.
 - A transfer is ONE THING WITH TWO LEGS. An existing transfer is written
   only by `update_transfer()` (migration 59) -- both legs in one call,
   SECURITY DEFINER scoped to `auth.uid()` -- through `updateTransfer()` /

@@ -200,7 +200,7 @@ function ContributionItem({
       <ConfirmDialog
         open={confirming}
         title={`Delete ${amountText} from ${goalName}, ${dateText}?`}
-        description={`This can't be undone -- the contribution will be permanently removed, and ${goalName}'s total will go down by ${amountText}.`}
+        description={`This can't be undone -- the contribution will be permanently removed, and the total for ${goalName} will go down by ${amountText}.`}
         confirmLabel={isDeleting ? "Deleting…" : "Delete"}
         confirmIcon={<TrashIcon className="h-4 w-4" />}
         cancelLabel="Cancel"

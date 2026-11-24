@@ -20,6 +20,7 @@ import { AccountLink } from "@/components/AccountLink";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DeleteTransactionButton } from "./DeleteTransactionButton";
+import { bulkOriginWarning, type TransferOrigin } from "@/lib/turnIntoTransfer";
 import { MakeRecurringButton } from "./MakeRecurringButton";
 import { LogAgainButton } from "./LogAgainButton";
 import type { TransactionAccountOption } from "./AddTransactionForm";
@@ -249,6 +250,7 @@ export function TransactionsList({
   expenseCategories,
   goals,
   deleteNotes = {},
+  deleteOrigins = {},
 }: {
   transactions: TransactionWithRelations[];
   totalCount: number;
@@ -279,6 +281,12 @@ export function TransactionsList({
    * confirmation, single or bulk, before anything goes.
    */
   deleteNotes?: Record<string, string>;
+  /**
+   * Transfers made from an entry or joined by an import, by transfer group
+   * (migration 80): their delete names both entries and offers "Separate
+   * them instead".
+   */
+  deleteOrigins?: Record<string, TransferOrigin>;
 }) {
   const { pending } = useOptimisticTransactions();
   // The empty state's "Add" opens the full form from here, with the data this
@@ -340,6 +348,17 @@ export function TransactionsList({
   const selectedForecastNotes = selectedInfos
     .map((info) => deleteNotes[info.transferGroupId ?? info.transactionId!])
     .filter((note): note is string => note !== undefined);
+  // Bulk delete can't separate (queued): it warns when the selection holds
+  // transfers made from entries or joined by an import (migration 80).
+  const selectedOriginWarning = bulkOriginWarning(
+    selectedInfos.filter((info) => info.transferGroupId !== null && deleteOrigins[info.transferGroupId] !== undefined).length,
+  );
+  // An import-joined transfer's separated side needs a category of its own.
+  const separateCategoryOptions = [...incomeCategories, ...expenseCategories].map((c) => ({
+    id: c.id,
+    name: c.category_name,
+    type: c.category_type as TransactionType,
+  }));
 
   function toggleAll(checked: boolean) {
     setSelected(checked ? new Set(selectableKeys) : new Set());
@@ -745,6 +764,8 @@ export function TransactionsList({
                           transferGroupId={row.transferGroupId}
                           forecastNote={deleteNotes[row.transferGroupId]}
                           goalName={row.goalName}
+                          origin={deleteOrigins[row.transferGroupId]}
+                          categoryOptions={separateCategoryOptions}
                           redirectToList={false}
                         />
                       </div>
@@ -848,6 +869,8 @@ export function TransactionsList({
                         transferGroupId={tx.transfer_group_id}
                         forecastNote={deleteNotes[tx.transfer_group_id ?? tx.id]}
                         goalName={tx.goal_name}
+                        origin={tx.transfer_group_id ? deleteOrigins[tx.transfer_group_id] : undefined}
+                        categoryOptions={separateCategoryOptions}
                         redirectToList={false}
                       />
                     </div>
@@ -869,14 +892,14 @@ export function TransactionsList({
                 selectedTransferCount === 1
                   ? "1 of these is a transfer"
                   : `${selectedTransferCount} of these are transfers`
-              } — ${selectedTransferCount === 1 ? "its matching leg" : "their matching legs"} will also be deleted.`
+              }, and ${selectedTransferCount === 1 ? "its matching leg" : "their matching legs"} will also be deleted.`
         }${selectedForecastNotes.map((note) => ` ${note}`).join("")}${
           selectedForGoal === 0
             ? ""
             : selectedForGoal === 1
               ? " 1 of these counts toward a goal, and comes off it."
               : ` ${selectedForGoal} of these count toward goals, and come off them.`
-        }`}
+        }${selectedOriginWarning ? ` ${selectedOriginWarning}` : ""}`}
         confirmLabel={isBulkDeleting ? "Deleting…" : "Delete"}
         confirmIcon={<TrashIcon className="h-4 w-4" />}
         cancelLabel="Cancel"

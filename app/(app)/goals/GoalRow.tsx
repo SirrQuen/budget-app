@@ -355,7 +355,7 @@ export function GoalRow({
               )}
             </span>
           </div>
-          <p className="text-xs text-ink-muted">Follows {cardName}&apos;s balance in Sorrel.</p>
+          <p className="text-xs text-ink-muted">Follows the {cardName} balance in Sorrel.</p>
         </div>
       ) : (
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">

@@ -68,7 +68,7 @@ export function SameBillQuestion({
       <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-secondary ${className}`}>
         <p role="status">
           {answered === "same"
-            ? `Counted once now, as the entry you added. ${pair.name}'s schedule carries on from the next one.`
+            ? `Counted once now, as the entry you added. The schedule for ${pair.name} carries on from the next one.`
             : "Keeping both. We won't ask about these two again."}
         </p>
         {onDismiss ? (

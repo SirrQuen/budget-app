@@ -6,6 +6,7 @@ import { previewUndoImportAction, undoImportAction } from "@/lib/actions/import"
 import type { UndoPreview } from "@/lib/db/imports";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { TrashIcon } from "@/components/ui/icons";
+import { separatesSentence } from "@/lib/turnIntoTransfer";
 
 // "Undo this import": one atomic undo (migration 68, undo_import). The
 // confirmation says what it will do before it does it -- how many rows go,
@@ -65,6 +66,8 @@ export function UndoImportButton({
         preview.restored > 0
           ? `${preview.restored === 1 ? "1 entry you already had" : `${preview.restored} entries you already had`} stay${preview.restored === 1 ? "s" : ""}, and go${preview.restored === 1 ? "es" : ""} back to how ${preview.restored === 1 ? "it was" : "they were"} before the import joined ${preview.restored === 1 ? "it" : "them"} to a transfer. Any edits since are kept.`
           : "",
+        // Transfers made from its rows are separated first (migration 80).
+        separatesSentence(preview.separates) ?? "",
         ...preview.scheduleNotes,
       ]
         .filter(Boolean)

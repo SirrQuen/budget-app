@@ -86,6 +86,11 @@
 --                 confirm_same_bill() and record_different_bill() refuse
 --                 B on A's rows like a made-up id; clear_different_bill()
 --                 as B leaves A's answer; A can answer A's own (the control)
+--   2o Turn into a transfer (migration 80): make_transfer(),
+--                 undo_make_transfer() and separate_import_transfer()
+--                 refuse B on A's entries, accounts, conversions and
+--                 pairings exactly as a made-up id; A's own (make, then
+--                 undo) is the control
 --
 -- Every "must be 0" read carries a positive control: A must see the
 -- same row the table owner sees. Without it, a 0 from B proves nothing
@@ -224,7 +229,7 @@ select u.k || '_' || v.k,
  cross join (values ('acct','01'), ('invacct','02'), ('txn','03'), ('budget','04'),
                     ('goal','05'), ('contrib','06'), ('invest','07'), ('notif','08'),
                     ('recur','09'), ('sub','0a'), ('sba','0b'), ('imp','0c'),
-                    ('ipair','0d')) as v(k, n)
+                    ('ipair','0d'), ('xconv','0e')) as v(k, n)
  where u.k in ('A', 'B');
 
 do $$
@@ -298,6 +303,17 @@ begin
     values (pg_temp.fx(u || '_ipair'), uid, pg_temp.fx(u || '_imp'), pg_temp.fx(u || '_txn'),
             pg_temp.fx(u || '_groceries'), gen_random_uuid());
 
+    -- A conversion (migration 80), written as the table owner: the app can
+    -- only write it through make_transfer(). A record only -- neither
+    -- transaction is made a leg here. The dated-ahead row stands in for
+    -- the created leg.
+    insert into public.transfer_conversions (id, userid, transfer_group_id, source_transactionid,
+                                             source_prior_categoryid, created_transactionid)
+    values (pg_temp.fx(u || '_xconv'), uid, gen_random_uuid(), pg_temp.fx(u || '_txn'),
+            pg_temp.fx(u || '_groceries'),
+            (select t.id from public.transactions t
+              where t.userid = uid and t.description = 'RLS ' || u || ' dated ahead'));
+
     insert into public.subscriptions (id, userid, stripe_customer_id, stripe_subscription_id,
                                       plan, status, renewal_date)
     values (pg_temp.fx(u || '_sub'), uid, 'cus_rls_' || u, 'sub_rls_' || u, 'Pro', 'Active',
@@ -344,6 +360,7 @@ begin
       ('1 reads', 'settings',               format('userid = %L', a),                            format('userid <> %L', b)),
       ('1 reads', 'subscriptions',          format('userid = %L', a),                            format('userid <> %L', b)),
       ('1 reads', 'transactions',           format('userid = %L', a),                            format('userid <> %L', b)),
+      ('1 reads', 'transfer_conversions',   format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_account_balances',     format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_budget_vs_actual',     format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_category_activity',    format('userid = %L', a),                            format('userid <> %L', b)),
@@ -418,7 +435,8 @@ begin
       ('same_bill_answers',      'id', pg_temp.fx('A_sba'),      pg_temp.fx('B_sba'),      'userid', 'occurrence_due_date = current_date'),
       ('settings',               'id', pg_temp.fx('A_settings'), pg_temp.fx('B_settings'), 'userid', 'currency = ''XXX'''),
       ('subscriptions',          'id', pg_temp.fx('A_sub'),      pg_temp.fx('B_sub'),      'userid', 'plan = ''Premium'''),
-      ('transactions',           'id', pg_temp.fx('A_txn'),      pg_temp.fx('B_txn'),      'userid', 'description = ''rls-b-was-here''')
+      ('transactions',           'id', pg_temp.fx('A_txn'),      pg_temp.fx('B_txn'),      'userid', 'description = ''rls-b-was-here'''),
+      ('transfer_conversions',   'id', pg_temp.fx('A_xconv'),    pg_temp.fx('B_xconv'),    'userid', 'transfer_group_id = gen_random_uuid()')
     ) as t(rel, key, a_row, b_row, owner_col, set_sql)
   loop
     -- UPDATE A's row: 0 rows affected, A's row byte-identical afterwards.
@@ -475,7 +493,8 @@ begin
       ('same_bill_answers',      format('insert into public.same_bill_answers (userid, recurringid, transactionid, answer, occurrence_due_date) values (%L, %L, %L, ''different'', current_date)', a, pg_temp.fx('B_recur'), pg_temp.fx('B_txn'))),
       ('settings',               format('insert into public.settings (userid) values (%L)', a)),
       ('subscriptions',          format('insert into public.subscriptions (userid, stripe_customer_id, stripe_subscription_id, renewal_date) values (%L, ''cus_x'', ''sub_x'', current_date)', a)),
-      ('transactions',           format('insert into public.transactions (userid, accountid, categoryid, description, amount, transaction_type, transaction_date) values (%L, %L, %L, ''rls'', 1, ''Expense'', current_date)', a, pg_temp.fx('B_acct'), pg_temp.fx('B_groceries')))
+      ('transactions',           format('insert into public.transactions (userid, accountid, categoryid, description, amount, transaction_type, transaction_date) values (%L, %L, %L, ''rls'', 1, ''Expense'', current_date)', a, pg_temp.fx('B_acct'), pg_temp.fx('B_groceries'))),
+      ('transfer_conversions',   format('insert into public.transfer_conversions (userid, transfer_group_id, source_transactionid, source_prior_categoryid, created_transactionid) values (%L, gen_random_uuid(), %L, %L, %L)', a, pg_temp.fx('B_txn'), pg_temp.fx('B_groceries'), pg_temp.fx('B_txn')))
     ) as t(rel, sql)
   loop
     select * into w from pg_temp.try_as(b, r.sql);
@@ -798,13 +817,17 @@ declare
   -- A transaction of each user that no pairing names yet (the fixture
   -- pairs A_txn and B_txn), so import_pairings_transactionid_key can't
   -- refuse first and hide the FK under test.
+  -- Likewise no conversion names it as its source (migration 80), so
+  -- transfer_conversions_source_key can't refuse first either.
   v_a_free uuid := (select t.id from public.transactions t
                      where t.userid = pg_temp.fx('A')
                        and not exists (select 1 from public.import_pairings p where p.transactionid = t.id)
+                       and not exists (select 1 from public.transfer_conversions c where c.source_transactionid = t.id)
                      order by t.id limit 1);
   v_b_free uuid := (select t.id from public.transactions t
                      where t.userid = pg_temp.fx('B')
                        and not exists (select 1 from public.import_pairings p where p.transactionid = t.id)
+                       and not exists (select 1 from public.transfer_conversions c where c.source_transactionid = t.id)
                      order by t.id limit 1);
 begin
   for r in
@@ -860,6 +883,18 @@ begin
         format('insert into public.import_pairings (userid, import_id, transactionid, prior_categoryid, transfer_group_id) values (%L, %L, %L, %L, gen_random_uuid())', b, pg_temp.fx('B_imp'), v_a_free, pg_temp.fx('B_groceries'))),
       ('import_pairings_prior_category_fkey',
         format('insert into public.import_pairings (userid, import_id, transactionid, prior_categoryid, transfer_group_id) values (%L, %L, %L, %L, gen_random_uuid())', b, pg_temp.fx('B_imp'), v_b_free, pg_temp.fx('A_groceries'))),
+      -- Migration 80: a conversion is about its own user's transactions and
+      -- categories, every one of them.
+      ('transfer_conversions_source_fkey',
+        format('insert into public.transfer_conversions (userid, transfer_group_id, source_transactionid, source_prior_categoryid, created_transactionid) values (%L, gen_random_uuid(), %L, %L, %L)', b, v_a_free, pg_temp.fx('B_groceries'), v_b_free)),
+      ('transfer_conversions_created_fkey',
+        format('insert into public.transfer_conversions (userid, transfer_group_id, source_transactionid, source_prior_categoryid, created_transactionid) values (%L, gen_random_uuid(), %L, %L, %L)', b, v_b_free, pg_temp.fx('B_groceries'), v_a_free)),
+      ('transfer_conversions_joined_fkey',
+        format('insert into public.transfer_conversions (userid, transfer_group_id, source_transactionid, source_prior_categoryid, joined_transactionid, joined_prior_categoryid) values (%L, gen_random_uuid(), %L, %L, %L, %L)', b, v_b_free, pg_temp.fx('B_groceries'), v_a_free, pg_temp.fx('B_groceries'))),
+      ('transfer_conversions_source_category_fkey',
+        format('insert into public.transfer_conversions (userid, transfer_group_id, source_transactionid, source_prior_categoryid, created_transactionid) values (%L, gen_random_uuid(), %L, %L, %L)', b, v_b_free, pg_temp.fx('A_groceries'), v_b_free)),
+      ('transfer_conversions_joined_category_fkey',
+        format('insert into public.transfer_conversions (userid, transfer_group_id, source_transactionid, source_prior_categoryid, joined_transactionid, joined_prior_categoryid) values (%L, gen_random_uuid(), %L, %L, %L, %L)', b, v_b_free, pg_temp.fx('B_groceries'), v_b_free, pg_temp.fx('A_groceries'))),
       -- Migration 66: an answer is about its own user's schedule and entry.
       ('same_bill_answers_recurringid_fkey',
         format('insert into public.same_bill_answers (userid, recurringid, transactionid, answer, occurrence_due_date) values (%L, %L, %L, ''different'', current_date)', b, pg_temp.fx('A_recur'), pg_temp.fx('B_txn'))),
@@ -1689,6 +1724,18 @@ begin
       ('public.list_imports()',                                  'authenticated', true),
       ('public.same_bill_answer(uuid,uuid,date,date,date,boolean)', 'anon',          false),
       ('public.same_bill_answer(uuid,uuid,date,date,date,boolean)', 'authenticated', false),
+      -- "Turn into a transfer" (migration 80). Signed-in only, the full
+      -- grant block; the shared check is internal, closed to every role.
+      ('public.make_transfer(uuid,uuid,uuid,boolean,timestamptz,jsonb,jsonb)', 'anon',          false),
+      ('public.make_transfer(uuid,uuid,uuid,boolean,timestamptz,jsonb,jsonb)', 'authenticated', true),
+      ('public.undo_make_transfer(uuid)',                        'anon',          false),
+      ('public.undo_make_transfer(uuid)',                        'authenticated', true),
+      ('public.separate_import_transfer(uuid,uuid)',             'anon',          false),
+      ('public.separate_import_transfer(uuid,uuid)',             'authenticated', true),
+      ('public.undo_import_conversions(uuid)',                   'anon',          false),
+      ('public.undo_import_conversions(uuid)',                   'authenticated', true),
+      ('public.transfer_leg_refusal(public.transactions,uuid,text,numeric,date)', 'anon',          false),
+      ('public.transfer_leg_refusal(public.transactions,uuid,text,numeric,date)', 'authenticated', false),
       -- Goal links (migration 69). Signed-in only; the completion trigger's
       -- function is closed like every trigger function.
       ('public.same_goal_money(uuid)',                           'anon',          false),
@@ -2326,6 +2373,104 @@ end
 $$;
 
 
+-- ---------------------------------------------------------------------
+-- 2o -- Turn into a transfer (migration 80)
+--
+-- make_transfer(), undo_make_transfer() and separate_import_transfer()
+-- are SECURITY DEFINER, scoped by their own auth.uid() checks. B aims
+-- each at A's rows: every one refuses exactly as a made-up id does
+-- (P0002; SMT02 for a join) and leaves A's rows as they were. B's
+-- undo_import_conversions() counts none of A's. The control runs last:
+-- A turns A's own entry into a transfer and undoes it.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  a uuid := pg_temp.fx('A');
+  b uuid := pg_temp.fx('B');
+  a_tx uuid := gen_random_uuid();
+  b_tx uuid := gen_random_uuid();
+  v_a_conv_grp uuid := (select transfer_group_id from public.transfer_conversions where id = pg_temp.fx('A_xconv'));
+  v_a_pair_grp uuid := (select transfer_group_id from public.import_pairings where id = pg_temp.fx('A_ipair'));
+  v_case record;
+  v_try record;
+  v_hash text;
+  v_pass boolean;
+  v_seen bigint;
+  v_grp uuid;
+  -- A's own ACTIVE other account. Section 3 archives A_invacct, and
+  -- make_transfer() refuses an archived account (SMT01) -- that refusal
+  -- is make-transfer-test.sql's, section 4. Here the target must be live,
+  -- so B's refusals below come from ownership alone and A's control can
+  -- succeed.
+  a_sav uuid := gen_random_uuid();
+begin
+  insert into public.accounts (id, userid, account_name, account_type, opening_balance, opening_date)
+  values (a_sav, a, 'RLS A savings (2o)', 'Savings', 0, current_date - 30);
+
+  insert into public.transactions (id, userid, accountid, categoryid, description, amount,
+                                   transaction_type, transaction_date)
+  values (a_tx, a, pg_temp.fx('A_acct'), pg_temp.fx('A_groceries'), 'rls convert', 30, 'Expense', current_date),
+         (b_tx, b, pg_temp.fx('B_acct'), pg_temp.fx('B_groceries'), 'rls convert', 30, 'Expense', current_date);
+  v_hash := pg_temp.row_hash('transactions', 'id', a_tx);
+
+  for v_case in
+    select * from (values
+      ('B turns A''s entry into a transfer', 'P0002',
+       format('select public.make_transfer(%L, %L)', a_tx, a_sav)),
+      ('B turns a made-up entry into a transfer (the oracle baseline)', 'P0002',
+       format('select public.make_transfer(%L, %L)', gen_random_uuid(), pg_temp.fx('B_invacct'))),
+      ('B makes B''s entry a transfer to A''s account', 'P0002',
+       format('select public.make_transfer(%L, %L)', b_tx, a_sav)),
+      ('B makes B''s entry a transfer to a made-up account (the oracle baseline)', 'P0002',
+       format('select public.make_transfer(%L, %L)', b_tx, gen_random_uuid())),
+      ('B joins A''s entry to B''s', 'SMT02',
+       format('select public.make_transfer(%L, %L, %L)', b_tx, pg_temp.fx('B_invacct'), a_tx)),
+      ('B joins a made-up entry to B''s (the oracle baseline)', 'SMT02',
+       format('select public.make_transfer(%L, %L, %L)', b_tx, pg_temp.fx('B_invacct'), gen_random_uuid())),
+      ('B undoes A''s conversion', 'P0002',
+       format('select public.undo_make_transfer(%L)', v_a_conv_grp)),
+      ('B undoes a made-up conversion (the oracle baseline)', 'P0002',
+       format('select public.undo_make_transfer(%L)', gen_random_uuid())),
+      ('B separates A''s import-joined transfer', 'P0002',
+       format('select public.separate_import_transfer(%L, %L)', v_a_pair_grp, pg_temp.fx('B_groceries'))),
+      ('B separates a made-up one (the oracle baseline)', 'P0002',
+       format('select public.separate_import_transfer(%L, %L)', gen_random_uuid(), pg_temp.fx('B_groceries')))
+    ) as t(what, expect, sql)
+  loop
+    select * into v_try from pg_temp.try_as(b, v_case.sql);
+    v_pass := v_try.state = v_case.expect
+      and v_hash is not null
+      and pg_temp.row_hash('transactions', 'id', a_tx) = v_hash
+      and exists (select 1 from public.transfer_conversions where id = pg_temp.fx('A_xconv'))
+      and exists (select 1 from public.import_pairings where id = pg_temp.fx('A_ipair'))
+      and (select transfer_group_id is null from public.transactions where id = b_tx);
+    perform pg_temp.rec('2o turn into transfer', 'make_transfer() / undo_make_transfer() / separate_import_transfer()',
+      v_case.what, v_case.expect || '; A''s rows intact',
+      coalesce(v_try.state, 'no error') || coalesce(': ' || v_try.msg, ''), v_pass);
+  end loop;
+
+  v_seen := pg_temp.count_as(b, format('select public.undo_import_conversions(%L)', pg_temp.fx('A_imp')));
+  perform pg_temp.rec('2o turn into transfer', 'undo_import_conversions()', 'B counts A''s import''s conversions',
+    '0', v_seen::text, v_seen = 0);
+
+  -- Control: A turns A's own entry into a transfer, then undoes it.
+  select * into v_try from pg_temp.try_as(a, format('select public.make_transfer(%L, %L)', a_tx, a_sav));
+  v_grp := (select transfer_group_id from public.transactions where id = a_tx);
+  v_pass := v_try.state is null and v_grp is not null
+    and (select count(*) from public.transactions where transfer_group_id = v_grp) = 2;
+  perform pg_temp.rec('2o turn into transfer', 'make_transfer()', 'control: A turns A''s own entry into a transfer',
+    'two legs', coalesce(v_try.state || ': ' || v_try.msg, 'no error'), v_pass);
+
+  select * into v_try from pg_temp.try_as(a, format('select public.undo_make_transfer(%L)', v_grp));
+  v_pass := v_try.state is null
+    and (select transfer_group_id is null and categoryid = pg_temp.fx('A_groceries') from public.transactions where id = a_tx)
+    and not exists (select 1 from public.transactions where transfer_group_id = v_grp);
+  perform pg_temp.rec('2o turn into transfer', 'undo_make_transfer()', 'control: A undoes it',
+    'the entry is back in its category, the created leg gone', coalesce(v_try.state || ': ' || v_try.msg, 'no error'), v_pass);
+end
+$$;
+
+
 -- The report. Must be the last statement that returns rows.
 -- The summary is the LAST row. A run counts as passed only when it says
 -- ALL PASS (CLAUDE.md). A run that errors part-way returns no rows at
@@ -2335,7 +2480,7 @@ with expected_sections(s) as (
   select unnest(array['1 reads', '2 views', '2c money functions', '2d function grants',
                       '2e waitlist', '2f definer writes', '2g same-bill answers',
                       '2h import', '2i goal links', '2j card goals', '2k month story',
-                      '2l goal pace', '2m beta applications', '2n signup alerts', '3 writes', '4 cross-tenant refs', '5 coverage',
+                      '2l goal pace', '2m beta applications', '2n signup alerts', '2o turn into transfer', '3 writes', '4 cross-tenant refs', '5 coverage',
                       '6 same-user writes', '7 trigger oracles', '8 composite FKs'])
 ),
 tally as (

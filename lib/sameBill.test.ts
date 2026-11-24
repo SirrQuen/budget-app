@@ -121,7 +121,7 @@ test("the question names the bill, the day, and both sources", () => {
 });
 
 test("a 'No' reads back as a fact the person can change", () => {
-  assert.equal(differentBillLine("Rent", day(17)), "You said this isn't Rent's 1 December payment.");
+  assert.equal(differentBillLine("Rent", day(17)), "You said this isn't the 1 December payment for Rent.");
 });
 
 // ---------------------------------------------------------------------

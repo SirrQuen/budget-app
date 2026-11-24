@@ -1569,8 +1569,8 @@ function Review({
         ) : null}
         {summary.countedCount < includedCount ? (
           <p className="mt-1 text-xs text-ink-muted">
-            {includedCount - summary.countedCount} of these {includedCount - summary.countedCount === 1 ? "doesn't" : "don't"} change{" "}
-            {accountName}&apos;s balance today
+            {includedCount - summary.countedCount} of these {includedCount - summary.countedCount === 1 ? "doesn't" : "don't"} change the{" "}
+            {accountName} balance today
             {summary.futureCount > 0 ? ` (${summary.futureCount} dated ahead count on their dates)` : ""}.
           </p>
         ) : null}
@@ -1653,8 +1653,8 @@ function Review({
                   <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
                   <span className="text-ink-secondary">
                     <span className="font-medium text-ink">Is this the same bill?</span> {row.description} ·{" "}
-                    <Amount amount={dollars(row.cents)} type={v.type} /> · {formatDayMonth(row.date)} looks like {m.name}&apos;s{" "}
-                    {formatDayMonth(m.dueDate)} {v.kind === "Transfer" ? "transfer" : "payment"}, which is still waiting in your confirmation list.
+                    <Amount amount={dollars(row.cents)} type={v.type} /> · {formatDayMonth(row.date)} looks like the{" "}
+                    {formatDayMonth(m.dueDate)} {v.kind === "Transfer" ? "transfer" : "payment"} for {m.name}, which is still waiting in your confirmation list.
                   </span>
                 </p>
                 <div className="flex flex-col gap-1.5 sm:flex-row sm:gap-2 sm:pl-6">

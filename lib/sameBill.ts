@@ -152,7 +152,7 @@ export function sameBillQuestionParts(pair: SameBillPair): { before: string; aft
 
 /** A "No, keep both" on the transaction's own screen, with "Change your answer" beside it. */
 export function differentBillLine(scheduleName: string, occurrenceDueDate: string): string {
-  return `You said this isn't ${scheduleName}'s ${formatDayMonth(occurrenceDueDate)} payment.`;
+  return `You said this isn't the ${formatDayMonth(occurrenceDueDate)} payment for ${scheduleName}.`;
 }
 
 export type SameBillDeletePreview = {

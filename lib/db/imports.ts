@@ -95,6 +95,17 @@ function describeImportError(error: DbError, what: string): string {
       ? `Undo the import from ${formatDate(day)} first. It made one of these transactions part of a transfer.`
       : "Undo the later import first. It made one of these transactions part of a transfer.";
   }
+  // undo_import(): a "Turn into a transfer" from an entry outside this
+  // import joined one of its rows (migration 80).
+  if (error.code === "SIU02") {
+    const day = /\d{4}-\d{2}-\d{2}/.exec(error.message)?.[0];
+    return day
+      ? `Separate the transfer from ${formatDate(day)} first: open it and choose Undo. It joined one of these transactions.`
+      : "Separate the transfer that joined one of these transactions first: open it and choose Undo.";
+  }
+  // undo_import() reverses conversions made from its rows; one that can't
+  // go back refuses in its own words (migration 80).
+  if (error.code === "SMT03") return error.message;
   if (error.code === "SRA01" || error.code === "SRA02") {
     return "A balance date changed while you were importing, so nothing was imported. Start the preview again.";
   }
@@ -150,7 +161,7 @@ export type ImportContext = {
 const PAGE = 1000;
 const MAX_PAGES = 50;
 
-type Client = Awaited<ReturnType<typeof createClient>>;
+export type Client = Awaited<ReturnType<typeof createClient>>;
 
 /** The account's transactions from `from` to `to`, for the duplicate check -- the preview's and the server's re-run. */
 async function readExisting(
@@ -318,7 +329,7 @@ async function readOtherAccounts(supabase: Client, accountId: string, dates: str
  * each can be JOINED is migration 76's rule, said here so the preview asks
  * only what the server will accept; the server checks it again.
  */
-async function readTransferCandidates(
+export async function readTransferCandidates(
   supabase: Client,
   accountIds: string[],
   from: string,
@@ -400,7 +411,7 @@ async function readCategoryHistory(
  * not already recorded, on this account -- a transfer schedule at either
  * end (migration 76; findImportSameBill matches both ends).
  */
-function importQueueItems(
+export function importQueueItems(
   queue: Awaited<ReturnType<typeof getConfirmationQueue>> extends { data: infer D } ? NonNullable<D> : never,
   accountId: string,
 ): ImportSameBillItem[] {
@@ -649,6 +660,8 @@ export type UndoPreview = {
   edited: number;
   /** Entries this import joined into a transfer: they go back to how they were (migration 76). */
   restored: number;
+  /** Transfers made from its rows ("Turn into a transfer"): undo separates them first (migration 80). */
+  separates: number;
   /** What undoing does to each schedule a row was matched to (item 4's delete handling). */
   scheduleNotes: string[];
 };
@@ -657,12 +670,14 @@ export type UndoPreview = {
 export async function getUndoPreview(importId: string): Promise<DbResult<UndoPreview>> {
   if (!UUID.test(importId)) return { data: null, error: "We couldn't find that import." };
   const supabase = await createClient();
-  const [listRes, idsRes, pairedRes] = await Promise.all([
+  const [listRes, idsRes, pairedRes, convRes] = await Promise.all([
     listImports(),
     supabase.from("transactions").select("id").eq("import_id", importId),
     supabase.from("import_pairings").select("id", { count: "exact", head: true }).eq("import_id", importId),
+    supabase.rpc("undo_import_conversions", { p_import_id: importId }),
   ]);
   if (listRes.error !== null) return { data: null, error: listRes.error };
+  if (convRes.error) return { data: null, error: describeReadError(convRes.error, "imports") };
   if (idsRes.error) return { data: null, error: describeReadError(idsRes.error, "transactions") };
   if (pairedRes.error) return { data: null, error: describeReadError(pairedRes.error, "imports") };
   const item = listRes.data.find((i) => i.importId === importId);
@@ -675,6 +690,7 @@ export async function getUndoPreview(importId: string): Promise<DbResult<UndoPre
       remaining: item.remainingCount,
       edited: item.editedCount,
       restored: pairedRes.count ?? 0,
+      separates: convRes.data ?? 0,
       scheduleNotes: previews.data.map(sameBillDeleteNote),
     },
     error: null,

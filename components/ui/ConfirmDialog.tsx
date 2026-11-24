@@ -13,6 +13,10 @@ export function ConfirmDialog({
   tone = "default",
   busy = false,
   returnFocus,
+  secondaryLabel,
+  onSecondary,
+  secondaryDisabled = false,
+  children,
   onConfirm,
   onCancel,
 }: {
@@ -35,6 +39,16 @@ export function ConfirmDialog({
    * deleted row), or focus falls to <body>.
    */
   returnFocus?: () => HTMLElement | null;
+  /**
+   * A gentler alternative to the confirmed action, offered beside it
+   * ("Separate them instead"). Neutral, never the critical tone.
+   */
+  secondaryLabel?: string;
+  onSecondary?: () => void;
+  /** The secondary action is waiting on an answer in `children` (aria-disabled, so focus stays). */
+  secondaryDisabled?: boolean;
+  /** A control the secondary action needs, under the description. */
+  children?: React.ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -95,7 +109,8 @@ export function ConfirmDialog({
         <p id={descId} className="mt-2 text-sm text-ink-secondary">
           {description}
         </p>
-        <div className="mt-5 flex justify-end gap-2">
+        {children ? <div className="mt-3">{children}</div> : null}
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
           {/* aria-disabled, not disabled, while busy: disabling the focused
               button would drop focus out of the dialog mid-action. */}
           <button
@@ -108,6 +123,19 @@ export function ConfirmDialog({
           >
             {cancelLabel}
           </button>
+          {secondaryLabel && onSecondary ? (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                if (!busy && !secondaryDisabled) onSecondary();
+              }}
+              aria-disabled={busy || secondaryDisabled || undefined}
+              className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+            >
+              {secondaryLabel}
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant={tone === "critical" ? "critical" : "primary"}

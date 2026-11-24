@@ -12,6 +12,7 @@ import { formatMonthYear } from "@/lib/budgetMonth";
 import { formatCurrency } from "@/lib/format";
 import { getSameBillDeletePreviews } from "@/lib/db/sameBill";
 import { sameBillDeleteNotes } from "@/lib/sameBill";
+import { getTransferOrigins } from "@/lib/db/transferConversions";
 import { exportLabel } from "@/lib/transactionExport";
 import {
   budgetDrillMonth,
@@ -115,6 +116,13 @@ export async function TransactionsView({
     transactions.filter((t) => t.recurringid !== null).map((t) => t.id),
   );
   const deleteNotes = sameBillDeleteNotes(previewsResult.data ?? []);
+  // Transfers made from an entry or joined by an import: their delete
+  // names both entries and offers "Separate them instead" (migration 80).
+  // A failed read leaves the plain dialog.
+  const originsResult = await getTransferOrigins(
+    transactions.map((t) => t.transfer_group_id).filter((g): g is string => g !== null),
+  );
+  const deleteOrigins = Object.fromEntries(originsResult.data ?? []);
   const categories = categoriesResult.data;
   const accounts = accountsResult.data;
   const activeAccounts = accounts.filter((a) => a.is_active);
@@ -365,6 +373,7 @@ export async function TransactionsView({
         expenseCategories={expenseCategoriesResult.data}
         goals={goalsResult.data}
         deleteNotes={deleteNotes}
+        deleteOrigins={deleteOrigins}
       />
     </div>
   );

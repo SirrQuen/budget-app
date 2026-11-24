@@ -1273,6 +1273,120 @@ export type Database = {
           },
         ]
       }
+      transfer_conversions: {
+        Row: {
+          created_at: string
+          created_transactionid: string | null
+          id: string
+          joined_prior_categoryid: string | null
+          joined_transactionid: string | null
+          source_prior_categoryid: string
+          source_transactionid: string
+          transfer_group_id: string
+          userid: string
+        }
+        Insert: {
+          created_at?: string
+          created_transactionid?: string | null
+          id?: string
+          joined_prior_categoryid?: string | null
+          joined_transactionid?: string | null
+          source_prior_categoryid: string
+          source_transactionid: string
+          transfer_group_id: string
+          userid: string
+        }
+        Update: {
+          created_at?: string
+          created_transactionid?: string | null
+          id?: string
+          joined_prior_categoryid?: string | null
+          joined_transactionid?: string | null
+          source_prior_categoryid?: string
+          source_transactionid?: string
+          transfer_group_id?: string
+          userid?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transfer_conversions_created_fkey"
+            columns: ["userid", "created_transactionid"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "transfer_conversions_created_fkey"
+            columns: ["userid", "created_transactionid"]
+            isOneToOne: false
+            referencedRelation: "v_future_transactions"
+            referencedColumns: ["userid", "transaction_id"]
+          },
+          {
+            foreignKeyName: "transfer_conversions_joined_category_fkey"
+            columns: ["userid", "joined_prior_categoryid"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "transfer_conversions_joined_category_fkey"
+            columns: ["userid", "joined_prior_categoryid"]
+            isOneToOne: false
+            referencedRelation: "v_category_activity"
+            referencedColumns: ["userid", "category_id"]
+          },
+          {
+            foreignKeyName: "transfer_conversions_joined_fkey"
+            columns: ["userid", "joined_transactionid"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "transfer_conversions_joined_fkey"
+            columns: ["userid", "joined_transactionid"]
+            isOneToOne: false
+            referencedRelation: "v_future_transactions"
+            referencedColumns: ["userid", "transaction_id"]
+          },
+          {
+            foreignKeyName: "transfer_conversions_source_category_fkey"
+            columns: ["userid", "source_prior_categoryid"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "transfer_conversions_source_category_fkey"
+            columns: ["userid", "source_prior_categoryid"]
+            isOneToOne: false
+            referencedRelation: "v_category_activity"
+            referencedColumns: ["userid", "category_id"]
+          },
+          {
+            foreignKeyName: "transfer_conversions_source_fkey"
+            columns: ["userid", "source_transactionid"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "transfer_conversions_source_fkey"
+            columns: ["userid", "source_transactionid"]
+            isOneToOne: false
+            referencedRelation: "v_future_transactions"
+            referencedColumns: ["userid", "transaction_id"]
+          },
+          {
+            foreignKeyName: "transfer_conversions_userid_fkey"
+            columns: ["userid"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       waitlist: {
         Row: {
           created_at: string
@@ -2079,6 +2193,18 @@ export type Database = {
           row_count: number
         }[]
       }
+      make_transfer: {
+        Args: {
+          p_anchor_set_at?: string
+          p_counts_despite_anchor?: boolean
+          p_different_bill?: Json
+          p_other_accountid: string
+          p_pair_with?: string
+          p_same_bill?: Json
+          p_transactionid: string
+        }
+        Returns: string
+      }
       month_story: {
         Args: { p_month: string }
         Returns: {
@@ -2167,6 +2293,10 @@ export type Database = {
         Returns: undefined
       }
       send_signup_alerts: { Args: { p_now?: string }; Returns: undefined }
+      separate_import_transfer: {
+        Args: { p_categoryid: string; p_transfer_group_id: string }
+        Returns: undefined
+      }
       set_goal_funding: {
         Args: { p_goalid?: string; p_recurringid: string }
         Returns: undefined
@@ -2223,11 +2353,29 @@ export type Database = {
         Args: { p_goal_id: string; p_reassess: boolean; p_touched: string[] }
         Returns: undefined
       }
+      transfer_leg_refusal: {
+        Args: {
+          p_accountid?: string
+          p_amount?: number
+          p_date?: string
+          p_tx: Database["public"]["Tables"]["transactions"]["Row"]
+          p_type?: string
+        }
+        Returns: string
+      }
       undo_import: {
         Args: { p_import_id: string }
         Returns: {
           out_deleted: number
         }[]
+      }
+      undo_import_conversions: {
+        Args: { p_import_id: string }
+        Returns: number
+      }
+      undo_make_transfer: {
+        Args: { p_transfer_group_id: string }
+        Returns: undefined
       }
       unlink_goal_from_card: { Args: { p_goal_id: string }; Returns: number }
       update_transfer: {

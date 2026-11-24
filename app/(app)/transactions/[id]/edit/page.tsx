@@ -25,6 +25,9 @@ import { getTimeZone } from "@/lib/db/settings";
 import { todayInZone } from "@/lib/date";
 import { formatDayMonth } from "@/lib/format";
 import { InfoIcon } from "@/components/ui/icons";
+import { getTransferOrigins, getTurnIntoTransferCandidates, getTurnIntoTransferQueue } from "@/lib/db/transferConversions";
+import { TurnIntoTransfer } from "./TurnIntoTransfer";
+import { TransferOriginNote } from "./TransferOriginNote";
 
 // "Is this the same bill?" on the entry's own screen (migration 66): the
 // open question if this entry pairs with a schedule's next occurrence,
@@ -42,6 +45,10 @@ async function loadSameBill(entryId: string, ids: string[]) {
   const pair = (pairs.data ?? []).find((p) => p.transactionId === entryId) ?? null;
   const preview = previews.data?.[0];
   return {
+    // A stored "No, keep both" keeps an entry from becoming a transfer
+    // (migration 80's shared rule); unknown on a failed read, and the
+    // database checks it anyway.
+    hasAnswer: (differents.data ?? []).length > 0,
     section:
       pair || (differents.data ?? []).length > 0 ? (
         <div className="flex flex-col gap-2">
@@ -186,6 +193,10 @@ export default async function EditTransactionPage({
     const toName = transferAccounts.find((a) => a.id === transfer.toLeg.accountId)?.account_name;
     const sameBill = await loadSameBill(transfer.fromLeg.id, [transfer.fromLeg.id, transfer.toLeg.id]);
     const transferGoal = await currentGoalFor(transfer.goalid, transferGoals.data);
+    // Made from an entry, or joined by an import: Undo, and the delete
+    // dialog's "Separate them instead" (migration 80). A failed read just
+    // leaves both out; the plain delete still works.
+    const origin = (await getTransferOrigins([transferGroupId])).data?.get(transferGroupId);
 
     return (
       <div className="flex flex-col gap-6">
@@ -193,6 +204,7 @@ export default async function EditTransactionPage({
           title="Edit transfer"
           description="A transfer moves money between two of your accounts. Both sides change together."
         />
+        {origin?.kind === "conversion" ? <TransferOriginNote origin={origin} forecastNote={sameBill.deleteNote} /> : null}
         {sameBill.section}
         <TransferEditForm
           transfer={transfer}
@@ -225,6 +237,12 @@ export default async function EditTransactionPage({
             transferAccounts={fromName && toName ? { from: fromName, to: toName } : undefined}
             forecastNote={sameBill.deleteNote}
             goalName={transferGoal?.name}
+            origin={origin}
+            categoryOptions={[...transferIncomeCategories.data, ...transferExpenseCategories.data].map((c) => ({
+              id: c.id,
+              name: c.category_name,
+              type: c.category_type as TransactionType,
+            }))}
             redirectToList={true}
             label="Delete this transfer"
           />
@@ -293,6 +311,19 @@ export default async function EditTransactionPage({
   const currentGoal =
     tx.goalid === null ? null : { id: tx.goalid, name: tx.goal_name ?? goals.find((g) => g.id === tx.goalid)?.name ?? "A goal" };
 
+  // "Turn into a transfer" (migration 80): offered on an entry the rule
+  // allows -- not from a schedule, no "same bill" answer on it. The
+  // database checks again. A failed candidate read offers it without a
+  // match to join; the other side is then added.
+  const turnable = tx.recurringid === null && !sameBill.hasAnswer;
+  const otherAccounts = accounts.filter((a) => a.id !== tx.accountid);
+  const [turnCandidates, turnQueue] = turnable
+    ? await Promise.all([
+        getTurnIntoTransferCandidates({ id: tx.id, date: tx.transaction_date }, otherAccounts.map((a) => a.id)),
+        getTurnIntoTransferQueue(tx.accountid),
+      ])
+    : [null, null];
+
   let accountsWithCurrent = accounts;
   if (!accounts.some((a) => a.id === tx.accountid)) {
     const accountResult = await getAccount(tx.accountid);
@@ -357,6 +388,22 @@ export default async function EditTransactionPage({
           expenseCategories={expenseCategories}
           goals={goals}
         />
+        {turnable && otherAccounts.length > 0 ? (
+          <TurnIntoTransfer
+            transaction={{
+              id: tx.id,
+              type: tx.transaction_type as "Income" | "Expense",
+              date: tx.transaction_date,
+              cents: Math.round(Number(tx.amount) * 100),
+              description: tx.description,
+              categoryName: tx.category_name ?? "its category",
+            }}
+            accounts={otherAccounts.map((a) => ({ id: a.id, name: a.account_name }))}
+            candidates={turnCandidates?.data ?? []}
+            accountId={tx.accountid}
+            queue={turnQueue?.data ?? []}
+          />
+        ) : null}
         <DeleteTransactionButton
           id={tx.id}
           description={tx.description}

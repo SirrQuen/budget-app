@@ -5,12 +5,12 @@ import { formatCurrency } from "@/lib/format";
 // to the money already logged against the goal before it happens: it
 // stays as history, uncounted, and the card's balance takes over.
 
-/** "Your 4 payments ($900) stay in its history. From now on the goal follows Visa's balance." */
+/** "Your 4 payments ($900) stay in its history. From now on the goal follows the Visa balance." */
 export function historySentence(count: number, total: number, cardName: string): string {
-  if (count === 0) return `From now on the goal follows ${cardName}'s balance.`;
+  if (count === 0) return `From now on the goal follows the ${cardName} balance.`;
   const payments = count === 1 ? "Your 1 payment" : `Your ${count} payments`;
   const stay = count === 1 ? "stays" : "stay";
-  return `${payments} (${formatCurrency(total)}) ${stay} in its history. From now on the goal follows ${cardName}'s balance.`;
+  return `${payments} (${formatCurrency(total)}) ${stay} in its history. From now on the goal follows the ${cardName} balance.`;
 }
 
 /** The note beside the Goal field when a transaction touches a followed card. */

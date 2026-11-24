@@ -2801,17 +2801,149 @@ ZZ VISA AUTOPAY PAYMENT -80, ZZ TESCO STORES 0423 -12.40):
 
 ## "Turn into a transfer" on an existing row (2026-11-20, 2026-11-24)
 
-**Status:** designed, not built (reported 2026-11-24). Raised
-2026-11-20 (deferred in docs/queue.md when 76 left misimported rows
-alone) and 2026-11-24 (no way to mark an existing row as a transfer
-outside the import screen). Raised twice.
+**Status:** built on branch `turn-into-transfer` (migrations 80 and 81),
+not merged. Both on sorrel-dev (2026-11-24); tests and the browser check
+below. Raised 2026-11-20 (deferred in docs/queue.md when
+76 left misimported rows alone) and 2026-11-24 (no way to mark an
+existing row as a transfer outside the import screen). Raised twice.
 
 The action on a single plain row in the transaction editor: pick the
 other account; if a plain, same-cents, opposite-direction row is there
 within 5 days, offer to join them; otherwise create the other leg, with
-that account's own pre-anchor question. The design (atomic write, undo,
-delete, migration) is in the conversation of 2026-11-24, awaiting
-rulings.
+that account's own pre-anchor question.
+
+Ruled 2026-11-24:
+1. Goal-linked rows: as import. Allowed when the linked row becomes the
+   Expense leg; refused only if it would become the Income leg, "Unlink
+   it from <goal> first." (An Income row can't carry a goal --
+   transactions_goal_expense_only -- so the refusal holds by
+   construction; the function checks it anyway.)
+2. Undo after edits: allowed, like import's undo. Categories and
+   grouping are restored, a created side is deleted, edits are kept, and
+   the dialog says so.
+3. Deleting a converted or import-joined transfer: the dialog names
+   both entries and offers "Separate them instead". Import-joined
+   transfers' delete dialog changed the same way.
+4. undo_import reverses its own rows' conversions first and says so
+   ("This also separates 2 transfers made from these rows"); it refuses
+   with the exact step if a later import or conversion depends on it.
+
+What 80 does:
+- `transfer_conversions`: one row per conversion (the entry and its
+  category; the joined entry and its category, or the created leg).
+  Cascades from each transaction.
+- `transfer_leg_refusal()`: THE check for "can this row be a leg / be
+  joined". `import_transactions()` now reads it too (76's inline check
+  moved, same SIP01).
+- `make_transfer()`, `undo_make_transfer()`,
+  `separate_import_transfer()`: SECURITY DEFINER, scoped to auth.uid().
+- `undo_import()`: reverses conversions made from its rows; SIU02 ("Separate
+  the transfer from <date> first.") while a conversion from an entry
+  outside it joined one of its rows.
+- `undo_import_conversions()`: the count for the undo dialog.
+- `delete_own_account()`: conversions go first.
+
+Separating an import-joined transfer (ruled 2026-11-24, revising the
+first build, which deleted the imported side): the imported side is real
+bank data, so it is KEPT. The dialog asks for its category ("This entry
+from your <account> file needs a category to stand on its own"),
+required, of its own type; then the entry the person had goes back to
+its category and both rows stand alone. No balance moves.
+`separate_import_transfer(group, category)`; SMT04 for a missing or
+unfitting category. A side CREATED by "Turn into a transfer" is still
+deleted on Separate -- Sorrel made it.
+
+**No privacy-policy change** (ruled 2026-11-24). The policy's triggers
+are a new processor, a bank connection, or a change in deletion
+behaviour. Separating and Undo are a person's own actions on their own
+entries, taken from a dialog that says what each does before it does
+it -- the same footing as editing or deleting an entry. They don't
+change how Sorrel handles, keeps or deletes data: nothing is removed
+that the person didn't ask to remove, and imported bank data is never
+removed by Separate.
+
+Gaps closed 2026-11-24:
+- **The same-bill question.** An added side that is a transfer
+  schedule's waiting occurrence (both ends, this way round) is asked
+  "Is this the same bill?" exactly as an imported transfer is
+  (`findImportSameBill`, re-checked against the queue on the server).
+  "Yes" goes through `same_bill_answer()`: both legs linked, the
+  schedule stepped, so a scheduled card payment isn't counted twice.
+  Undo steps the schedule back (while `same_bill_restores()` holds, the
+  rule a delete follows) and forgets the answer. A joined entry isn't
+  asked (v1, as import). docs/make-transfer-test.sql section 15.
+- **Bulk delete** warns when the selection holds a converted or
+  import-joined transfer ("1 of them was made from entries you already
+  had. To keep those entries, open it and choose Separate instead." --
+  reworded after the browser check, below). Separate from bulk delete is
+  queued.
+
+A swap of from and to in the transfer editor is an edit like any other:
+`update_transfer()` moves accounts, never a row's type, so the old
+category always fits. SMT03 (refused) is only reachable by a
+service-role fix that changed a leg's type.
+
+**On sorrel-dev, 2026-11-24.**
+- 80's first push failed at statement 14 (an unescaped apostrophe in a
+  comment); nothing was left behind (checked read-only: not recorded, no
+  objects). Every comment and apostrophe message in 80 is now
+  dollar-quoted (`173c25b`); the second push applied it.
+- rls-isolation-test.sql, first run after 80: 606 rows, 2 false, NOT
+  PASSED. Both were 2o's CONTROL rows: the fixture pointed
+  make_transfer() at A's brokerage account, which section 3 archives, so
+  it was refused (SMT01, as it should be). Test fixed (`df8cfe6`): 2o
+  makes its own active account. make_transfer's archived refusal is
+  unchanged and covered by make-transfer-test.sql section 4.
+- `npm run types:dev` after 80 replaced the hand-written entries
+  (`a4f6378`); after 81, no change.
+
+**Browser check, sorrel-dev, 2026-11-24** (ZZ data, removed afterwards;
+both ZZ accounts back to their starting balances): create, join,
+Separate, Undo, the balance-date question (ZZ Savings $540 -> $555 on
+"No, add it"), the same-bill question (Yes stepped the schedule; Undo
+put the occurrence back in the queue), Separate on an import-joined
+transfer (category required; the imported side kept), the bulk warning,
+and Undo import's separates line. Three things found, fixed on the
+branch (`d305ab0`, `0670c07`):
+1. Undo import called a converted row "edited since the import".
+   Migration 81 recreates list_imports(): a row a conversion touched
+   counts as edited only when updated_at is past the conversion's
+   created_at (both carry the same now() when make_transfer writes
+   them). An ordinary edit, and an edit after the conversion, still
+   count -- it's what warns that Undo loses edits. make-transfer-test.sql
+   section 10's first version of this check aged the import with a plain
+   UPDATE, which trg_transactions_created_at (migration 48) undoes, so
+   all three rows read 0 under either rule; fixed (`51b160e`) by turning
+   both timestamp triggers off for that one statement, as
+   balance-anchor-test.sql does. Its four rows each fail on a wrong rule.
+2. The Undo dialog didn't mention a same-bill schedule; it now carries
+   the delete dialog's line (sameBillDeleteNote) -- it goes back on the
+   schedule, or, if the schedule has moved on, when it picks up again.
+3. Copy: "<name>'s" read "ZZ monthly savings's". Every possessive on a
+   name a person typed is gone from the app (nine places; none in SQL).
+   The bulk warning no longer repeats the sentence before it or mixes
+   "--" with an em dash.
+
+**Test runs, sorrel-dev, 2026-11-24, after 81** (run by Matt):
+- make-transfer-test.sql: 82 rows, 0 false, ALL PASS (sections 1-15).
+- rls-isolation-test.sql: 606 rows, 0 false, ALL PASS. (Same row count
+  as the failing run: 2o's new account is a fixture, not a recorded row.)
+- import-transfers-test.sql: 53 rows, 0 false, ALL PASS (sections 1-11).
+- import-test.sql: 79 rows, 0 false, ALL PASS (sections 1-12).
+- `npm run test:parity`: passed, reported by Matt 2026-11-24 -- its
+  final line, "All N checks pass.", wasn't pasted, so N isn't recorded.
+  The script exits non-zero when the CLI refuses the query or returns no
+  rows ("No result rows -- the test did not run."), so a pass means it
+  ran. That answers the open question further down ("`npm run
+  test:parity` probably fails the same way", raised 2026-11-22): this
+  run reached its result rows.
+
+Known edges, not fixed:
+- Bulk delete warns but can't separate (queued, docs/queue.md).
+- The same-bill question is asked only for an occurrence already
+  waiting in the confirmation queue, as import's is: a matching entry
+  dated ahead of its schedule's open window isn't asked (seen in the
+  browser check; by design, v1).
 
 ## Signup alerts: no notice of a new waitlist signup or beta application (2026-11-21)
 
