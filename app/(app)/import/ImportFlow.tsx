@@ -35,11 +35,14 @@ import {
   type PreAnchorChoice,
 } from "@/lib/importReview";
 import {
+  awaitsTransferAnswer,
   findTransferMatches,
   historyMap,
+  keptTransfersSentence,
   resolveRowCategories,
   sameBillRows,
   sameMerchantRows,
+  transferAnswerTodo,
   transferWording,
   type RowCategory,
   type TransferMatch,
@@ -77,8 +80,10 @@ import { UndoImportButton } from "./UndoImportButton";
 // Answers REQUIRED with no default: which way money goes (a one-column
 // amount), the date format (when every date could be read either way),
 // whether rows before a balance date were already in that balance (per
-// account), each "same bill" and "make them one transfer" question, every
-// row's category (but a transfer's) and every transfer's other account.
+// account), whether each row that looks like a transfer is one (ruled
+// 2026-11-24: "Transfer to…" or "Keep as spending", neither assumed), each
+// "same bill" and "make them one transfer" question, every row's category
+// (but a transfer's) and every transfer's other account.
 
 export type ImportAccount = { id: string; name: string; type: string };
 
@@ -149,7 +154,10 @@ type RowView = {
   pairWith: string | null;
   /** A joinable match the person hasn't answered yet. */
   pairUnanswered: boolean;
+  /** Flagged (wording or a match elsewhere) and not set as a transfer. */
   looksLikeTransfer: boolean;
+  /** Flagged and not yet answered transfer-or-not: no type, no category until it is. */
+  awaitingTransferAnswer: boolean;
 };
 
 export function ImportFlow({
@@ -405,13 +413,38 @@ export function ImportFlow({
     [context, included, rowKind, rowOther, exportPartner, otherById],
   );
 
+  const flagged = (r: ReadRow) => transferWording(r.description) || transferMatches.has(r.row);
+
+  // Rows that look like a transfer and haven't been answered: the import
+  // waits on them, and they take no category until they're kept.
+  const awaiting = useMemo(
+    () =>
+      new Set(
+        included
+          .filter((r) =>
+            awaitsTransferAnswer({
+              included: true,
+              looksLikeTransfer: flagged(r),
+              fileTransfer: r.transferGroupId !== null,
+              answered: rowKind[r.row] !== undefined,
+            }),
+          )
+          .map((r) => r.row),
+      ),
+    // flagged reads transferMatches.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [included, transferMatches, rowKind],
+  );
+
   // File category names matched to the person's (one exact match, by type).
   const fileCategories = useMemo(() => {
     if (!context) return null;
-    const plain = included.filter((r) => kindOf(r) !== "Transfer").map((r) => ({ row: r.row, type: typeOf(r), categoryName: r.categoryName }));
+    const plain = included
+      .filter((r) => kindOf(r) !== "Transfer" && !awaiting.has(r.row))
+      .map((r) => ({ row: r.row, type: typeOf(r), categoryName: r.categoryName }));
     return matchCategories(plain, context.categories);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context, included, rowKind]);
+  }, [context, included, rowKind, awaiting]);
 
   const categories = useMemo(() => {
     if (!context || !fileCategories) return null;
@@ -422,13 +455,14 @@ export function ImportFlow({
         transfer: kindOf(r) === "Transfer",
         description: r.description,
         fileCategoryId: fileCategories.byRow.get(r.row) ?? null,
+        awaitingTransferAnswer: awaiting.has(r.row),
       })),
       categoryTypes,
       new Map(Object.entries(rowCategory).map(([k, v]) => [Number(k), v])),
       history,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context, fileCategories, included, rowKind, rowCategory, categoryTypes, history]);
+  }, [context, fileCategories, included, rowKind, rowCategory, categoryTypes, history, awaiting]);
 
   const views: RowView[] = useMemo(() => {
     const inc = new Set(included.map((r) => r.row));
@@ -451,10 +485,11 @@ export function ImportFlow({
         pairWith: joinable && pairAnswer[r.row] === "pair" ? match!.candidate.id : null,
         pairUnanswered: joinable && pairAnswer[r.row] === undefined,
         looksLikeTransfer: kind !== "Transfer" && (transferWording(r.description) || anyMatch !== undefined),
+        awaitingTransferAnswer: awaiting.has(r.row),
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scoped, included, rowKind, rowOther, exportPartner, transferMatches, categories, pairAnswer]);
+  }, [scoped, included, rowKind, rowOther, exportPartner, transferMatches, categories, pairAnswer, awaiting]);
   const includedViews = useMemo(() => views.filter((v) => v.included), [views]);
   const viewByRow = useMemo(() => new Map(views.map((v) => [v.r.row, v])), [views]);
 
@@ -508,7 +543,8 @@ export function ImportFlow({
         ? findImportSameBill(
             sameBillRows(
               includedViews
-                .filter((v) => v.kind !== "Transfer" || v.otherAccountId !== null)
+                // A row not yet answered transfer-or-not isn't asked "same bill?" until it is.
+                .filter((v) => !v.awaitingTransferAnswer && (v.kind !== "Transfer" || v.otherAccountId !== null))
                 .map((v) => ({ row: v.r.row, type: v.type, date: v.r.date, cents: v.r.cents, transfer: transferPayload(v) })),
             ),
             context.queue,
@@ -525,9 +561,14 @@ export function ImportFlow({
   const unansweredPairs = includedViews.filter((v) => v.pairUnanswered).length;
   const otherAnswerNeeded = otherSummaries.some((o) => o.summary.answerNeeded);
   const otherUndescribed = otherSummaries.some((o) => o.summary.undescribed > 0);
+  const keptLine = keptTransfersSentence(
+    includedViews.filter((v) => v.looksLikeTransfer && !v.awaitingTransferAnswer && v.type === "Expense").length,
+    includedViews.filter((v) => v.looksLikeTransfer && !v.awaitingTransferAnswer && v.type === "Income").length,
+  );
   const ready =
     context !== null &&
     included.length > 0 &&
+    awaiting.size === 0 &&
     !summary.answerNeeded &&
     summary.undescribed === 0 &&
     !otherAnswerNeeded &&
@@ -578,10 +619,16 @@ export function ImportFlow({
   const shortcut = useMemo(() => {
     if (!lastPick || !categories) return null;
     const v = viewByRow.get(lastPick.row);
-    if (!v || !v.included || v.kind === "Transfer") return null;
+    if (!v || !v.included || v.kind === "Transfer" || v.awaitingTransferAnswer) return null;
     const found = sameMerchantRows(
       { row: v.r.row, type: v.type, description: v.r.description, categoryId: lastPick.categoryId },
-      includedViews.map((x) => ({ row: x.r.row, type: x.type, transfer: x.kind === "Transfer", description: x.r.description })),
+      includedViews.map((x) => ({
+        row: x.r.row,
+        type: x.type,
+        // Not offered to a row still waiting to be answered transfer-or-not.
+        transfer: x.kind === "Transfer" || x.awaitingTransferAnswer,
+        description: x.r.description,
+      })),
       categories.byRow,
     );
     return found ? { ...found, row: lastPick.row, categoryId: lastPick.categoryId } : null;
@@ -1009,6 +1056,12 @@ export function ImportFlow({
           {context && scoped.length > 0 ? (
             <div className="mt-5 flex flex-col gap-3">
               {saveError ? <ErrorMessage severity="critical" message={saveError} /> : null}
+              {keptLine ? (
+                <p className="flex items-start gap-2 text-sm text-ink-secondary">
+                  <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
+                  {keptLine}
+                </p>
+              ) : null}
               <div className="flex flex-wrap items-center gap-3">
                 <Button type="button" disabled={!ready} onClick={save}>
                   {saving ? "Importing…" : `Import ${included.length.toLocaleString("en-US")} ${included.length === 1 ? "transaction" : "transactions"}`}
@@ -1016,6 +1069,7 @@ export function ImportFlow({
                 {!ready && !saving ? (
                   <p className="text-sm text-ink-secondary">
                     {whatsMissing({
+                      awaitingTransferAnswers: awaiting.size,
                       answerNeeded: summary.answerNeeded || otherAnswerNeeded,
                       missingCategories,
                       transfersWithoutAccount,
@@ -1035,6 +1089,7 @@ export function ImportFlow({
 }
 
 function whatsMissing(m: {
+  awaitingTransferAnswers: number;
   answerNeeded: boolean;
   missingCategories: number;
   transfersWithoutAccount: number;
@@ -1044,6 +1099,7 @@ function whatsMissing(m: {
 }): string {
   if (m.includedCount === 0) return "There's nothing selected to import.";
   const todo: string[] = [];
+  if (m.awaitingTransferAnswers > 0) todo.push(transferAnswerTodo(m.awaitingTransferAnswers));
   if (m.answerNeeded) todo.push("say whether each balance already included the earlier rows");
   if (m.missingCategories > 0) todo.push(`choose a category for ${m.missingCategories} ${m.missingCategories === 1 ? "row" : "rows"}`);
   if (m.transfersWithoutAccount > 0) todo.push(`choose the other account for ${m.transfersWithoutAccount} ${m.transfersWithoutAccount === 1 ? "transfer" : "transfers"}`);
@@ -1194,6 +1250,17 @@ function RowItem({
   const otherNameShown = v.otherAccountId ? otherName(v.otherAccountId) : "";
   const cand = v.match?.candidate;
 
+  // Answering "transfer or not" replaces the question with the row's
+  // controls; focus moves to the one that comes next (the other account,
+  // or the category), never back to the top of the page.
+  const focusAfter = useRef<"other" | "cat" | null>(null);
+  useEffect(() => {
+    const next = focusAfter.current;
+    if (next === null) return;
+    focusAfter.current = null;
+    document.getElementById(`row-${r.row}-${next}`)?.focus();
+  });
+
   return (
     <li
       className={`flex flex-col gap-2 rounded-lg border border-hairline px-3 py-3 text-sm ${muted ? "text-ink-muted" : "text-ink-secondary"}`}
@@ -1214,16 +1281,52 @@ function RowItem({
         </label>
       ) : null}
 
-      {v.included ? (
+      {v.included && v.awaitingTransferAnswer ? (
+        // Asked, never assumed: neither answer is preselected, and the
+        // import waits until one is given (ruled 2026-11-24).
+        <fieldset className="flex flex-col gap-2 rounded-lg bg-surface-raised px-3 py-3">
+          <legend className="sr-only">Is row {r.row} a transfer between your accounts?</legend>
+          <p className="flex items-start gap-2 text-ink-secondary">
+            <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
+            <span>
+              <span className="text-ink">Looks like a transfer.</span> Is it money moving between your own accounts?
+            </span>
+          </p>
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                focusAfter.current = "other";
+                onKind("Transfer");
+              }}
+            >
+              {v.type === "Expense" ? "Transfer to…" : "Transfer from…"}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                focusAfter.current = "cat";
+                onKind(v.type);
+              }}
+            >
+              Keep as {v.type === "Expense" ? "spending" : "income"}
+            </Button>
+          </div>
+        </fieldset>
+      ) : v.included ? (
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-          <label htmlFor={id("type")} className="sr-only">
-            Type for row {r.row}
-          </label>
-          <select id={id("type")} value={v.kind} onChange={(e) => onKind(e.target.value as RowKind)} className={SMALL_FIELD}>
-            <option value="Expense">Spending</option>
-            <option value="Income">Income</option>
-            <option value="Transfer">{v.type === "Expense" ? "Transfer out" : "Transfer in"}</option>
-          </select>
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+            <label htmlFor={id("type")} className="text-xs font-medium text-ink-secondary">
+              Type<span className="sr-only"> for row {r.row}</span>
+            </label>
+            <select id={id("type")} value={v.kind} onChange={(e) => onKind(e.target.value as RowKind)} className={SMALL_FIELD}>
+              <option value="Expense">Spending</option>
+              <option value="Income">Income</option>
+              <option value="Transfer">{v.type === "Expense" ? "Transfer out" : "Transfer in"}</option>
+            </select>
+          </div>
 
           {v.kind === "Transfer" ? (
             <>

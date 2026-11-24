@@ -2728,6 +2728,65 @@ Known edges, not fixed:
   entry is in fact a scheduled card payment, its queue item still asks
   until it's answered.
 
+## Import: a transfer can still come in one-sided (2026-11-24)
+
+**Status:** built on branch `import-transfer-answer`, not merged. Raised
+2026-11-24 ("import transfers are only updating ONE account on
+production, and I don't see a way to mark a row as a Transfer").
+
+Production (ybdwqyihvbokowocvlgq), read-only counts, 2026-11-24: migration
+76 applied, `import_pairings` present. One import since 76's deploy (one
+user, 6 Checking rows, all Spending with a category), no transfer legs
+from any import ever, and no imported row worded like a transfer. So the
+one-sided transfer seen wasn't in the imports production holds now: it
+was undone, or worded outside the pattern, or entered another way. Not
+determinable from counts.
+
+76 did everything right on the server -- a row set to Transfer writes or
+joins both legs. The gap was in the preview:
+- Every row started as Spending or Income. "Looks like a transfer" was a
+  muted hint that nothing waited on.
+- A flagged row's only gate was a category, and that could fill itself:
+  from the file's category column, or suggested from history -- which
+  every transfer imported as spending before 76 had taught.
+- The wording missed common card-payment words (PMT, CRD EPAY,
+  E-PAYMENT, TFR, TRNSFR).
+- The type control had no visible label; on a phone it was a select
+  reading "Spending".
+
+Ruled 2026-11-24, built:
+- A flagged row asks "Transfer to…" / "Keep as spending" (or income),
+  neither preselected. Import waits ("say whether 2 rows that look like
+  transfers are transfers"). `awaitsTransferAnswer()`,
+  `lib/importTransfers.ts`.
+- No category -- suggested or from the file -- and no group, shortcut or
+  same-bill question for a flagged row until it's kept.
+- A visible "Type" label on every row.
+- Above Import, once flagged rows are kept: "2 rows that look like
+  transfers will come in as spending." (`keptTransfersSentence()`).
+- The wording widened: PMT, CRD EPAY, E-PAYMENT/EPAYMENT, TFR, TRNSFR,
+  PAYMENT TO, PAYMENT FROM. Zelle, Venmo and Cash App never flag by
+  wording (payments to people); a matching entry on another account
+  still flags them.
+
+Not done: the server doesn't re-check the answer (it never sees the
+wording before Import, and a kept row is a valid row). No tester note:
+no number moves; a row is asked, and the person decides.
+
+## "Turn into a transfer" on an existing row (2026-11-20, 2026-11-24)
+
+**Status:** designed, not built (reported 2026-11-24). Raised
+2026-11-20 (deferred in docs/queue.md when 76 left misimported rows
+alone) and 2026-11-24 (no way to mark an existing row as a transfer
+outside the import screen). Raised twice.
+
+The action on a single plain row in the transaction editor: pick the
+other account; if a plain, same-cents, opposite-direction row is there
+within 5 days, offer to join them; otherwise create the other leg, with
+that account's own pre-anchor question. The design (atomic write, undo,
+delete, migration) is in the conversation of 2026-11-24, awaiting
+rulings.
+
 ## Signup alerts: no notice of a new waitlist signup or beta application (2026-11-21)
 
 **Status:** deployed 2026-11-21. Main was fast-forwarded to `307b692`

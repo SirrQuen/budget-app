@@ -3,14 +3,17 @@ import assert from "node:assert/strict";
 import {
   MAX_HISTORY_KEYS,
   TRANSFER_MATCH_DAYS,
+  awaitsTransferAnswer,
   buildCategoryHistory,
   findTransferMatches,
   historyMap,
+  keptTransfersSentence,
   merchantKey,
   resolveRowCategories,
   sameBillRows,
   sameMerchantRows,
   suggestCategory,
+  transferAnswerTodo,
   transferWording,
   type TransferCandidate,
 } from "./importTransfers";
@@ -33,6 +36,89 @@ test("the wording banks use for a transfer is flagged, and ordinary spending isn
   for (const d of ["TESCO STORES 1234", "TRANSFERWISE FEE", "Payroll ACME", "Coffee"]) {
     assert.equal(transferWording(d), false, d);
   }
+});
+
+test("the wording widened 2026-11-24: card-payment and abbreviated transfer words", () => {
+  for (const d of [
+    "CAPITAL ONE MOBILE PMT",
+    "ACH PMT AMEX",
+    "CHASE CREDIT CRD EPAY",
+    "Chase Credit Crd Epay 1234",
+    "DISCOVER E-PAYMENT 4410",
+    "AMEX EPAYMENT ACH",
+    "TFR TO SAVINGS 0091",
+    "ONLINE TRNSFR FROM CHK",
+    "XFER 2231 SAV",
+    "Payment to Visa ending 4421",
+    "PAYMENT FROM CHK 1234",
+  ]) {
+    assert.equal(transferWording(d), true, d);
+  }
+});
+
+test("words inside other words, and person-to-person apps, aren't flagged", () => {
+  for (const d of [
+    "PMTS SUPPLY CO", // PMT inside a word
+    "SHOPMTN OUTFITTERS",
+    "EPAYROLL SERVICES",
+    "TFRANK DELI",
+    "XFERIC LABS",
+    "PAYMENT PROCESSING FEE", // "payment" alone isn't a transfer
+    "Payments Inc",
+    "ZELLE PAYMENT TO SAM",
+    "Zelle Transfer from Alex",
+    "VENMO PAYMENT 1023",
+    "VENMO TRANSFER",
+    "Cash App*Jordan",
+    "CASHAPP PMT",
+    "SQ *CASH APP TRANSFER",
+  ]) {
+    assert.equal(transferWording(d), false, d);
+  }
+});
+
+test("a flagged row waits for an answer; an answered, export or left-out row doesn't", () => {
+  const base = { included: true, looksLikeTransfer: true, fileTransfer: false, answered: false };
+  assert.equal(awaitsTransferAnswer(base), true);
+  assert.equal(awaitsTransferAnswer({ ...base, answered: true }), false, "Transfer or Keep chosen");
+  assert.equal(awaitsTransferAnswer({ ...base, looksLikeTransfer: false }), false, "not flagged");
+  assert.equal(awaitsTransferAnswer({ ...base, fileTransfer: true }), false, "a Sorrel export's leg is already a transfer");
+  assert.equal(awaitsTransferAnswer({ ...base, included: false }), false, "a skipped duplicate isn't asked");
+});
+
+test("the to-do and the kept-rows line say how many, in neutral words", () => {
+  assert.equal(transferAnswerTodo(1), "say whether 1 row that looks like a transfer is a transfer");
+  assert.equal(transferAnswerTodo(2), "say whether 2 rows that look like transfers are transfers");
+  assert.equal(keptTransfersSentence(0, 0), null);
+  assert.equal(keptTransfersSentence(2, 0), "2 rows that look like transfers will come in as spending.");
+  assert.equal(keptTransfersSentence(1, 0), "1 row that looks like a transfer will come in as spending.");
+  assert.equal(keptTransfersSentence(0, 1), "1 row that looks like a transfer will come in as income.");
+  assert.equal(keptTransfersSentence(2, 1), "3 rows that look like transfers will come in as spending (2) or income (1).");
+});
+
+test("a row awaiting the transfer answer gets no category -- not suggested, not from the file -- and isn't missing", () => {
+  const types = new Map<string, "Income" | "Expense">([["misc", "Expense"]]);
+  const history = new Map([["Expense|TRANSFER TO", "misc"]]);
+  const desc = "ONLINE TRANSFER TO SAV 4421";
+  const waiting = resolveRowCategories(
+    [
+      { row: 2, type: "Expense", transfer: false, description: desc, fileCategoryId: null, awaitingTransferAnswer: true },
+      { row: 3, type: "Expense", transfer: false, description: desc, fileCategoryId: "misc", awaitingTransferAnswer: true },
+    ],
+    types,
+    new Map(),
+    history,
+  );
+  assert.equal(waiting.byRow.size, 0);
+  assert.deepEqual(waiting.missing, []);
+  // Answered "keep as spending": the suggestion applies as for any row.
+  const kept = resolveRowCategories(
+    [{ row: 2, type: "Expense", transfer: false, description: desc, fileCategoryId: null, awaitingTransferAnswer: false }],
+    types,
+    new Map(),
+    history,
+  );
+  assert.deepEqual(kept.byRow.get(2), { id: "misc", source: "suggested" });
 });
 
 const cand = (over: Partial<TransferCandidate>): TransferCandidate => ({

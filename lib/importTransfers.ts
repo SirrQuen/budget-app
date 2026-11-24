@@ -25,13 +25,64 @@ import type { ImportType } from "@/lib/importCsv";
  */
 export const TRANSFER_MATCH_DAYS = 5;
 
-/** The words banks use for money moving between your own accounts. */
+/**
+ * The words banks use for money moving between your own accounts, card
+ * payments included ("CAPITAL ONE MOBILE PMT", "CHASE CREDIT CRD EPAY",
+ * "DISCOVER E-PAYMENT"; widened 2026-11-24).
+ */
 const TRANSFER_WORDS =
-  /\b(?:ONLINE\s+TRANSFER|TRANSFER|XFER|XFR|PAYMENT\s*-?\s*THANK\s+YOU|THANK\s+YOU\s+FOR\s+YOUR\s+PAYMENT|AUTOPAY\s+PAYMENT|AUTO\s*PAY|AUTOPAY|CREDIT\s+CARD\s+PAYMENT|CARD\s+PAYMENT)\b/i;
+  /\b(?:TRANSFER|TRNSFR|XFER|XFR|TFR|PMT|PAYMENT\s*-?\s*THANK\s+YOU|THANK\s+YOU\s+FOR\s+YOUR\s+PAYMENT|PAYMENT\s+(?:TO|FROM)|AUTO\s*PAY|AUTOPAY|CREDIT\s+CARD\s+PAYMENT|CARD\s+PAYMENT|CRD\s+EPAY|E-?PAYMENT)\b/i;
+
+/**
+ * Person-to-person apps. Money sent through them usually goes to someone
+ * else, so their wording never flags a row on its own ("ZELLE PAYMENT TO
+ * SAM", "VENMO TRANSFER"). A matching entry on another account still does.
+ */
+const PERSON_TO_PERSON = /\b(?:ZELLE|VENMO|CASH\s*APP)\b/i;
 
 /** Whether the description reads like a transfer. A hint, never a decision. */
 export function transferWording(description: string): boolean {
-  return TRANSFER_WORDS.test(description);
+  return TRANSFER_WORDS.test(description) && !PERSON_TO_PERSON.test(description);
+}
+
+/**
+ * A row that looks like a transfer -- by its wording, or a matching entry
+ * on another account -- waits for the person to say what it is: a
+ * transfer, or spending (income) after all. Neither is assumed, and until
+ * it's answered it takes no category, suggested or from the file (ruled
+ * 2026-11-24: a category learned from transfers once imported as spending
+ * would otherwise settle the question for them). A Sorrel export's
+ * transfer leg already is one and is never asked; neither is a row left
+ * out of the import.
+ */
+export function awaitsTransferAnswer(r: {
+  included: boolean;
+  looksLikeTransfer: boolean;
+  /** The file says it's a transfer (a Sorrel export's leg). */
+  fileTransfer: boolean;
+  /** Whether the person has set the row's type themselves. */
+  answered: boolean;
+}): boolean {
+  return r.included && r.looksLikeTransfer && !r.fileTransfer && !r.answered;
+}
+
+/** The import's to-do for unanswered rows: "say whether 2 rows that look like transfers are transfers". */
+export function transferAnswerTodo(count: number): string {
+  return count === 1
+    ? "say whether 1 row that looks like a transfer is a transfer"
+    : `say whether ${count} rows that look like transfers are transfers`;
+}
+
+/**
+ * The line above Import once flagged rows are kept as spending or income:
+ * a fact, so a one-sided transfer is never a surprise. Null when none are.
+ */
+export function keptTransfersSentence(spending: number, income: number): string | null {
+  if (spending + income === 0) return null;
+  const lead = (n: number) => (n === 1 ? "1 row that looks like a transfer" : `${n} rows that look like transfers`);
+  if (income === 0) return `${lead(spending)} will come in as spending.`;
+  if (spending === 0) return `${lead(income)} will come in as income.`;
+  return `${lead(spending + income)} will come in as spending (${spending}) or income (${income}).`;
 }
 
 /** An entry already on one of the person's OTHER active accounts (not a transfer leg). */
@@ -231,10 +282,20 @@ export type RowCategory = { id: string; source: CategorySource };
  * file's category name when it matches exactly one of theirs, else the
  * history's suggestion -- always one of the row's own type (the database
  * refuses anything else). A row with none is listed in `missing`, and the
- * import waits on it. A transfer row has no category and is never listed.
+ * import waits on it. A transfer row has no category and is never listed;
+ * nor is a row still waiting to be answered transfer-or-not
+ * (awaitsTransferAnswer) -- that question comes first, and the import
+ * waits on it instead.
  */
 export function resolveRowCategories(
-  rows: readonly { row: number; type: ImportType; transfer: boolean; description: string; fileCategoryId: string | null }[],
+  rows: readonly {
+    row: number;
+    type: ImportType;
+    transfer: boolean;
+    description: string;
+    fileCategoryId: string | null;
+    awaitingTransferAnswer?: boolean;
+  }[],
   categoryTypes: ReadonlyMap<string, ImportType>,
   chosen: ReadonlyMap<number, string>,
   history: ReadonlyMap<string, string>,
@@ -244,7 +305,7 @@ export function resolveRowCategories(
   const fits = (id: string | null | undefined, type: ImportType): id is string =>
     id != null && categoryTypes.get(id) === type;
   for (const r of rows) {
-    if (r.transfer) continue;
+    if (r.transfer || r.awaitingTransferAnswer) continue;
     const pick = chosen.get(r.row);
     const suggested = suggestCategory(history, r.description, r.type);
     if (fits(pick, r.type)) byRow.set(r.row, { id: pick, source: "chosen" });
