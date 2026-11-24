@@ -134,6 +134,20 @@ export function ConfirmationQueue({ items }: { items: ConfirmationQueueItem[] })
   );
 }
 
+// " · Everyday Checking → Visa": the account(s) an occurrence belongs to, in
+// the surrounding line's ink. Shared by Coming up and "to confirm" so the two
+// never drift. The accounts come from every account, archived included, so a
+// closed account still names itself.
+function QueueAccounts({ item }: { item: ConfirmationQueueItem }) {
+  if (item.accounts.length === 0) return null;
+  return (
+    <>
+      {" "}
+      · <span>{item.accounts.map((a) => a.name).join(" → ")}</span>
+    </>
+  );
+}
+
 // "Rent · $1,850 · Friday". A reminder, not a task: neutral ink, a calendar
 // icon, the day's name -- never "in 5 days", "due soon" or "overdue". No
 // answers yet; "Got it" hides it until the day, when the same item asks.
@@ -158,12 +172,7 @@ function ComingUpRow({ item }: { item: ConfirmationQueueItem }) {
           <Amount amount={item.amount} type={item.kind === "Income" ? "Income" : "Expense"} /> ·{" "}
           {item.approximate ? "around " : ""}
           {formatWeekday(item.dueDate)}
-          {item.accounts.length > 0 ? (
-            <>
-              {" "}
-              · <span>{item.accounts.map((a) => a.name).join(" → ")}</span>
-            </>
-          ) : null}
+          <QueueAccounts item={item} />
         </p>
         <button type="button" onClick={dismiss} disabled={pending} className={QUIET}>
           {pending ? <DrawnCheck className="mr-1 h-3.5 w-3.5" /> : null}
@@ -207,6 +216,7 @@ function QueueRow({ item, disabled }: { item: ConfirmationQueueItem; disabled: b
       <p className="text-xs text-ink-secondary">
         {item.approximate ? "Around " : "Expected "}
         {formatDateWithWeekday(item.dueDate)}
+        <QueueAccounts item={item} />
         {item.outstanding > 1
           ? ` · ${item.outstanding - 1} more after this one`
           : ""}

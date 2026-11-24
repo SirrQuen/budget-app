@@ -26,12 +26,14 @@ registerHooks({
 });
 
 let React: typeof import("react");
+let TodayProvider: typeof import("@/components/TodayProvider").TodayProvider;
 let renderToStaticMarkup: typeof import("react-dom/server").renderToStaticMarkup;
 let ConfirmationQueue: typeof import("./ConfirmationQueue").ConfirmationQueue;
 
 before(async () => {
   React = await import("react");
   ({ renderToStaticMarkup } = await import("react-dom/server"));
+  ({ TodayProvider } = await import("@/components/TodayProvider"));
   ({ ConfirmationQueue } = await import("./ConfirmationQueue"));
 });
 
@@ -62,7 +64,19 @@ function comingUp(over: Partial<ConfirmationQueueItem>): ConfirmationQueueItem {
 }
 
 const render = (item: ConfirmationQueueItem) =>
-  text(renderToStaticMarkup(React.createElement(ConfirmationQueue, { items: [item] })));
+  text(
+    renderToStaticMarkup(
+      // eslint-disable-next-line react/no-children-prop -- createElement's typing wants it
+      React.createElement(
+        TodayProvider,
+        {
+          today: "2026-11-18",
+          timeZone: null,
+          children: React.createElement(ConfirmationQueue, { items: [item] }),
+        },
+      ),
+    ),
+  );
 
 test("coming up: the account name follows the weekday", () => {
   assert.match(render(comingUp({})), /Rent · .*1,850.* · Friday · Checking/);
@@ -81,4 +95,25 @@ test("coming up: a transfer names both ends, source first", () => {
     }),
   );
   assert.match(out, /Friday · Checking → Visa/);
+});
+
+test("to confirm: the account name follows the expected date", () => {
+  const out = render(comingUp({ state: "to-confirm" }));
+  assert.match(out, /Expected .* · Checking/);
+});
+
+test("to confirm: a transfer names both ends, source first", () => {
+  const out = render(
+    comingUp({
+      state: "to-confirm",
+      name: "Card payment",
+      kind: "Transfer",
+      toAccountId: "a2",
+      accounts: [
+        { id: "a1", name: "Everyday Checking", openingDate: "2026-01-01" },
+        { id: "a2", name: "Visa", openingDate: "2026-01-01" },
+      ],
+    }),
+  );
+  assert.match(out, /Everyday Checking → Visa/);
 });
