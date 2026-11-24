@@ -117,3 +117,16 @@ test("to confirm: a transfer names both ends, source first", () => {
   );
   assert.match(out, /Everyday Checking → Visa/);
 });
+
+// getConfirmationQueue reads every account, archived included, so a closed
+// account's schedule still names where it lands. The item carries no
+// is_active flag; the name is all it has, and it must show.
+test("to confirm: an item on an archived account still shows its name", () => {
+  const out = render(
+    comingUp({
+      state: "to-confirm",
+      accounts: [{ id: "a9", name: "Old Savings (closed)", openingDate: "2024-01-01" }],
+    }),
+  );
+  assert.match(out, /Expected .* · Old Savings \(closed\)/);
+});
