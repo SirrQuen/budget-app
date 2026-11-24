@@ -2730,7 +2730,8 @@ Known edges, not fixed:
 
 ## Import: a transfer can still come in one-sided (2026-11-24)
 
-**Status:** built on branch `import-transfer-answer`, not merged. Raised
+**Status:** merged 2026-11-24: main fast-forwarded to `d8e6e7f`
+(`import-transfer-answer`), not yet pushed or deployed. Raised
 2026-11-24 ("import transfers are only updating ONE account on
 production, and I don't see a way to mark a row as a Transfer").
 
