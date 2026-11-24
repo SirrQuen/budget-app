@@ -2801,9 +2801,12 @@ ZZ VISA AUTOPAY PAYMENT -80, ZZ TESCO STORES 0423 -12.40):
 
 ## "Turn into a transfer" on an existing row (2026-11-20, 2026-11-24)
 
-**Status:** built on branch `turn-into-transfer` (migrations 80 and 81),
-not merged. Both on sorrel-dev (2026-11-24); tests and the browser check
-below. Raised 2026-11-20 (deferred in docs/queue.md when
+**Status:** shipped 2026-11-24 -- squashed to `9ac8506` and
+fast-forwarded to main; migrations 80 and 81 pushed to production
+(ybdwqyihvbokowocvlgq) before the deploy, checked read-only (both
+recorded, transfer_conversions and 80's five functions present,
+list_imports() on 81's rule). Tests and the browser check below.
+Raised 2026-11-20 (deferred in docs/queue.md when
 76 left misimported rows alone) and 2026-11-24 (no way to mark an
 existing row as a transfer outside the import screen). Raised twice.
 

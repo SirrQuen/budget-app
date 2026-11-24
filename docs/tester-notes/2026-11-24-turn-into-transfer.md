@@ -1,7 +1,7 @@
 Sent:      not yet
 Migration: 80, 81
-Merge:     not yet
-Deployed:  not yet
+Merge:     9ac8506 (fast-forward of turn-into-transfer, squashed; no merge commit)
+Deployed:  2026-11-24 (80 and 81 on production first, checked read-only)
 
 ---
 

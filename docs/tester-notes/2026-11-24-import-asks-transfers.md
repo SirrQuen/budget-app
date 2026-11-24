@@ -1,7 +1,7 @@
 Sent:      not yet
 Migration: none
 Merge:     d8e6e7f (fast-forward of import-transfer-answer; no merge commit)
-Deployed:  not yet
+Deployed:  2026-11-24 (reached origin/main in the 10:04 push, with d191b12)
 
 ---
 
