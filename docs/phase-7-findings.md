@@ -2770,8 +2770,33 @@ Ruled 2026-11-24, built:
   still flags them.
 
 Not done: the server doesn't re-check the answer (it never sees the
-wording before Import, and a kept row is a valid row). No tester note:
-no number moves; a row is asked, and the person decides.
+wording before Import, and a kept row is a valid row). No number moves by
+itself; a tester note says what changed anyway:
+docs/tester-notes/2026-11-24-import-asks-transfers.md (not before-deploy).
+
+Browser check on localhost against sorrel-dev (tztbebdzlezlhvsbylsf),
+2026-11-24, ZZ Checking ($2,000.00), ZZ Savings ($500.00), ZZ Visa
+($550.00 owed), with a 3-row file (ZZ ONLINE TRANSFER TO SAV 4421 -150,
+ZZ VISA AUTOPAY PAYMENT -80, ZZ TESCO STORES 0423 -12.40):
+- Both transfer rows asked "Transfer to…" / "Keep as spending", neither
+  chosen. Import was disabled: "To import: say whether 2 rows that look
+  like transfers are transfers." "Set all" counted 1 spending row (TESCO
+  only). The TESCO row showed the visible "Type" label.
+- "Keep as spending" on the Visa row: the line above Import read "1 row
+  that looks like a transfer will come in as spending." "Transfer to…"
+  on the savings row moved focus to its account picker.
+- The Visa row switched to Transfer out to ZZ Visa, the savings row to ZZ
+  Savings; the kept line went away and Import enabled. Preview: Checking
+  $2,000.00 -> $1,757.60, Savings $500.00 -> $650.00, Visa $550.00 ->
+  $470.00 owed.
+- Imported. Read-only on sorrel-dev: each transfer was an Expense leg on
+  ZZ Checking and an Income leg on the other account, no category, both
+  carrying the import; TESCO a plain Groceries row. No entry on ZZ Visa
+  matched, so this run created both legs; joining was checked on
+  2026-11-20 and the join path is unchanged.
+- Undo (dialog "Undo this import? 3 transactions will be removed", read
+  first): accounts back to $2,000.00 / $500.00 / $550.00 owed, and no ZZ
+  rows from the run remain (read-only). No console errors.
 
 ## "Turn into a transfer" on an existing row (2026-11-20, 2026-11-24)
 
