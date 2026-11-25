@@ -3150,3 +3150,55 @@ to 'before' and 'after' (`lib/actions/recurring.ts:264`), so saving
 either should fail. `resolve_recurring_due_date()` reads before/after.
 Production has 0 schedules with a rule other than 'none'. The
 business-day OFFSET (`business_day_offset`) is unaffected.
+
+## The stored timezone follows whichever browser loaded last (2026-11-25)
+
+**Status:** reported, not changed. Raised 2026-11-25 (found while checking
+the dashboard scenes) and again 2026-11-25 (Matt asked for the report).
+From reading the code; not tested by travelling.
+
+**Where.** An effect in `components/TodayProvider.tsx` compares the
+browser's zone with `settings.timezone` and calls `syncTimeZoneAction`
+(`lib/actions/settings.ts`) -> `updateTimeZone` (`lib/db/settings.ts`).
+Added in `9aaeac0` (2026-10-06).
+
+**How often.** It checks on every load and writes only when the zone
+differs, once per zone per mount. It runs in a client effect calling a
+server action, not during a render, so "a page render never writes" holds.
+
+**When a user travels:**
+
+- The first load renders in the old zone, saves the new one, then
+  re-renders, so figures can change in front of the user.
+- Stored dates (transactions, schedules, balance dates) don't move.
+- "Today" can. A transaction counts toward a balance from its date
+  (migration 65), so one dated at that boundary can start or stop
+  counting. Flying west can move a balance until the date arrives again.
+- Schedules don't move; when an item opens for confirmation, "days until"
+  and the forecast can shift by a day.
+- Near month end, budgets, month-to-date figures and cash flow can show a
+  different month, including the previous one.
+- Values derived from timestamps ("since" labels, milestone dates) can
+  read a day differently.
+- The greeting, scene, plant and visitor follow the new zone after the
+  re-render.
+
+**Two devices in different zones** (a laptop left on home time, a phone
+that moved) switch the stored zone back and forth: each load writes its own
+device's zone, so "today", and any figure resting on it, depends on which
+device was opened last.
+
+**Possible later fix:** a setting, "Use my device's timezone
+automatically", default on; off keeps the stored zone. To be decided with
+the queued hemisphere setting (docs/queue.md, Deferred).
+
+## The dashboard scrolls sideways at 320px with a large figure (2026-11-25)
+
+**Status:** noted, not fixed. Seen on sorrel-dev at 320px: the page is
+346px wide in a 305px viewport. The cause is the Safe to Spend figure
+(`+$110,788.61` at `text-5xl`, `app/(app)/dashboard/SafeToSpendHero.tsx`),
+which can't shrink; hiding it removes the scroll. First reported the same
+day as a table, which was wrong: the wide table is the cash flow chart's
+screen-reader table, which is clipped and adds no width. A shorter figure
+may fit. The scenes banner is not involved.
+

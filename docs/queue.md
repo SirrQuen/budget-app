@@ -5,7 +5,7 @@ lives in its findings entry (docs/phase-7-findings.md) or spec. "Do this
 next" means editing this file. Launch blockers live in the findings'
 authoritative list, not here.
 
-Last updated 2026-11-22.
+Last updated 2026-11-25.
 
 ## Next
 
@@ -195,6 +195,8 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 |---|---|---|---|
 | A real "last day of the month" option and a semi-monthly frequency, together. Today onboarding's "Last day of the month" anchors a Monthly schedule's start_date on a 31st (it clamps to every month's end), and "twice a month" is two Monthly schedules. Both work with no migration but read as "Monthly on the 31st" and as two schedules. A proper frequency needs rectx_frequency_check, the cadence (lib/recurringCadence.ts) and its wording | 2026-11-17 | Unscheduled | `lib/onboarding.ts` (`lastDayAnchor`, `paycheckPlans`); docs/Decide-and-Grow.md, rulings for G |
 | Hemisphere setting for the seasonal leaf. Batch D picks the season from the month, northern hemisphere; a southern-hemisphere user sees the wrong one. Needs a setting (a settings column, so a migration) and a Settings control. The doc's own note ("Note a hemisphere setting in the queue") | 2026-11-17 | Unscheduled | `lib/timeOfDay.ts` (`seasonForMonth`); docs/Motion-and-Delight.md, step 8 |
+| "Use my device's timezone automatically" (default on): today the stored zone follows whichever browser loaded last. Decide together with the hemisphere setting above | 2026-11-25 | With the hemisphere setting | Findings, "The stored timezone follows whichever browser loaded last" |
+| The dashboard scrolls sideways at 320px: a large Safe to Spend figure doesn't shrink (not a table, as first reported, and not the scenes banner) | 2026-11-25 | Unscheduled | Findings, "The dashboard scrolls sideways at 320px with a large figure" |
 | "Separate them instead" from bulk delete. Today its dialog warns when the selection holds a converted or import-joined transfer ("To keep those entries, open each and choose Separate instead") and points to opening each; separating in bulk would need a category for every import-joined side in one dialog | 2026-11-24 | Unscheduled (`turn-into-transfer` shipped 2026-11-24) | Findings, "\"Turn into a transfer\" on an existing row" |
 | Auto-link a goal-funding schedule's confirmed occurrences to its goal (goals.funding_recurringid), so the goal's progress moves when the transfer is confirmed. Today the hold already skips a funded goal, but confirming writes no link | 2026-11-16 | After 69 and 70 merge | Findings, "A transfer for a goal came off safe to spend twice" |
 | Drag-and-drop library: classic `@dnd-kit/core` 6.3.1 + `@dnd-kit/sortable` 10.0.0, pinned exactly (chosen 2026-11-14: stable over active, one sortable list, small footprint; the new `@dnd-kit/react` line is 0.x). Revisit: move to the new line if classic breaks on a React upgrade, or when the new line reaches 1.0 | 2026-11-14 | On a React upgrade, or `@dnd-kit/react` 1.0 | `package.json`; `app/(app)/dashboard/DashboardSections.tsx` |
