@@ -9,6 +9,7 @@ import {
   VISITOR_AWAY_KEY,
   VISITOR_AWAY_MS,
   VISITOR_FLIGHT_MS,
+  VISITOR_PERCH,
   VISITOR_SEEN_KEY,
   bandStamp,
   hasRoom,
@@ -25,8 +26,9 @@ import {
 // the day per device, then sits perched, completely still. Display only --
 // "seen" and "sent away" are per-device localStorage (lib/visitors.ts), the
 // render writes nothing, and every animation is a one-shot CSS keyframe on
-// transform or opacity (app/globals.css, "VISITORS"). The perch is the
-// header's empty right end (PageHeader's `ornament`).
+// transform or opacity (app/globals.css, "VISITORS"). The perch is on the
+// roselle in the dashboard's scene (docs/Scenes.md; lib/visitors.ts,
+// VISITOR_PERCH): the slot is placed against the plant's own box.
 
 /** The arrival's floor after mount. It used to be 1.6s, to let the sign-in fold play; the
  *  plant (lib/plantSignals.ts) is waited on directly now, so nothing is guessed. */
@@ -205,7 +207,8 @@ export function Visitor({
       aria-hidden="true"
       data-visitor-slot=""
       // The slot never takes a pointer; only the visitor's own box does.
-      className="pointer-events-none absolute right-0 top-0 flex h-12 w-11 origin-top-right items-end justify-end max-sm:scale-[0.85] sm:top-auto sm:bottom-0 sm:origin-bottom-right"
+      className="pointer-events-none absolute flex h-12 w-11 origin-bottom items-end justify-center max-sm:scale-[0.85]"
+      style={{ left: `calc(${VISITOR_PERCH[kind].x}% - 22px)`, bottom: `${VISITOR_PERCH[kind].y}%` }}
     >
       {shown ? (
         <div

@@ -34,6 +34,8 @@ The band comes from **`lib/timeOfDay`, in the user's stored timezone**, the same
 
 ## Where it perches
 
+**Since the scenes (docs/Scenes.md): on the roselle, in the dashboard banner.** `VISITOR_PERCH` in `lib/visitors.ts` holds each visitor's point on the plant's box (centre across, feet above the base): songbird 55% / 78%, butterfly 88% / 91%, firefly 98% / 87%, owl 53% / 80%. The twig and the header's right end below are the earlier arrangement.
+
 **Next to the greeting**, on a small twig carrying the season's leaf (see the canvas), or on the existing seasonal leaf if that already sits beside the greeting. **Phase 1 of the build reports what is beside the greeting now** (the seasonal leaf and the Your Sorrel button), proposes the perch point, and shows it at 1440px, 1024px and 390px wide. At phone width, a smaller visitor (about 85% size) is fine. Not appearing is better than crowding.
 
 ---

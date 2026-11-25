@@ -398,11 +398,12 @@ data contexts.
 - Text never wears a data colour. Values, labels and legends use ink tokens;
   a coloured dot beside the text carries identity.
 - Status colour never appears alone — always icon + label too.
-- No muted-ink text directly on the page plane in the dashboard's glow
-  region — at a glow's peak it falls below 4.5:1. Put it on a card or use
-  secondary ink. (Measured 2026-11-17: dark morning 3.28, light evening
-  4.17; secondary ink clears 6.16 everywhere. The glow is
-  `components/TimeOfDayGlow.tsx`; its strengths are `--tod-*` in globals.css.)
+- No muted-ink text over the dashboard's scene (`components/SceneBanner.tsx`,
+  colours in `lib/scenes.ts`). The date, greeting and "Your Sorrel" use
+  secondary ink and hold 4.5:1 in every scene because the scrim behind them
+  (`.dash-scene__scrim`) is sized for it: fix contrast there, never by
+  changing the text colour or the drawing (docs/Scenes.md). Below 64rem the
+  words sit above the scene, with nothing behind them.
 - Big standalone numbers use proportional figures. `tabular-nums` only in
   columns that must align vertically (table rows).
 - Exactly one hero figure per view, >= 48px, same sans as everything else.

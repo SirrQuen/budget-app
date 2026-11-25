@@ -1,10 +1,8 @@
 import { recordLogin } from "@/lib/db/profile";
 import { isFirstSession } from "@/lib/auth/firstSession";
 import { welcomeMessage } from "@/lib/displayName";
-import { markStateAt, seasonAt, timeBandAt } from "@/lib/timeOfDay";
-import { TimeOfDayGlow } from "@/components/TimeOfDayGlow";
-import { YourSorrelLink } from "./YourSorrelLink";
-import { Visitor } from "@/components/Visitor";
+import { markStateAt, seasonAt, timeBandAt, type TimeBand } from "@/lib/timeOfDay";
+import { DashboardBanner } from "./DashboardBanner";
 import {
   getDashboardOnboarding,
   classifyDashboardStage,
@@ -47,7 +45,6 @@ import { sinceLabel } from "@/lib/sinceLabel";
 import { monthStartISO } from "@/lib/date";
 import { flowDrillHref, periodForRange, periodLabels, type Flow } from "@/lib/transactionFilters";
 import { formatCurrency } from "@/lib/format";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { StatTile } from "@/components/ui/StatTile";
 import { ReturnSummaryStrip } from "@/components/ui/ReturnSummaryStrip";
 import { VariableAmountPrompt } from "./VariableAmountPrompt";
@@ -81,7 +78,6 @@ import { DashboardSections } from "./DashboardSections";
 import { SectionError } from "./SectionError";
 import { LoadError } from "@/components/ui/LoadError";
 import { NoTransactionsView } from "./DashboardOnboarding";
-import { DayNightMark } from "@/components/DayNightMark";
 import { WelcomeReady } from "@/components/WelcomeReady";
 
 // Auth is already enforced by app/(app)/layout.tsx's requireUser() before
@@ -189,7 +185,28 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
 
   // A failed profile read just means no name -- "Welcome back" alone.
   const welcome = welcomeMessage(greetingResult.data ?? {}, firstSession, band);
+  // All four, so a band that changes while the page is open changes the words
+  // with the scene (components/SceneBanner.tsx).
+  const greeting = (b: TimeBand) => welcomeMessage(greetingResult.data ?? {}, firstSession, b);
+  const greetings: Record<TimeBand, string> = {
+    morning: greeting("morning"),
+    afternoon: greeting("afternoon"),
+    evening: greeting("evening"),
+    night: greeting("night"),
+  };
   const previousLoginAt = greetingResult.data?.previousLoginAt ?? null;
+
+  // The landscape for this part of the day (docs/Scenes.md): the dashboard's
+  // header, with or without transactions. The onboarding steps stay plain.
+  const banner = (
+    <DashboardBanner
+      timeZone={timeZone}
+      band={band}
+      greetings={greetings}
+      season={season}
+      plantState={markStateAt(timeZone, renderedAt)}
+    />
+  );
 
   // If the snapshot itself failed we can't tell which stage the user is in --
   // fall through to the full dashboard, where the per-section error handling
@@ -279,8 +296,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       <>
         <WelcomeReady />
         <NoTransactionsView
+          header={banner}
           billsCard={billsCard}
-          welcome={welcome}
           accounts={balancesResult.data ?? []}
           accountsError={balancesResult.error}
           netWorth={netWorthResult.data?.net_worth ?? null}
@@ -613,9 +630,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
 
   return (
     <DashboardLayoutProvider saved={layout}>
-      <div className="relative isolate flex flex-col gap-10">
-        {/* Behind everything, static, by the user's local hour. */}
-        <TimeOfDayGlow band={band} />
+      <div className="flex flex-col gap-10">
         {/* The data has landed: the daily welcome can dissolve onto this. */}
         <WelcomeReady />
         {/* A failed read is no toast, never an error. */}
@@ -635,21 +650,11 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         ) : null}
         {/* ── Right now: as-of-today and forward-looking; not scoped by the filter ── */}
         <section className="flex flex-col gap-6" aria-labelledby="dash-right-now">
-          <PageHeader
-            title="Dashboard"
-            description={welcome}
-            descriptionAfter={<YourSorrelLink season={season} />}
-            ornament={<Visitor band={band} today={today} />}
-          />
+          {banner}
           {pageLevelError ? <LoadError message="We couldn’t load parts of your dashboard." /> : null}
-          {/* The mark is ambient -- day/night for "right now" -- and kept out
-              of the hero's row so nothing competes with that figure. */}
-          <div className="flex items-center justify-between gap-4">
-            <h2 id="dash-right-now" className="text-sm font-medium text-ink-secondary">
-              Right now
-            </h2>
-            <DayNightMark size={56} timeZone={timeZone} initialState={markStateAt(timeZone, renderedAt)} />
-          </div>
+          <h2 id="dash-right-now" className="text-sm font-medium text-ink-secondary">
+            Right now
+          </h2>
 
           {/* LoggingStreakStrip is hidden, not deleted: it counts days with a
               transaction, so a week of spending nothing breaks it. It returns

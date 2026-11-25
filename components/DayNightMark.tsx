@@ -18,14 +18,10 @@ import { setPlantBusy } from "@/lib/plantSignals";
 import { hourInZone, msUntilNextMarkBoundary, type MarkState } from "@/lib/timeOfDay";
 import { afterWelcome } from "@/lib/welcomeSignals";
 
-// The slot is the old flower's 56px, so the row (and the hero under it) sits
-// where it always has. The plant is taller than the slot and rises out of its
-// top, over the empty space above the row -- never down over the hero. Height
-// is ~100px from 640px up, 88px on a phone. From 640px up the header's
-// bottom-right holds the visitor's perch and flight, so the plant stands 72px
-// in from the edge, clear of both; the calyces are drawn 1.4x so
-// every one is >= 14px (>= 12px on a phone). See docs/Roselle.md.
-const ROW_PX = 56;
+// The plant stands on the near hill of the dashboard's scene (docs/Scenes.md;
+// placed by .dash-banner__perch). 120px tall from 640px up, 88px on a phone
+// (docs/Roselle.md), width following the drawing's 240:280; at those sizes
+// every stem calyx is over 14px.
 /** The reveal fade (app/globals.css, .roselle-slot). */
 const REVEAL_MS = 150;
 /** No decision by now: show the resting pose. */
@@ -34,7 +30,7 @@ const REVEAL_FALLBACK_MS = 2000;
 /**
  * The dashboard's living plant (docs/Roselle.md): a roselle, open
  * 7:00am-6:59pm and closed 7:00pm-6:59am in the user's stored zone
- * (lib/timeOfDay.ts -- the same clock as the dashboard's glow). The server
+ * (lib/timeOfDay.ts -- the same clock as the dashboard's scene). The server
  * renders the pose for its own hour, so there is no flash and nothing to
  * guess on hydration.
  *
@@ -51,12 +47,9 @@ const REVEAL_FALLBACK_MS = 2000;
  * assistive tech. Not the brand mark.
  */
 export function DayNightMark({
-  size = ROW_PX,
   timeZone,
   initialState,
 }: {
-  /** The row's height in px: the footprint in the layout, which the plant never grows. */
-  size?: number;
   /** settings.timezone (getTimeZone()); null is UTC. */
   timeZone: string | null;
   /** markStateAt(timeZone, now), computed on the server for the first paint. */
@@ -192,15 +185,10 @@ export function DayNightMark({
   return (
     <span
       aria-hidden="true"
-      className="roselle-slot relative block w-[75px] shrink-0 sm:w-[158px]"
-      style={{ height: size, opacity: ready ? 1 : 0 }}
+      className="roselle-slot block h-full w-full"
+      style={{ opacity: ready ? 1 : 0 }}
     >
-      <Roselle
-        pose={pose}
-        motion={motion}
-        height={100}
-        className="absolute bottom-0 right-0 h-[88px] w-[75.4px] sm:right-[72px] sm:h-[100px] sm:w-[85.7px]"
-      />
+      <Roselle pose={pose} motion={motion} height={120} className="block h-full w-full" />
     </span>
   );
 }

@@ -11,7 +11,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 let dom: JSDOM;
 let reducedMotion = false;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let React: any, act: any, createRoot: any, SeasonalLeaf: any, TimeOfDayGlow: any;
+let React: any, act: any, createRoot: any, SeasonalLeaf: any;
 
 before(async () => {
   dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
@@ -35,7 +35,6 @@ before(async () => {
   act = React.act;
   ({ createRoot } = await import("react-dom/client"));
   ({ SeasonalLeaf } = await import("./SeasonalLeaf"));
-  ({ TimeOfDayGlow } = await import("./TimeOfDayGlow"));
 });
 
 beforeEach(() => {
@@ -120,13 +119,4 @@ test("an unrecognised stored value is not a season change", async () => {
   const c = await mount(<SeasonalLeaf season="autumn" />);
   await tick();
   assert.equal(playing(c), 0);
-});
-
-test("the glow names its band, is hidden from assistive tech, and carries no animation class", () => {
-  for (const band of ["morning", "afternoon", "evening", "night"] as const) {
-    const html = renderToStaticMarkup(<TimeOfDayGlow band={band} />);
-    assert.match(html, /aria-hidden="true"/);
-    assert.match(html, new RegExp(`tod-glow--${band}`));
-    assert.doesNotMatch(html, /animate|pulse|drift/);
-  }
 });

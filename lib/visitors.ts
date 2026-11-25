@@ -21,6 +21,18 @@ export function visitorForBand(band: TimeBand): VisitorKind {
   return VISITOR_FOR_BAND[band];
 }
 
+/**
+ * Where each one perches on the dashboard's roselle (docs/Scenes.md; the
+ * design board's positions): the visitor's centre across the plant's box, and
+ * its feet above the plant's base, both in percent.
+ */
+export const VISITOR_PERCH: Record<VisitorKind, { x: number; y: number }> = {
+  songbird: { x: 55, y: 78 },
+  butterfly: { x: 88, y: 91 },
+  firefly: { x: 98, y: 87 },
+  owl: { x: 53, y: 80 },
+};
+
 /** `visitor-seen`: `<local date>:<band>`, the last band whose arrival played. */
 export const VISITOR_SEEN_KEY = "visitor-seen";
 /** `visitor-away`: `<local date>:<band>`, sent away by a tap for that band. */

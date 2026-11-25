@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Round 3 · A scene for every part of the day</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&amp;family=Figtree:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+.eb{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#A5A2B4}
+.ban{position:relative;overflow:hidden;height:300px;border-radius:14px}
+.ban.dk{background:#0B0B12;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.ban.lt{background:#F4F1F5}
+.ban .scene{position:absolute;inset:0;width:100%;height:100%;-webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 74%,transparent 97%),linear-gradient(to right,transparent 0%,#000 2.5%,#000 97.5%,transparent 100%);-webkit-mask-composite:source-in;mask-image:linear-gradient(to bottom,#000 0%,#000 74%,transparent 97%),linear-gradient(to right,transparent 0%,#000 2.5%,#000 97.5%,transparent 100%);mask-composite:intersect}
+.ban::after{content:"";position:absolute;left:26px;right:26px;bottom:0;height:22px;border-radius:14px 14px 0 0}
+.ban.dk::after{background:#13131D;box-shadow:inset 0 1px 0 rgba(255,255,255,.09)}
+.ban.lt::after{background:#FFFFFF;box-shadow:inset 0 1px 0 rgba(11,11,18,.08)}
+.ban .txt{position:absolute;left:26px;top:30px;display:flex;flex-direction:column;gap:6px}
+.ban .date{font-size:13px;font-weight:500}
+.ban .greet{font-family:'Bricolage Grotesque',Figtree,sans-serif;font-weight:700;font-size:28px;letter-spacing:-.02em;line-height:1.1}
+.ban .pill{align-self:flex-start;margin-top:6px;display:flex;align-items:center;gap:8px;font:inherit;font-size:13px;font-weight:600;padding:7px 12px;border-radius:999px;cursor:pointer}
+.dk .date{color:#C9C6D6}.dk .greet{color:#F6F4F8}.dk .pill{background:rgba(11,11,18,.55);border:1px solid rgba(255,255,255,.18);color:#F6F4F8}
+.lt .date{color:#3D3B4A}.lt .greet{color:#0B0B12}.lt .pill{background:rgba(255,255,255,.72);border:1px solid rgba(11,11,18,.14);color:#0B0B12}
+.plant{position:absolute;right:92px;bottom:40px}
+.vis{position:absolute;transform:translateY(-26px)}
+.rowlab{display:flex;flex-direction:column;justify-content:center;gap:4px}
+</style>
+</helmet>
+<div style="width:1840px;height:1700px;box-sizing:border-box;background:#0B0B12;color:#F6F4F8;font-family:Figtree,system-ui,sans-serif;padding:40px;display:flex;flex-direction:column;gap:22px;overflow:hidden">
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <radialGradient id="rsPet" cx="50%" cy="100%" r="100%"><stop offset="0%" stop-color="#E49C8C"></stop><stop offset="50%" stop-color="#F1C6B3"></stop><stop offset="100%" stop-color="#F7DEC9"></stop></radialGradient>
+      <linearGradient id="rsCx" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#6E0A1C"></stop><stop offset="55%" stop-color="#A8132B"></stop><stop offset="100%" stop-color="#D3263A"></stop></linearGradient>
+      <linearGradient id="rsLf" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#3F7A48"></stop><stop offset="100%" stop-color="#86B97E"></stop></linearGradient>
+      <symbol id="rsBase" viewBox="0 0 70 90">
+        <path d="M35 90 C33 72 37 54 36 36" stroke="#7A1828" stroke-width="3" fill="none" stroke-linecap="round"></path>
+        <path d="M35 70 C26 66 18 60 14 52" stroke="#7A1828" stroke-width="2" fill="none" stroke-linecap="round"></path>
+        <path d="M35 78 C44 76 52 70 56 64" stroke="#7A1828" stroke-width="1.6" fill="none" stroke-linecap="round"></path>
+        <path d="M56 64 C50 58 50 50 56 44 C62 50 62 58 56 64 Z" fill="url(#rsLf)"></path>
+        <g transform="translate(14 54) rotate(-18)"><path d="M0 0 C-7 -1 -9 -8 -7 -15 L-8 -23 L-4 -17 L-2 -25 L0 -18 L2 -25 L4 -17 L8 -23 L7 -15 C9 -8 7 -1 0 0 Z" fill="url(#rsCx)"></path><path d="M-3 -5 C-4 -8 -4 -11 -2 -13" stroke="rgba(255,255,255,.5)" stroke-width="1.3" fill="none" stroke-linecap="round"></path></g>
+      </symbol>
+      <symbol id="rsOpen" viewBox="0 0 70 90">
+        <use href="#rsBase"></use>
+        <g transform="translate(38 28)">
+          <path d="M0 0 C-4 -6 -5 -13 -2 -19 L0 -27 L2 -19 C5 -13 4 -6 0 0 Z" fill="url(#rsCx)" transform="rotate(36)"></path>
+          <path d="M0 0 C-4 -6 -5 -13 -2 -19 L0 -27 L2 -19 C5 -13 4 -6 0 0 Z" fill="url(#rsCx)" transform="rotate(108)"></path>
+          <path d="M0 0 C-4 -6 -5 -13 -2 -19 L0 -27 L2 -19 C5 -13 4 -6 0 0 Z" fill="url(#rsCx)" transform="rotate(180)"></path>
+          <path d="M0 0 C-4 -6 -5 -13 -2 -19 L0 -27 L2 -19 C5 -13 4 -6 0 0 Z" fill="url(#rsCx)" transform="rotate(252)"></path>
+          <path d="M0 0 C-4 -6 -5 -13 -2 -19 L0 -27 L2 -19 C5 -13 4 -6 0 0 Z" fill="url(#rsCx)" transform="rotate(324)"></path>
+          <path d="M0 0 C-8 -3 -12 -12 -9 -19 C-7 -24 -2 -25 0 -22 C2 -25 7 -24 9 -19 C12 -12 8 -3 0 0 Z" fill="url(#rsPet)" stroke="rgba(170,110,100,.45)" stroke-width=".6"></path>
+          <path d="M0 0 C-8 -3 -12 -12 -9 -19 C-7 -24 -2 -25 0 -22 C2 -25 7 -24 9 -19 C12 -12 8 -3 0 0 Z" fill="url(#rsPet)" stroke="rgba(170,110,100,.45)" stroke-width=".6" transform="rotate(72)"></path>
+          <path d="M0 0 C-8 -3 -12 -12 -9 -19 C-7 -24 -2 -25 0 -22 C2 -25 7 -24 9 -19 C12 -12 8 -3 0 0 Z" fill="url(#rsPet)" stroke="rgba(170,110,100,.45)" stroke-width=".6" transform="rotate(144)"></path>
+          <path d="M0 0 C-8 -3 -12 -12 -9 -19 C-7 -24 -2 -25 0 -22 C2 -25 7 -24 9 -19 C12 -12 8 -3 0 0 Z" fill="url(#rsPet)" stroke="rgba(170,110,100,.45)" stroke-width=".6" transform="rotate(216)"></path>
+          <path d="M0 0 C-8 -3 -12 -12 -9 -19 C-7 -24 -2 -25 0 -22 C2 -25 7 -24 9 -19 C12 -12 8 -3 0 0 Z" fill="url(#rsPet)" stroke="rgba(170,110,100,.45)" stroke-width=".6" transform="rotate(288)"></path>
+          <circle r="8" fill="#B0122A"></circle><circle r="2.6" fill="#E8B44A"></circle>
+        </g>
+      </symbol>
+      <symbol id="rsClosed" viewBox="0 0 70 90">
+        <use href="#rsBase"></use>
+        <g transform="translate(37 30)">
+          <path d="M0 6 C-7 4 -9 -4 -7 -10 L-8 -16 L-4 -11 L-2 -17 L0 -12 L2 -17 L4 -11 L8 -16 L7 -10 C9 -4 7 4 0 6 Z" fill="url(#rsCx)"></path>
+          <path d="M0 -6 C-5 -12 -4 -22 1 -28 C4 -22 5 -12 0 -6 Z" fill="url(#rsPet)" stroke="rgba(170,110,100,.5)" stroke-width=".6"></path>
+          <path d="M-2 -8 C-1 -15 1 -21 3 -25" stroke="rgba(170,110,100,.5)" stroke-width=".6" fill="none"></path>
+        </g>
+      </symbol>
+      <symbol id="vBird" viewBox="0 0 42 38"><path d="M30 18 L41 13 L39 23 Z" fill="#A97A22"></path><ellipse cx="21" cy="21" rx="13" ry="11" fill="#C99632"></ellipse><ellipse cx="18" cy="24" rx="8" ry="6" fill="#F3CF7A"></ellipse><circle cx="11" cy="13" r="7.5" fill="#C99632"></circle><circle cx="8.6" cy="12" r="1.5" fill="#0B0B12"></circle><path d="M3.6 13 L0 14.6 L3.6 16 Z" fill="#E8B44A"></path><path d="M17 17 C23 10 31 12 33 19 C27 21 21 22 17 17 Z" fill="#A97A22"></path><path d="M18 31 V36 M23 31 V36" stroke="#6E5A2E" stroke-width="1.6" stroke-linecap="round"></path></symbol>
+      <symbol id="vFly" viewBox="0 0 36 30"><path d="M18 14 C10 2 2 4 4 12 C6 17 13 17 18 15 Z" fill="#E8B44A"></path><path d="M18 16 C11 18 6 26 11 27 C15 27 17 22 18 17 Z" fill="#F3CF7A"></path><path d="M18 14 C26 2 34 4 32 12 C30 17 23 17 18 15 Z" fill="#E8B44A"></path><path d="M18 16 C25 18 30 26 25 27 C21 27 19 22 18 17 Z" fill="#F3CF7A"></path><ellipse cx="18" cy="16" rx="1.7" ry="8" fill="#3B2A12"></ellipse></symbol>
+      <radialGradient id="ffG"><stop offset="0%" stop-color="#F3CF7A" stop-opacity=".9"></stop><stop offset="100%" stop-color="#F3CF7A" stop-opacity="0"></stop></radialGradient>
+      <symbol id="vFire" viewBox="-14 -14 56 56"><circle cx="14" cy="19" r="14" fill="url(#ffG)" opacity=".6"></circle><ellipse cx="10" cy="10" rx="4" ry="2.4" fill="rgba(246,244,248,.55)" transform="rotate(-25 10 10)"></ellipse><ellipse cx="18" cy="10" rx="4" ry="2.4" fill="rgba(246,244,248,.55)" transform="rotate(25 18 10)"></ellipse><ellipse cx="14" cy="13" rx="2.6" ry="4.4" fill="#4A4A5E"></ellipse><ellipse cx="14" cy="19" rx="2.8" ry="3.2" fill="#F3CF7A"></ellipse></symbol>
+      <symbol id="vOwl" viewBox="0 0 44 48"><path d="M9 12 L12 2 L17 9 Z M35 12 L32 2 L27 9 Z" fill="#3B4A73"></path><ellipse cx="22" cy="28" rx="15.5" ry="17" fill="#3B4A73"></ellipse><ellipse cx="22" cy="33" rx="10" ry="11" fill="#5B6B95"></ellipse><circle cx="15.5" cy="20" r="7" fill="#D9DCEB"></circle><circle cx="28.5" cy="20" r="7" fill="#D9DCEB"></circle><circle cx="15.5" cy="20" r="3.4" fill="#0B0B12"></circle><circle cx="28.5" cy="20" r="3.4" fill="#0B0B12"></circle><path d="M20.5 25 L22 29 L23.5 25 Z" fill="#E8B44A"></path><path d="M17 45 V47.5 M20 45 V47.5 M24 45 V47.5 M27 45 V47.5" stroke="#E8B44A" stroke-width="1.6" stroke-linecap="round"></path></symbol>
+    </defs>
+  </svg>
+
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div class="eb">Round 3 · A scene for every part of the day</div>
+    <h1 style="margin:0;font-family:'Bricolage Grotesque',Figtree,sans-serif;font-weight:800;font-size:38px;letter-spacing:-.03em;line-height:1.1">The greeting lives in a little landscape</h1>
+    <p style="margin:0;color:#A5A2B4;font-size:15.5px;line-height:1.5;max-width:1260px">The dashboard banner becomes a small painted scene: sky, sun or moon, layered hills, mist, clouds or stars, with the roselle and the day's visitor standing in it. Four scenes, each drawn twice, deep for the dark theme and airy for the light theme, so the greeting always reads clearly. As much scenery as fits: distant mountains, two layers of hills, trees, mist, birds, clouds or stars, with the sky rising behind the greeting. The scene has no hard edge: it melts into the page background at the bottom and sides, so the dashboard's cards (the strip under each scene) sit on the same ground.</p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:110px minmax(0,1fr) minmax(0,1fr);gap:18px 24px;align-items:stretch">
+    <div></div><div class="eb">Dark theme</div><div class="eb">Light theme</div>
+
+    <!-- MORNING -->
+    <div class="rowlab"><span style="font-weight:700">Morning</span><span style="font-size:12.5px;color:#A5A2B4">5am–noon<br>sunrise, mist</span></div>
+    <div class="ban dk">
+      <svg class="scene" viewBox="0 -80 860 280" preserveAspectRatio="none" aria-hidden="true">
+        <defs><linearGradient id="mD" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1B1E3A"></stop><stop offset="55%" stop-color="#5B4A6B"></stop><stop offset="100%" stop-color="#E7A46B"></stop></linearGradient><radialGradient id="mDs"><stop offset="0%" stop-color="#FFE2A8"></stop><stop offset="40%" stop-color="#FFC47A" stop-opacity=".7"></stop><stop offset="100%" stop-color="#FFC47A" stop-opacity="0"></stop></radialGradient><linearGradient id="mDscrim" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#0B0B12" stop-opacity=".5"></stop><stop offset="42%" stop-color="#0B0B12" stop-opacity="0"></stop></linearGradient></defs>
+        <rect y="-80" width="860" height="280" fill="url(#mD)"></rect>
+        <circle cx="600" cy="58" r="80" fill="url(#mDs)"></circle><circle cx="600" cy="58" r="20" fill="#FFD796"></circle>
+        <g stroke="rgba(246,244,248,.55)" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M420 38 l6 4 l6 -4"></path><path d="M442 30 l5 3 l5 -3"></path><path d="M462 44 l4 3 l4 -3"></path></g><path d="M0 132 C40 120 60 104 90 106 C120 108 140 92 175 86 C210 80 230 104 265 100 C300 96 320 78 360 74 C400 70 420 96 455 92 C490 88 515 70 555 68 C595 66 615 90 650 88 C690 86 710 72 750 70 C790 68 820 84 860 82 L860 200 L0 200 Z" fill="#3A3F62"></path><path d="M0 150 C120 120 220 135 330 118 C450 100 560 130 680 112 C760 100 820 110 860 104 L860 200 L0 200 Z" fill="#2C3550"></path>
+        <ellipse cx="430" cy="160" rx="460" ry="18" fill="rgba(255,236,214,.14)"></ellipse>
+        <path d="M0 172 C140 150 260 168 400 150 C520 136 640 160 760 146 C810 140 840 144 860 142 L860 200 L0 200 Z" fill="#1E2638"></path><g fill="#161D2E"><rect x="612" y="138" width="3" height="12"></rect><circle cx="613.5" cy="131" r="10"></circle><path d="M646 150 L656 116 L666 150 Z"></path><path d="M664 152 L672 126 L680 152 Z"></path><rect x="520" y="146" width="2.5" height="9"></rect><circle cx="521" cy="141" r="7"></circle><path d="M770 146 L779 112 L788 146 Z"></path><rect x="808" y="128" width="3" height="14"></rect><circle cx="809.5" cy="119" r="13"></circle><rect x="360" y="152" width="2.5" height="8"></rect><circle cx="361" cy="148" r="6"></circle><circle cx="34" cy="166" r="9"></circle><circle cx="50" cy="168" r="7"></circle></g>
+        <rect y="-80" width="860" height="280" fill="url(#mDscrim)"></rect>
+      </svg>
+      <div class="txt"><span class="date">Wednesday, November 25</span><span class="greet">Good morning, Rel</span><button type="button" class="pill">Your Sorrel · 22 days together</button></div>
+      <svg class="plant" width="70" height="90" aria-hidden="true"><use href="#rsOpen"></use></svg>
+      <svg class="vis" style="right:108px;bottom:84px" width="30" height="27" aria-hidden="true"><use href="#vBird"></use></svg>
+    </div>
+    <div class="ban lt">
+      <svg class="scene" viewBox="0 -80 860 280" preserveAspectRatio="none" aria-hidden="true">
+        <defs><linearGradient id="mL" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#D6E4F2"></stop><stop offset="60%" stop-color="#F6E3D4"></stop><stop offset="100%" stop-color="#F7CFAE"></stop></linearGradient><radialGradient id="mLs"><stop offset="0%" stop-color="#FFF1D2"></stop><stop offset="40%" stop-color="#F9C98C" stop-opacity=".6"></stop><stop offset="100%" stop-color="#F9C98C" stop-opacity="0"></stop></radialGradient><linearGradient id="mLscrim" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#FFFFFF" stop-opacity=".5"></stop><stop offset="42%" stop-color="#FFFFFF" stop-opacity="0"></stop></linearGradient></defs>
+        <rect y="-80" width="860" height="280" fill="url(#mL)"></rect>
+        <circle cx="600" cy="58" r="80" fill="url(#mLs)"></circle><circle cx="600" cy="58" r="20" fill="#F6B26B"></circle>
+        <g stroke="#5A6478" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M420 38 l6 4 l6 -4"></path><path d="M442 30 l5 3 l5 -3"></path><path d="M462 44 l4 3 l4 -3"></path></g><path d="M0 132 C40 120 60 104 90 106 C120 108 140 92 175 86 C210 80 230 104 265 100 C300 96 320 78 360 74 C400 70 420 96 455 92 C490 88 515 70 555 68 C595 66 615 90 650 88 C690 86 710 72 750 70 C790 68 820 84 860 82 L860 200 L0 200 Z" fill="#D1D9E6"></path><path d="M0 150 C120 120 220 135 330 118 C450 100 560 130 680 112 C760 100 820 110 860 104 L860 200 L0 200 Z" fill="#C3CEDB"></path>
+        <ellipse cx="430" cy="160" rx="460" ry="18" fill="rgba(255,255,255,.55)"></ellipse>
+        <path d="M0 172 C140 150 260 168 400 150 C520 136 640 160 760 146 C810 140 840 144 860 142 L860 200 L0 200 Z" fill="#A9B9C9"></path><g fill="#8FA2B5"><rect x="612" y="138" width="3" height="12"></rect><circle cx="613.5" cy="131" r="10"></circle><path d="M646 150 L656 116 L666 150 Z"></path><path d="M664 152 L672 126 L680 152 Z"></path><rect x="520" y="146" width="2.5" height="9"></rect><circle cx="521" cy="141" r="7"></circle><path d="M770 146 L779 112 L788 146 Z"></path><rect x="808" y="128" width="3" height="14"></rect><circle cx="809.5" cy="119" r="13"></circle><rect x="360" y="152" width="2.5" height="8"></rect><circle cx="361" cy="148" r="6"></circle><circle cx="34" cy="166" r="9"></circle><circle cx="50" cy="168" r="7"></circle></g>
+        <rect y="-80" width="860" height="280" fill="url(#mLscrim)"></rect>
+      </svg>
+      <div class="txt"><span class="date">Wednesday, November 25</span><span class="greet">Good morning, Rel</span><button type="button" class="pill">Your Sorrel · 22 days together</button></div>
+      <svg class="plant" width="70" height="90" aria-hidden="true"><use href="#rsOpen"></use></svg>
+      <svg class="vis" style="right:108px;bottom:84px" width="30" height="27" aria-hidden="true"><use href="#vBird"></use></svg>
+    </div>
+
+    <!-- AFTERNOON -->
+    <div class="rowlab"><span style="font-weight:700">Afternoon</span><span style="font-size:12.5px;color:#A5A2B4">noon–5pm<br>high sun, clouds</span></div>
+    <div class="ban dk">
+      <svg class="scene" viewBox="0 -80 860 280" preserveAspectRatio="none" aria-hidden="true">
+        <defs><linearGradient id="aD" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#12304A"></stop><stop offset="60%" stop-color="#2C6280"></stop><stop offset="100%" stop-color="#8FB9BE"></stop></linearGradient><radialGradient id="aDs"><stop offset="0%" stop-color="#FFF2C8"></stop><stop offset="40%" stop-color="#FFE3A0" stop-opacity=".55"></stop><stop offset="100%" stop-color="#FFE3A0" stop-opacity="0"></stop></radialGradient><linearGradient id="aDscrim" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#0B0B12" stop-opacity=".5"></stop><stop offset="42%" stop-color="#0B0B12" stop-opacity="0"></stop></linearGradient></defs>
+        <rect y="-80" width="860" height="280" fill="url(#aD)"></rect>
+        <circle cx="690" cy="40" r="70" fill="url(#aDs)"></circle><circle cx="690" cy="40" r="17" fill="#FFE9B0"></circle>
+        <g fill="rgba(255,255,255,.2)"><ellipse cx="470" cy="56" rx="60" ry="13"></ellipse><ellipse cx="505" cy="47" rx="34" ry="12"></ellipse><ellipse cx="300" cy="80" rx="48" ry="10"></ellipse></g>
+        <g stroke="rgba(246,244,248,.55)" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M560 38 l6 4 l6 -4"></path><path d="M582 30 l5 3 l5 -3"></path><path d="M602 44 l4 3 l4 -3"></path></g><path d="M0 132 C40 120 60 104 90 106 C120 108 140 92 175 86 C210 80 230 104 265 100 C300 96 320 78 360 74 C400 70 420 96 455 92 C490 88 515 70 555 68 C595 66 615 90 650 88 C690 86 710 72 750 70 C790 68 820 84 860 82 L860 200 L0 200 Z" fill="#2F5A6F"></path><path d="M0 150 C120 120 220 135 330 118 C450 100 560 130 680 112 C760 100 820 110 860 104 L860 200 L0 200 Z" fill="#24485A"></path>
+        <path d="M0 172 C140 150 260 168 400 150 C520 136 640 160 760 146 C810 140 840 144 860 142 L860 200 L0 200 Z" fill="#173342"></path><g fill="#10283A"><rect x="612" y="138" width="3" height="12"></rect><circle cx="613.5" cy="131" r="10"></circle><path d="M646 150 L656 116 L666 150 Z"></path><path d="M664 152 L672 126 L680 152 Z"></path><rect x="520" y="146" width="2.5" height="9"></rect><circle cx="521" cy="141" r="7"></circle><path d="M770 146 L779 112 L788 146 Z"></path><rect x="808" y="128" width="3" height="14"></rect><circle cx="809.5" cy="119" r="13"></circle><rect x="360" y="152" width="2.5" height="8"></rect><circle cx="361" cy="148" r="6"></circle><circle cx="34" cy="166" r="9"></circle><circle cx="50" cy="168" r="7"></circle></g>
+        <rect y="-80" width="860" height="280" fill="url(#aDscrim)"></rect>
+      </svg>
+      <div class="txt"><span class="date">Wednesday, November 25</span><span class="greet">Good afternoon, Rel</span><button type="button" class="pill">Your Sorrel · 22 days together</button></div>
+      <svg class="plant" width="70" height="90" aria-hidden="true"><use href="#rsOpen"></use></svg>
+      <svg class="vis" style="right:84px;bottom:96px" width="28" height="23" aria-hidden="true"><use href="#vFly"></use></svg>
+    </div>
+    <div class="ban lt">
+      <svg class="scene" viewBox="0 -80 860 280" preserveAspectRatio="none" aria-hidden="true">
+        <defs><linearGradient id="aL" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#BCDCF2"></stop><stop offset="65%" stop-color="#E6F2F8"></stop><stop offset="100%" stop-color="#F6F0DE"></stop></linearGradient><radialGradient id="aLs"><stop offset="0%" stop-color="#FFF6D8"></stop><stop offset="40%" stop-color="#FCE29A" stop-opacity=".6"></stop><stop offset="100%" stop-color="#FCE29A" stop-opacity="0"></stop></radialGradient><linearGradient id="aLscrim" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#FFFFFF" stop-opacity=".5"></stop><stop offset="42%" stop-color="#FFFFFF" stop-opacity="0"></stop></linearGradient></defs>
+        <rect y="-80" width="860" height="280" fill="url(#aL)"></rect>
+        <circle cx="690" cy="40" r="70" fill="url(#aLs)"></circle><circle cx="690" cy="40" r="17" fill="#F7C766"></circle>
+        <g fill="rgba(255,255,255,.85)"><ellipse cx="470" cy="56" rx="60" ry="13"></ellipse><ellipse cx="505" cy="47" rx="34" ry="12"></ellipse><ellipse cx="300" cy="80" rx="48" ry="10"></ellipse></g>
+        <g stroke="#5A6478" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M560 38 l6 4 l6 -4"></path><path d="M582 30 l5 3 l5 -3"></path><path d="M602 44 l4 3 l4 -3"></path></g><path d="M0 132 C40 120 60 104 90 106 C120 108 140 92 175 86 C210 80 230 104 265 100 C300 96 320 78 360 74 C400 70 420 96 455 92 C490 88 515 70 555 68 C595 66 615 90 650 88 C690 86 710 72 750 70 C790 68 820 84 860 82 L860 200 L0 200 Z" fill="#C3D8E2"></path><path d="M0 150 C120 120 220 135 330 118 C450 100 560 130 680 112 C760 100 820 110 860 104 L860 200 L0 200 Z" fill="#B5CFBE"></path>
+        <path d="M0 172 C140 150 260 168 400 150 C520 136 640 160 760 146 C810 140 840 144 860 142 L860 200 L0 200 Z" fill="#97BBA2"></path><g fill="#7FA98C"><rect x="612" y="138" width="3" height="12"></rect><circle cx="613.5" cy="131" r="10"></circle><path d="M646 150 L656 116 L666 150 Z"></path><path d="M664 152 L672 126 L680 152 Z"></path><rect x="520" y="146" width="2.5" height="9"></rect><circle cx="521" cy="141" r="7"></circle><path d="M770 146 L779 112 L788 146 Z"></path><rect x="808" y="128" width="3" height="14"></rect><circle cx="809.5" cy="119" r="13"></circle><rect x="360" y="152" width="2.5" height="8"></rect><circle cx="361" cy="148" r="6"></circle><circle cx="34" cy="166" r="9"></circle><circle cx="50" cy="168" r="7"></circle></g>
+        <rect y="-80" width="860" height="280" fill="url(#aLscrim)"></rect>
+      </svg>
+      <div class="txt"><span class="date">Wednesday, November 25</span><span class="greet">Good afternoon, Rel</span><button type="button" class="pill">Your Sorrel · 22 days together</button></div>
+      <svg class="plant" width="70" height="90" aria-hidden="true"><use href="#rsOpen"></use></svg>
+      <svg class="vis" style="right:84px;bottom:96px" width="28" height="23" aria-hidden="true"><use href="#vFly"></use></svg>
+    </div>
+
+    <!-- EVENING -->
+    <div class="rowlab"><span style="font-weight:700">Evening</span><span style="font-size:12.5px;color:#A5A2B4">5pm–10pm<br>sunset</span></div>
+    <div class="ban dk">
+      <svg class="scene" viewBox="0 -80 860 280" preserveAspectRatio="none" aria-hidden="true">
+        <defs><linearGradient id="eD" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#211838"></stop><stop offset="55%" stop-color="#6A2D5C"></stop><stop offset="100%" stop-color="#DB7046"></stop></linearGradient><radialGradient id="eDs"><stop offset="0%" stop-color="#FFC08A"></stop><stop offset="40%" stop-color="#FF8F5A" stop-opacity=".6"></stop><stop offset="100%" stop-color="#FF8F5A" stop-opacity="0"></stop></radialGradient><linearGradient id="eDscrim" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#0B0B12" stop-opacity=".5"></stop><stop offset="42%" stop-color="#0B0B12" stop-opacity="0"></stop></linearGradient></defs>
+        <rect y="-80" width="860" height="280" fill="url(#eD)"></rect>
+        <circle cx="470" cy="86" r="100" fill="url(#eDs)"></circle><circle cx="470" cy="86" r="24" fill="#FF9E5E"></circle>
+        <path d="M0 132 C40 120 60 104 90 106 C120 108 140 92 175 86 C210 80 230 104 265 100 C300 96 320 78 360 74 C400 70 420 96 455 92 C490 88 515 70 555 68 C595 66 615 90 650 88 C690 86 710 72 750 70 C790 68 820 84 860 82 L860 200 L0 200 Z" fill="#4A2C55"></path><path d="M0 150 C120 120 220 135 330 118 C450 100 560 130 680 112 C760 100 820 110 860 104 L860 200 L0 200 Z" fill="#3A2445"></path>
+        <path d="M0 172 C140 150 260 168 400 150 C520 136 640 160 760 146 C810 140 840 144 860 142 L860 200 L0 200 Z" fill="#22152C"></path><g fill="#1A1022"><rect x="612" y="138" width="3" height="12"></rect><circle cx="613.5" cy="131" r="10"></circle><path d="M646 150 L656 116 L666 150 Z"></path><path d="M664 152 L672 126 L680 152 Z"></path><rect x="520" y="146" width="2.5" height="9"></rect><circle cx="521" cy="141" r="7"></circle><path d="M770 146 L779 112 L788 146 Z"></path><rect x="808" y="128" width="3" height="14"></rect><circle cx="809.5" cy="119" r="13"></circle><rect x="360" y="152" width="2.5" height="8"></rect><circle cx="361" cy="148" r="6"></circle><circle cx="34" cy="166" r="9"></circle><circle cx="50" cy="168" r="7"></circle></g>
+        <rect y="-80" width="860" height="280" fill="url(#eDscrim)"></rect>
+      </svg>
+      <div class="txt"><span class="date">Wednesday, November 25</span><span class="greet">Good evening, Rel</span><button type="button" class="pill">Your Sorrel · 22 days together</button></div>
+      <svg class="plant" width="70" height="90" aria-hidden="true"><use href="#rsClosed"></use></svg>
+      <svg class="vis" style="right:74px;bottom:92px" width="32" height="32" aria-hidden="true"><use href="#vFire"></use></svg>
+    </div>
+    <div class="ban lt">
+      <svg class="scene" viewBox="0 -80 860 280" preserveAspectRatio="none" aria-hidden="true">
+        <defs><linearGradient id="eL" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#D7C8EA"></stop><stop offset="60%" stop-color="#F2CDC4"></stop><stop offset="100%" stop-color="#F8D6B2"></stop></linearGradient><radialGradient id="eLs"><stop offset="0%" stop-color="#FFE0C2"></stop><stop offset="40%" stop-color="#F4A57A" stop-opacity=".55"></stop><stop offset="100%" stop-color="#F4A57A" stop-opacity="0"></stop></radialGradient><linearGradient id="eLscrim" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#FFFFFF" stop-opacity=".5"></stop><stop offset="42%" stop-color="#FFFFFF" stop-opacity="0"></stop></linearGradient></defs>
+        <rect y="-80" width="860" height="280" fill="url(#eL)"></rect>
+        <circle cx="470" cy="86" r="100" fill="url(#eLs)"></circle><circle cx="470" cy="86" r="24" fill="#F29A6B"></circle>
+        <path d="M0 132 C40 120 60 104 90 106 C120 108 140 92 175 86 C210 80 230 104 265 100 C300 96 320 78 360 74 C400 70 420 96 455 92 C490 88 515 70 555 68 C595 66 615 90 650 88 C690 86 710 72 750 70 C790 68 820 84 860 82 L860 200 L0 200 Z" fill="#D9C3DC"></path><path d="M0 150 C120 120 220 135 330 118 C450 100 560 130 680 112 C760 100 820 110 860 104 L860 200 L0 200 Z" fill="#CBB4D0"></path>
+        <path d="M0 172 C140 150 260 168 400 150 C520 136 640 160 760 146 C810 140 840 144 860 142 L860 200 L0 200 Z" fill="#B49CBD"></path><g fill="#9C84A8"><rect x="612" y="138" width="3" height="12"></rect><circle cx="613.5" cy="131" r="10"></circle><path d="M646 150 L656 116 L666 150 Z"></path><path d="M664 152 L672 126 L680 152 Z"></path><rect x="520" y="146" width="2.5" height="9"></rect><circle cx="521" cy="141" r="7"></circle><path d="M770 146 L779 112 L788 146 Z"></path><rect x="808" y="128" width="3" height="14"></rect><circle cx="809.5" cy="119" r="13"></circle><rect x="360" y="152" width="2.5" height="8"></rect><circle cx="361" cy="148" r="6"></circle><circle cx="34" cy="166" r="9"></circle><circle cx="50" cy="168" r="7"></circle></g>
+        <rect y="-80" width="860" height="280" fill="url(#eLscrim)"></rect>
+      </svg>
+      <div class="txt"><span class="date">Wednesday, November 25</span><span class="greet">Good evening, Rel</span><button type="button" class="pill">Your Sorrel · 22 days together</button></div>
+      <svg class="plant" width="70" height="90" aria-hidden="true"><use href="#rsClosed"></use></svg>
+      <svg class="vis" style="right:74px;bottom:92px" width="32" height="32" aria-hidden="true"><use href="#vFire"></use></svg>
+    </div>
+
+    <!-- NIGHT -->
+    <div class="rowlab"><span style="font-weight:700">Night</span><span style="font-size:12.5px;color:#A5A2B4">10pm–5am<br>moon, stars</span></div>
+    <div class="ban dk">
+      <svg class="scene" viewBox="0 -80 860 280" preserveAspectRatio="none" aria-hidden="true">
+        <defs><linearGradient id="nD" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#070A1A"></stop><stop offset="60%" stop-color="#121B3A"></stop><stop offset="100%" stop-color="#1E2A52"></stop></linearGradient><radialGradient id="nDm"><stop offset="0%" stop-color="#E9ECF7" stop-opacity=".35"></stop><stop offset="100%" stop-color="#E9ECF7" stop-opacity="0"></stop></radialGradient></defs>
+        <rect y="-80" width="860" height="280" fill="url(#nD)"></rect>
+        <g fill="#D9DCEB"><circle cx="380" cy="30" r="1.2" opacity=".8"></circle><circle cx="450" cy="62" r="1" opacity=".6"></circle><circle cx="520" cy="22" r="1.4" opacity=".7"></circle><circle cx="600" cy="70" r="1" opacity=".5"></circle><circle cx="760" cy="96" r="1.1" opacity=".6"></circle><circle cx="820" cy="30" r="1" opacity=".6"></circle><circle cx="300" cy="90" r=".9" opacity=".5"></circle></g>
+        <circle cx="690" cy="46" r="60" fill="url(#nDm)"></circle>
+        <path d="M690 28 A18 18 0 1 0 708 50 A14 14 0 1 1 690 28 Z" fill="#E9ECF7"></path>
+        <g fill="#D9DCEB"><circle cx="330" cy="-40" r="1.1" opacity=".7"></circle><circle cx="410" cy="-62" r="1.3" opacity=".8"></circle><circle cx="480" cy="-20" r=".9" opacity=".6"></circle><circle cx="560" cy="-55" r="1.2" opacity=".7"></circle><circle cx="640" cy="-30" r="1" opacity=".6"></circle><circle cx="740" cy="-66" r="1.4" opacity=".8"></circle><circle cx="800" cy="-14" r="1" opacity=".6"></circle><circle cx="280" cy="-60" r=".9" opacity=".5"></circle><circle cx="690" cy="-8" r=".8" opacity=".5"></circle></g><path d="M0 132 C40 120 60 104 90 106 C120 108 140 92 175 86 C210 80 230 104 265 100 C300 96 320 78 360 74 C400 70 420 96 455 92 C490 88 515 70 555 68 C595 66 615 90 650 88 C690 86 710 72 750 70 C790 68 820 84 860 82 L860 200 L0 200 Z" fill="#1A2342"></path><path d="M0 150 C120 120 220 135 330 118 C450 100 560 130 680 112 C760 100 820 110 860 104 L860 200 L0 200 Z" fill="#141B33"></path>
+        <path d="M0 172 C140 150 260 168 400 150 C520 136 640 160 760 146 C810 140 840 144 860 142 L860 200 L0 200 Z" fill="#0B1022"></path><g fill="#070B18"><rect x="612" y="138" width="3" height="12"></rect><circle cx="613.5" cy="131" r="10"></circle><path d="M646 150 L656 116 L666 150 Z"></path><path d="M664 152 L672 126 L680 152 Z"></path><rect x="520" y="146" width="2.5" height="9"></rect><circle cx="521" cy="141" r="7"></circle><path d="M770 146 L779 112 L788 146 Z"></path><rect x="808" y="128" width="3" height="14"></rect><circle cx="809.5" cy="119" r="13"></circle><rect x="360" y="152" width="2.5" height="8"></rect><circle cx="361" cy="148" r="6"></circle><circle cx="34" cy="166" r="9"></circle><circle cx="50" cy="168" r="7"></circle></g>
+      </svg>
+      <div class="txt"><span class="date">Wednesday, November 25</span><span class="greet">Hi, night owl</span><button type="button" class="pill">Your Sorrel · 22 days together</button></div>
+      <svg class="plant" width="70" height="90" aria-hidden="true"><use href="#rsClosed"></use></svg>
+      <svg class="vis" style="right:110px;bottom:86px" width="30" height="33" aria-hidden="true"><use href="#vOwl"></use></svg>
+    </div>
+    <div class="ban lt">
+      <svg class="scene" viewBox="0 -80 860 280" preserveAspectRatio="none" aria-hidden="true">
+        <defs><linearGradient id="nL" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#C5CCEC"></stop><stop offset="60%" stop-color="#DADFF5"></stop><stop offset="100%" stop-color="#E9EBF8"></stop></linearGradient><linearGradient id="nLscrim" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#FFFFFF" stop-opacity=".45"></stop><stop offset="42%" stop-color="#FFFFFF" stop-opacity="0"></stop></linearGradient></defs>
+        <rect y="-80" width="860" height="280" fill="url(#nL)"></rect>
+        <g fill="#7F89BD"><circle cx="380" cy="30" r="1.2" opacity=".8"></circle><circle cx="450" cy="62" r="1" opacity=".6"></circle><circle cx="520" cy="22" r="1.4" opacity=".7"></circle><circle cx="600" cy="70" r="1" opacity=".5"></circle><circle cx="760" cy="96" r="1.1" opacity=".6"></circle><circle cx="820" cy="30" r="1" opacity=".6"></circle></g>
+        <path d="M690 28 A18 18 0 1 0 708 50 A14 14 0 1 1 690 28 Z" fill="#FFFFFF" stroke="rgba(90,100,160,.35)" stroke-width="1"></path>
+        <g fill="#7F89BD"><circle cx="330" cy="-40" r="1.1" opacity=".7"></circle><circle cx="410" cy="-62" r="1.3" opacity=".8"></circle><circle cx="480" cy="-20" r=".9" opacity=".6"></circle><circle cx="560" cy="-55" r="1.2" opacity=".7"></circle><circle cx="640" cy="-30" r="1" opacity=".6"></circle><circle cx="740" cy="-66" r="1.4" opacity=".8"></circle><circle cx="800" cy="-14" r="1" opacity=".6"></circle><circle cx="280" cy="-60" r=".9" opacity=".5"></circle><circle cx="690" cy="-8" r=".8" opacity=".5"></circle></g><path d="M0 132 C40 120 60 104 90 106 C120 108 140 92 175 86 C210 80 230 104 265 100 C300 96 320 78 360 74 C400 70 420 96 455 92 C490 88 515 70 555 68 C595 66 615 90 650 88 C690 86 710 72 750 70 C790 68 820 84 860 82 L860 200 L0 200 Z" fill="#C2C9E8"></path><path d="M0 150 C120 120 220 135 330 118 C450 100 560 130 680 112 C760 100 820 110 860 104 L860 200 L0 200 Z" fill="#B3BBE0"></path>
+        <path d="M0 172 C140 150 260 168 400 150 C520 136 640 160 760 146 C810 140 840 144 860 142 L860 200 L0 200 Z" fill="#9EA8D4"></path><g fill="#8C97C9"><rect x="612" y="138" width="3" height="12"></rect><circle cx="613.5" cy="131" r="10"></circle><path d="M646 150 L656 116 L666 150 Z"></path><path d="M664 152 L672 126 L680 152 Z"></path><rect x="520" y="146" width="2.5" height="9"></rect><circle cx="521" cy="141" r="7"></circle><path d="M770 146 L779 112 L788 146 Z"></path><rect x="808" y="128" width="3" height="14"></rect><circle cx="809.5" cy="119" r="13"></circle><rect x="360" y="152" width="2.5" height="8"></rect><circle cx="361" cy="148" r="6"></circle><circle cx="34" cy="166" r="9"></circle><circle cx="50" cy="168" r="7"></circle></g>
+        <rect y="-80" width="860" height="280" fill="url(#nLscrim)"></rect>
+      </svg>
+      <div class="txt"><span class="date">Wednesday, November 25</span><span class="greet">Hi, night owl</span><button type="button" class="pill">Your Sorrel · 22 days together</button></div>
+      <svg class="plant" width="70" height="90" aria-hidden="true"><use href="#rsClosed"></use></svg>
+      <svg class="vis" style="right:110px;bottom:86px" width="30" height="33" aria-hidden="true"><use href="#vOwl"></use></svg>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px 28px;margin-top:6px">
+    <div style="display:flex;flex-direction:column;gap:4px"><span style="font-weight:700;font-size:14.5px">Always readable</span><span style="color:#A5A2B4;font-size:13.5px;line-height:1.5">The sky stays calm behind the words, and a soft fade from the left keeps the greeting at 4.5:1 or better in every scene and both themes. Detail lives on the right.</span></div>
+    <div style="display:flex;flex-direction:column;gap:4px"><span style="font-weight:700;font-size:14.5px">Still, not busy</span><span style="color:#A5A2B4;font-size:13.5px;line-height:1.5">No drifting clouds or twinkling loops. When the part of the day changes, the scene cross-fades once (about 600ms). Reduced motion: it just appears.</span></div>
+    <div style="display:flex;flex-direction:column;gap:4px"><span style="font-weight:700;font-size:14.5px">One home for the plant and visitor</span><span style="color:#A5A2B4;font-size:13.5px;line-height:1.5">The roselle stands on the near hill and the visitor perches on it, so they belong to the scene rather than floating over the header.</span></div>
+    <div style="display:flex;flex-direction:column;gap:4px"><span style="font-weight:700;font-size:14.5px">Melts into the page</span><span style="color:#A5A2B4;font-size:13.5px;line-height:1.5">No box and no seam: the sky and hills fade into the page's own background colour at the bottom and both sides, in each theme. Drawn in code, no images, same hours as the Step 8 glow it replaces.</span></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1840,"height":1700}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionError } from "./SectionError";
 import { AccountLink } from "@/components/AccountLink";
@@ -22,15 +21,12 @@ const primaryAction =
 // hides its icon slot from assistive tech, so the mark's own label is moot.
 const ladderMark = <SorrelMark size={104} className="opacity-[0.08]" />;
 
-// `welcome` is the resolved greeting from welcomeMessage() in
-// lib/displayName.ts -- built once in the page, shared by every stage.
-//
 // Stage 1 (no accounts) is onboarding now: OnboardingFlow.tsx.
 
 // Stage 2: accounts, but nothing logged yet. The balances are real, so show
 // them. Everything time-based is a promise, not a figure.
 export function NoTransactionsView({
-  welcome,
+  header,
   accounts,
   accountsError,
   netWorth,
@@ -38,7 +34,8 @@ export function NoTransactionsView({
   safeToSpend,
   billsCard = null,
 }: {
-  welcome: string;
+  /** The dashboard's banner, with its greeting (DashboardBanner). */
+  header: React.ReactNode;
   accounts: AccountBalanceRow[];
   accountsError: string | null;
   netWorth: number | null;
@@ -50,7 +47,7 @@ export function NoTransactionsView({
 }) {
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Dashboard" description={welcome} />
+      {header}
 
       {/* The number onboarding ended on, here to stay. A failed read leaves
           it out: the full dashboard's section errors aren't on this view. */}

@@ -1,7 +1,7 @@
 import { todayInZone } from "@/lib/date";
 
 // Time of day and season, in the user's own zone (docs/Motion-and-Delight.md,
-// step 8). Pure: every function takes the zone and the instant, so the
+// step 8; docs/Scenes.md). Pure: every function takes the zone and the instant, so the
 // dashboard renders on the server with no flash and nothing is stored. The
 // zone is settings.timezone (getTimeZone() in lib/db/settings.ts), the same
 // one balances use; null or an unknown name is UTC, as everywhere else.
@@ -92,7 +92,7 @@ export function seasonAt(timeZone: string | null, now: Date): Season {
 }
 
 // The dashboard flower (components/DayNightMark.tsx): open 7:00am-6:59pm,
-// folded 7:00pm-6:59am, on the SAME hour as the glow above -- the user's
+// folded 7:00pm-6:59am, on the SAME hour as the greeting above -- the user's
 // stored zone, never the browser's clock. These hours are the flower's own;
 // they are not the greeting's bands.
 export type MarkState = "open" | "folded";
@@ -109,17 +109,28 @@ export function markStateAt(timeZone: string | null, now: Date): MarkState {
 }
 
 /**
- * Milliseconds until the wall clock in `timeZone` next reads 7:00 or 19:00.
- * Always positive: exactly on a boundary, the answer is the one after it. A
- * daylight-saving change can make the real wait an hour off for that one
- * night; the caller re-reads the state when the timer fires and re-arms, so
- * it only ever lands early or late once.
+ * Milliseconds until the wall clock in `timeZone` next reads one of `hours`
+ * (ascending, on the hour). Always positive: exactly on a boundary, the answer
+ * is the one after it. A daylight-saving change can make the real wait an hour
+ * off for that one night; callers re-read the state when the timer fires and
+ * re-arm, so they only ever land early or late once.
  */
-export function msUntilNextMarkBoundary(timeZone: string | null, now: Date): number {
+function msUntilNextHour(hours: readonly number[], timeZone: string | null, now: Date): number {
   const { hour, minute, second } = wallClockInZone(timeZone, now);
   const secondsIntoDay = hour * 3600 + minute * 60 + second;
-  const day = 24 * 3600;
-  const next =
-    [MARK_DAY_START * 3600, MARK_NIGHT_START * 3600].find((b) => b > secondsIntoDay) ?? MARK_DAY_START * 3600 + day;
+  const next = hours.map((h) => h * 3600).find((b) => b > secondsIntoDay) ?? hours[0] * 3600 + 24 * 3600;
   return (next - secondsIntoDay) * 1000 - now.getUTCMilliseconds();
+}
+
+/** The next 7:00 or 19:00, when the dashboard plant opens or closes. */
+export function msUntilNextMarkBoundary(timeZone: string | null, now: Date): number {
+  return msUntilNextHour([MARK_DAY_START, MARK_NIGHT_START], timeZone, now);
+}
+
+/** The hours each greeting band begins: timeBand()'s own boundaries. */
+export const BAND_START_HOURS = [5, 12, 17, 22] as const;
+
+/** The next 5:00, 12:00, 17:00 or 22:00, when the greeting and the scene change. */
+export function msUntilNextBandBoundary(timeZone: string | null, now: Date): number {
+  return msUntilNextHour(BAND_START_HOURS, timeZone, now);
 }

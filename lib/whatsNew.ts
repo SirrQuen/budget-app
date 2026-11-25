@@ -90,9 +90,9 @@ export const WHATS_NEW_ITEMS: readonly WhatsNewItem[] = [
     action: { kind: "href", href: "/budgets" },
   },
   {
-    // The plant is on this page: nothing to open.
+    // The plant and its landscape are on this page: nothing to open.
     id: "plant",
-    text: "The dashboard plant is now a roselle that opens in the morning and closes at night, and the light follows your day.",
+    text: "The dashboard plant is now a roselle that opens in the morning and closes at night. Your dashboard now has a little landscape that follows the time of day.",
     action: { kind: "none" },
   },
 ];
