@@ -1,6 +1,6 @@
 Sent:      not yet
 Migration: none
-Merge:     not yet
+Merge:     c31b9f2 (feat/income-spending-drilldown, fast-forward; no merge commit)
 Deployed:  not yet
 
 ---
