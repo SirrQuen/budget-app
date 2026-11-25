@@ -69,14 +69,14 @@ test("six lines at most, in order, no exclamation marks, each wired to what it n
   assert.ok(WHATS_NEW_ITEMS.length <= 6);
   assert.deepEqual(
     WHATS_NEW_ITEMS.map((i) => i.id),
-    ["recap", "safe-to-spend", "goals", "import", "budgets", "plant"],
+    ["recap", "tiles", "goals", "import", "budgets", "plant"],
   );
   for (const item of WHATS_NEW_ITEMS) assert.doesNotMatch(item.text, /!/, item.text);
   const by = Object.fromEntries(WHATS_NEW_ITEMS.map((i) => [i.id, i.action]));
-  // Nothing to open: the recap until December 1st, Safe to Spend and the
-  // plant are on the dashboard itself.
+  // Nothing to open: the recap until December 1st, the tiles and the plant
+  // are on the dashboard itself.
   assert.deepEqual(by.recap, { kind: "none" });
-  assert.deepEqual(by["safe-to-spend"], { kind: "none" });
+  assert.deepEqual(by.tiles, { kind: "none" });
   assert.deepEqual(by.plant, { kind: "none" });
   assert.deepEqual(by.goals, { kind: "href", href: "/goals" });
   assert.deepEqual(by.import, { kind: "href", href: "/import?from=transactions" });
@@ -100,5 +100,5 @@ test("the recap line goes once the recap's own week has passed", () => {
   assert.equal(whatsNewItems("2026-12-07").length, 6);
   const later = whatsNewItems("2026-12-08");
   assert.equal(later.length, 5);
-  assert.equal(later[0].id, "safe-to-spend");
+  assert.equal(later[0].id, "tiles");
 });

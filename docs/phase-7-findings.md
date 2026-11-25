@@ -2383,6 +2383,14 @@ Production carried 12 future-dated rows (one user, 6 of them transfer
 legs, 8 on Checking or Cash, the furthest 22 days ahead) when counted on
 2026-11-10 (`docs/future-dated-audit.sql`, read-only).
 
+**Raised again 2026-11-25** (Income and Spending drill-down; status
+unchanged). The Spending tile counts month to date, so its drill-down
+does too, while Budgets and a budget's drill-down count the whole month:
+with an entry dated later this month, a budget reads higher than the same
+category in the Spending summary. The summary's rows narrow the tile's own
+drill-down, not the budget's (ruled the same day), so no link crosses the
+two.
+
 ## Not a defect: safe to spend's low point "in the past" (2026-11-10)
 
 **Status: no change. The projection is correct. Recorded so it isn't

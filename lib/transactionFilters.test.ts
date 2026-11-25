@@ -32,6 +32,8 @@ test("parse: valid values pass, junk is dropped", () => {
     accountid: "",
     type: "Income",
     q: "rent",
+    flow: "",
+    period: "",
   });
 });
 

@@ -74,8 +74,8 @@ const showButton = (c: HTMLElement, label: string) =>
 test("six lines in order: the ones with nothing to open are plain text, the rest links in the pill style", async () => {
   const c = await mount();
   const items = [...c.querySelectorAll("li")];
-  assert.deepEqual(items.map((i) => i.dataset.whatsNew), ["recap", "safe-to-spend", "goals", "import", "budgets", "plant"]);
-  for (const id of ["recap", "safe-to-spend", "plant"]) {
+  assert.deepEqual(items.map((i) => i.dataset.whatsNew), ["recap", "tiles", "goals", "import", "budgets", "plant"]);
+  for (const id of ["recap", "tiles", "plant"]) {
     assert.equal(li(c, id).querySelector("a,button"), null, `${id}: nothing to open`);
   }
   assert.match(li(c, "recap").textContent!, /December 1st/);
@@ -127,7 +127,7 @@ test("phone: lines four to six are hidden below md until 'Show all 6' expands th
   assert.ok(button, "a real button");
   assert.equal(button.getAttribute("aria-expanded"), "false");
   assert.match(button.className, /md:hidden/, "not on desktop");
-  for (const id of ["recap", "safe-to-spend", "goals"]) assert.doesNotMatch(li(c, id).className, /hidden/, id);
+  for (const id of ["recap", "tiles", "goals"]) assert.doesNotMatch(li(c, id).className, /hidden/, id);
   for (const id of ["import", "budgets", "plant"]) {
     assert.match(li(c, id).className, /\bhidden\b.*md:list-item/, `${id} hidden on a phone, shown from md`);
   }

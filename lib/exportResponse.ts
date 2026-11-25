@@ -4,7 +4,7 @@ import { listCategories } from "@/lib/db/categories";
 import { getToday } from "@/lib/db/settings";
 import { exportTransactions } from "@/lib/db/transactions";
 import { buildTransactionsCsv, exportFileName, type ExportScope } from "@/lib/transactionExport";
-import type { TransactionFilters } from "@/lib/transactionFilters";
+import { listReadOptions, type TransactionFilters } from "@/lib/transactionFilters";
 
 /**
  * THE transaction download. Settings > "Download transactions" is this with
@@ -19,20 +19,16 @@ import type { TransactionFilters } from "@/lib/transactionFilters";
  * missing rows.
  */
 export async function transactionsCsvResponse(filters: Partial<TransactionFilters> = {}): Promise<Response | null> {
-  const rowsPromise = exportTransactions({
-    ...(filters.dateFrom ? { dateFrom: filters.dateFrom } : {}),
-    ...(filters.dateTo ? { dateTo: filters.dateTo } : {}),
-    ...(filters.categoryid ? { categoryid: filters.categoryid } : {}),
-    ...(filters.accountid ? { accountid: filters.accountid } : {}),
-    ...(filters.type ? { transaction_type: filters.type } : {}),
-    ...(filters.q ? { q: filters.q } : {}),
-  });
+  // listReadOptions: the list's own reading of its filters, a tile's flow
+  // scope included.
+  const today = await getToday();
+  const options = listReadOptions(filters, today);
+  const rowsPromise = exportTransactions(options);
 
   // The filters name the file. Names, not ids; a name that can't be read
   // just leaves that part out of the filename, never fails the download.
-  const [rows, today, account, categories] = await Promise.all([
+  const [rows, account, categories] = await Promise.all([
     rowsPromise,
-    getToday(),
     filters.accountid ? getAccount(filters.accountid) : null,
     filters.categoryid ? listCategories() : null,
   ]);
@@ -44,12 +40,12 @@ export async function transactionsCsvResponse(filters: Partial<TransactionFilter
       categories && categories.error === null
         ? (categories.data.find((c) => c.id === filters.categoryid)?.category_name ?? null)
         : null,
-    type: filters.type ?? "",
-    dateFrom: filters.dateFrom,
-    dateTo: filters.dateTo,
+    type: options.transaction_type ?? "",
+    dateFrom: options.dateFrom,
+    dateTo: options.dateTo,
     q: filters.q,
     filtered: Boolean(
-      filters.accountid || filters.categoryid || filters.type || filters.dateFrom || filters.dateTo || filters.q,
+      filters.accountid || filters.categoryid || filters.type || filters.dateFrom || filters.dateTo || filters.q || filters.flow,
     ),
   };
 

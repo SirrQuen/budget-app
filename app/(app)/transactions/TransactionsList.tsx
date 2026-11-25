@@ -29,7 +29,14 @@ import { useOptimisticTransactions, type PendingTransaction } from "@/components
 import { categoryColorVar } from "@/lib/categoryOptions";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import { callAction } from "@/components/useActionForm";
-import { buildListHref, parseSearchAmount, type TransactionFilters } from "@/lib/transactionFilters";
+import {
+  activeFlowScope,
+  buildListHref,
+  inFlowScope,
+  parseSearchAmount,
+  type Flow,
+  type TransactionFilters,
+} from "@/lib/transactionFilters";
 
 const checkboxClassName =
   "h-4 w-4 cursor-pointer rounded border-hairline bg-surface-raised accent-action outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
@@ -48,7 +55,9 @@ const AMOUNT_CELL =
 // matches what a ghost carries (description, category, account, amount); a
 // term that only the saved row's notes would match drops the ghost, and the
 // real row appears once it saves.
-function matchesFilters(tx: PendingTransaction, filters: TransactionFilters) {
+function matchesFilters(tx: PendingTransaction, filters: TransactionFilters, today: string) {
+  const scope = activeFlowScope(filters, today);
+  if (scope && !inFlowScope({ ...tx, transfer_group_id: null }, scope)) return false;
   if (filters.categoryid && tx.categoryid !== filters.categoryid) return false;
   if (filters.accountid && tx.accountid !== filters.accountid) return false;
   if (filters.type && tx.transaction_type !== filters.type) return false;
@@ -244,6 +253,7 @@ export function TransactionsList({
   lockedAccountId,
   hasFilters,
   budgetDrill,
+  flowEmpty,
   canLog,
   accounts,
   incomeCategories,
@@ -266,6 +276,8 @@ export function TransactionsList({
   hasFilters: boolean;
   /** Set when the filters are one budget's drill-down: names what's empty. */
   budgetDrill?: { categoryName: string; monthLabel: string };
+  /** Set when a tile's drill-down has nothing in its period at all. */
+  flowEmpty?: { flow: Flow; phrase: string };
   /** False when there's no active account yet -- the add-transaction form
    * isn't shown above, so the empty state has to point at /accounts. */
   canLog: boolean;
@@ -318,14 +330,14 @@ export function TransactionsList({
 
   // Ghosts only ever belong on page 1 (newest-first) -- a row that hasn't
   // been saved yet has no real position on page 2+.
-  const ghosts = page === 1 ? pending.filter((tx) => matchesFilters(tx, effectiveFilters)) : [];
+  const today = useToday();
+  const ghosts = page === 1 ? pending.filter((tx) => matchesFilters(tx, effectiveFilters, today)) : [];
 
   // Computed unconditionally (before the empty-state early returns below) so
   // the hooks above stay unconditional too -- this is just array shaping,
   // cheap even when the page ends up rendering an EmptyState instead.
   const displayRows = buildDisplayRows(transactions);
   const selectionInfos = displayRows.map(selectionInfoFor);
-  const today = useToday();
   const settling = useSettlingRows(
     displayRows.map((row, i) => ({
       key: selectionInfos[i].key,
@@ -411,6 +423,46 @@ export function TransactionsList({
     });
   }
 
+  // The full form an empty state's "Add" opens, and the toast its save leaves.
+  const addOverlay = (
+    <>
+      {addOpen ? (
+        <FullFormOverlay
+          accounts={accounts.filter((a) => a.is_active)}
+          incomeCategories={incomeCategories}
+          expenseCategories={expenseCategories}
+          goals={goals}
+          prefill={
+            addFrom
+              ? logAgainPrefill(addFrom.source, {
+                  accountIds: new Set(accounts.filter((a) => a.is_active).map((a) => a.id)),
+                  incomeCategoryIds: new Set(incomeCategories.map((c) => c.id)),
+                  expenseCategoryIds: new Set(expenseCategories.map((c) => c.id)),
+                  goalIds: new Set(goals.map((g) => g.id)),
+                })
+              : lockedAccountId
+                ? { accountid: lockedAccountId }
+                : flowEmpty?.flow === "income"
+                  ? { transaction_type: "Income" }
+                  : undefined
+          }
+          onClose={() => setAddOpen(false)}
+          onSaved={(_note, _bill, _money, saved) => {
+            showToast(saved ?? null);
+            setAddOpen(false);
+          }}
+        />
+      ) : null}
+      <div className="pointer-events-none fixed inset-x-4 bottom-6 z-50 flex flex-col items-center gap-2">
+        <SaveToast summary={toast} onLogAgain={(summary) => {
+            showToast(null);
+            setAddFrom(summary);
+            setAddOpen(true);
+          }} />
+      </div>
+    </>
+  );
+
   if (transactions.length === 0 && ghosts.length === 0 && page > 1 && totalCount > 0) {
     return (
       <EmptyState
@@ -430,6 +482,40 @@ export function TransactionsList({
   }
 
   if (transactions.length === 0 && ghosts.length === 0) {
+    if (flowEmpty) {
+      const income = flowEmpty.flow === "income";
+      const linkClass =
+        "inline-flex min-h-11 items-center rounded text-sm font-medium text-action transition-colors duration-150 hover:text-action-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
+      const label = income ? "Log income" : "Log a transaction";
+      return (
+        <>
+          <EmptyState
+            icon={<SproutIllustration />}
+            heading={income ? `No income logged yet ${flowEmpty.phrase}.` : `Nothing spent yet ${flowEmpty.phrase}.`}
+            action={
+              canLog ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddFrom(null);
+                    setAddOpen(true);
+                  }}
+                  className={linkClass}
+                >
+                  {label}
+                </button>
+              ) : (
+                <Link href="/accounts" className={linkClass}>
+                  Add an account
+                </Link>
+              )
+            }
+          />
+          {addOverlay}
+        </>
+      );
+    }
+
     if (hasFilters) {
       return (
         <EmptyState
@@ -505,38 +591,7 @@ export function TransactionsList({
           </div>
         }
       />
-      {addOpen ? (
-        <FullFormOverlay
-          accounts={accounts.filter((a) => a.is_active)}
-          incomeCategories={incomeCategories}
-          expenseCategories={expenseCategories}
-          goals={goals}
-          prefill={
-            addFrom
-              ? logAgainPrefill(addFrom.source, {
-                  accountIds: new Set(accounts.filter((a) => a.is_active).map((a) => a.id)),
-                  incomeCategoryIds: new Set(incomeCategories.map((c) => c.id)),
-                  expenseCategoryIds: new Set(expenseCategories.map((c) => c.id)),
-                  goalIds: new Set(goals.map((g) => g.id)),
-                })
-              : lockedAccountId
-                ? { accountid: lockedAccountId }
-                : undefined
-          }
-          onClose={() => setAddOpen(false)}
-          onSaved={(_note, _bill, _money, saved) => {
-            showToast(saved ?? null);
-            setAddOpen(false);
-          }}
-        />
-      ) : null}
-      <div className="pointer-events-none fixed inset-x-4 bottom-6 z-50 flex flex-col items-center gap-2">
-        <SaveToast summary={toast} onLogAgain={(summary) => {
-            showToast(null);
-            setAddFrom(summary);
-            setAddOpen(true);
-          }} />
-      </div>
+      {addOverlay}
       </>
     );
   }

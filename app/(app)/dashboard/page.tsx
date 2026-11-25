@@ -45,6 +45,8 @@ import {
 } from "@/lib/dashboardLayout";
 import { sinceLabel } from "@/lib/sinceLabel";
 import { monthStartISO } from "@/lib/date";
+import { flowDrillHref, periodForRange, periodLabels, type Flow } from "@/lib/transactionFilters";
+import { formatCurrency } from "@/lib/format";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatTile } from "@/components/ui/StatTile";
 import { ReturnSummaryStrip } from "@/components/ui/ReturnSummaryStrip";
@@ -295,6 +297,14 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
 
   const rangeStats = rangeStatsResult.data;
 
+  // The Income and Spending tiles open the rows they add up (flowScope), for
+  // the same period.
+  const flowPeriod = periodForRange(range);
+  const flowTileLink = (flow: Flow, value: number) => ({
+    href: flowDrillHref(flow, flowPeriod),
+    label: `${flow === "income" ? "Income" : "Spending"} ${periodLabels(flowPeriod, today).phrase}, ${formatCurrency(value)}. See the transactions.`,
+  });
+
   // Nothing to plot until there's at least one day of activity in the window.
   const cashflow = cashflowResult.data?.some((p) => p.income > 0 || p.expenses > 0)
     ? cashflowResult.data
@@ -534,6 +544,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         label="Income"
         value={rangeStats.income.value}
         format="currency"
+        link={flowTileLink("income", rangeStats.income.value)}
         delta={{
           value: rangeStats.income.delta,
           periodLabel: range.prevLabel,
@@ -549,6 +560,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         label="Spending"
         value={rangeStats.spending.value}
         format="currency"
+        link={flowTileLink("spending", rangeStats.spending.value)}
         delta={{
           value: rangeStats.spending.delta,
           periodLabel: range.prevLabel,

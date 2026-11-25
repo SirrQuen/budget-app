@@ -11,6 +11,7 @@
     "check:recap-preview": "next build && tsx scripts/check-recap-preview.ts",
     "test:parity":"tsx scripts/leaves-spendable-set-parity.ts",
     "test:parity:ends": "tsx scripts/recurring-ends-parity.ts",
+    "test:parity:flow": "tsx scripts/flow-scope-parity.ts",
     "types:dev": "tsx scripts/gen-types.ts"
   },
   "dependencies": {

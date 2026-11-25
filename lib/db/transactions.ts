@@ -5,6 +5,7 @@ import { describeReadError, describeWriteError, sessionUserId } from "@/lib/db/e
 import { buildSearchOr, escapeLike, MAX_SEARCH_LENGTH } from "@/lib/transactionFilters";
 import { NO_ANCHOR_ANSWER, type AnchorAnswerColumns, type AnchorPreview } from "@/lib/anchorAnswer";
 import type { ExportRow } from "@/lib/transactionExport";
+import type { FlowRow } from "@/lib/flowSummary";
 import { RECENT_DAYS, type RecentRow } from "@/lib/logAgain";
 import { addDaysISO } from "@/lib/date";
 
@@ -285,6 +286,50 @@ export async function listTransactions(
   }
 
   return { data: { transactions: data.map(flatten), totalCount, truncation }, error: null };
+}
+
+const FLOW_PAGE_SIZE = 1000;
+
+/**
+ * Every row a filter set selects, amounts and categories only -- what a flow
+ * drill-down's summary adds up (lib/flowSummary.ts). Read through
+ * selectFiltered(), the list's own query, and paged to the end, so a total
+ * never stops at the project's row ceiling: a short read is an error, never
+ * a smaller figure.
+ */
+export async function listFlowRows(opts: TransactionFilterOptions): Promise<DbResult<FlowRow[]>> {
+  const supabase = await createClient();
+  const rows: FlowRow[] = [];
+  let expected: number | null = null;
+
+  for (;;) {
+    const filtered = await selectFiltered(
+      supabase,
+      opts,
+      "amount, categoryid, category:categories(category_name)",
+      rows.length === 0 ? "exact" : undefined,
+    );
+    if (filtered.error !== null) return { data: null, error: filtered.error };
+    const { data, error, count } = await filtered.query
+      .order("id", { ascending: true })
+      .range(rows.length, rows.length + FLOW_PAGE_SIZE - 1)
+      .returns<{ amount: number; categoryid: string | null; category: { category_name: string } | null }[]>();
+
+    if (error) {
+      return { data: null, error: describeReadError(error, "transactions") };
+    }
+    if (expected === null) expected = count ?? 0;
+    for (const r of data) {
+      rows.push({ amount: r.amount, categoryid: r.categoryid, categoryName: r.category?.category_name ?? null });
+    }
+    if (data.length === 0 || rows.length >= expected) break;
+  }
+
+  if (rows.length !== expected) {
+    console.error(`[flow] read ${rows.length} of ${expected} transactions`);
+    return { data: null, error: "Your transactions changed while we were adding them up. Refresh the page." };
+  }
+  return { data: rows, error: null };
 }
 
 // head:true means no rows come back over the wire -- just the count, cheap

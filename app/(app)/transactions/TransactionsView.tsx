@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { listTransactions, TRANSACTIONS_PAGE_SIZE } from "@/lib/db/transactions";
+import { listFlowRows, listTransactions, TRANSACTIONS_PAGE_SIZE } from "@/lib/db/transactions";
+import { getToday } from "@/lib/db/settings";
+import { summarizeFlow } from "@/lib/flowSummary";
 import { listCategories, listCategoriesForType } from "@/lib/db/categories";
 import { listAccounts } from "@/lib/db/accounts";
 import { listFollowedGoals, listGoalOptions } from "@/lib/db/goals";
@@ -15,15 +17,20 @@ import { sameBillDeleteNotes } from "@/lib/sameBill";
 import { getTransferOrigins } from "@/lib/db/transferConversions";
 import { exportLabel } from "@/lib/transactionExport";
 import {
+  activeFlowScope,
   budgetDrillMonth,
   buildListHref,
   hasActiveFilters,
+  listReadOptions,
   MAX_SEARCH_LENGTH,
+  narrowsFlow,
+  periodLabels,
   parsePage,
   parseTransactionFilters,
   type SearchParams,
 } from "@/lib/transactionFilters";
 import { AddTransactionForm } from "./AddTransactionForm";
+import { FlowSummaryCard } from "./FlowSummaryCard";
 import { TransactionsList } from "./TransactionsList";
 
 // The one filterable transaction list. /transactions and /accounts/[id] both
@@ -48,14 +55,24 @@ export async function TransactionsView({
   lockedAccountId?: string;
 }) {
   const filters = parseTransactionFilters(searchParams);
-  // On an account page the account is the page; a stray ?accountid= is ignored.
-  if (lockedAccountId) filters.accountid = "";
+  // On an account page the account is the page; a stray ?accountid= is ignored,
+  // as is a tile's flow, which belongs to /transactions.
+  if (lockedAccountId) {
+    filters.accountid = "";
+    filters.flow = "";
+    filters.period = "";
+  }
   const page = parsePage(searchParams);
   const accountid = lockedAccountId ?? filters.accountid;
   // A budget's drill-down reads the budget's own rule -- Expense, no transfer
   // legs, this category, this month -- and its total comes from the same
   // function the Budgets page does, never a sum made here.
   const drillMonth = lockedAccountId ? null : budgetDrillMonth(filters);
+  // A dashboard tile's drill-down: the tile's scope, which the other filters
+  // only narrow. The summary reads the whole scope, and again as narrowed.
+  const today = await getToday();
+  const flowScope = activeFlowScope(filters, today);
+  const narrowed = flowScope !== null && narrowsFlow(filters);
 
   const [
     transactionsResult,
@@ -66,15 +83,12 @@ export async function TransactionsView({
     goalsResult,
     followedGoalsResult,
     drillBudgetsResult,
+    flowRowsResult,
+    narrowedRowsResult,
   ] = await Promise.all([
     listTransactions({
-      ...(filters.dateFrom ? { dateFrom: filters.dateFrom } : {}),
-      ...(filters.dateTo ? { dateTo: filters.dateTo } : {}),
-      ...(filters.categoryid ? { categoryid: filters.categoryid } : {}),
-      ...(accountid ? { accountid } : {}),
-      ...(filters.type ? { transaction_type: filters.type } : {}),
+      ...listReadOptions({ ...filters, accountid }, today),
       ...(drillMonth ? { excludeTransfers: true } : {}),
-      ...(filters.q ? { q: filters.q } : {}),
       page,
     }),
     listCategories(),
@@ -84,6 +98,10 @@ export async function TransactionsView({
     listGoalOptions(),
     listFollowedGoals(),
     drillMonth ? getBudgetsForMonth(drillMonth) : Promise.resolve(null),
+    flowScope
+      ? listFlowRows(listReadOptions({ flow: filters.flow, period: filters.period }, today))
+      : Promise.resolve(null),
+    narrowed ? listFlowRows(listReadOptions(filters, today)) : Promise.resolve(null),
   ]);
 
   if (
@@ -92,7 +110,10 @@ export async function TransactionsView({
     accountsResult.error !== null ||
     incomeCategoriesResult.error !== null ||
     expenseCategoriesResult.error !== null ||
-    goalsResult.error !== null
+    goalsResult.error !== null ||
+    // A tile's drill-down without its total would be half an answer.
+    (flowRowsResult !== null && flowRowsResult.error !== null) ||
+    (narrowedRowsResult !== null && narrowedRowsResult.error !== null)
   ) {
     return (
       <LoadError
@@ -103,6 +124,8 @@ export async function TransactionsView({
           incomeCategoriesResult.error ??
           expenseCategoriesResult.error ??
           goalsResult.error ??
+          flowRowsResult?.error ??
+          narrowedRowsResult?.error ??
           "We couldn't load your transactions. Refresh the page to try again."
         }
       />
@@ -143,6 +166,9 @@ export async function TransactionsView({
   const budgetDrill = drillMonth
     ? { categoryName: drillCategoryName, monthLabel: formatMonthYear(drillMonth) }
     : undefined;
+
+  const flowSummary = flowRowsResult?.data ? summarizeFlow(flowRowsResult.data) : null;
+  const flowLabels = flowScope ? periodLabels(filters.period, today) : null;
 
   const incomeCategories = categories.filter((c) => c.category_type === "Income");
   const expenseCategories = categories.filter((c) => c.category_type === "Expense");
@@ -191,11 +217,42 @@ export async function TransactionsView({
         </div>
       ) : null}
 
+      {flowScope && flowSummary && flowLabels ? (
+        <FlowSummaryCard
+          scope={flowScope}
+          period={filters.period}
+          labels={flowLabels}
+          summary={flowSummary}
+          narrowed={narrowedRowsResult?.data ? summarizeFlow(narrowedRowsResult.data) : null}
+          clearHref={basePath}
+          category={
+            filters.categoryid
+              ? {
+                  // The summary names archived categories too.
+                  name:
+                    flowSummary.categories.find((c) => c.categoryid === filters.categoryid)?.name ??
+                    categories.find((c) => c.id === filters.categoryid)?.category_name ??
+                    "Category",
+                  clearHref: buildListHref(basePath, filters, { categoryid: "" }),
+                }
+              : null
+          }
+        />
+      ) : null}
+
       <form
         action={basePath}
         role="search"
         className="flex flex-wrap items-end gap-3 rounded-2xl border border-hairline bg-surface p-4"
       >
+        {/* A tile's drill-down stays one while it's searched or narrowed. */}
+        {flowScope ? (
+          <>
+            <input type="hidden" name="flow" value={filters.flow} />
+            <input type="hidden" name="period" value={filters.period} />
+          </>
+        ) : null}
+
         <div className="flex min-w-0 max-w-full flex-col gap-1.5">
           <label htmlFor="filter-q" className={LABEL}>
             Search
@@ -292,16 +349,19 @@ export async function TransactionsView({
           </div>
         )}
 
-        <div className="flex min-w-0 max-w-full flex-col gap-1.5">
-          <label htmlFor="filter-type" className={LABEL}>
-            Type
-          </label>
-          <select id="filter-type" name="type" defaultValue={filters.type} className={FILTER_FIELD}>
-            <option value="">All</option>
-            <option value="Income">Income</option>
-            <option value="Expense">Expense</option>
-          </select>
-        </div>
+        {/* Income or Spending already says which. */}
+        {flowScope ? null : (
+          <div className="flex min-w-0 max-w-full flex-col gap-1.5">
+            <label htmlFor="filter-type" className={LABEL}>
+              Type
+            </label>
+            <select id="filter-type" name="type" defaultValue={filters.type} className={FILTER_FIELD}>
+              <option value="">All</option>
+              <option value="Income">Income</option>
+              <option value="Expense">Expense</option>
+            </select>
+          </div>
+        )}
 
         <button
           type="submit"
@@ -367,6 +427,11 @@ export async function TransactionsView({
         lockedAccountId={lockedAccountId}
         hasFilters={hasFilters}
         budgetDrill={budgetDrill}
+        flowEmpty={
+          flowScope && flowSummary?.count === 0 && flowLabels
+            ? { flow: flowScope.flow, phrase: flowLabels.phrase }
+            : undefined
+        }
         canLog={canAddHere}
         accounts={activeAccounts}
         incomeCategories={incomeCategoriesResult.data}

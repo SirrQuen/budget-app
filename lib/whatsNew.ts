@@ -69,9 +69,9 @@ export const WHATS_NEW_ITEMS: readonly WhatsNewItem[] = [
     action: { kind: "none" },
   },
   {
-    // Safe to Spend is the hero just above this card: nothing to open.
-    id: "safe-to-spend",
-    text: "Safe to Spend rolls to its new figure, saving gives you a few leaves, and Sorrel can live on your home screen.",
+    // The tiles are on this page: nothing to open.
+    id: "tiles",
+    text: "Tap Income or Spending on your dashboard to see exactly what's in it.",
     action: { kind: "none" },
   },
   {

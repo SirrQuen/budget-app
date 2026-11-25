@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+import { useId } from "react";
+import { ChevronRightIcon } from "@/components/ui/icons";
 import { formatCompactNumber, formatDelta, type Tone } from "@/lib/format";
 import { toneClassName } from "@/components/ui/Amount";
 import { Sparkline } from "@/components/ui/Sparkline";
@@ -14,6 +17,7 @@ export function StatTile({
   footnote,
   trend,
   size = "default",
+  link,
 }: {
   /** Sentence case, e.g. "Current monthly balance". */
   label: string;
@@ -48,7 +52,13 @@ export function StatTile({
    * never for a row of secondary stats (those stay "default").
    */
   size?: "default" | "hero";
+  /**
+   * Makes the whole tile a link. `label` is its accessible name: it says
+   * the figure and where the link goes; the delta line is its description.
+   */
+  link?: { href: string; label: string };
 }) {
+  const deltaId = useId();
   // Rolls only when `value` changes while on screen -- never on load
   // (docs/Motion-and-Delight.md, rules 6 and 10); same as the hero.
   const change = useValueChange(value);
@@ -69,9 +79,21 @@ export function StatTile({
 
   const showSparkline = trend != null && new Set(trend).size > 1;
 
-  return (
-    <div className="rounded-2xl border border-hairline bg-surface p-4">
-      <p className="text-sm font-medium text-ink-secondary">{label}</p>
+  const body = (
+    <>
+      {link ? (
+        // The chevron sits by the label: the card's own move controls take
+        // the top-right corner.
+        <p className="flex items-center gap-0.5 text-sm font-medium text-ink-secondary">
+          <span className="underline-offset-2 group-hover/tile:underline">{label}</span>
+          <ChevronRightIcon
+            aria-hidden="true"
+            className="h-4 w-4 shrink-0 text-ink-muted transition-transform duration-150 group-hover/tile:translate-x-0.5 group-hover/tile:text-ink motion-reduce:transition-none motion-reduce:group-hover/tile:translate-x-0"
+          />
+        </p>
+      ) : (
+        <p className="text-sm font-medium text-ink-secondary">{label}</p>
+      )}
       <p
         className={`mt-1 font-semibold text-ink ${size === "hero" ? "text-5xl" : "text-2xl"}`}
       >
@@ -81,7 +103,7 @@ export function StatTile({
         // flex-wrap: in a narrow tile the comparison label drops to its own
         // line whole instead of being squeezed a word per line beside the
         // delta. min-w-0 lets it wrap there if even a full line is too narrow.
-        <p className={`mt-1 flex flex-wrap items-center gap-x-1 text-sm ${toneClassName(deltaTone)}`}>
+        <p id={deltaId} className={`mt-1 flex flex-wrap items-center gap-x-1 text-sm ${toneClassName(deltaTone)}`}>
           <span aria-hidden="true">{deltaParts.arrow}</span>
           <span>{deltaParts.text}</span>
           <span className="min-w-0 text-ink-muted">vs {delta!.periodLabel}</span>
@@ -90,6 +112,20 @@ export function StatTile({
         <p className="mt-1 text-sm text-ink-muted">{footnote}</p>
       ) : null}
       {showSparkline ? <Sparkline values={trend} className="mt-3" /> : null}
-    </div>
+    </>
+  );
+
+  const card = "rounded-2xl border border-hairline bg-surface p-4";
+  return link ? (
+    <Link
+      href={link.href}
+      aria-label={link.label}
+      aria-describedby={deltaParts ? deltaId : undefined}
+      className={`group/tile block min-h-11 ${card} transition-colors duration-150 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-page`}
+    >
+      {body}
+    </Link>
+  ) : (
+    <div className={card}>{body}</div>
   );
 }

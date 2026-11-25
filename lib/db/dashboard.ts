@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import { addDaysISO, endOfMonthISO, daysBetweenInclusive, monthStartISO } from "@/lib/date";
 import type { DashboardRange } from "@/lib/dashboardRange";
+import { rangeCashflowStats, type DashboardStat, type RangeCashflowStats } from "@/lib/rangeCashflow";
 import { describeReadError } from "@/lib/db/errors";
 import { getSafeToSpendWindowPref, getSafeToSpendCushion, getTimeZone, getToday } from "@/lib/db/settings";
 import { getBankHolidays } from "@/lib/db/holidays";
@@ -42,6 +43,8 @@ type UpcomingRecurringRow = Database["public"]["Views"]["v_upcoming_recurring"][
 type IntegrityIssueRow = Database["public"]["Views"]["v_integrity_issues"]["Row"];
 type InvestmentHoldingRow = Database["public"]["Views"]["v_investment_holdings"]["Row"];
 type PortfolioSummaryRow = Database["public"]["Views"]["v_portfolio_summary"]["Row"];
+
+export type { DashboardStat, RangeCashflowStats };
 
 export type DbResult<T> = { data: T; error: null } | { data: null; error: string };
 
@@ -1136,24 +1139,6 @@ async function listRecordedOccurrences(
   return { data: byId, error: null };
 }
 
-export type DashboardStat = {
-  /** The headline figure -- as-of-now for net worth, range total for cashflow. */
-  value: number;
-  /**
-   * Sparkline points, oldest first, the last being the most recent bucket.
-   * Dollars. 12 monthly points for net worth; range-bucketed for the
-   * cashflow tiles.
-   */
-  points: number[];
-  /** value minus the comparison figure (prior month, or preceding window). Dollars, signed. */
-  delta: number;
-};
-
-export type RangeCashflowStats = {
-  income: DashboardStat;
-  spending: DashboardStat;
-};
-
 // First-of-month ISO strings for the last 12 calendar months, oldest first,
 // ending with the current month -- the x-axis for every stat-tile sparkline.
 // The user's calendar months, matching v_monthly_cashflow.month (date_trunc
@@ -1234,10 +1219,10 @@ export async function getNetWorthStat(): Promise<DbResult<DashboardStat>> {
 // sparkline bucketed to the range's granularity (~daily to a month,
 // weekly to six, monthly beyond).
 //
-// One read off v_daily_cashflow spanning prevFrom..to; every figure is
-// summed off that daily grid in integer cents (amount is exact `numeric`;
-// same rule as getNetWorthStat / getSafeToSpend). v_daily_cashflow only
-// has rows for days with activity, so a missing day is a real zero.
+// One read off v_daily_cashflow spanning prevFrom..to; the figures are
+// summed off that daily grid by rangeCashflowStats (lib/rangeCashflow.ts),
+// each tile's total over its flow scope (flowScope), the same scope its
+// drill-down lists.
 export async function getRangeCashflowStats(
   range: DashboardRange,
 ): Promise<DbResult<RangeCashflowStats>> {
@@ -1254,51 +1239,7 @@ export async function getRangeCashflowStats(
     return { data: null, error: describeReadError(error, "cash flow") };
   }
 
-  const toCents = (n: number | null | undefined) => Math.round((n ?? 0) * 100);
-  const byDay = new Map(
-    data.filter((r): r is typeof r & { day: string } => r.day !== null).map((r) => [r.day, r]),
-  );
-
-  // Sum an inclusive [from, to] span off the daily grid, in cents. ISO
-  // "YYYY-MM-DD" strings compare lexicographically, so the loop bound is safe.
-  const sumSpan = (from: string, to: string, key: "income" | "expenses") => {
-    let cents = 0;
-    for (let d = from; d <= to; d = addDaysISO(d, 1)) {
-      cents += toCents(byDay.get(d)?.[key]);
-    }
-    return cents;
-  };
-
-  // Bucket start dates across the selected range, per range.bucket.
-  const bucketStarts: string[] = [];
-  if (range.bucket === "month") {
-    let d = `${range.from.slice(0, 7)}-01`;
-    while (d <= range.to) {
-      bucketStarts.push(d < range.from ? range.from : d);
-      const [y, m] = d.split("-").map(Number);
-      const ny = m === 12 ? y + 1 : y;
-      const nm = m === 12 ? 1 : m + 1;
-      d = `${ny}-${String(nm).padStart(2, "0")}-01`;
-    }
-  } else {
-    const step = range.bucket === "week" ? 7 : 1;
-    for (let d = range.from; d <= range.to; d = addDaysISO(d, step)) {
-      bucketStarts.push(d);
-    }
-  }
-
-  const stat = (key: "income" | "expenses"): DashboardStat => {
-    const valueCents = sumSpan(range.from, range.to, key);
-    const prevCents = sumSpan(range.prevFrom, range.prevTo, key);
-    const points = bucketStarts.map((start, i) => {
-      const end =
-        i + 1 < bucketStarts.length ? addDaysISO(bucketStarts[i + 1], -1) : range.to;
-      return sumSpan(start, end, key) / 100;
-    });
-    return { value: valueCents / 100, points, delta: (valueCents - prevCents) / 100 };
-  };
-
-  return { data: { income: stat("income"), spending: stat("expenses") }, error: null };
+  return { data: rangeCashflowStats(data, range), error: null };
 }
 
 // Ops-only (see DATABASE.md) -- no user-facing screen reads this.

@@ -8,7 +8,8 @@ export function EmptyState({
 }: {
   icon?: React.ReactNode;
   heading: string;
-  message: string;
+  /** Left out when the heading says it all. */
+  message?: string;
   action?: React.ReactNode;
 }) {
   return (
@@ -17,7 +18,7 @@ export function EmptyState({
         {icon ?? <InboxIcon className="h-10 w-10" />}
       </div>
       <h2 className="text-lg font-semibold text-ink">{heading}</h2>
-      <p className="max-w-sm text-sm text-ink-secondary">{message}</p>
+      {message ? <p className="max-w-sm text-sm text-ink-secondary">{message}</p> : null}
       {action ? <div className="mt-2">{action}</div> : null}
     </div>
   );
