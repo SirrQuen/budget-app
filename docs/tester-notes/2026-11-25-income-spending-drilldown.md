@@ -1,7 +1,7 @@
-Sent:      not yet
+Sent:      2026-11-25
 Migration: none
 Merge:     c31b9f2 (feat/income-spending-drilldown, fast-forward; no merge commit)
-Deployed:  not yet
+Deployed:  2026-11-25
 
 ---
 
