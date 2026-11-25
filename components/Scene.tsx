@@ -59,7 +59,15 @@ const stars = (list: readonly Star[]) =>
 const fill = (name: string) => ({ fill: `var(--scene-${name})` });
 const stop = (name: string) => ({ stopColor: `var(--scene-${name})` });
 
-export function Scene({ band }: { band: TimeBand }) {
+const VIEW_BOX = "0 -80 860 280";
+const FIT = "xMaxYMax slice";
+
+/**
+ * The drawing. `artId` names its art so SceneCopy can show it again: the
+ * dashboard backdrop's softened copy (docs/Backdrop.md) is a <use> of this,
+ * not a second drawing.
+ */
+export function Scene({ band, artId }: { band: TimeBand; artId?: string }) {
   const uid = useId().replace(/[^\w-]/g, "");
   const sky = `scene-sky-${band}-${uid}`;
   const glow = `scene-glow-${band}-${uid}`;
@@ -70,7 +78,7 @@ export function Scene({ band }: { band: TimeBand }) {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: sceneCss(band) }} />
-      <svg viewBox="0 -80 860 280" preserveAspectRatio="xMaxYMax slice" aria-hidden="true" focusable="false">
+      <svg viewBox={VIEW_BOX} preserveAspectRatio={FIT} aria-hidden="true" focusable="false">
         <defs>
           <linearGradient id={sky} x1="0" y1="0" x2="0" y2="1">
             {skyOffsets(band).map((offset, i) => (
@@ -93,67 +101,78 @@ export function Scene({ band }: { band: TimeBand }) {
           </radialGradient>
         </defs>
 
-        <rect y="-80" width="860" height="280" fill={`url(#${sky})`} />
+        <g id={artId}>
+          <rect y="-80" width="860" height="280" fill={`url(#${sky})`} />
 
-        {sun ? (
-          <g data-sun="">
-            <circle cx={sun.cx} cy={sun.glowCy} r={sun.glowR} fill={`url(#${glow})`} />
-            <circle cx={sun.cx} cy={sun.cy} r={sun.r} style={fill("sun")} />
-          </g>
-        ) : null}
-
-        {band === "afternoon" ? (
-          <g style={fill("clouds")}>
-            <ellipse cx="470" cy="56" rx="60" ry="13" />
-            <ellipse cx="505" cy="47" rx="34" ry="12" />
-            <ellipse cx="300" cy="80" rx="48" ry="10" />
-          </g>
-        ) : null}
-
-        {birds ? (
-          <g style={{ stroke: "var(--scene-birds)" }} strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round">
-            {birds.map((d) => (
-              <path key={d} d={d} />
-            ))}
-          </g>
-        ) : null}
-
-        {night ? (
-          <>
-            <g style={fill("stars")}>{stars(LOW_STARS)}</g>
-            <circle cx="300" cy="90" r=".9" opacity=".5" style={fill("extra-star")} />
-            <g data-moon="">
-              <circle cx="690" cy="46" r="60" fill={`url(#${glow})`} />
-              <path
-                d="M690 28 A18 18 0 1 0 708 50 A14 14 0 1 1 690 28 Z"
-                style={{ fill: "var(--scene-moon)", stroke: "var(--scene-moon-edge)" }}
-                strokeWidth="1"
-              />
+          {sun ? (
+            <g data-sun="">
+              <circle cx={sun.cx} cy={sun.glowCy} r={sun.glowR} fill={`url(#${glow})`} />
+              <circle cx={sun.cx} cy={sun.cy} r={sun.r} style={fill("sun")} />
             </g>
-            <g style={fill("stars")}>{stars(HIGH_STARS)}</g>
-          </>
-        ) : null}
+          ) : null}
 
-        <path d={MOUNTAINS} style={fill("mountains")} />
-        <path d={MID_HILL} style={fill("mid-hill")} />
-        {band === "morning" ? <ellipse cx="430" cy="160" rx="460" ry="18" style={fill("mist")} /> : null}
-        <path d={NEAR_HILL} style={fill("near-hill")} />
-        <g style={fill("trees")}>
-          <rect x="612" y="138" width="3" height="12" />
-          <circle cx="613.5" cy="131" r="10" />
-          <path d="M646 150 L656 116 L666 150 Z" />
-          <path d="M664 152 L672 126 L680 152 Z" />
-          <rect x="520" y="146" width="2.5" height="9" />
-          <circle cx="521" cy="141" r="7" />
-          <path d="M770 146 L779 112 L788 146 Z" />
-          <rect x="808" y="128" width="3" height="14" />
-          <circle cx="809.5" cy="119" r="13" />
-          <rect x="360" y="152" width="2.5" height="8" />
-          <circle cx="361" cy="148" r="6" />
-          <circle cx="34" cy="166" r="9" />
-          <circle cx="50" cy="168" r="7" />
+          {band === "afternoon" ? (
+            <g style={fill("clouds")}>
+              <ellipse cx="470" cy="56" rx="60" ry="13" />
+              <ellipse cx="505" cy="47" rx="34" ry="12" />
+              <ellipse cx="300" cy="80" rx="48" ry="10" />
+            </g>
+          ) : null}
+
+          {birds ? (
+            <g style={{ stroke: "var(--scene-birds)" }} strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round">
+              {birds.map((d) => (
+                <path key={d} d={d} />
+              ))}
+            </g>
+          ) : null}
+
+          {night ? (
+            <>
+              <g style={fill("stars")}>{stars(LOW_STARS)}</g>
+              <circle cx="300" cy="90" r=".9" opacity=".5" style={fill("extra-star")} />
+              <g data-moon="">
+                <circle cx="690" cy="46" r="60" fill={`url(#${glow})`} />
+                <path
+                  d="M690 28 A18 18 0 1 0 708 50 A14 14 0 1 1 690 28 Z"
+                  style={{ fill: "var(--scene-moon)", stroke: "var(--scene-moon-edge)" }}
+                  strokeWidth="1"
+                />
+              </g>
+              <g style={fill("stars")}>{stars(HIGH_STARS)}</g>
+            </>
+          ) : null}
+
+          <path d={MOUNTAINS} style={fill("mountains")} />
+          <path d={MID_HILL} style={fill("mid-hill")} />
+          {band === "morning" ? <ellipse cx="430" cy="160" rx="460" ry="18" style={fill("mist")} /> : null}
+          <path d={NEAR_HILL} style={fill("near-hill")} />
+          <g style={fill("trees")}>
+            <rect x="612" y="138" width="3" height="12" />
+            <circle cx="613.5" cy="131" r="10" />
+            <path d="M646 150 L656 116 L666 150 Z" />
+            <path d="M664 152 L672 126 L680 152 Z" />
+            <rect x="520" y="146" width="2.5" height="9" />
+            <circle cx="521" cy="141" r="7" />
+            <path d="M770 146 L779 112 L788 146 Z" />
+            <rect x="808" y="128" width="3" height="14" />
+            <circle cx="809.5" cy="119" r="13" />
+            <rect x="360" y="152" width="2.5" height="8" />
+            <circle cx="361" cy="148" r="6" />
+            <circle cx="34" cy="166" r="9" />
+            <circle cx="50" cy="168" r="7" />
+          </g>
         </g>
       </svg>
     </>
+  );
+}
+
+/** A Scene's art shown again, at the same size and crop. Decorative. */
+export function SceneCopy({ artId }: { artId: string }) {
+  return (
+    <svg viewBox={VIEW_BOX} preserveAspectRatio={FIT} aria-hidden="true" focusable="false">
+      <use href={`#${artId}`} />
+    </svg>
   );
 }

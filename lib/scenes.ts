@@ -29,9 +29,22 @@ type Palette = {
   moon: string;
   moonEdge: string;
   moonHalo: string;
-  /** The fade behind the words: "r g b" and its strength at the left edge. */
+  /**
+   * The fade behind the words: "r g b" and its strength at the left edge.
+   * Morning and afternoon dark are 0.6 (were 0.5): a greeting reaching
+   * 320px into the banner crossed their brighter sky at 4.41:1 on a strict
+   * per-pixel check (docs/Backdrop.md, "Rulings").
+   */
   scrim: string;
   scrimAlpha: number;
+  /**
+   * The ground below the scene, behind the cards (docs/Backdrop.md): 0%, 45%
+   * and 100% of the way from the near hill to the bottom of the screen. The
+   * first stop is the near hill's own colour, so there is no seam.
+   */
+  ground: readonly [string, string, string];
+  /** The two soft ellipses in the top of the ground. */
+  meadow: string;
 };
 
 const NONE = "transparent";
@@ -50,6 +63,8 @@ const blank = {
 
 const DARK_SCRIM = "11 11 18";
 const LIGHT_SCRIM = "255 255 255";
+const DARK_MEADOW = "rgb(255 255 255 / 0.05)";
+const LIGHT_MEADOW = "rgb(255 255 255 / 0.28)";
 
 export const SCENE_PALETTES: Record<TimeBand, { light: Palette; dark: Palette }> = {
   morning: {
@@ -65,7 +80,9 @@ export const SCENE_PALETTES: Record<TimeBand, { light: Palette; dark: Palette }>
       nearHill: "#1E2638",
       trees: "#161D2E",
       scrim: DARK_SCRIM,
-      scrimAlpha: 0.5,
+      scrimAlpha: 0.6,
+      ground: ["#1E2638", "#151B2A", "#0E1119"],
+      meadow: DARK_MEADOW,
     },
     light: {
       ...blank,
@@ -80,6 +97,8 @@ export const SCENE_PALETTES: Record<TimeBand, { light: Palette; dark: Palette }>
       trees: "#8FA2B5",
       scrim: LIGHT_SCRIM,
       scrimAlpha: 0.5,
+      ground: ["#A9B9C9", "#C3CFDB", "#E2E8EF"],
+      meadow: LIGHT_MEADOW,
     },
   },
   afternoon: {
@@ -95,7 +114,9 @@ export const SCENE_PALETTES: Record<TimeBand, { light: Palette; dark: Palette }>
       nearHill: "#173342",
       trees: "#10283A",
       scrim: DARK_SCRIM,
-      scrimAlpha: 0.5,
+      scrimAlpha: 0.6,
+      ground: ["#173342", "#10232F", "#0B141B"],
+      meadow: DARK_MEADOW,
     },
     light: {
       ...blank,
@@ -110,6 +131,8 @@ export const SCENE_PALETTES: Record<TimeBand, { light: Palette; dark: Palette }>
       trees: "#7FA98C",
       scrim: LIGHT_SCRIM,
       scrimAlpha: 0.5,
+      ground: ["#97BBA2", "#B7D0BE", "#DCE9DF"],
+      meadow: LIGHT_MEADOW,
     },
   },
   evening: {
@@ -124,6 +147,8 @@ export const SCENE_PALETTES: Record<TimeBand, { light: Palette; dark: Palette }>
       trees: "#1A1022",
       scrim: DARK_SCRIM,
       scrimAlpha: 0.5,
+      ground: ["#22152C", "#181020", "#0F0A15"],
+      meadow: DARK_MEADOW,
     },
     light: {
       ...blank,
@@ -136,6 +161,8 @@ export const SCENE_PALETTES: Record<TimeBand, { light: Palette; dark: Palette }>
       trees: "#9C84A8",
       scrim: LIGHT_SCRIM,
       scrimAlpha: 0.5,
+      ground: ["#B49CBD", "#CBB8D2", "#E6DCE9"],
+      meadow: LIGHT_MEADOW,
     },
   },
   night: {
@@ -155,6 +182,8 @@ export const SCENE_PALETTES: Record<TimeBand, { light: Palette; dark: Palette }>
       trees: "#070B18",
       scrim: DARK_SCRIM,
       scrimAlpha: 0,
+      ground: ["#0B1022", "#080B17", "#06080F"],
+      meadow: DARK_MEADOW,
     },
     light: {
       ...blank,
@@ -168,6 +197,8 @@ export const SCENE_PALETTES: Record<TimeBand, { light: Palette; dark: Palette }>
       trees: "#8C97C9",
       scrim: LIGHT_SCRIM,
       scrimAlpha: 0.45,
+      ground: ["#9EA8D4", "#BAC2E2", "#DDE1F2"],
+      meadow: LIGHT_MEADOW,
     },
   },
 };
@@ -219,6 +250,10 @@ function declarations(band: TimeBand, p: Palette): string {
     ["moon-halo", p.moonHalo],
     ["scrim", p.scrim],
     ["scrim-alpha", p.scrimAlpha],
+    ["ground-1", p.ground[0]],
+    ["ground-2", p.ground[1]],
+    ["ground-3", p.ground[2]],
+    ["meadow", p.meadow],
   ];
   return vars.map(([name, value]) => `--scene-${name}:${value}`).join(";");
 }

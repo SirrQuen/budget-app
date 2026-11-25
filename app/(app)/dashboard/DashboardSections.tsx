@@ -262,6 +262,8 @@ function SortableCard({
               .filter(Boolean)
               .join(", "),
       }}
+      // The lifted card is solid, not glass (docs/Backdrop.md, rule 4).
+      data-lifted={isDragging ? "" : undefined}
       className={`card-lift group relative min-w-0 scroll-mt-6 ${SPAN[sizeOf(id)]} ${
         isDragging ? (reducedMotion ? "z-20 opacity-90" : "card-lift--on z-20") : ""
       }`}

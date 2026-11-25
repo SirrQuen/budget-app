@@ -92,7 +92,7 @@ export const WHATS_NEW_ITEMS: readonly WhatsNewItem[] = [
   {
     // The plant and its landscape are on this page: nothing to open.
     id: "plant",
-    text: "The dashboard plant is now a roselle that opens in the morning and closes at night. Your dashboard now has a little landscape that follows the time of day.",
+    text: "The dashboard plant is now a roselle that opens in the morning and closes at night. The scene now fills your whole dashboard. Scroll down and it softens behind your numbers.",
     action: { kind: "none" },
   },
 ];

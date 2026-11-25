@@ -19,7 +19,7 @@ import { hourInZone, msUntilNextMarkBoundary, type MarkState } from "@/lib/timeO
 import { afterWelcome } from "@/lib/welcomeSignals";
 
 // The plant stands on the near hill of the dashboard's scene (docs/Scenes.md;
-// placed by .dash-banner__perch). 120px tall from 640px up, 88px on a phone
+// placed by .dash-backdrop__perch, in the fixed backdrop). 120px tall from 640px up, 88px on a phone
 // (docs/Roselle.md), width following the drawing's 240:280; at those sizes
 // every stem calyx is over 14px.
 /** The reveal fade (app/globals.css, .roselle-slot). */

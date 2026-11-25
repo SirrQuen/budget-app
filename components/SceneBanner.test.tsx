@@ -106,10 +106,15 @@ test("the next band boundary, in the stored zone", () => {
 
 test("the server render: this band only, decorative, no text in the drawing, no fade", () => {
   const html = renderToStaticMarkup(banner(NY, "morning"));
-  assert.match(html, /class="dash-scene"/);
-  assert.match(html, /aria-hidden="true" class="dash-scene"/);
+  assert.match(html, /aria-hidden="true" class="dash-backdrop"/);
   assert.match(html, /preserveAspectRatio="xMaxYMax slice"/);
-  assert.equal(html.match(/<svg/g)?.length, 1);
+  // One drawing; the softened copy (docs/Backdrop.md) is a <use> of its art,
+  // not a second drawing.
+  assert.equal(html.match(/<svg/g)?.length, 2);
+  assert.equal(html.match(/<path/g)?.length, new Set(html.match(/<path[^>]*>/g)).size);
+  const art = html.match(/<g id="(scene-art-[^"]+)"/)?.[1];
+  assert.ok(art);
+  assert.match(html, new RegExp(`<use href="#${art}"`));
   assert.doesNotMatch(html, /<text|tabindex="0"|dash-scene__layer--in/i);
   assert.match(html, /Wednesday 25 November/);
   assert.match(html, /<h1 id="page-title"/);
@@ -159,7 +164,8 @@ async function mountAt(instant: Date) {
     fired,
     scenes: () => [...container.querySelectorAll<HTMLElement>("[data-scene]")].map((e) => e.dataset.scene),
     greeting: () => container.querySelector("[data-banner-greeting]")!.textContent,
-    fading: () => container.querySelectorAll(".dash-scene__layer--in").length,
+    // The scene layers; each one's softened copy fades with it.
+    fading: () => container.querySelectorAll("[data-scene].dash-scene__layer--in").length,
     tick: (ms: number) => act(async () => mock.timers.tick(ms)),
   };
 }

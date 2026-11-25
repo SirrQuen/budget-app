@@ -630,7 +630,10 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
 
   return (
     <DashboardLayoutProvider saved={layout}>
-      <div className="flex flex-col gap-10">
+      {/* dash-glass: the cards are frosted over the backdrop the banner
+          draws; dash-pass: the space between them lets a tap through to the
+          visitor on the hill (app/globals.css, "DASHBOARD BACKDROP"). */}
+      <div className="dash-glass dash-pass flex flex-col gap-10">
         {/* The data has landed: the daily welcome can dissolve onto this. */}
         <WelcomeReady />
         {/* A failed read is no toast, never an error. */}
@@ -649,7 +652,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
           />
         ) : null}
         {/* ── Right now: as-of-today and forward-looking; not scoped by the filter ── */}
-        <section className="flex flex-col gap-6" aria-labelledby="dash-right-now">
+        <section className="dash-pass flex flex-col gap-6" aria-labelledby="dash-right-now">
           {banner}
           {pageLevelError ? <LoadError message="We couldn’t load parts of your dashboard." /> : null}
           <h2 id="dash-right-now" className="text-sm font-medium text-ink-secondary">

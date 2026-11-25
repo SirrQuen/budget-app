@@ -10,7 +10,7 @@ The motion rules in `docs/Motion-and-Delight.md` apply throughout.
 
 ## Rules
 
-1. **The red calyces must always be visible on the dashboard,** open or closed, at every screen width. They're what makes it unmistakably sorrel. At the sizes used:
+1. **The red calyces must be fully visible on the dashboard when it is scrolled to the top,** open or closed, at every screen width. When you scroll, cards may pass over the plant (changed by docs/Backdrop.md: the plant now stands in the fixed backdrop, behind the cards). The size rules still apply. They're what makes it unmistakably sorrel. At the sizes used:
    - the plant is at least **120px tall on desktop and 88px on a phone**;
    - every calyx is at least **14px tall** on screen;
    - nothing crops, hides or overlaps them;

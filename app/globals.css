@@ -1793,52 +1793,61 @@ body {
   }
 }
 
-/* DASHBOARD SCENE -- the header's landscape (docs/Scenes.md; components/
-   SceneBanner.tsx, Scene.tsx). The banner has no background of its own: the
-   scene is masked to transparent at the bottom and sides, so what shows
-   through is the page's own colour and there is no edge. Colours are the
-   layers' custom properties (lib/scenes.ts). Nothing here moves except one
-   cross-fade when the part of the day changes with the page open. */
-/* Below 64rem the words sit above and the scenery below them: a narrow banner
-   crops the drawing so its sun and birds would otherwise be behind the text.
-   Nothing is behind the words there, so there is no scrim. A phone is 280px in
-   all (a wrapped name takes its line from the scene); between 40rem and 64rem
-   the scene is 180px under the words. From 64rem the words lie over the
-   scene. */
+/* DASHBOARD BACKDROP -- the landscape behind the whole dashboard
+   (docs/Backdrop.md, docs/Scenes.md; components/SceneBanner.tsx, Scene.tsx,
+   lib/backdrop.ts). One fixed layer behind the dashboard's content, covering
+   the main area (the sidebar stays solid): sky to the top of the screen, the
+   shipped scene where the banner's empty slot is at scroll 0, then ground to
+   the bottom. Colours are the layers' custom properties (lib/scenes.ts).
+   Nothing here moves by itself: the scroll fades in a static softened copy,
+   and the part of the day changing with the page open cross-fades once.
+
+   Stacking: the dashboard's content wrapper (.dash-glass) isolates, and the
+   backdrop is its z -1 child, so every card paints over it; the shell's
+   header and sidebar (z 1, components/app-shell/AppShell.tsx) paint over
+   that. */
+
+/* The banner: words, then the slot the scene lines up with. Below 64rem the
+   words sit above the scenery with nothing behind them but sky. On a phone
+   the words box is a fixed height, so the scene sits in the same place every
+   load, and a name that wraps grows up into the plain sky. Between 40rem and
+   64rem the slot is 180px under the words. From 64rem the words lie over the
+   scene, behind the scrim. */
 .dash-banner {
   position: relative;
-  isolation: isolate;
   display: flex;
   flex-direction: column;
-  height: 280px;
   --perch-right: 20px;
-  --perch-bottom: 24px;
 }
-.dash-scene {
+.dash-banner__words {
   position: relative;
-  order: 1;
-  flex: 1;
-  min-height: 0;
-  z-index: -1;
-  overflow: hidden;
-  pointer-events: none;
-  /* One mask over every layer, so a cross-fade never thickens the faded part.
-     Faded at the top too: no straight edge against the page. */
-  -webkit-mask-image:
-    linear-gradient(to bottom, transparent 0%, #000 8%, #000 74%, transparent 97%),
-    linear-gradient(to right, transparent 0%, #000 2.5%, #000 97.5%, transparent 100%);
-  -webkit-mask-composite: source-in;
-  mask-image:
-    linear-gradient(to bottom, transparent 0%, #000 8%, #000 74%, transparent 97%),
-    linear-gradient(to right, transparent 0%, #000 2.5%, #000 97.5%, transparent 100%);
-  mask-composite: intersect;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 140px;
+  width: fit-content;
+  max-width: calc(100% - var(--perch-right) - 90px);
+  padding: 12px 0 0 12px;
+  overflow-wrap: anywhere;
+}
+.dash-banner__stage {
+  height: 140px;
+}
+.dash-banner__marker {
+  position: absolute;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  visibility: hidden;
 }
 @media (min-width: 40rem) {
-  .dash-banner {
+  .dash-banner__words {
+    display: block;
     height: auto;
+    max-width: 60%;
+    padding: 26px 0 0 26px;
   }
-  .dash-scene {
-    flex: none;
+  .dash-banner__stage {
     height: 180px;
   }
 }
@@ -1847,9 +1856,8 @@ body {
     display: block;
     height: 260px;
     --perch-right: 56px;
-    --perch-bottom: 32px;
   }
-  .dash-scene {
+  .dash-banner__stage {
     position: absolute;
     inset: 0;
     height: auto;
@@ -1859,64 +1867,230 @@ body {
   .dash-banner {
     height: 300px;
     --perch-right: 92px;
-    --perch-bottom: 40px;
+  }
+}
+
+/* Taps go through the space around the cards to the visitor on the hill:
+   the wrappers between them take no pointer, their other children do. In a
+   layer below the utilities, so a child's own pointer-events-none wins. */
+@layer components {
+  .dash-pass,
+  .dash-banner,
+  .dash-banner__stage,
+  .dash-banner__marker {
+    pointer-events: none;
+  }
+  :where(.dash-pass, .dash-banner) > :where(:not(.dash-pass, .dash-banner__stage, .dash-banner__marker, .dash-backdrop)) {
+    pointer-events: auto;
+  }
+}
+.dash-glass {
+  isolation: isolate;
+}
+
+/* The layer. 100lvh, so a phone's address bar showing and hiding never
+   leaves a gap. The defaults are the usual layout's, so the server's render
+   already lines up; SceneBanner measures the real slot and overrides them. */
+.dash-backdrop {
+  position: fixed;
+  z-index: -1;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100lvh;
+  pointer-events: none;
+  --scene-top: 233px;
+  --scene-h: 140px;
+  --soften-distance: 240px;
+  --pad: 1rem;
+}
+@media (min-width: 40rem) {
+  .dash-backdrop {
+    --scene-top: 247px;
+    --scene-h: 180px;
+  }
+}
+@media (min-width: 48rem) {
+  .dash-backdrop {
+    left: 15rem;
+    --pad: 2rem;
+    --scene-top: 347px;
+  }
+}
+@media (min-width: 64rem) {
+  .dash-backdrop {
+    --scene-top: 159px;
+    --scene-h: 260px;
+  }
+}
+@media (min-width: 80rem) {
+  .dash-backdrop {
+    --scene-h: 300px;
   }
 }
 .dash-scene__layer,
-.dash-scene__scrim {
+.dash-backdrop__soft,
+.dash-backdrop__blur,
+.dash-backdrop__dim {
   position: absolute;
   inset: 0;
 }
-.dash-scene__layer > svg {
+/* Sky to the top of the screen and past it, so a rubber-band overscroll
+   shows sky, never an edge. It runs on under the scene's faded top. */
+.dash-backdrop__sky {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -100lvh;
+  height: calc(100lvh + var(--scene-top) + var(--scene-h) / 2);
+  background: var(--scene-sky-1);
+}
+/* The shipped scene, unchanged, at the slot. Its top fades into the plain
+   sky (a wide screen crops sky from the top); its bottom is the near hill,
+   which is the ground's first colour, so it needs no fade. */
+.dash-backdrop__band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--scene-top);
+  height: var(--scene-h);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 22%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 22%);
+}
+.dash-backdrop__band > svg {
   display: block;
   width: 100%;
   height: 100%;
 }
-/* The fade behind the words, measured from the banner's left edge, not the
-   drawing's (which a narrow banner crops away). */
+/* From the near hill to the bottom of the screen, with two soft wide
+   ellipses in its top part, and on past the bottom for overscroll. */
+.dash-backdrop__ground {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--scene-top) + var(--scene-h) - 1px);
+  bottom: 0;
+  min-height: 240px;
+  background:
+    radial-gradient(50% 26px at 30% 70px, var(--scene-meadow) 96%, transparent 100%),
+    radial-gradient(45% 30px at 80% 190px, var(--scene-meadow) 96%, transparent 100%),
+    linear-gradient(to bottom, var(--scene-ground-1) 0%, var(--scene-ground-2) 45%, var(--scene-ground-3) 100%);
+}
+.dash-backdrop__ground::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 100lvh;
+  background: var(--scene-ground-3);
+}
+/* The content column, placed as main places it, so the plant and the scrim
+   keep their places against the banner at every width. */
+.dash-backdrop__column {
+  position: absolute;
+  top: 0;
+  left: var(--pad);
+  right: var(--pad);
+  max-width: 72rem;
+  margin-inline: auto;
+  height: calc(var(--scene-top) + var(--scene-h));
+}
+/* The fade behind the words, measured from the banner's left edge (solid to
+   the left of it) and faded top and bottom with the scene. */
 .dash-scene__scrim {
+  position: absolute;
+  top: var(--scene-top);
+  bottom: 0;
+  left: -100vw;
+  right: 58%;
   background: linear-gradient(
     to right,
-    rgb(var(--scene-scrim) / var(--scene-scrim-alpha)) 0%,
-    rgb(var(--scene-scrim) / 0) 42%
+    rgb(var(--scene-scrim) / var(--scene-scrim-alpha)) 0,
+    rgb(var(--scene-scrim) / var(--scene-scrim-alpha)) 100vw,
+    rgb(var(--scene-scrim) / 0) 100%
   );
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 8%, #000 74%, transparent 97%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 8%, #000 74%, transparent 97%);
 }
 @media (max-width: 63.999rem) {
   .dash-scene__scrim {
     display: none;
   }
 }
-.dash-banner__words {
-  position: relative;
-  width: fit-content;
-  max-width: calc(100% - var(--perch-right) - 90px);
-  padding: 12px 0 0 12px;
-  overflow-wrap: anywhere;
-}
-@media (min-width: 40rem) {
-  .dash-banner__words {
-    max-width: 60%;
-    padding: 26px 0 0 26px;
-  }
-}
-/* The roselle's box, on the near hill; the visitor is placed against it. */
-.dash-banner__perch {
+/* The roselle on the near hill; the visitor is placed against it. */
+.dash-backdrop__perch {
   position: absolute;
-  right: var(--perch-right);
-  bottom: var(--perch-bottom);
+  right: 20px;
+  bottom: 24px;
   width: 75.4px;
   height: 88px;
   pointer-events: none;
 }
 @media (min-width: 40rem) {
-  .dash-banner__perch {
+  .dash-backdrop__perch {
     width: 102.9px;
     height: 120px;
   }
 }
+@media (min-width: 64rem) {
+  .dash-backdrop__perch {
+    right: 56px;
+    bottom: 32px;
+  }
+}
+@media (min-width: 80rem) {
+  .dash-backdrop__perch {
+    right: 92px;
+    bottom: 40px;
+  }
+}
+
+/* Softening: a static blurred copy and a 22% dim of the page colour. Only
+   its opacity changes, tied to the scroll -- 0 at the top, 1 once the cards
+   have covered the scene -- so it stops when the scrolling does. Reduced
+   motion: none at all. */
+.dash-backdrop__soft {
+  opacity: 0;
+  will-change: opacity;
+}
+.dash-backdrop__blur {
+  filter: blur(8px);
+}
+.dash-backdrop__dim {
+  background: color-mix(in srgb, var(--page) 22%, transparent);
+}
+@keyframes dash-soften {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
 @media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: scroll()) {
+    .dash-backdrop__soft {
+      animation: dash-soften linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 var(--soften-distance);
+    }
+  }
+  @supports not (animation-timeline: scroll()) {
+    .dash-backdrop__soft {
+      transition: opacity 250ms var(--ease-out);
+    }
+    .dash-backdrop--soft .dash-backdrop__soft {
+      opacity: 1;
+    }
+  }
   .dash-scene__layer--in {
     animation: scene-in 600ms var(--ease-out) both;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash-backdrop__soft {
+    display: none;
   }
 }
 @keyframes scene-in {
@@ -1927,14 +2101,96 @@ body {
     opacity: 1;
   }
 }
-/* Decoration only: gone in forced colours and on paper, the words stay. */
+
+/* The phone's header sits on the sky: no background or rule of its own on
+   the dashboard. The page arriving after a navigation fades without its
+   rise here, since a transform would carry the fixed layer with it. */
+.app-frame:has(.dash-backdrop) > .app-header {
+  background: transparent;
+  border-color: transparent;
+}
+.page-arrive-a:has(.dash-backdrop),
+.page-arrive-b:has(.dash-backdrop) {
+  animation-name: page-arrive-fade;
+}
+@keyframes page-arrive-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Glass tiles (lib/backdrop.ts, GLASS_TILE): tinted cards over the softened
+   scene -- the card token at 95% (dark) or 92% (light), with NO
+   backdrop-filter. The softening behind them does the frosting.
+
+   Why no blur (ruled 2026-11-25): blur(16px) on the cards dropped 2-4
+   frames to 33ms on every fast scroll at 390px, on a desktop with no CPU
+   throttle, where main drops none; blur(8px) was no better, and with the
+   card blur off it was 0 again. docs/Backdrop.md, "Speed", has the runs.
+
+   Why 95% dark: measured over the real backdrop, a dark card at the doc's
+   78% crossing the bright sky (the morning sun most of all) dropped muted
+   text to 3.17:1 and the green series to 2.15:1. Raised, never the colours
+   (docs/Backdrop.md, rule 1). Why 92% light: with no card blur, the
+   scene's sharp birds, trees and the roselle's dark stems show through an
+   82% light card and dropped muted text to 3.97:1 and the control border
+   to 2.64:1; 91% is the first step that passes, 92% leaves a margin.
+
+   Solid, exactly as everywhere else, without color-mix, with reduced
+   transparency or forced colours, and on paper. Menus, popovers, dialogs,
+   toasts and the logging form are never tiles, and the dragged card turns
+   solid while it's lifted. */
+.dash-glass {
+  --glass-mix: 92%;
+  --glass-edge: rgb(11 11 18 / 0.08);
+  --glass-shadow: 0 6px 18px rgb(60 40 80 / 0.1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .dash-glass {
+    --glass-mix: 95%;
+    --glass-edge: rgb(255 255 255 / 0.1);
+    --glass-shadow: none;
+  }
+}
+:root[data-theme="dark"] .dash-glass {
+  --glass-mix: 95%;
+  --glass-edge: rgb(255 255 255 / 0.1);
+  --glass-shadow: none;
+}
+@supports (background: color-mix(in srgb, red 50%, transparent)) {
+  @media screen {
+    .dash-glass .bg-surface.border-hairline:not(dialog, dialog *, [data-lifted] *, .bg-surface.border-hairline *) {
+      background-color: color-mix(in srgb, var(--surface) var(--glass-mix), transparent);
+      border-color: var(--glass-edge);
+      box-shadow: var(--glass-shadow);
+    }
+    .dash-glass .bg-surface.border-hairline.hover\:bg-surface-raised:hover {
+      background-color: var(--surface-raised);
+    }
+  }
+  @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+    .dash-glass .bg-surface.border-hairline:not(dialog, dialog *, [data-lifted] *, .bg-surface.border-hairline *) {
+      background-color: var(--surface);
+      border-color: var(--hairline);
+      box-shadow: none;
+    }
+  }
+}
+
+/* Decoration only: gone in forced colours and on paper; the words stay. */
 @media (forced-colors: active), print {
-  .dash-banner {
+  .dash-backdrop,
+  .dash-banner__stage {
+    display: none;
+  }
+  .dash-banner__words {
     height: auto;
   }
-  .dash-scene,
-  .dash-banner__perch {
-    display: none;
+  .app-frame:has(.dash-backdrop) > .app-header {
+    background: var(--page);
   }
 }
 

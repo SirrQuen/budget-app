@@ -88,7 +88,7 @@ export function AppShell({
       {/* The one Your Sorrel panel; the greeting link, the milestone toast and
           the account block below open it. Nothing is read until it opens. */}
       <YourSorrelPanel />
-      <div className="min-h-dvh bg-page text-ink md:flex">
+      <div className="app-frame min-h-dvh bg-page text-ink md:flex">
         {/* First tab stop on every authenticated page -- jumps past the nav
             straight to the page content. Visually hidden until focused. */}
         <a
@@ -97,7 +97,7 @@ export function AppShell({
         >
           Skip to main content
         </a>
-        <header className="flex items-center justify-between border-b border-hairline bg-page px-4 py-3 md:hidden">
+        <header className="app-header relative z-[1] flex items-center justify-between border-b border-hairline bg-page px-4 py-3 md:hidden">
           <Wordmark />
           <button
             type="button"
@@ -111,7 +111,7 @@ export function AppShell({
         </header>
 
         <aside
-          className={`${open ? "flex" : "hidden"} flex-col gap-6 border-b border-hairline bg-page px-4 pb-4 md:sticky md:top-0 md:flex md:h-dvh md:w-60 md:shrink-0 md:border-b-0 md:border-r md:py-6`}
+          className={`${open ? "flex" : "hidden"} relative z-[1] flex-col gap-6 border-b border-hairline bg-page px-4 pb-4 md:sticky md:top-0 md:flex md:h-dvh md:w-60 md:shrink-0 md:border-b-0 md:border-r md:py-6`}
         >
           <div className="flex flex-col gap-6">
             <div className="hidden px-2 md:block">

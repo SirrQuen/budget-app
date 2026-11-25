@@ -139,3 +139,9 @@ These replace anything above they disagree with.
 - **Sun and bird positions** are the corrected board's. The first board drew the morning and evening suns behind the mountains.
 - **A dashboard with accounts but no transactions gets the scene.** The onboarding steps stay plain.
 - Approved as built: the date line, the "Dashboard" heading, the translucent Your Sorrel pill, the plant at 120px, What's new merged into the plant line. The light night stays as it is for now.
+
+## Changed by docs/Backdrop.md, 2026-11-25
+
+- **The scene is no longer a banner with a bottom fade.** It's the top of a full-height fixed backdrop behind the whole dashboard: plain sky above it, the shipped scene, then ground to the bottom of the screen. The banner keeps the words and an empty slot the backdrop lines its scene up with at scroll 0. The sides and bottom are no longer masked (the near hill runs straight into the ground); the top fades into the plain sky.
+- **The words-above-scenery arrangement below 1024px stays,** now with the plain sky behind the words, and so does the scrim behind the greeting on wider screens.
+- **"Never over a number or a control" (rule 5)** now holds at scroll 0. When you scroll, the cards pass over the scene on frosted glass.

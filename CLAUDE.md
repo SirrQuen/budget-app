@@ -403,7 +403,8 @@ data contexts.
   secondary ink and hold 4.5:1 in every scene because the scrim behind them
   (`.dash-scene__scrim`) is sized for it: fix contrast there, never by
   changing the text colour or the drawing (docs/Scenes.md). Below 64rem the
-  words sit above the scene, with nothing behind them.
+  words sit above the scene, with only the plain sky behind them
+  (docs/Backdrop.md).
 - Big standalone numbers use proportional figures. `tabular-nums` only in
   columns that must align vertically (table rows).
 - Exactly one hero figure per view, >= 48px, same sans as everything else.

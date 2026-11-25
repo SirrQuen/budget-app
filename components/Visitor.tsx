@@ -51,8 +51,12 @@ function boxOf(r: DOMRect): Box {
  * at phone width the title's block spans the row but its words don't.
  */
 export function measureRoom(slot: HTMLElement | null): boolean {
-  const header = slot?.closest("[data-page-header]");
+  const header = headerFor(slot);
   if (!slot || !header) return false;
+  // On the dashboard the plant and visitor stand in the fixed backdrop
+  // (docs/Backdrop.md), which lines up with the banner at scroll 0: compare
+  // them there, whatever the scroll is now.
+  const dy = slot.closest(".dash-backdrop") ? window.scrollY : 0;
   const s = slot.getBoundingClientRect();
   if (s.width === 0 && s.height === 0) return false;
   const envelope: Box = {
@@ -74,9 +78,16 @@ export function measureRoom(slot: HTMLElement | null): boolean {
       rect = el.getBoundingClientRect();
     }
     if (rect.width === 0 && rect.height === 0) continue;
-    others.push(boxOf(rect));
+    const box = boxOf(rect);
+    others.push({ ...box, top: box.top + dy, bottom: box.bottom + dy });
   }
   return hasRoom(envelope, others);
+}
+
+/** The page header the slot keeps clear of: its own, or the dashboard banner. */
+function headerFor(slot: HTMLElement | null): Element | null {
+  if (!slot) return null;
+  return slot.closest("[data-page-header]") ?? document.querySelector("[data-page-header]");
 }
 
 type Stage = "idle" | "perched" | "arrive" | "leaving";
@@ -109,7 +120,7 @@ export function Visitor({
   useEffect(() => {
     const check = () => setRoom(measure(slotRef.current));
     const raf = requestAnimationFrame(check);
-    const header = slotRef.current?.closest("[data-page-header]");
+    const header = headerFor(slotRef.current);
     const observer = typeof ResizeObserver !== "undefined" && header ? new ResizeObserver(check) : null;
     if (observer && header) observer.observe(header);
     window.addEventListener("resize", check);

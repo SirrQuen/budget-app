@@ -46,7 +46,9 @@ export function NoTransactionsView({
   billsCard?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-6">
+    // The full dashboard's backdrop and glass (app/globals.css, "DASHBOARD
+    // BACKDROP"); the onboarding steps stay plain.
+    <div className="dash-glass dash-pass flex flex-col gap-6">
       {header}
 
       {/* The number onboarding ended on, here to stay. A failed read leaves
