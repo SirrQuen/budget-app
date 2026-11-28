@@ -1,5 +1,5 @@
 -- =====================================================================
--- Goal monthly holds test (migrations 57 and 69)
+-- Goal monthly holds test (migrations 57, 69 and 82)
 --
 --   npx supabase db query --remote=tztbebdzlezlhvsbylsf -f docs/goal-monthly-holds-test.sql
 --
@@ -30,10 +30,11 @@
 --   7  The composite FK: a goal can't name another user's schedule, even
 --      written with RLS bypassed (23503).
 --   8  RLS: another user sees none of these rows.
---   9  set_goal_funding (the recurring form's side): links one goal and
---      unlinks the rest atomically; omitted goal = "No"; refuses a
---      schedule that isn't a transfer, and another user's goal or
---      schedule (P0002 -- RLS hides them).
+--   9  set_goal_funding (82: the schedule's own link,
+--      recurring_transactions.goalid): moves that one schedule to the
+--      goal; omitted goal = "No"; refuses a schedule that isn't a
+--      transfer, and another user's goal or schedule (P0002 -- RLS hides
+--      them). Several schedules per goal: docs/goal-multi-schedule-test.sql.
 --  10  (59) A funding transfer with an occurrence limit counts
 --      OCCURRENCES: limit 2, one confirmed (two legs) is still counted,
 --      so its goal still holds nothing. Counting rows, it had ended.
@@ -69,6 +70,17 @@
 --      removes it and the goal counts the money once.
 --  19  goal_contributions.funding_method defaults to 'manual'.
 --  20  v_goal_money carries production's ACL and is security_invoker.
+--
+-- Migration 82. v_goal_monthly_holds (1-12 above) is now read only by
+-- the deploy before 82, during the push window; its funding test reads
+-- the schedule's link, which the fixtures' goals.funding_recurringid
+-- reaches through the mirror trigger. The app reads v_goal_hold_inputs
+-- and nets in the projection (lib/safeToSpendProjection.test.ts).
+--  21  v_goal_hold_inputs keeps a funded goal (it holds what its
+--      schedules don't cover), and carries production's ACL.
+--
+-- The LAST row is the SUMMARY: ALL PASS only when every row is true and
+-- all 61 are present (CLAUDE.md).
 -- =====================================================================
 
 begin;
@@ -201,6 +213,9 @@ begin
   -- 4, 5 ---------------------------------------------------------------
   select count(*) into n from public.v_goal_monthly_holds where goalid = g_funded;
   perform pg_temp.rec('4 funded by a counted transfer: absent', '0', n::text);
+  select monthly_contribution::numeric(12,2)::text || '|' || contributed_this_month::numeric(12,2)::text into hold
+    from public.v_goal_hold_inputs where goalid = g_funded;
+  perform pg_temp.rec('21 v_goal_hold_inputs keeps the funded goal: its target, nothing in yet', '200.00|0.00', hold);
   select still_to_set_aside::text into hold from public.v_goal_monthly_holds where goalid = g_paused;
   perform pg_temp.rec('5 funded by a paused transfer: the target holds', '200', hold);
   select still_to_set_aside::text into hold from public.v_goal_monthly_holds where goalid = g_cash;
@@ -248,13 +263,15 @@ begin
      next_run_date, start_date, next_due_date)
   values (rent_s, u, chk, rent_cat, 'Rent', 900, 'Monthly', current_date + 5, current_date + 5, current_date + 5);
 
-  -- to_cash funds g_cash (fixture); pointing it at g_plain moves the link.
+  -- to_cash funds g_cash (fixture, through the mirror); pointing it at
+  -- g_plain moves that schedule's link.
   perform public.set_goal_funding(to_cash, g_plain);
-  select string_agg(goal_name, ', ' order by goal_name) into linked from public.goals where funding_recurringid = to_cash;
+  select string_agg(g.goal_name, ', ' order by g.goal_name) into linked
+    from public.recurring_transactions r join public.goals g on g.id = r.goalid where r.id = to_cash;
   perform pg_temp.rec('9 linking a schedule to a goal moves it there, off the other', 'Plain', linked);
 
   perform public.set_goal_funding(to_cash);
-  select count(*) into n from public.goals where funding_recurringid = to_cash;
+  select count(*) into n from public.recurring_transactions where id = to_cash and goalid is not null;
   perform pg_temp.rec('9 no goal = "No": the schedule funds nothing', '0', n::text);
 
   begin
@@ -283,8 +300,8 @@ begin
   end;
   perform pg_temp.rec('9 another user''s goal is refused', 'P0002', state);
   perform pg_temp.unbecome();
-  select coalesce(funding_recurringid::text, '<null>') into hold from public.goals where id = g_plain;
-  perform pg_temp.rec('9 ... and left it unlinked', '<null>', hold);
+  select count(*)::text into hold from public.recurring_transactions where goalid = g_plain;
+  perform pg_temp.rec('9 ... and left it unlinked', '0', hold);
 
   -- 10 -----------------------------------------------------------------
   perform pg_temp.become(u);
@@ -555,6 +572,28 @@ select pg_temp.rec('11 anon cannot read v_goal_monthly_holds', 'false',
 select pg_temp.rec('11 v_goal_monthly_holds is security_invoker', 'security_invoker=true',
                    (select array_to_string(reloptions, ',') from pg_class where oid = 'public.v_goal_monthly_holds'::regclass));
 
-select seq, check_, expected, actual, pass from gh_results order by seq;
+-- 21 -------------------------------------------------------------------
+select pg_temp.rec('21 v_goal_hold_inputs ACL',
+                   'postgres=arwdDxtm/postgres authenticated=rDxtm/postgres service_role=Dxtm/postgres',
+                   (select array_to_string(relacl, ' ') from pg_class where oid = 'public.v_goal_hold_inputs'::regclass));
+select pg_temp.rec('21 v_goal_hold_inputs is security_invoker', 'security_invoker=true',
+                   (select array_to_string(reloptions, ',') from pg_class where oid = 'public.v_goal_hold_inputs'::regclass));
+
+-- The summary is the LAST row (CLAUDE.md): ALL PASS only when every row
+-- is true AND all 61 are present. A run that errors part-way returns no
+-- rows at all.
+with tally as (
+  select count(*) as total, count(*) filter (where not pass) as failed from gh_results
+)
+select check_ as check, expected, actual, pass
+  from (select seq, check_, expected, actual, pass
+          from gh_results
+        union all
+        select 2147483647, 'SUMMARY', 'ALL PASS (61 rows, 0 false)',
+               t.total || ' rows, ' || t.failed || ' false -- '
+                 || case when t.failed = 0 and t.total = 61 then 'ALL PASS' else 'NOT PASSED' end,
+               t.failed = 0 and t.total = 61
+          from tally t) x
+ order by seq;
 
 rollback;

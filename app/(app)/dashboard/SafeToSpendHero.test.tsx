@@ -53,7 +53,9 @@ function safeToSpend(
     today: TODAY,
     cash,
     cushion,
-    goalHolds,
+    // Already-netted holds: as inputs, a target of that amount with nothing
+    // in yet and no schedule feeding it.
+    goalHolds: goalHolds.map((g) => ({ goalId: g.goalId, name: g.name, monthly: g.amount, contributedThisMonth: 0, remaining: g.amount })),
     schedules,
     futureTransactions: [],
     holidays: new Set(),

@@ -18,7 +18,7 @@ import type { RecurringWithRelations } from "@/lib/db/recurring";
 import type { TransactionType } from "@/lib/db/transactions";
 import type { CategoryWithGroup } from "@/lib/db/categories";
 import type { TransactionAccountOption } from "../transactions/AddTransactionForm";
-import type { GoalOption } from "@/lib/db/goals";
+import type { FeedingSchedule, GoalOption } from "@/lib/db/goals";
 import { callAction } from "@/components/useActionForm";
 import { AmountBasisTag } from "@/components/AmountBasisTag";
 import type { RecurringAmount } from "@/lib/db/recurring";
@@ -29,6 +29,7 @@ export function RecurringRow({
   expenseCategories,
   accounts,
   goals,
+  goalSchedules = [],
   holidays = [],
   amount,
   today,
@@ -39,6 +40,8 @@ export function RecurringRow({
   expenseCategories: CategoryWithGroup[];
   accounts: TransactionAccountOption[];
   goals: GoalOption[];
+  /** Live recurring transfers with the goal each feeds -- the form's "also fed by" hint. */
+  goalSchedules?: FeedingSchedule[];
   /** ISO dates, for RecurringForm's live timing preview -- see its own doc comment. */
   holidays?: string[];
   /**
@@ -113,6 +116,7 @@ export function RecurringRow({
       date_tolerance_days: recurring.date_tolerance_days,
       business_day_offset: recurring.business_day_offset,
       non_business_day_rule: recurring.non_business_day_rule,
+      goalid: recurring.goalid,
     };
     return (
       <li id={`schedule-${recurring.id}`} className="scroll-mt-4 p-4 @4xl:col-span-5">
@@ -122,6 +126,7 @@ export function RecurringRow({
           expenseCategories={expenseCategories}
           accounts={accounts}
           goals={goals}
+          goalSchedules={goalSchedules}
           holidays={holidays}
           onSuccess={() => setEditing(false)}
           onCancel={() => setEditing(false)}
@@ -187,6 +192,13 @@ export function RecurringRow({
                     <span aria-hidden="true">→</span>
                     <span className="sr-only">to</span>
                     {accountLink(recurring.to_accountid, recurring.to_account_name, "…")}
+                    {/* The goal it feeds (ruling 9): plain text, like the accounts. */}
+                    {recurring.goal_name ? (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span>Feeds {recurring.goal_name}</span>
+                      </>
+                    ) : null}
                   </>
                 ) : (
                   <>

@@ -13,7 +13,8 @@ import { useToday } from "@/components/TodayProvider";
 import { resolveDueDate, type NonBusinessDayRule } from "@/lib/businessDays";
 import { formatCurrency, formatDate, formatDateWithWeekday } from "@/lib/format";
 import { isSafeToSpendCommitment } from "@/lib/safeToSpend";
-import type { GoalOption } from "@/lib/db/goals";
+import type { FeedingSchedule, GoalOption } from "@/lib/db/goals";
+import { alsoFedByHint, duplicateOf, duplicateQuestion, moveLine, stopFeedingLine } from "@/lib/goalSchedules";
 import { ordinal } from "@/lib/recurringSchedule";
 import { firstDateAfterSource } from "@/lib/recurringCadence";
 import { Amount } from "@/components/ui/Amount";
@@ -146,6 +147,8 @@ export type EditableRecurring = {
   date_tolerance_days: number;
   business_day_offset: number;
   non_business_day_rule: string;
+  /** The goal this schedule feeds (recurring_transactions.goalid, migration 82). */
+  goalid?: string | null;
 };
 
 // Seeds a fresh (create-mode) schedule from an existing transaction ("Make
@@ -287,6 +290,7 @@ export function RecurringForm({
   expenseCategories,
   accounts,
   goals,
+  goalSchedules = [],
   holidays = [],
   onSuccess,
   onCancel,
@@ -311,8 +315,13 @@ export function RecurringForm({
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
   accounts: TransactionAccountOption[];
-  /** Active, uncompleted goals with their current links -- "Is this for a goal?" (listGoalOptions). */
+  /** Active, uncompleted goals -- "Is this for a goal?" (listGoalOptions). */
   goals: GoalOption[];
+  /**
+   * Live recurring transfers with the goal each feeds (listFeedingSchedules):
+   * the "also fed by" hint and the duplicate question. Empty: neither shows.
+   */
+  goalSchedules?: FeedingSchedule[];
   /**
    * ISO dates, for the live "Next: ..." timing preview below -- what
    * actually gets saved is resolved authoritatively server-side
@@ -370,7 +379,11 @@ export function RecurringForm({
       fromAccountType: fromAccount.account_type,
       toAccountType: toAccount.account_type,
     });
-  const linkedGoals = isEdit ? goals.filter((g) => g.fundingRecurringId === recurring.id) : [];
+  // One schedule, one goal (migration 82): its own field, so answering
+  // here never moves another schedule's link.
+  const currentGoalId = isEdit ? (recurring.goalid ?? null) : null;
+  const currentGoalName = currentGoalId ? (goals.find((g) => g.id === currentGoalId)?.name ?? null) : null;
+  const [goalChoice, setGoalChoice] = useState(currentGoalId ?? "");
   const toAccountIsCreditCard = toAccount?.account_type === "Credit Card";
   const [amountIsVariable, setAmountIsVariable] = useState(recurring?.amount_is_variable ?? false);
   const showCardVariableToggle = kind === "Transfer" && toAccountIsCreditCard;
@@ -411,6 +424,34 @@ export function RecurringForm({
   const [intervalCount, setIntervalCount] = useState(
     String(recurring ? intervalFromFrequency(recurring.frequency, recurring.interval_count) : 1),
   );
+
+  // What answering "Is this for a goal?" would do, said before it's saved
+  // (Part A rules 2 and 4): the goal's other schedules, as information; a
+  // move or an unlink, on this schedule only; and a schedule that repeats
+  // one already feeding the goal, asked rather than merged.
+  const chosenGoal = goals.find((g) => g.id === goalChoice);
+  const othersFeedingChosen = goalSchedules.filter((g) => g.goalId === goalChoice && g.id !== recurring?.id);
+  const alsoFedBy = chosenGoal ? alsoFedByHint(chosenGoal.name, othersFeedingChosen) : null;
+  const goalChange =
+    currentGoalName && goalChoice !== currentGoalId
+      ? chosenGoal
+        ? moveLine(chosenGoal.name, currentGoalName)
+        : stopFeedingLine(currentGoalName)
+      : null;
+  const duplicateFeeding =
+    chosenGoal && goalChoice !== currentGoalId
+      ? duplicateOf(
+          {
+            id: recurring?.id,
+            amount: Number(amountValue),
+            frequency: repeats,
+            intervalCount: repeats === "Weekly" ? Number(intervalCount) || 1 : 1,
+            accountId: fromAccountId,
+            toAccountId,
+          },
+          othersFeedingChosen,
+        )
+      : undefined;
 
   // Controlled (not defaultValue) because the live timing preview below
   // needs to react to every change -- see nextRunDate's own comment on the
@@ -564,36 +605,46 @@ export function RecurringForm({
           />
 
           {countedTransfer && goals.length > 0 ? (
-            linkedGoals.length > 1 ? (
-              // Linked from several goals' side: one answer here would
-              // unlink the rest, so it isn't offered.
-              <p className="text-sm text-ink-secondary">
-                This transfer funds {linkedGoals.map((g) => g.name).join(", ")}. Change that from each goal.
-              </p>
-            ) : (
-              <>
-                <input type="hidden" name="funding_goal_asked" value="1" />
-                <FormField
-                  label="Is this for a goal?"
-                  htmlFor={fieldId("funding_goalid")}
-                  hint="Safe to spend then counts this transfer instead of the goal's monthly target, so the money isn't set aside twice."
+            <>
+              <input type="hidden" name="funding_goal_asked" value="1" />
+              <FormField
+                label="Is this for a goal?"
+                htmlFor={fieldId("funding_goalid")}
+                hint={
+                  goalChange ??
+                  alsoFedBy ??
+                  "Each transfer counts toward the goal once you confirm it, and safe to spend counts it instead of setting the goal's monthly target aside too."
+                }
+              >
+                <select
+                  id={fieldId("funding_goalid")}
+                  name="funding_goalid"
+                  value={goalChoice}
+                  onChange={(e) => setGoalChoice(e.target.value)}
+                  className={fieldClassName}
                 >
-                  <select
-                    id={fieldId("funding_goalid")}
-                    name="funding_goalid"
-                    defaultValue={linkedGoals[0]?.id ?? ""}
-                    className={fieldClassName}
-                  >
-                    <option value="">No</option>
-                    {goals.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.monthlyContribution ? `${g.name} · ${formatCurrency(g.monthlyContribution)} a month` : g.name}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-              </>
-            )
+                  <option value="">No</option>
+                  {goals.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.monthlyContribution ? `${g.name} · ${formatCurrency(g.monthlyContribution)} a month` : g.name}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              {goalChange && alsoFedBy ? <p className="text-sm text-ink-secondary">{alsoFedBy}</p> : null}
+              {duplicateFeeding ? (
+                <fieldset className="flex flex-col gap-2 text-sm">
+                  <legend className="mb-1 text-ink-secondary">{duplicateQuestion(duplicateFeeding)}</legend>
+                  <input type="hidden" name="funding_duplicate_asked" value="1" />
+                  <label className="flex items-center gap-2 text-ink">
+                    <input type="radio" name="funding_add_duplicate" value="yes" required /> Yes, add it as well
+                  </label>
+                  <label className="flex items-center gap-2 text-ink">
+                    <input type="radio" name="funding_add_duplicate" value="no" required /> No, leave it unlinked
+                  </label>
+                </fieldset>
+              ) : null}
+            </>
           ) : null}
 
           {showCardVariableToggle ? (

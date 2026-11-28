@@ -738,6 +738,7 @@ export type Database = {
           description: string
           end_date: string | null
           frequency: string
+          goalid: string | null
           id: string
           interval_count: number
           is_active: boolean
@@ -764,6 +765,7 @@ export type Database = {
           description: string
           end_date?: string | null
           frequency?: string
+          goalid?: string | null
           id?: string
           interval_count?: number
           is_active?: boolean
@@ -790,6 +792,7 @@ export type Database = {
           description?: string
           end_date?: string | null
           frequency?: string
+          goalid?: string | null
           id?: string
           interval_count?: number
           is_active?: boolean
@@ -1615,6 +1618,25 @@ export type Database = {
         }
         Relationships: []
       }
+      v_goal_hold_inputs: {
+        Row: {
+          contributed_this_month: number | null
+          goal_name: string | null
+          goalid: string | null
+          monthly_contribution: number | null
+          remaining_to_target: number | null
+          userid: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goals_userid_fkey"
+            columns: ["userid"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_goal_monthly_holds: {
         Row: {
           contributed_this_month: number | null
@@ -2172,6 +2194,12 @@ export type Database = {
       leaves_spendable_set: {
         Args: { p_from_type: string; p_to_type: string }
         Returns: boolean
+      }
+      link_earlier_occurrences: {
+        Args: { p_recurringid: string }
+        Returns: {
+          transaction_id: string
+        }[]
       }
       link_goal_to_card: {
         Args: { p_account_id: string; p_goal_id: string }

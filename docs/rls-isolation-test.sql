@@ -369,6 +369,7 @@ begin
       ('2 views', 'v_future_transactions',  format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_goal_money',           format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_goal_monthly_holds',   format('userid = %L', a),                            format('userid <> %L', b)),
+      ('2 views', 'v_goal_hold_inputs',     format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_goal_progress',        format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_goals_summary',        format('userid = %L', a),                            format('userid <> %L', b)),
       ('2 views', 'v_integrity_issues',     format('userid = %L', a),                            format('userid <> %L', b)),
@@ -813,6 +814,7 @@ declare
   v_txn_recur uuid := gen_random_uuid();
   v_goal_linked uuid := gen_random_uuid();
   v_goal_funded uuid := gen_random_uuid();
+  v_recur_goal uuid := gen_random_uuid();
   v_row record;
   -- A transaction of each user that no pairing names yet (the fixture
   -- pairs A_txn and B_txn), so import_pairings_transactionid_key can't
@@ -869,6 +871,9 @@ begin
       -- Migration 57: a goal's funding transfer must be its own user's.
       ('goals_funding_recurringid_fkey',
         format('update public.goals set funding_recurringid = %L where id = %L', pg_temp.fx('A_recur'), pg_temp.fx('B_goal'))),
+      -- Migration 82: a schedule feeds only its own user's goal.
+      ('recurring_transactions_goalid_fkey',
+        format('insert into public.recurring_transactions (userid, accountid, to_accountid, categoryid, goalid, description, amount, frequency, next_run_date, next_due_date) values (%L, %L, %L, null, %L, ''rls'', 1, ''Monthly'', current_date + 5, current_date + 5)', b, pg_temp.fx('B_acct'), pg_temp.fx('B_invacct'), pg_temp.fx('A_goal'))),
       -- Migration 68: an import is about its own user's account, and a
       -- transaction can only belong to its own user's import.
       ('imports_accountid_fkey',
@@ -938,6 +943,11 @@ begin
   values (v_goal_linked, a, 'rls fk linked', 'Custom', 1, v_acct);
   insert into public.goals (id, userid, goal_name, goal_type, target_amount, funding_recurringid)
   values (v_goal_funded, a, 'rls fk funded', 'Custom', 1, v_recur);
+  -- Migration 82: a transfer schedule feeding v_goal.
+  insert into public.recurring_transactions (id, userid, accountid, to_accountid, categoryid, goalid, description,
+                                             amount, frequency, next_run_date, next_due_date)
+  values (v_recur_goal, a, pg_temp.fx('A_acct'), pg_temp.fx('A_invacct'), null, v_goal, 'rls fk feeds', 1, 'Monthly',
+          current_date + 5, current_date + 5);
 
   delete from public.goals where id = v_goal;
   delete from public.recurring_transactions where id = v_recur;
@@ -951,6 +961,8 @@ begin
     select 'goals_accountid_fkey', g.accountid, g.userid from public.goals g where g.id = v_goal_linked
     union all
     select 'goals_funding_recurringid_fkey', g.funding_recurringid, g.userid from public.goals g where g.id = v_goal_funded
+    union all
+    select 'recurring_transactions_goalid_fkey', r.goalid, r.userid from public.recurring_transactions r where r.id = v_recur_goal
   loop
     perform pg_temp.rec('8 composite FKs', v_row.fk, 'parent deleted: SET NULL nulls the reference only',
       'ref null, userid = A',
@@ -1697,6 +1709,16 @@ begin
       -- The recurring form's side of a goal's funding link (migration 57).
       ('public.set_goal_funding(uuid,uuid)',                     'anon',          false),
       ('public.set_goal_funding(uuid,uuid)',                     'authenticated', true),
+      -- Migration 82: a goal fed by several schedules. "Count them" is
+      -- signed-in only; the three trigger functions are closed.
+      ('public.link_earlier_occurrences(uuid)',                  'anon',          false),
+      ('public.link_earlier_occurrences(uuid)',                  'authenticated', true),
+      ('public.occurrence_goal()',                               'anon',          false),
+      ('public.occurrence_goal()',                               'authenticated', false),
+      ('public.mirror_goal_funding()',                           'anon',          false),
+      ('public.mirror_goal_funding()',                           'authenticated', false),
+      ('public.refuse_card_with_schedules()',                    'anon',          false),
+      ('public.refuse_card_with_schedules()',                    'authenticated', false),
       -- "Is this the same bill?" (migration 66). Signed-in only; the
       -- delete trigger's function is closed like every trigger function.
       ('public.confirm_same_bill(uuid,uuid,date,date,date)',     'anon',          false),

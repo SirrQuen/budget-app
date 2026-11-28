@@ -20,7 +20,7 @@ import { getDifferentBillAnswers, getSameBillDeletePreviews, getSameBillPairs } 
 import { sameBillDeleteNote } from "@/lib/sameBill";
 import { DifferentBillNote, SameBillQuestion } from "@/components/SameBillQuestion";
 import { getImportedAt } from "@/lib/db/imports";
-import { getGoalName, listGoalOptions, type GoalOption } from "@/lib/db/goals";
+import { getGoalName, listFollowedGoals, listGoalOptions, type GoalOption } from "@/lib/db/goals";
 import { getTimeZone } from "@/lib/db/settings";
 import { todayInZone } from "@/lib/date";
 import { formatDayMonth } from "@/lib/format";
@@ -120,7 +120,7 @@ export default async function EditTransactionPage({
     // isNonTransfer keyed on transfer_group_id === null, so this branch has a
     // group id -- TS just can't narrow a non-union field through the negation.
     const transferGroupId = tx.transfer_group_id as string;
-    const [transferResult, transferAccountsResult, transferIncomeCategories, transferExpenseCategories, transferGoals] =
+    const [transferResult, transferAccountsResult, transferIncomeCategories, transferExpenseCategories, transferGoals, transferFollowed] =
       await Promise.all([
         getTransferForEdit(transferGroupId),
         listAccounts({ is_active: true }),
@@ -128,6 +128,8 @@ export default async function EditTransactionPage({
         listCategoriesForType("Income"),
         listCategoriesForType("Expense"),
         listGoalOptions(),
+        // Only the note beside the Goal field: a failed read leaves it out.
+        listFollowedGoals(),
       ]);
     if (
       transferResult.error !== null ||
@@ -211,6 +213,7 @@ export default async function EditTransactionPage({
           accounts={transferAccounts}
           goals={transferGoals.data}
           currentGoal={transferGoal}
+          followedGoals={transferFollowed.data ?? []}
         />
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 self-start">
           <LogAgainButton
@@ -226,6 +229,7 @@ export default async function EditTransactionPage({
             incomeCategories={transferIncomeCategories.data}
             expenseCategories={transferExpenseCategories.data}
             goals={transferGoals.data}
+            followedGoals={transferFollowed.data ?? []}
           />
           <DeleteTransactionButton
             id={tx.id}
@@ -261,6 +265,9 @@ export default async function EditTransactionPage({
     getTimeZone(),
     listGoalOptions(),
   ]);
+  // Only the note beside the Goal field: a failed read leaves it out.
+  const followedResult = await listFollowedGoals();
+  const followedGoals = followedResult.data ?? [];
 
   if (
     incomeCategoriesResult.error !== null ||
@@ -370,6 +377,7 @@ export default async function EditTransactionPage({
         expenseCategories={expenseCategories}
         accounts={accountsWithCurrent}
         goals={goals}
+        followedGoals={followedGoals}
       />
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 self-start">
@@ -387,6 +395,7 @@ export default async function EditTransactionPage({
           incomeCategories={incomeCategories}
           expenseCategories={expenseCategories}
           goals={goals}
+          followedGoals={followedGoals}
         />
         {turnable && otherAccounts.length > 0 ? (
           <TurnIntoTransfer

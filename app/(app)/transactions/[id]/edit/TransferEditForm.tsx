@@ -25,7 +25,8 @@ import { formatDate } from "@/lib/format";
 import { transferEffect, transferEffectLine } from "@/lib/transferEdit";
 import { GoalField } from "@/components/GoalField";
 import { SameMoneyQuestion } from "@/components/SameMoneyQuestion";
-import type { GoalOption } from "@/lib/db/goals";
+import type { FollowedGoal, GoalOption } from "@/lib/db/goals";
+import { onlyThisPaymentLine } from "@/lib/goalSchedules";
 import { goalFieldAsks } from "@/lib/goalLinks";
 
 // A transfer is ONE THING WITH TWO LEGS (docs/Recurring-Amounts-and-
@@ -44,6 +45,7 @@ export function TransferEditForm({
   accounts,
   goals,
   currentGoal,
+  followedGoals = [],
 }: {
   transfer: TransferForEdit;
   accounts: TransactionAccountOption[];
@@ -51,6 +53,8 @@ export function TransferEditForm({
   goals: GoalOption[];
   /** The goal this transfer counts toward, named, for when the picker no longer lists it. */
   currentGoal: { id: string; name: string } | null;
+  /** Goals that follow a card: named beside the Goal field when this transfer touches their card (ruling 7). */
+  followedGoals?: FollowedGoal[];
 }) {
   const fieldId = useFieldId();
   const router = useRouter();
@@ -267,8 +271,18 @@ export function TransferEditForm({
         value={goalid}
         onChange={setGoalid}
         currentGoal={currentGoal}
+        followed={followedGoals}
+        accountIds={[from?.id ?? "", to?.id ?? ""]}
         asks={goalFieldAsks("Transfer", from?.account_type, to?.account_type)}
       />
+
+      {/* One occurrence, a different goal (ruling 10): only this payment
+          changes; the schedule's own link stays where it is. */}
+      {transfer.schedule?.goal && goalid !== transfer.schedule.goal.id ? (
+        <p className="text-sm text-ink-secondary">
+          {onlyThisPaymentLine(transfer.schedule.description, transfer.schedule.goal.name)}
+        </p>
+      ) : null}
 
       {effectLine ? <p className="text-sm text-ink-secondary">{effectLine}</p> : null}
 

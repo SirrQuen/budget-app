@@ -20,7 +20,9 @@ import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { ChevronDownIcon, TargetIcon, TrashIcon } from "@/components/ui/icons";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { GoalProgress } from "@/lib/db/dashboard";
-import type { FollowableCard, FundingTransfer, GoalContribution, GoalLinkedTransaction } from "@/lib/db/goals";
+import type { FeedingSchedule, FollowableCard, GoalContribution, GoalLinkedTransaction } from "@/lib/db/goals";
+import { deleteGoalSchedulesLine } from "@/lib/goalSchedules";
+import { FundedBy } from "./FundedBy";
 import { FollowCardForm, StopFollowingButton } from "./FollowCard";
 import type { GoalCompletion } from "@/lib/goalCompletion";
 import { ContributionList } from "./ContributionList";
@@ -58,7 +60,9 @@ export function GoalRow({
   contributions,
   linked,
   completedOn,
-  fundingRecurringId,
+  feeding,
+  scheduledThisMonth,
+  uncounted,
   fundingTransfers,
   cards = [],
   pace = null,
@@ -67,9 +71,14 @@ export function GoalRow({
   contributions: GoalContribution[];
   /** Transactions linked to this goal (migration 69). */
   linked: GoalLinkedTransaction[];
-  /** goals.funding_recurringid -- v_goal_progress doesn't carry it. */
-  fundingRecurringId: string | null;
-  fundingTransfers: FundingTransfer[];
+  /** The live schedules that feed this goal (recurring_transactions.goalid, migration 82). */
+  feeding: FeedingSchedule[];
+  /** This month's occurrences of them that safe to spend subtracts (GoalScheduled); null when unread. */
+  scheduledThisMonth: number | null;
+  /** Per schedule, its confirmed transfers that don't count toward this goal yet. */
+  uncounted: ReadonlyMap<string, number>;
+  /** Every live counted recurring transfer, for the edit form's "add one" picker. */
+  fundingTransfers: FeedingSchedule[];
   /** Cards a debt payoff goal can follow (migration 70). */
   cards?: FollowableCard[];
   /** The history pace (goal_pace(), migration 72); null shows no line. */
@@ -229,7 +238,6 @@ export function GoalRow({
             target_amount: target,
             target_date: goal.target_date,
             monthly_contribution: goal.monthly_contribution,
-            funding_recurringid: fundingRecurringId,
             follows_card: follows ? cardName : null,
           }}
           fundingTransfers={fundingTransfers}
@@ -379,6 +387,16 @@ export function GoalRow({
 
       {pace ? <GoalPaceLine pace={pace} name={follows ? cardName : goalName} /> : null}
 
+      {follows ? null : (
+        <FundedBy
+          goalName={goalName}
+          schedules={feeding}
+          scheduledThisMonth={scheduledThisMonth}
+          uncounted={uncounted}
+          onCompleted={setCompletion}
+        />
+      )}
+
       {contributions.length + linked.length > 0 ? (
         <div className="flex flex-col gap-2">
           <button
@@ -454,7 +472,9 @@ export function GoalRow({
             ? linked.length === 0
               ? `This can't be undone -- the goal and its ${formatCurrency(contributed)} of contributions will be permanently removed.`
               : `This can't be undone -- the goal and the ${contributions.length === 1 ? "1 contribution" : `${contributions.length} contributions`} you entered by hand will be permanently removed.`
-            : "This can't be undone -- the goal will be permanently removed.") + linkedSentence(linked.length)
+            : "This can't be undone -- the goal will be permanently removed.") +
+          linkedSentence(linked.length) +
+          (deleteGoalSchedulesLine(feeding.length) ? ` ${deleteGoalSchedulesLine(feeding.length)}` : "")
         }
         confirmLabel={isDeleting ? "Deleting…" : "Delete"}
         confirmIcon={<TrashIcon className="h-4 w-4" />}

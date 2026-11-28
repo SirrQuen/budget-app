@@ -355,9 +355,10 @@ export function SafeToSpendHero({ data }: { data: SafeToSpend }) {
               <dd className="shrink-0 font-medium tabular-nums text-ink">{formatCurrency(data.cushion)}</dd>
             </div>
 
-            {/* Named beside the cushion: both come off flat. Goals a recurring
-                transfer funds don't appear -- that transfer is already a
-                commitment above. */}
+            {/* Named beside the cushion: both come off flat. A goal fed by
+                recurring transfers holds only what this month's transfers
+                don't cover -- those are already commitments above, netted
+                in the projection (migration 82). */}
             {data.goalHolds.length > 0 ? (
               <>
                 <div className="flex items-baseline justify-between gap-4">

@@ -12,7 +12,7 @@ import { getBankHolidays } from "@/lib/db/holidays";
 import { paydayWindowEnd } from "@/lib/recurringSchedule";
 import type { NonBusinessDayRule } from "@/lib/businessDays";
 import {
-  type GoalHold,
+  type GoalHoldInput,
   type ProjectedObligation,
   type ProjectionSchedule,
   type ProjectionTransaction,
@@ -721,7 +721,7 @@ export function paycheckState(income: IncomeSchedules): PaycheckState {
   return income.soonest ? "tracked" : income.anyIncome ? "untracked" : "none";
 }
 
-function toProjectionSchedule(row: UpcomingProjectionRow): ProjectionSchedule | null {
+function toProjectionSchedule(row: UpcomingProjectionRow, goalOf: ReadonlyMap<string, string>): ProjectionSchedule | null {
   const kind =
     row.to_accountid !== null
       ? "Transfer"
@@ -766,6 +766,7 @@ function toProjectionSchedule(row: UpcomingProjectionRow): ProjectionSchedule | 
     dateToleranceDays: row.date_tolerance_days,
     endDate: row.end_date,
     occurrencesRemaining: row.occurrences_remaining,
+    goalId: goalOf.get(row.recurring_id) ?? null,
   };
 }
 
@@ -773,22 +774,35 @@ function toProjectionSchedule(row: UpcomingProjectionRow): ProjectionSchedule | 
 // safe-to-spend figure and the confirmation queue are two uses of the same
 // rows, read once per request, so the two can never be built from
 // different data. The same-bill question (lib/db/sameBill.ts) reads them too.
+//
+// Each schedule carries the goal it feeds (recurring_transactions.goalid,
+// migration 82): the projection nets a goal's hold by the occurrences of
+// its schedules that it subtracts.
 export const getProjectionSchedules = cache(async (): Promise<DbResult<ProjectionSchedule[]>> => {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("v_upcoming_recurring")
-    .select(
-      "recurring_id, description, amount, amount_low, amount_high, amount_basis, forecast_basis, is_estimated_amount, category_type, accountid, account_type, to_accountid, to_account_type, card_balance_owed, next_run_date, next_due_date, start_date, end_date, frequency, interval_count, business_day_offset, non_business_day_rule, date_tolerance_days, occurrences_remaining, amount_is_variable, next_amount_confirmed_at, statement_day, to_account_name",
-    )
-    .returns<UpcomingProjectionRow[]>();
+  const [{ data, error }, links] = await Promise.all([
+    supabase
+      .from("v_upcoming_recurring")
+      .select(
+        "recurring_id, description, amount, amount_low, amount_high, amount_basis, forecast_basis, is_estimated_amount, category_type, accountid, account_type, to_accountid, to_account_type, card_balance_owed, next_run_date, next_due_date, start_date, end_date, frequency, interval_count, business_day_offset, non_business_day_rule, date_tolerance_days, occurrences_remaining, amount_is_variable, next_amount_confirmed_at, statement_day, to_account_name",
+      )
+      .returns<UpcomingProjectionRow[]>(),
+    supabase.from("recurring_transactions").select("id, goalid").not("goalid", "is", null),
+  ]);
 
   if (error) {
     return { data: null, error: describeReadError(error, "dashboard") };
   }
+  // Part of the hero's arithmetic (the hold's netting): a failed read is
+  // an error, never a silent "no schedule feeds a goal".
+  if (links.error) {
+    return { data: null, error: describeReadError(links.error, "dashboard") };
+  }
+  const goalOf = new Map(links.data.map((r) => [r.id, r.goalid as string]));
 
   return {
-    data: data.map(toProjectionSchedule).filter((s): s is ProjectionSchedule => s !== null),
+    data: data.map((r) => toProjectionSchedule(r, goalOf)).filter((s): s is ProjectionSchedule => s !== null),
     error: null,
   };
 });
@@ -846,14 +860,15 @@ export const getFutureTransactions = cache(async (): Promise<DbResult<FutureTran
   };
 });
 
-// This month's goal money still to set aside, per goal -- derived in SQL
-// (v_goal_monthly_holds, migration 57), never stored. The view already
-// drops archived, completed, target-less and transfer-funded goals.
-async function getGoalMonthlyHolds(): Promise<DbResult<GoalHold[]>> {
+// Each goal's monthly target, its goal money this month and what's left --
+// summed in SQL (v_goal_hold_inputs, migration 82), never stored. The view
+// already drops archived, completed, target-less and card-following goals.
+// The projection nets each by its schedules' occurrences this month.
+async function getGoalMonthlyHolds(): Promise<DbResult<GoalHoldInput[]>> {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("v_goal_monthly_holds")
-    .select("goalid, goal_name, still_to_set_aside")
+    .from("v_goal_hold_inputs")
+    .select("goalid, goal_name, monthly_contribution, contributed_this_month, remaining_to_target")
     .order("goal_name");
   if (error) {
     return { data: null, error: describeReadError(error, "dashboard") };
@@ -861,7 +876,15 @@ async function getGoalMonthlyHolds(): Promise<DbResult<GoalHold[]>> {
   return {
     data: data.flatMap((r) =>
       r.goalid !== null && r.goal_name !== null
-        ? [{ goalId: r.goalid, name: r.goal_name, amount: Number(r.still_to_set_aside ?? 0) }]
+        ? [
+            {
+              goalId: r.goalid,
+              name: r.goal_name,
+              monthly: Number(r.monthly_contribution ?? 0),
+              contributedThisMonth: Number(r.contributed_this_month ?? 0),
+              remaining: Number(r.remaining_to_target ?? 0),
+            },
+          ]
         : [],
     ),
     error: null,
@@ -889,9 +912,10 @@ async function getGoalMonthlyHolds(): Promise<DbResult<GoalHold[]>> {
 //              guard. The projection steps each one forward past its next
 //              occurrence itself.
 //   cushion    settings.safe_to_spend_cushion, or the suggestion.
-//   goals      v_goal_monthly_holds: each goal's monthly target less what
-//              it got this month, never more than is left to its target,
-//              unless a counted transfer funds it.
+//   goals      v_goal_hold_inputs: each goal's monthly target, what it
+//              got this month and what's left. The projection takes off
+//              this month's occurrences of the goal's schedules it already
+//              subtracts, so the same money is never held twice.
 //   holidays   for resolving occurrences after the stored next_due_date.
 //   window     the settings fallback (next payday / end of month / 30
 //              days), used only when there's no usable income schedule.

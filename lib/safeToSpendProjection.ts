@@ -120,6 +120,11 @@ export type ProjectionSchedule = {
   endDate: string | null;
   /** occurrence_limit minus occurrences already posted; null when uncapped. */
   occurrencesRemaining: number | null;
+  /**
+   * The goal this schedule feeds (recurring_transactions.goalid, migration
+   * 82), or null. Its occurrences this month net against that goal's hold.
+   */
+  goalId?: string | null;
 };
 
 /**
@@ -209,6 +214,34 @@ export type GoalHold = {
   amount: number;
 };
 
+/**
+ * A goal with a monthly target, before netting (v_goal_hold_inputs,
+ * migration 82). Dollars.
+ */
+export type GoalHoldInput = {
+  goalId: string;
+  name: string;
+  /** goals.monthly_contribution, > 0. */
+  monthly: number;
+  /** Goal money dated this month (v_goal_money): hand entries and linked transactions. */
+  contributedThisMonth: number;
+  /** What's left to the target -- the hold never exceeds it. */
+  remaining: number;
+};
+
+/**
+ * This month's occurrences of a goal's schedules that the projection
+ * subtracts -- the goals page's "Scheduled this month" and the hold's
+ * netting, one set.
+ */
+export type GoalScheduled = {
+  goalId: string;
+  /** Their total, dollars. */
+  amount: number;
+  /** The occurrences themselves: elements of the projection's own `obligations`. */
+  occurrences: ProjectedObligation[];
+};
+
 export type SafeToSpendProjectionInput = {
   today: string;
   /** Active Checking + Cash balances (spendable_cash_balance()), dollars. */
@@ -216,15 +249,16 @@ export type SafeToSpendProjectionInput = {
   /** Dollars, >= 0. */
   cushion: number;
   /**
-   * This month's goal money still to set aside, per goal
-   * (v_goal_monthly_holds): max(0, monthly target - contributed this
-   * month), capped at what's left to the target, already excluding goals
-   * a counted transfer funds. Subtracted
+   * Goals with a monthly target (v_goal_hold_inputs). Each holds
+   * min(max(monthly - goal money this month - this month's occurrences of
+   * its schedules subtracted below, 0), remaining) -- netted here, from
+   * the obligations this projection subtracts, so the hold and the walk
+   * can't take the same money twice (migration 82, ruling 3). Subtracted
    * flat after the cushion, like it. Never raises the running-low line:
    * a cushion is money not to touch; goal money can be deferred, and
    * skipping a contribution when short is the right call.
    */
-  goalHolds: GoalHold[];
+  goalHolds: GoalHoldInput[];
   schedules: ProjectionSchedule[];
   /** One-off transactions dated after today. Never set the horizon. */
   futureTransactions: ProjectionTransaction[];
@@ -245,6 +279,11 @@ export type SafeToSpendProjection = {
   goalHolds: GoalHold[];
   /** Their total, dollars -- subtracted after the cushion. */
   goalHold: number;
+  /**
+   * Per goal with schedules, this month's occurrences the walk subtracts
+   * (due this month, inside the horizon). What each hold was netted by.
+   */
+  goalScheduled: GoalScheduled[];
   /** The lowest projected balance, the day it happens, and what lands that day. */
   trough: { amount: number; date: string; obligations: ProjectedObligation[] };
   /**
@@ -652,7 +691,8 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
   }
 
   const cushionCents = Math.max(0, toCents(input.cushion));
-  const goalHolds = input.goalHolds.filter((g) => toCents(g.amount) > 0);
+  const goalScheduled = scheduledThisMonthByGoal(obligations, schedules, today);
+  const goalHolds = netGoalHolds(input.goalHolds, goalScheduled).filter((g) => toCents(g.amount) > 0);
   const goalHoldCents = goalHolds.reduce((sum, g) => sum + toCents(g.amount), 0);
   // Flat, like the cushion -- not pro-rated by horizon. The episodes below
   // still measure against the cushion alone.
@@ -669,6 +709,7 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
     cushion: toDollars(cushionCents),
     goalHolds,
     goalHold: toDollars(goalHoldCents),
+    goalScheduled,
     trough: { amount: toDollars(troughCents), date: troughDate, obligations: troughObligations },
     after: roomAfterTightest(days, troughCents),
     obligations,
@@ -694,6 +735,49 @@ export function projectSafeToSpend(input: SafeToSpendProjectionInput): SafeToSpe
       income: d.income,
     })),
   };
+}
+
+// THE set ruling 3 nets (docs/Goals-and-Import.md): the obligations this
+// projection subtracts -- the same array the walk reads, so the same view,
+// the same leaves-the-set rule (isObligationSchedule), the same horizon and
+// early edge -- narrowed to schedules that feed a goal and to occurrences
+// DUE this month. Due date, not the day it's subtracted: a confirmed
+// occurrence is dated on its due date and becomes that month's goal money,
+// so the two meet in the same month. An occurrence past the horizon isn't
+// in `obligations`, so it isn't netted and the hold keeps it.
+export function scheduledThisMonthByGoal(
+  obligations: readonly ProjectedObligation[],
+  schedules: readonly ProjectionSchedule[],
+  today: string,
+): GoalScheduled[] {
+  const goalOf = new Map<string, string>();
+  for (const s of schedules) {
+    if (s.goalId) goalOf.set(s.recurringId, s.goalId);
+  }
+  const month = today.slice(0, 7);
+  const byGoal = new Map<string, { cents: number; occurrences: ProjectedObligation[] }>();
+  for (const o of obligations) {
+    if (o.recurringId === null || o.dueDate.slice(0, 7) !== month) continue;
+    const goalId = goalOf.get(o.recurringId);
+    if (goalId === undefined) continue;
+    const entry = byGoal.get(goalId) ?? { cents: 0, occurrences: [] };
+    entry.cents += toCents(o.amount);
+    entry.occurrences.push(o);
+    byGoal.set(goalId, entry);
+  }
+  return [...byGoal].map(([goalId, e]) => ({ goalId, amount: toDollars(e.cents), occurrences: e.occurrences }));
+}
+
+// min(max(monthly - goal money this month - scheduled this month, 0), left),
+// per goal, in cents. Never summed across goals first: one over-funded goal
+// must not cover another.
+function netGoalHolds(holds: readonly GoalHoldInput[], scheduled: readonly GoalScheduled[]): GoalHold[] {
+  const scheduledCents = new Map(scheduled.map((g) => [g.goalId, toCents(g.amount)]));
+  return holds.map((h) => {
+    const open = toCents(h.monthly) - toCents(h.contributedThisMonth) - (scheduledCents.get(h.goalId) ?? 0);
+    const cents = Math.min(Math.max(open, 0), Math.max(toCents(h.remaining), 0));
+    return { goalId: h.goalId, name: h.name, amount: toDollars(cents) };
+  });
 }
 
 type WalkedDay = {

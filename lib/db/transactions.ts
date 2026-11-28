@@ -767,7 +767,13 @@ export async function updateTransfer(input: UpdateTransferInput): Promise<DbResu
   return { data: null, error: null };
 }
 
-export type ScheduleSummary = { id: string; description: string; amountIsVariable: boolean };
+export type ScheduleSummary = {
+  id: string;
+  description: string;
+  amountIsVariable: boolean;
+  /** The goal the schedule feeds (recurring_transactions.goalid, migration 82), with its name; null when none. */
+  goal: { id: string; name: string } | null;
+};
 
 // The schedule a confirmed transaction came from, for the edit-scope
 // question (lib/recurringEditScope.ts). null when there's no recurringid or
@@ -779,7 +785,7 @@ export async function getScheduleSummary(recurringid: string | null): Promise<Db
 
   const { data, error } = await supabase
     .from("recurring_transactions")
-    .select("id, description, amount_is_variable")
+    .select("id, description, amount_is_variable, goalid, goal:goals!recurring_transactions_goalid_fkey(goal_name)")
     .eq("id", recurringid)
     .maybeSingle();
 
@@ -787,7 +793,17 @@ export async function getScheduleSummary(recurringid: string | null): Promise<Db
     return { data: null, error: describeReadError(error, "transaction") };
   }
   return {
-    data: data ? { id: data.id, description: data.description, amountIsVariable: data.amount_is_variable } : null,
+    data: data
+      ? {
+          id: data.id,
+          description: data.description,
+          amountIsVariable: data.amount_is_variable,
+          goal:
+            data.goalid !== null
+              ? { id: data.goalid, name: (data.goal as unknown as { goal_name: string } | null)?.goal_name ?? "its goal" }
+              : null,
+        }
+      : null,
     error: null,
   };
 }

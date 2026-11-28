@@ -437,6 +437,7 @@ export async function TransactionsView({
         incomeCategories={incomeCategoriesResult.data}
         expenseCategories={expenseCategoriesResult.data}
         goals={goalsResult.data}
+        followedGoals={followedGoalsResult.data ?? []}
         deleteNotes={deleteNotes}
         deleteOrigins={deleteOrigins}
       />

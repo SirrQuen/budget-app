@@ -1,11 +1,12 @@
-import { getGoalProgress, getGoalsSummary } from "@/lib/db/dashboard";
+import { getGoalProgress, getGoalsSummary, getSafeToSpend } from "@/lib/db/dashboard";
 import {
   getGoalContributions,
   getGoalLinkedTransactions,
   getGoalPace,
-  listFundingTransfers,
+  listFeedingSchedules,
   listFollowableCards,
-  listGoalFundingLinks,
+  listUncountedOccurrences,
+  type FeedingSchedule,
   type GoalContribution,
   type GoalLinkedTransaction,
 } from "@/lib/db/goals";
@@ -20,14 +21,15 @@ import { CreateGoalForm } from "./CreateGoalForm";
 import { GoalRow } from "./GoalRow";
 
 export default async function GoalsPage() {
-  const [progressResult, summaryResult, contributionsResult, timeZone, transfersResult, linksResult, linkedResult, cardsResult, paceResult] =
+  const [progressResult, summaryResult, contributionsResult, timeZone, transfersResult, linkedResult, cardsResult, paceResult, safeResult] =
     await Promise.all([
       getGoalProgress(),
       getGoalsSummary(),
       getGoalContributions(),
       getTimeZone(),
-      listFundingTransfers(),
-      listGoalFundingLinks(),
+      // Every live counted recurring transfer, each with the goal it feeds
+      // (migration 82): the "Funded by" lists and the add-one picker.
+      listFeedingSchedules(),
       getGoalLinkedTransactions(),
       // Cards a debt payoff goal can follow (migration 70). A failed read
       // only means no card is offered.
@@ -35,6 +37,11 @@ export default async function GoalsPage() {
       // The history pace (migration 72). A failed read only means no pace
       // line: the goals themselves still show.
       getGoalPace(),
+      // "Scheduled this month": the occurrences the safe-to-spend projection
+      // subtracts for each goal's schedules -- the set its hold is netted
+      // by, read from the projection itself, never re-derived. A failed
+      // read only hides the line.
+      getSafeToSpend(),
     ]);
 
   if (
@@ -42,7 +49,6 @@ export default async function GoalsPage() {
     summaryResult.error !== null ||
     contributionsResult.error !== null ||
     transfersResult.error !== null ||
-    linksResult.error !== null ||
     linkedResult.error !== null
   ) {
     return (
@@ -57,7 +63,6 @@ export default async function GoalsPage() {
             summaryResult.error ??
             contributionsResult.error ??
             transfersResult.error ??
-            linksResult.error ??
             linkedResult.error ??
             "We couldn't load your goals. Refresh the page to try again."
           }
@@ -67,6 +72,19 @@ export default async function GoalsPage() {
   }
 
   const goals = progressResult.data;
+
+  const feedingByGoal = new Map<string, FeedingSchedule[]>();
+  for (const s of transfersResult.data) {
+    if (s.goalId === null) continue;
+    feedingByGoal.set(s.goalId, [...(feedingByGoal.get(s.goalId) ?? []), s]);
+  }
+  const scheduledByGoal = new Map((safeResult.data?.goalScheduled ?? []).map((g) => [g.goalId, g.amount]));
+  // Earlier confirmations the goal page offers to count (ruling 1). A
+  // failed read only means no offer.
+  const uncountedResult = await listUncountedOccurrences(
+    transfersResult.data.filter((s) => s.goalId !== null).map((s) => s.id),
+  );
+  const uncounted = new Map((uncountedResult.data ?? []).map((u) => [u.recurringId, u.count]));
 
   const contributionsByGoal = new Map<string, GoalContribution[]>();
   for (const contribution of contributionsResult.data) {
@@ -128,7 +146,9 @@ export default async function GoalsPage() {
             goal={goal}
             contributions={contributionsByGoal.get(goal.goal_id ?? "") ?? []}
             linked={linkedByGoal.get(goal.goal_id ?? "") ?? []}
-            fundingRecurringId={linksResult.data.get(goal.goal_id ?? "") ?? null}
+            feeding={feedingByGoal.get(goal.goal_id ?? "") ?? []}
+            scheduledThisMonth={safeResult.data ? (scheduledByGoal.get(goal.goal_id ?? "") ?? 0) : null}
+            uncounted={uncounted}
             fundingTransfers={transfersResult.data}
             cards={cardsResult.data ?? []}
             pace={paceResult.data?.get(goal.goal_id ?? "") ?? null}

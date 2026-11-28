@@ -24,7 +24,7 @@ import { bulkOriginWarning, type TransferOrigin } from "@/lib/turnIntoTransfer";
 import { MakeRecurringButton } from "./MakeRecurringButton";
 import { LogAgainButton } from "./LogAgainButton";
 import type { TransactionAccountOption } from "./AddTransactionForm";
-import type { GoalOption } from "@/lib/db/goals";
+import type { FollowedGoal, GoalOption } from "@/lib/db/goals";
 import { useOptimisticTransactions, type PendingTransaction } from "@/components/quick-add/OptimisticTransactionsContext";
 import { categoryColorVar } from "@/lib/categoryOptions";
 import type { CategoryWithGroup } from "@/lib/db/categories";
@@ -259,6 +259,7 @@ export function TransactionsList({
   incomeCategories,
   expenseCategories,
   goals,
+  followedGoals = [],
   deleteNotes = {},
   deleteOrigins = {},
 }: {
@@ -287,6 +288,8 @@ export function TransactionsList({
   expenseCategories: CategoryWithGroup[];
   /** For "Make this recurring" on a transfer -- "Is this for a goal?". */
   goals: GoalOption[];
+  /** Goals that follow a card, for Log again's note beside the Goal field. */
+  followedGoals?: FollowedGoal[];
   /**
    * What deleting a row does to a "same bill" answer, keyed by transfer
    * group or id (sameBillDeleteNotes, lib/sameBill.ts). Said in the delete
@@ -432,6 +435,7 @@ export function TransactionsList({
           incomeCategories={incomeCategories}
           expenseCategories={expenseCategories}
           goals={goals}
+          followedGoals={followedGoals}
           prefill={
             addFrom
               ? logAgainPrefill(addFrom.source, {
@@ -802,6 +806,7 @@ export function TransactionsList({
                             incomeCategories={incomeCategories}
                             expenseCategories={expenseCategories}
                             goals={goals}
+                            followedGoals={followedGoals}
                           />
                         ) : null}
                         <Link
@@ -907,6 +912,7 @@ export function TransactionsList({
                           incomeCategories={incomeCategories}
                           expenseCategories={expenseCategories}
                           goals={goals}
+                          followedGoals={followedGoals}
                         />
                       ) : null}
                       <Link

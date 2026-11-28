@@ -57,7 +57,9 @@ function run(
     today: TODAY,
     cash,
     cushion,
-    goalHolds,
+    // Already-netted holds: as inputs, a target of that amount with nothing
+    // in yet and no schedule feeding it.
+    goalHolds: goalHolds.map((g) => ({ goalId: g.goalId, name: g.name, monthly: g.amount, contributedThisMonth: 0, remaining: g.amount })),
     schedules,
     futureTransactions,
     holidays: NO_HOLIDAYS,
@@ -1196,4 +1198,128 @@ test("after: the property itself -- room is exactly how much later spending the 
   // On or before the tightest day: in full.
   assert.equal(withSpend(50, 3), base.safeToSpend - 50);
   assert.equal(withSpend(50, 1), base.safeToSpend - 50);
+});
+
+// ---------------------------------------------------------------------------
+// Goal holds netted by the goal's schedules (migration 82, ruling 3):
+// hold = min(max(monthly - goal money this month - this month's
+// occurrences of its schedules that the projection subtracts, 0), left).
+// TODAY is Thu 2026-10-01; a weekly transfer from day(1) lands Oct 2, 9,
+// 16, 23 and 30 -- five times $50 this month.
+// ---------------------------------------------------------------------------
+
+const toSavings = (overrides: Partial<ProjectionSchedule> & Pick<ProjectionSchedule, "amount">) =>
+  schedule({
+    kind: "Transfer",
+    toAccountId: "savings",
+    toAccountType: "Savings",
+    goalId: "trip",
+    ...overrides,
+  });
+const weekly50 = toSavings({ name: "Weekly $50", amount: 50, frequency: "Weekly", nextDueDate: day(1) });
+const tripTarget = (monthly = 400, contributedThisMonth = 0, remaining = 5000) => ({
+  goalId: "trip",
+  name: "Trip",
+  monthly,
+  contributedThisMonth,
+  remaining,
+});
+function runHolds(schedules: ProjectionSchedule[], holds: ReturnType<typeof tripTarget>[], fallbackWindowEnd = "2026-10-31") {
+  return projectSafeToSpend({
+    today: TODAY,
+    cash: 5000,
+    cushion: 0,
+    goalHolds: holds,
+    schedules,
+    futureTransactions: [],
+    holidays: NO_HOLIDAYS,
+    fallbackWindowEnd,
+  });
+}
+
+test("netted hold: weekly $50 against a $400 target holds $150 (5 x $50 already subtracted)", () => {
+  const result = runHolds([paycheck, weekly50], [tripTarget()]);
+  assert.deepEqual(result.goalScheduled.map((g) => [g.goalId, g.amount, g.occurrences.length]), [["trip", 250, 5]]);
+  assert.deepEqual(result.goalHolds, [{ goalId: "trip", name: "Trip", amount: 150 }]);
+  // Before 82 a funded goal held $0, so $150 of the target was never set aside.
+});
+
+test("the netted occurrences are the very obligations the walk subtracts -- one set", () => {
+  const result = runHolds([paycheck, weekly50], [tripTarget()]);
+  for (const o of result.goalScheduled[0].occurrences) {
+    assert.ok(result.obligations.includes(o), `${o.dueDate} is subtracted by the walk`);
+  }
+  // Across the walk and the hold, the month takes exactly the target, never more.
+  const transfersThisMonth = result.obligations
+    .filter((o) => o.recurringId === weekly50.recurringId && o.dueDate.startsWith("2026-10"))
+    .reduce((sum, o) => sum + o.amount, 0);
+  assert.equal(transfersThisMonth + result.goalHold, 400);
+});
+
+test("two schedules feed one goal: weekly $50 + $200 on the 15th covers the $400 target", () => {
+  const monthly200 = toSavings({ name: "Monthly $200", amount: 200, nextDueDate: day(14) });
+  const result = runHolds([paycheck, weekly50, monthly200], [tripTarget()]);
+  assert.equal(result.goalScheduled[0].amount, 450);
+  assert.deepEqual(result.goalHolds, []);
+  assert.equal(result.goalHold, 0);
+});
+
+test("goal money already in this month nets too: $100 in + $250 scheduled leaves $50", () => {
+  const result = runHolds([paycheck, weekly50], [tripTarget(400, 100)]);
+  assert.equal(result.goalHold, 50);
+});
+
+test("the hold never exceeds what's left to the target", () => {
+  const result = runHolds([paycheck, weekly50], [tripTarget(400, 0, 100)]);
+  assert.equal(result.goalHold, 100);
+});
+
+test("a schedule that ends mid-month: only its remaining occurrence is netted, so nothing is taken twice", () => {
+  // Ends Oct 6: one occurrence left (Oct 2). Earlier confirmed occurrences
+  // were auto-linked, so they arrive as goal money ($100), not as obligations.
+  const ending = { ...weekly50, endDate: day(5) };
+  const result = runHolds([paycheck, ending], [tripTarget(400, 100)]);
+  assert.equal(result.goalScheduled[0].amount, 50);
+  assert.equal(result.goalHold, 250);
+  // Paused (not in v_upcoming_recurring at all): the target holds what goal money hasn't covered.
+  const paused = runHolds([paycheck], [tripTarget(400, 100)]);
+  assert.deepEqual(paused.goalScheduled, []);
+  assert.equal(paused.goalHold, 300);
+});
+
+test("an occurrence after the projection's horizon isn't netted -- the hold keeps it", () => {
+  // No income schedule: window mode, horizon Oct 10. Oct 2 and 9 are
+  // subtracted; Oct 16, 23 and 30 aren't, so they aren't netted either.
+  const result = runHolds([weekly50], [tripTarget()], day(9));
+  assert.equal(result.mode, "window");
+  assert.deepEqual(result.goalScheduled[0].occurrences.map((o) => o.dueDate), [day(1), day(8)]);
+  assert.equal(result.goalHold, 300);
+});
+
+test("next month's occurrences aren't this month's goal money", () => {
+  const monthly = toSavings({ name: "Monthly $200", amount: 200, nextDueDate: day(31) }); // Nov 1
+  const result = runHolds([paycheck, monthly], [tripTarget(200)]);
+  assert.deepEqual(result.goalScheduled, []);
+  assert.equal(result.goalHold, 200);
+});
+
+test("a schedule the projection doesn't subtract (Savings -> Investment) isn't netted", () => {
+  const inside = toSavings({
+    name: "To brokerage",
+    amount: 50,
+    frequency: "Weekly",
+    fromAccountType: "Savings",
+    toAccountType: "Investment",
+    nextDueDate: day(1),
+  });
+  const result = runHolds([paycheck, inside], [tripTarget()]);
+  assert.deepEqual(result.goalScheduled, []);
+  assert.equal(result.goalHold, 400);
+});
+
+test("one goal's schedules never cover another goal's hold", () => {
+  const other = { goalId: "car", name: "Car", monthly: 100, contributedThisMonth: 0, remaining: 5000 };
+  const result = runHolds([paycheck, toSavings({ ...weekly50, amount: 200 })], [tripTarget(400), other]);
+  // Trip: 5 x $200 = $1,000 against $400 -> $0. Car still holds $100.
+  assert.deepEqual(result.goalHolds, [{ goalId: "car", name: "Car", amount: 100 }]);
 });

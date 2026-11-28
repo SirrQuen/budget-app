@@ -46,8 +46,8 @@ const ACCOUNTS: TransactionAccountOption[] = [
   { id: "cash", account_name: "Wallet", is_active: true, opening_date: "2026-01-01", account_type: "Cash" },
 ];
 
-const JAPAN: GoalOption = { id: "japan", name: "Japan", monthlyContribution: 200, fundingRecurringId: null };
-const CAR: GoalOption = { id: "car", name: "Car", monthlyContribution: null, fundingRecurringId: null };
+const JAPAN: GoalOption = { id: "japan", name: "Japan", monthlyContribution: 200 };
+const CAR: GoalOption = { id: "car", name: "Car", monthlyContribution: null };
 
 before(async () => {
   dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
@@ -76,7 +76,12 @@ after(async () => {
 });
 
 async function render(
-  props: { goals?: GoalOption[]; recurring?: EditableRecurring; prefill?: import("./RecurringForm").RecurringPrefill } = {},
+  props: {
+    goals?: GoalOption[];
+    goalSchedules?: import("@/lib/db/goals").FeedingSchedule[];
+    recurring?: EditableRecurring;
+    prefill?: import("./RecurringForm").RecurringPrefill;
+  } = {},
 ): Promise<HTMLElement> {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -92,6 +97,7 @@ async function render(
           expenseCategories={[]}
           accounts={ACCOUNTS}
           goals={props.goals ?? []}
+          goalSchedules={props.goalSchedules}
           recurring={props.recurring}
           onSuccess={() => {}}
           onCancel={() => {}}
@@ -176,7 +182,7 @@ test("the statement day list runs 1st to 31st, the last three marked as not ever
   assert.ok(c.textContent?.includes("What day does this card's statement close?"));
 });
 
-// "Is this for a goal?" -- the recurring side of goals.funding_recurringid.
+// "Is this for a goal?" -- the schedule's own link (recurring_transactions.goalid, migration 82).
 // Without it, a goal set first and automated later is never linked, and
 // both its target and the transfer come off safe to spend.
 async function transfer(c: HTMLElement, from: string, to: string) {
@@ -239,23 +245,49 @@ const EDITING: EditableRecurring = {
   non_business_day_rule: "none",
 };
 
-test("at edit, the goal this transfer funds is already chosen", async () => {
-  const c = await render({ recurring: EDITING, goals: [CAR, { ...JAPAN, fundingRecurringId: "to-savings" }] });
+// Another schedule already feeding Japan: the same amount, cadence and accounts as EDITING.
+const WEEKLY_TO_JAPAN = {
+  id: "weekly-japan",
+  goalId: "japan",
+  description: "Japan weekly",
+  amount: 50,
+  basis: "fixed" as const,
+  frequency: "Weekly",
+  intervalCount: 1,
+  anchorDate: "2026-10-02",
+  accountId: "checking",
+  toAccountId: "savings",
+  toAccountName: "Savings",
+};
+const MONTHLY_TO_JAPAN = { ...WEEKLY_TO_JAPAN, id: "monthly-japan", amount: 200, frequency: "Monthly" };
+
+test("at edit, the goal this transfer feeds is already chosen", async () => {
+  const c = await render({ recurring: { ...EDITING, goalid: "japan" }, goals: [CAR, JAPAN] });
   assert.equal(goalPicker(c)?.value, "japan");
   assert.equal(asked(c)?.value, "1");
 });
 
-test("funding two goals: no picker -- one answer would unlink the other -- and nothing is posted", async () => {
-  const c = await render({
-    recurring: EDITING,
-    goals: [
-      { ...CAR, fundingRecurringId: "to-savings" },
-      { ...JAPAN, fundingRecurringId: "to-savings" },
-    ],
-  });
-  assert.equal(goalPicker(c), null);
-  assert.equal(asked(c), null);
-  assert.ok((c.textContent ?? "").includes("This transfer funds Car, Japan. Change that from each goal."));
+test("a goal already fed by another schedule says so -- information, not a warning", async () => {
+  const c = await render({ goals: [CAR, JAPAN], goalSchedules: [WEEKLY_TO_JAPAN] });
+  await transfer(c, "checking", "savings");
+  await setValue(goalPicker(c)!, "japan");
+  assert.ok((c.textContent ?? "").includes("Japan is also fed by Weekly $50 (fixed) to Savings."));
+});
+
+test("moving a schedule to another goal says so, on this schedule only", async () => {
+  const c = await render({ recurring: { ...EDITING, goalid: "japan" }, goals: [CAR, JAPAN] });
+  await setValue(goalPicker(c)!, "car");
+  assert.ok((c.textContent ?? "").includes("This schedule will feed Car instead of Japan."));
+  await setValue(goalPicker(c)!, "");
+  assert.ok((c.textContent ?? "").includes("This schedule will stop feeding Japan. It keeps running."));
+});
+
+test("a schedule repeating one that feeds the goal is asked about, never merged", async () => {
+  const c = await render({ recurring: EDITING, goals: [CAR, JAPAN], goalSchedules: [MONTHLY_TO_JAPAN] });
+  await setValue(goalPicker(c)!, "japan");
+  assert.ok((c.textContent ?? "").includes("Monthly $200 (fixed) to Savings already feeds this goal. Add this one as well?"));
+  assert.equal(c.querySelectorAll('input[name="funding_add_duplicate"]').length, 2);
+  assert.equal(q<HTMLInputElement>(c, 'input[name="funding_duplicate_asked"]')?.value, "1");
 });
 
 // "Make recurring": the source transaction is the first occurrence, so the

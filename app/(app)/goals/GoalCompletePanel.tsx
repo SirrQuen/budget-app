@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
+import { callAction } from "@/components/useActionForm";
+import { redirectScheduleAction, stopScheduleAction } from "@/lib/actions/goals";
+import { FIELD_CLASS } from "@/components/ui/Input";
 import { createPortal } from "react-dom";
 import { SorrelFlower } from "@/components/SorrelFlower";
 import { Button } from "@/components/ui/Button";
-import type { GoalCompletion } from "@/lib/goalCompletion";
+import type { FreedUp, GoalCompletion } from "@/lib/goalCompletion";
 
 const CLOSE_BUTTON =
   "inline-flex min-h-11 items-center rounded px-2 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
@@ -49,7 +52,7 @@ export function GoalCompletePanel({
       }
       // Focus trap: Tab off either end of the panel wraps to the other.
       if (e.key !== "Tab" || !panelRef.current) return;
-      const focusable = panelRef.current.querySelectorAll<HTMLElement>("button:not([disabled])");
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>("button:not([disabled]), select:not([disabled])");
       if (focusable.length === 0) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -88,6 +91,7 @@ export function GoalCompletePanel({
           <p className="text-base text-ink">{completion.figure}</p>
           {completion.nextLine ? <p className="text-sm text-ink-secondary">{completion.nextLine}</p> : null}
         </div>
+        {completion.freed ? <FreedSchedules freed={completion.freed} /> : null}
         <div className="flex flex-wrap items-center justify-center gap-3">
           <Button ref={primaryRef} type="button" onClick={onPrimary}>
             {completion.primaryLabel}
@@ -99,5 +103,113 @@ export function GoalCompletePanel({
       </div>
     </div>,
     document.body,
+  );
+}
+
+const CHOICE =
+  "inline-flex min-h-11 items-center rounded-lg border border-field-border px-3 text-sm font-medium text-ink transition-colors duration-150 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action disabled:opacity-50";
+
+// "The part only Sorrel can say": the recurring transfers still feeding
+// this goal, named with their amounts, each with Stop / Redirect / Keep.
+// Keep writes nothing; it only says the schedule is staying.
+function FreedSchedules({ freed }: { freed: FreedUp }) {
+  return (
+    <div className="flex w-full flex-col gap-3 text-left text-sm">
+      <p className="text-ink">{freed.line}</p>
+      <ul className="flex flex-col gap-3">
+        {freed.schedules.map((s) => (
+          <FreedSchedule key={s.id} schedule={s} redirectTo={freed.redirectTo} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function FreedSchedule({
+  schedule,
+  redirectTo,
+}: {
+  schedule: FreedUp["schedules"][number];
+  redirectTo: FreedUp["redirectTo"];
+}) {
+  const [outcome, setOutcome] = useState<string | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
+  const [target, setTarget] = useState(redirectTo[0]?.id ?? "");
+  const [error, setError] = useState<string>();
+  const [pending, start] = useTransition();
+
+  function stop() {
+    setError(undefined);
+    start(async () => {
+      const result = await callAction(() => stopScheduleAction(schedule.id));
+      if (result?.error) setError(result.error);
+      else setOutcome("Paused. You can resume it on Recurring any time.");
+    });
+  }
+
+  function redirect() {
+    const name = redirectTo.find((g) => g.id === target)?.name;
+    if (!name) return;
+    setError(undefined);
+    start(async () => {
+      const result = await callAction(() => redirectScheduleAction(schedule.id, target));
+      if (result?.error) setError(result.error);
+      else setOutcome(`It feeds ${name} from its next transfer.`);
+    });
+  }
+
+  return (
+    <li className="flex flex-col gap-2 rounded-xl border border-hairline px-3 py-2">
+      <span className="text-ink-secondary">{schedule.label}</span>
+      {outcome ? (
+        <p role="status" className="text-ink-secondary">
+          {outcome}
+        </p>
+      ) : redirecting ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="sr-only" htmlFor={`redirect-${schedule.id}`}>
+            Goal to feed instead
+          </label>
+          <select
+            id={`redirect-${schedule.id}`}
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            className={`${FIELD_CLASS} w-auto`}
+          >
+            {redirectTo.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+          <button type="button" onClick={redirect} disabled={pending} className={CHOICE}>
+            {pending ? "Saving…" : "Feed this goal"}
+          </button>
+          <button type="button" onClick={() => setRedirecting(false)} className={CLOSE_BUTTON}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={stop} disabled={pending} className={CHOICE}>
+            Stop
+          </button>
+          {redirectTo.length > 0 ? (
+            <button type="button" onClick={() => setRedirecting(true)} disabled={pending} className={CHOICE}>
+              Redirect
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setOutcome("Kept. It keeps running as it is.")}
+            disabled={pending}
+            className={CHOICE}
+          >
+            Keep
+          </button>
+        </div>
+      )}
+      {error ? <p className="text-critical">{error}</p> : null}
+    </li>
   );
 }

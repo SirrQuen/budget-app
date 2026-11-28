@@ -1,9 +1,10 @@
 import "server-only";
-import { getGoalCompletionStates, getFirstContributionDate } from "@/lib/db/goals";
+import { getGoalCompletionStates, getFirstContributionDate, listFeedingSchedules, listGoalOptions } from "@/lib/db/goals";
+import { scheduleLabel } from "@/lib/goalSchedules";
 import { getGoalProgress } from "@/lib/db/dashboard";
 import { getTimeZone, getToday } from "@/lib/db/settings";
 import { todayInZone } from "@/lib/date";
-import { completionCopy, type GoalCompletion } from "@/lib/goalCompletion";
+import { completionCopy, freedUpLine, type FreedUp, type GoalCompletion } from "@/lib/goalCompletion";
 
 // THE completion check (docs/Goal-Completion.md, D; migration 70): the one
 // helper every server action uses to learn whether its own write completed
@@ -52,7 +53,7 @@ export async function completedSince(before: CompletionSnapshot): Promise<GoalCo
     // A goal that follows a card cleared what the card owed when it started
     // following, since then -- not its old hand entries.
     const follows = goal.tracking_method === "LinkedAccount" && goal.starting_balance !== null;
-    return completionCopy({
+    const copy = completionCopy({
       goalId,
       goalName: goal.goal_name,
       goalType: goal.goal_type,
@@ -63,8 +64,26 @@ export async function completedSince(before: CompletionSnapshot): Promise<GoalCo
         follows && goal.linked_at ? todayInZone(timeZone, new Date(goal.linked_at)) : (firstResult.data ?? null),
       completedOn: today,
     });
+    return { ...copy, freed: follows ? null : await freedUp(goalId) };
   } catch {
     // The write already succeeded: a failure here costs the panel, never the save.
     return undefined;
   }
+}
+
+// The schedules still feeding the goal that just completed, by the link
+// itself -- identified with confidence, or not at all: a failed read drops
+// the line rather than name a wrong figure (docs/Goal-Completion.md).
+async function freedUp(goalId: string): Promise<FreedUp | null> {
+  const [schedules, goals] = await Promise.all([listFeedingSchedules(), listGoalOptions()]);
+  if (schedules.error !== null) return null;
+  const feeding = schedules.data.filter((s) => s.goalId === goalId);
+  const labels = feeding.map(scheduleLabel);
+  const line = freedUpLine(labels);
+  if (line === null) return null;
+  return {
+    line,
+    schedules: feeding.map((s, k) => ({ id: s.id, label: labels[k] })),
+    redirectTo: (goals.data ?? []).filter((g) => g.id !== goalId).map((g) => ({ id: g.id, name: g.name })),
+  };
 }

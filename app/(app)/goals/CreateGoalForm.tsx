@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { GoalForm } from "./GoalForm";
 import { Button } from "@/components/ui/Button";
-import type { FundingTransfer } from "@/lib/db/goals";
+import type { FeedingSchedule } from "@/lib/db/goals";
 
 // The goal-completion panel's "Start another goal" (GoalRow) opens this
 // form from elsewhere on the page.
@@ -16,7 +16,7 @@ export function CreateGoalForm({
 }: {
   label?: string;
   className?: string;
-  fundingTransfers: FundingTransfer[];
+  fundingTransfers: FeedingSchedule[];
 }) {
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);

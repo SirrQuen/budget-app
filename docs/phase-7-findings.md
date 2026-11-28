@@ -2559,6 +2559,19 @@ Not built, by ruling: auto-linking a goal-funding schedule's confirmed
 occurrences to its goal (docs/queue.md, Deferred). Until then a confirmed
 funding transfer moves the balance but not the goal's progress.
 
+**Update 2026-11-28 (branch `feat/goal-multi-schedule`, migration 82):**
+auto-linking is built (docs/Goals-and-Import.md, ruling 1) -- a
+confirmed occurrence's Expense leg takes its schedule's goal
+(`trg_transactions_occurrence_goal`). Future confirmations only;
+confirmations made before 82 count only when the person taps "Count them"
+on the goal (`link_earlier_occurrences()`, each run through
+`same_goal_money()`). The hold is now netted (ruling 3): a funded goal no
+longer holds $0, it holds what its schedules don't cover this month,
+using the projection's own occurrences. Consequence, raised 2026-11-28:
+until someone taps "Count them", a transfer confirmed earlier in the
+deploy month isn't goal money, so that month's hold is higher by it --
+the tester note says so (docs/tester-notes/2026-11-28-goal-schedules.md).
+
 ## The RLS harness couldn't finish on dev from migration 62 on (2026-11-18)
 
 **Status: done. On sorrel-dev 2026-11-18: rls-isolation-test.sql 430

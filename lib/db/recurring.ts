@@ -39,6 +39,8 @@ export type RecurringWithRelations = RecurringRow & {
   // Destination account name for a transfer template; null for an
   // ordinary category schedule.
   to_account_name: string | null;
+  /** The goal this schedule feeds, by name (goalid, migration 82); null when none. */
+  goal_name: string | null;
 };
 
 // categoryid/accountid have FK relationships to several relations (base
@@ -50,16 +52,18 @@ export type RecurringWithRelations = RecurringRow & {
 const RECURRING_SELECT =
   "*, category:categories(category_name, color, icon, category_type)," +
   " account:accounts!recurring_transactions_accountid_fkey(account_name)," +
-  " to_account:accounts!recurring_transactions_to_accountid_fkey(account_name)";
+  " to_account:accounts!recurring_transactions_to_accountid_fkey(account_name)," +
+  " goal:goals!recurring_transactions_goalid_fkey(goal_name)";
 
 type RawRecurringRow = RecurringRow & {
   category: { category_name: string; color: string | null; icon: string | null; category_type: string } | null;
   account: { account_name: string } | null;
   to_account: { account_name: string } | null;
+  goal: { goal_name: string } | null;
 };
 
 function flatten(row: RawRecurringRow): RecurringWithRelations {
-  const { category, account, to_account, ...rest } = row;
+  const { category, account, to_account, goal, ...rest } = row;
   return {
     ...rest,
     category_name: category?.category_name ?? null,
@@ -68,6 +72,7 @@ function flatten(row: RawRecurringRow): RecurringWithRelations {
     category_type: category?.category_type ?? null,
     account_name: account?.account_name ?? null,
     to_account_name: to_account?.account_name ?? null,
+    goal_name: goal?.goal_name ?? null,
   };
 }
 
@@ -213,6 +218,11 @@ export async function updateRecurring(
   const supabase = await createClient();
 
   const fullPatch: RecurringUpdate = { ...patch };
+  // Only a recurring transfer feeds a goal (recurring_goal_transfer_only,
+  // migration 82): a schedule edited into an income or expense one stops.
+  if (patch.to_accountid === null) {
+    fullPatch.goalid = null;
+  }
   if (patch.next_run_date !== undefined) {
     fullPatch.next_due_date = await computeNextDueDate(
       patch.next_run_date,

@@ -9,7 +9,7 @@ import type { SavedSummary } from "@/lib/savedSummary";
 import { SameBillQuestion } from "@/components/SameBillQuestion";
 import type { SameBillPair } from "@/lib/sameBill";
 import { logAgainPrefill, type LogAgainSource } from "@/lib/logAgain";
-import type { GoalOption } from "@/lib/db/goals";
+import type { FollowedGoal, GoalOption } from "@/lib/db/goals";
 import type { SameMoneyPair } from "@/lib/goalLinks";
 import { SameMoneyQuestion } from "@/components/SameMoneyQuestion";
 import type { TransactionAccountOption } from "./AddTransactionForm";
@@ -25,11 +25,14 @@ export function LogAgainButton({
   incomeCategories,
   expenseCategories,
   goals = [],
+  followedGoals = [],
   className,
 }: {
   source: LogAgainSource;
   /** Goals a transaction can be for -- the copied goal comes along only if listed. */
   goals?: GoalOption[];
+  /** Goals that follow a card: named beside the Goal field when this touches their card (ruling 7). */
+  followedGoals?: FollowedGoal[];
   accounts: TransactionAccountOption[];
   incomeCategories: CategoryWithGroup[];
   expenseCategories: CategoryWithGroup[];
@@ -79,6 +82,7 @@ export function LogAgainButton({
           incomeCategories={incomeCategories}
           expenseCategories={expenseCategories}
           goals={goals}
+          followedGoals={followedGoals}
           prefill={prefill}
           onClose={() => setOpen(false)}
           onSaved={(note, sameBill, sameMoney, saved) => {

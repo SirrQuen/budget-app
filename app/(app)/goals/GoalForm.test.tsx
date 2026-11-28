@@ -2,7 +2,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import * as nodeModule from "node:module";
 import { JSDOM } from "jsdom";
-import type { FundingTransfer } from "@/lib/db/goals";
+import type { FeedingSchedule } from "@/lib/db/goals";
 
 // The funding link is asked for in the same step as the monthly target:
 // a link the user has to remember to make won't exist, and the failure is
@@ -35,13 +35,21 @@ registerHooks({
   },
 });
 
-const TO_SAVINGS: FundingTransfer = {
+const TO_SAVINGS: FeedingSchedule = {
   id: "to-savings",
+  goalId: null,
   description: "To savings",
   amount: 200,
+  basis: "fixed",
   frequency: "Monthly",
+  intervalCount: 1,
+  anchorDate: "2026-10-01",
+  accountId: "checking",
+  toAccountId: "savings",
   toAccountName: "Savings",
 };
+// Feeds another goal already: never offered here (migration 82).
+const FEEDS_CAR: FeedingSchedule = { ...TO_SAVINGS, id: "car-weekly", goalId: "car", description: "Car fund", frequency: "Weekly", amount: 50 };
 
 before(async () => {
   dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
@@ -87,18 +95,26 @@ async function type(el: HTMLInputElement, value: string) {
 }
 
 const monthlyInput = (c: HTMLElement) => c.querySelector('input[name="monthly_contribution"]') as HTMLInputElement;
-const picker = (c: HTMLElement) => c.querySelector('select[name="funding_recurringid"]') as HTMLSelectElement | null;
+const picker = (c: HTMLElement) => c.querySelector('select[name="add_schedule_id"]') as HTMLSelectElement | null;
 
-test("no monthly target, no funding question", async () => {
-  const c = await render();
-  assert.equal(picker(c), null);
-  assert.ok(!(c.textContent ?? "").includes("Do you move this money automatically?"));
-});
+async function choose(select: HTMLSelectElement, value: string) {
+  Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, "value")!.set!.call(select, value);
+  await act(async () => {
+    select.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+  });
+}
 
-test("typing a monthly target asks the funding question in the same step", async () => {
-  const c = await render();
-  await type(monthlyInput(c), "200");
+const JAPAN = {
+  goal_id: "japan",
+  goal_name: "Japan",
+  goal_type: "Vacation",
+  target_amount: 5000,
+  target_date: null,
+  monthly_contribution: 200,
+};
 
+test("an unlinked recurring transfer is offered, named with its amount and cadence", async () => {
+  const c = await render({ fundingTransfers: [TO_SAVINGS, FEEDS_CAR] });
   const select = picker(c);
   assert.ok(select, "the picker appears");
   assert.ok((c.textContent ?? "").includes("Do you move this money automatically?"));
@@ -106,40 +122,37 @@ test("typing a monthly target asks the funding question in the same step", async
     [...select.options].map((o) => [o.value, o.textContent]),
     [
       ["", "No, I add it myself"],
-      ["to-savings", "To savings · $200.00 monthly to Savings"],
+      ["to-savings", "To savings · Monthly $200 (fixed) to Savings"],
     ],
   );
   assert.equal(select.value, "");
 });
 
-test("a zero target is no target: the question goes away", async () => {
-  const c = await render();
-  await type(monthlyInput(c), "200");
-  await type(monthlyInput(c), "0");
+test("a schedule feeding another goal is never offered -- adding never takes it from there", async () => {
+  const c = await render({ fundingTransfers: [FEEDS_CAR] });
   assert.equal(picker(c), null);
 });
 
-test("with no recurring transfers the question is still asked, as a pointer", async () => {
+test("with no recurring transfers, a monthly target still gets the pointer", async () => {
   const c = await render({ fundingTransfers: [] });
   await type(monthlyInput(c), "200");
   assert.equal(picker(c), null);
   assert.ok((c.textContent ?? "").includes("Do you move this money automatically?"));
 });
 
-test("editing keeps the current link selected, even once it's no longer counted", async () => {
-  const goal = {
-    goal_id: "japan",
-    goal_name: "Japan",
-    goal_type: "Vacation",
-    target_amount: 5000,
-    target_date: null,
-    monthly_contribution: 200,
-  };
-  const linked = await render({ goal: { ...goal, funding_recurringid: "to-savings" } });
-  assert.equal(picker(linked)!.value, "to-savings");
+test("the form carries no link field: clearing the monthly target can't unlink a schedule", async () => {
+  const feedsJapan: FeedingSchedule = { ...TO_SAVINGS, id: "japan-monthly", goalId: "japan" };
+  const c = await render({ goal: JAPAN, fundingTransfers: [feedsJapan] });
+  await type(monthlyInput(c), "");
+  assert.equal(c.querySelector('[name="funding_recurringid"]'), null);
+  assert.equal(picker(c), null, "nothing unlinked to add, so no picker");
+});
 
-  const stale = await render({ goal: { ...goal, funding_recurringid: "paused-one" } });
-  const select = picker(stale)!;
-  assert.equal(select.value, "paused-one");
-  assert.equal(select.selectedOptions[0].textContent, "The linked transfer (not counted right now)");
+test("a goal already fed asks to add another, and a repeat of one is asked about, not merged", async () => {
+  const feedsJapan: FeedingSchedule = { ...TO_SAVINGS, id: "japan-monthly", goalId: "japan" };
+  const c = await render({ goal: JAPAN, fundingTransfers: [feedsJapan, TO_SAVINGS] });
+  assert.ok((c.textContent ?? "").includes("Add another recurring transfer?"));
+  await choose(picker(c)!, "to-savings");
+  assert.ok((c.textContent ?? "").includes("Monthly $200 (fixed) to Savings already feeds this goal. Add this one as well?"));
+  assert.equal(c.querySelectorAll('input[name="add_duplicate"]').length, 2);
 });

@@ -2,7 +2,7 @@ import { listFinishedRecurringIds, listRecurring, listRecurringAmounts } from "@
 import { listAccounts } from "@/lib/db/accounts";
 import { listCategoriesForType } from "@/lib/db/categories";
 import { getBankHolidays } from "@/lib/db/holidays";
-import { listGoalOptions } from "@/lib/db/goals";
+import { listFeedingSchedules, listGoalOptions } from "@/lib/db/goals";
 import { getToday } from "@/lib/db/settings";
 import { getConfirmationQueue } from "@/lib/db/dashboard";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -48,6 +48,7 @@ export default async function RecurringPage() {
     confirmationResult,
     goalsResult,
     finishedResult,
+    feedingResult,
   ] = await Promise.all([
     listRecurring(),
     listAccounts({ is_active: true }),
@@ -58,7 +59,11 @@ export default async function RecurringPage() {
     getConfirmationQueue(),
     listGoalOptions(),
     listFinishedRecurringIds(),
+    // The form's "also fed by" hint and duplicate question. A failed read
+    // only means neither shows; the link itself is still saved.
+    listFeedingSchedules(),
   ]);
+  const goalSchedules = feedingResult.data ?? [];
 
   // RecurringForm's live timing preview degrades to "weekend-aware only"
   // (no holidays) if this fails to load -- what actually gets saved is
@@ -142,6 +147,7 @@ export default async function RecurringPage() {
                 expenseCategories={expenseCategories}
                 accounts={accounts}
                 goals={goalsResult.data}
+                goalSchedules={goalSchedules}
                 holidays={holidays}
                 label="Add your first schedule"
               />
@@ -163,6 +169,7 @@ export default async function RecurringPage() {
         expenseCategories={expenseCategories}
         accounts={accounts}
         goals={goalsResult.data}
+        goalSchedules={goalSchedules}
         holidays={holidays}
         amount={shown}
         today={today}
@@ -183,6 +190,7 @@ export default async function RecurringPage() {
         expenseCategories={expenseCategories}
         accounts={accounts}
         goals={goalsResult.data}
+        goalSchedules={goalSchedules}
         holidays={holidays}
       />
 

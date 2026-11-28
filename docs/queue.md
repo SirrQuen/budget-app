@@ -5,7 +5,7 @@ lives in its findings entry (docs/phase-7-findings.md) or spec. "Do this
 next" means editing this file. Launch blockers live in the findings'
 authoritative list, not here.
 
-Last updated 2026-11-25.
+Last updated 2026-11-28.
 
 ## Next
 
@@ -186,6 +186,7 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 
 | Item | Since | Held until | Where |
 |---|---|---|---|
+| Drop migration 82's push-window scaffolding: `goals.funding_recurringid`, the mirror trigger (`trg_goals_mirror_funding`, `mirror_goal_funding()`) and `v_goal_monthly_holds`, all unread by the app since 82 | 2026-11-28 | One week after 82's deploy is live on production | docs/Goals-and-Import.md, rulings 2; migration 82's header |
 | `feat/linked-goals`: migration 52, a goal's progress read from a linked account | 2026-10-26 | After the beta. It must be re-derived on top of 53, 57 and everything since, not just given a new timestamp. | Findings, "Held branches that touch goals"; the branch's own commits |
 | `fix/policy-notice-by-email-or-app` (`b3fcae6`): the privacy policy's "Changes" clause and the terms' "Changes" clause say "by email or by a notice in the app" instead of "email" | 2026-11-16 | Bundle with the next policy-change email (likely public launch). Merging it without that email would itself break the current notice clause. The policy's "Last updated" dates stay as they are. | Findings, "Import deployed without the policy-change email" |
 
@@ -198,7 +199,6 @@ docs/tester-notes/README.md). Move a line out when it's sent.
 | "Use my device's timezone automatically" (default on): today the stored zone follows whichever browser loaded last. Decide together with the hemisphere setting above | 2026-11-25 | With the hemisphere setting | Findings, "The stored timezone follows whichever browser loaded last" |
 | The dashboard scrolls sideways at 320px: a large Safe to Spend figure doesn't shrink (not a table, as first reported, and not the scenes banner) | 2026-11-25 | Unscheduled | Findings, "The dashboard scrolls sideways at 320px with a large figure" |
 | "Separate them instead" from bulk delete. Today its dialog warns when the selection holds a converted or import-joined transfer ("To keep those entries, open each and choose Separate instead") and points to opening each; separating in bulk would need a category for every import-joined side in one dialog | 2026-11-24 | Unscheduled (`turn-into-transfer` shipped 2026-11-24) | Findings, "\"Turn into a transfer\" on an existing row" |
-| Auto-link a goal-funding schedule's confirmed occurrences to its goal (goals.funding_recurringid), so the goal's progress moves when the transfer is confirmed. Today the hold already skips a funded goal, but confirming writes no link | 2026-11-16 | After 69 and 70 merge | Findings, "A transfer for a goal came off safe to spend twice" |
 | Drag-and-drop library: classic `@dnd-kit/core` 6.3.1 + `@dnd-kit/sortable` 10.0.0, pinned exactly (chosen 2026-11-14: stable over active, one sortable list, small footprint; the new `@dnd-kit/react` line is 0.x). Revisit: move to the new line if classic breaks on a React upgrade, or when the new line reaches 1.0 | 2026-11-14 | On a React upgrade, or `@dnd-kit/react` 1.0 | `package.json`; `app/(app)/dashboard/DashboardSections.tsx` |
 | "Every number is a door", the rest: an upcoming line opens its schedule; "(average of last 3)" opens the three confirmations it averaged; a goal's progress opens its contributions. The first three (budget spent, a category, the low-point item) shipped with #1 + #2 | 2026-11-14 | After #5 export | docs/Views-Search-Import-Layout.md, "Suggest other views" |
 | Same-bill question for HAND-ENTERED past rows: a past-dated unlinked entry meeting an occurrence still waiting in the confirmation queue (today the queue asks "Did rent come out?" and "It landed" writes it twice). Import asks this for its own rows only (`findImportSameBill`, `lib/sameBill.ts`); the same match for existing rows is not built | 2026-11-14 | After import is deployed | docs/Import-CSV.md, step 12; `lib/sameBill.ts` |

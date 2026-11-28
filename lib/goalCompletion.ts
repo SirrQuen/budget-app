@@ -7,12 +7,13 @@ import { formatCurrency } from "@/lib/format";
 // happens next. One treatment for every size of goal. No exclamation
 // marks, no emoji, nothing about pace the user is behind on.
 //
-// The "$340 a month you were sending to this card" line is NOT here: a
-// recurring schedule can't be tied to a goal with confidence (there is no
-// goalid on recurring_transactions, and goals.monthly_contribution is a
-// plan the user typed, not a schedule). The spec says drop the line
-// rather than name a wrong figure, so it's dropped until linked goals
-// give it a real relationship to read.
+// The part only Sorrel can say (docs/Goal-Completion.md): the recurring
+// transfers still feeding a goal that's now done aren't committed to
+// anything. Built from the schedule link (recurring_transactions.goalid,
+// migration 82) by lib/goalCompletionCheck.ts -- a goal following a card
+// can't be fed by a schedule, so it never gets the line. Each schedule is
+// named with its own amount and cadence; no monthly total is made from
+// frequencies (docs/Goals-and-Import.md, ruling 4).
 
 export type GoalCompletionFacts = {
   goalId: string;
@@ -38,7 +39,32 @@ export type GoalCompletion = {
   nextLine: string | null;
   next: CompletionNext;
   primaryLabel: string;
+  /**
+   * The schedules still feeding the goal, and the sentence about them;
+   * null when none does. Each gets its own Stop / Redirect / Keep.
+   */
+  freed?: FreedUp | null;
 };
+
+/** The recurring transfers a completed goal no longer needs. */
+export type FreedUp = {
+  line: string;
+  schedules: { id: string; label: string }[];
+  /** Goals a schedule can be redirected to: active, uncompleted, manual, not this one. */
+  redirectTo: { id: string; name: string }[];
+};
+
+/**
+ * "Weekly $50 (fixed) to Savings isn't committed to anything now." -- or,
+ * for several, "... and ... aren't committed to anything now." Names the
+ * amounts, never a generality. null with nothing to name.
+ */
+export function freedUpLine(labels: readonly string[]): string | null {
+  if (labels.length === 0) return null;
+  if (labels.length === 1) return `${labels[0]} isn't committed to anything now.`;
+  const list = `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+  return `${list} aren't committed to anything now.`;
+}
 
 const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
 

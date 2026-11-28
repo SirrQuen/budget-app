@@ -46,7 +46,7 @@ export function GoalField({
   const [opened, setOpened] = useState(false);
   const options =
     currentGoal && !goals.some((g) => g.id === currentGoal.id)
-      ? [...goals, { id: currentGoal.id, name: currentGoal.name, monthlyContribution: null, fundingRecurringId: null }]
+      ? [...goals, { id: currentGoal.id, name: currentGoal.name, monthlyContribution: null }]
       : goals;
 
   // A payment to a followed card already counts toward its goal: say so,

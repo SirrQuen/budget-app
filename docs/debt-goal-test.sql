@@ -426,6 +426,22 @@ begin
 end
 $$;
 
-select seq, check_, expected, actual, pass from dg_results order by seq;
+-- The summary is the LAST row (CLAUDE.md, ruling 12 of
+-- docs/Goals-and-Import.md): ALL PASS only when every row is true AND all
+-- 58 are present (section 18's loop records five). A run that errors
+-- part-way returns no rows at all.
+with tally as (
+  select count(*) as total, count(*) filter (where not pass) as failed from dg_results
+)
+select check_ as check, expected, actual, pass
+  from (select seq, check_, expected, actual, pass
+          from dg_results
+        union all
+        select 2147483647, 'SUMMARY', 'ALL PASS (58 rows, 0 false)',
+               t.total || ' rows, ' || t.failed || ' false -- '
+                 || case when t.failed = 0 and t.total = 58 then 'ALL PASS' else 'NOT PASSED' end,
+               t.failed = 0 and t.total = 58
+          from tally t) x
+ order by seq;
 
 rollback;

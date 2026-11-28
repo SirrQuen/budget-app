@@ -7,17 +7,22 @@ import {
   contributeToGoal,
   deleteGoal,
   deleteGoalContribution,
-  isRecurringTransfer,
+  getRecurringTransferLink,
+  getSameGoalMoney,
+  linkEarlierOccurrences,
   linkGoalToCard,
+  setGoalFunding,
   unlinkGoalFromCard,
   updateGoal,
   updateGoalContribution,
 } from "@/lib/db/goals";
 import { getGoalProgress } from "@/lib/db/dashboard";
+import { pauseRecurring } from "@/lib/db/recurring";
 import { GOAL_TYPES, type GoalType } from "@/lib/goalOptions";
 import type { GoalCompletion } from "@/lib/goalCompletion";
 import { completedSince, completionSnapshot } from "@/lib/goalCompletionCheck";
 import { formatCurrency } from "@/lib/format";
+import type { SameMoneyPair } from "@/lib/goalLinks";
 
 const VALID_TYPES = new Set<GoalType>(GOAL_TYPES);
 
@@ -54,17 +59,12 @@ function parseGoalFields(formData: FormData) {
     if (!Number.isFinite(monthly_contribution) || monthly_contribution < 0) {
       return { error: "Monthly contribution can't be negative." };
     }
-    // Asked in the same step as the target (GoalForm), and only kept with
-    // one: with no monthly target there's nothing for a transfer to stand
-    // in for.
-    const funding = String(formData.get("funding_recurringid") ?? "").trim();
     return {
       goal_name,
       goal_type: goal_type as GoalType,
       target_amount,
       target_date: target_date || null,
       monthly_contribution,
-      funding_recurringid: monthly_contribution > 0 && funding ? funding : null,
     };
   }
 
@@ -74,18 +74,33 @@ function parseGoalFields(formData: FormData) {
     target_amount,
     target_date: target_date || null,
     monthly_contribution: null,
-    funding_recurringid: null,
   };
 }
 
-// The picker only offers the user's counted recurring transfers; anything
-// else arriving here is refused rather than stored. Ownership is the
-// composite FK's guarantee too (migration 57) -- this is the readable error.
-async function checkFunding(fundingRecurringId: string | null): Promise<ActionState> {
-  if (fundingRecurringId === null) return undefined;
-  const result = await isRecurringTransfer(fundingRecurringId);
+// The goal form's "Do you move this money automatically?": a schedule to
+// ADD to this goal, or null. "No, leave it unlinked" to the duplicate
+// question is null too. Nothing here ever unlinks: the link lives on the
+// schedule (migration 82), and clearing the monthly target leaves it.
+function scheduleToAdd(formData: FormData): string | null {
+  const id = String(formData.get("add_schedule_id") ?? "").trim();
+  if (!id) return null;
+  if (formData.get("duplicate_asked") === "1" && formData.get("add_duplicate") !== "yes") return null;
+  return id;
+}
+
+// The picker offers only the user's counted recurring transfers that feed
+// no goal; anything else is refused rather than moved. Taking a schedule
+// from another goal is done on the schedule, where the form says so.
+// Ownership is the composite FK's guarantee too -- this is the readable error.
+async function checkScheduleToAdd(recurringId: string | null, goalId: string | null): Promise<ActionState> {
+  if (recurringId === null) return undefined;
+  const result = await getRecurringTransferLink(recurringId);
   if (result.error !== null) return { error: result.error };
-  return result.data ? undefined : { error: "Choose one of your recurring transfers, or No." };
+  if (result.data === null) return { error: "Choose one of your recurring transfers, or No." };
+  if (result.data.goalId !== null && result.data.goalId !== goalId) {
+    return { error: "That transfer already feeds another goal. Change it from the transfer on Recurring." };
+  }
+  return undefined;
 }
 
 export async function createGoalAction(
@@ -96,15 +111,25 @@ export async function createGoalAction(
   if ("error" in parsed) {
     return parsed;
   }
-  const fundingError = await checkFunding(parsed.funding_recurringid);
-  if (fundingError) {
-    return fundingError;
+  const adding = scheduleToAdd(formData);
+  const scheduleError = await checkScheduleToAdd(adding, null);
+  if (scheduleError) {
+    return scheduleError;
   }
 
-  const { error } = await createGoal(parsed);
+  const created = await createGoal(parsed);
 
-  if (error) {
-    return { error };
+  if (created.error !== null) {
+    return { error: created.error };
+  }
+
+  if (adding) {
+    const linked = await setGoalFunding(adding, created.data.id);
+    if (linked.error !== null) {
+      revalidatePath("/goals");
+      return { error: "Your goal is saved, but linking the transfer didn't work. Choose this goal on the transfer in Recurring." };
+    }
+    revalidatePath("/recurring");
   }
 
   revalidatePath("/goals");
@@ -124,9 +149,10 @@ export async function updateGoalAction(
   if ("error" in parsed) {
     return parsed;
   }
-  const fundingError = await checkFunding(parsed.funding_recurringid);
-  if (fundingError) {
-    return fundingError;
+  const adding = scheduleToAdd(formData);
+  const scheduleError = await checkScheduleToAdd(adding, id);
+  if (scheduleError) {
+    return scheduleError;
   }
 
   // A lowered target can complete the goal; a raised one un-completes it.
@@ -135,6 +161,15 @@ export async function updateGoalAction(
 
   if (error) {
     return { error };
+  }
+
+  if (adding) {
+    const linked = await setGoalFunding(adding, id);
+    if (linked.error !== null) {
+      revalidatePath("/goals");
+      return { error: "Your changes are saved, but linking the transfer didn't work. Try again, or choose this goal on the transfer in Recurring." };
+    }
+    revalidatePath("/recurring");
   }
 
   revalidatePath("/goals");
@@ -323,5 +358,91 @@ export async function deleteContributionAction(id: string): Promise<ActionState>
 
   revalidatePath("/goals");
   // A contribution changes this month's goal hold in safe to spend.
+  revalidatePath("/dashboard");
+}
+
+// "Funded by" on the goal page: Unlink. The schedule keeps running and
+// stops feeding this goal; no other schedule's link moves. Its confirmed
+// transfers keep counting -- they're real money that went to the goal.
+export async function unlinkScheduleAction(recurringId: string): Promise<ActionState> {
+  if (!recurringId) {
+    return { error: "Missing schedule id." };
+  }
+  const { error } = await setGoalFunding(recurringId, null);
+  if (error) {
+    return { error };
+  }
+  revalidatePath("/goals");
+  revalidatePath("/recurring");
+  // Its occurrences no longer net against the goal's hold.
+  revalidatePath("/dashboard");
+}
+
+export type CountEarlierState = { error?: string; sameMoney?: SameMoneyPair[]; completed?: GoalCompletion } | undefined;
+
+// "Count them" (ruling 1): only on a tap. Links the schedule's earlier
+// confirmed transfers to its goal, then asks "Is this the same money?"
+// for every one that matches a hand-entered contribution
+// (same_goal_money) -- "Yes" replaces the hand entry, "No" keeps both.
+export async function countEarlierOccurrencesAction(recurringId: string): Promise<CountEarlierState> {
+  if (!recurringId) {
+    return { error: "Missing schedule id." };
+  }
+  const before = await completionSnapshot();
+  const linked = await linkEarlierOccurrences(recurringId);
+  if (linked.error !== null) {
+    return { error: linked.error };
+  }
+  revalidatePath("/goals");
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+
+  const sameMoney: SameMoneyPair[] = [];
+  const used = new Set<string>();
+  for (const transactionId of linked.data) {
+    const pair = await getSameGoalMoney(transactionId);
+    if (pair.error !== null) {
+      return { error: "They're counted now, but checking them against your own entries didn't work. Look over this goal's history." };
+    }
+    // One hand entry answers for one transfer: two $50 transfers never
+    // both get asked about the same $50 entry.
+    if (pair.data && !used.has(pair.data.contributionId)) {
+      used.add(pair.data.contributionId);
+      sameMoney.push(pair.data);
+    }
+  }
+  const completed = await completedSince(before);
+  return { sameMoney, ...(completed ? { completed } : {}) };
+}
+
+// The completion panel's choices for a schedule still feeding a finished
+// goal (docs/Goal-Completion.md, "The part only Sorrel can say").
+// Stop pauses it -- reversible from Recurring, and its history stays.
+export async function stopScheduleAction(recurringId: string): Promise<ActionState> {
+  if (!recurringId) {
+    return { error: "Missing schedule id." };
+  }
+  const { error } = await pauseRecurring(recurringId);
+  if (error) {
+    return { error };
+  }
+  revalidatePath("/recurring");
+  revalidatePath("/goals");
+  // A paused schedule leaves the forecast.
+  revalidatePath("/dashboard");
+}
+
+// Redirect: the schedule feeds another goal from its next confirmation on.
+// Only this schedule's link moves (set_goal_funding, migration 82).
+export async function redirectScheduleAction(recurringId: string, goalId: string): Promise<ActionState> {
+  if (!recurringId || !goalId) {
+    return { error: "Choose a goal." };
+  }
+  const { error } = await setGoalFunding(recurringId, goalId);
+  if (error) {
+    return { error };
+  }
+  revalidatePath("/recurring");
+  revalidatePath("/goals");
   revalidatePath("/dashboard");
 }

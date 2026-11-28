@@ -267,11 +267,14 @@ function parseRecurringFields(formData: FormData): ParsedRecurringFields | { err
 }
 
 // "Is this for a goal?" -- answered only when the form asked it (a counted
-// transfer, with a single goal link to show; RecurringForm). Absent, the
-// link is left exactly as it is, so an edit that never showed the question
-// can't drop a link made from the goal side.
+// transfer; RecurringForm). Absent, the link is left exactly as it is, so
+// an edit that never showed the question can't drop a link made from the
+// goal side. The link is this schedule's own (recurring_transactions.goalid,
+// migration 82): answering never touches another schedule. "No, leave it
+// unlinked" to the duplicate question leaves the link as it was.
 function goalLinkAnswer(formData: FormData): { goalId: string | null } | null {
   if (formData.get("kind") !== "Transfer" || formData.get("funding_goal_asked") !== "1") return null;
+  if (formData.get("funding_duplicate_asked") === "1" && formData.get("funding_add_duplicate") !== "yes") return null;
   const goalId = String(formData.get("funding_goalid") ?? "").trim();
   return { goalId: goalId || null };
 }
