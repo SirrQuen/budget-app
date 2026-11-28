@@ -37,7 +37,7 @@ export default async function GoalsPage() {
       // The history pace (migration 72). A failed read only means no pace
       // line: the goals themselves still show.
       getGoalPace(),
-      // "Scheduled this month": the occurrences the safe-to-spend projection
+      // "Still to come this month": the occurrences the safe-to-spend projection
       // subtracts for each goal's schedules -- the set its hold is netted
       // by, read from the projection itself, never re-derived. A failed
       // read only hides the line.

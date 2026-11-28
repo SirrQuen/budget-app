@@ -6,7 +6,7 @@
 //
 // No monthly figure is ever made from a schedule's frequency (ruling 4):
 // each schedule shows its own amount and cadence, and what a goal gets this
-// month is the projection's own occurrences ("Scheduled this month",
+// month is the projection's own occurrences ("Still to come this month",
 // GoalScheduled in lib/safeToSpendProjection.ts).
 
 import { amountBasisLabel, type AmountBasis } from "@/lib/amountBasis";

@@ -320,6 +320,13 @@ export type Database = {
             foreignKeyName: "goal_contributions_goalid_fkey"
             columns: ["userid", "goalid"]
             isOneToOne: false
+            referencedRelation: "v_goal_hold_inputs"
+            referencedColumns: ["userid", "goalid"]
+          },
+          {
+            foreignKeyName: "goal_contributions_goalid_fkey"
+            columns: ["userid", "goalid"]
+            isOneToOne: false
             referencedRelation: "v_goal_monthly_holds"
             referencedColumns: ["userid", "goalid"]
           },
@@ -838,6 +845,34 @@ export type Database = {
             referencedColumns: ["userid", "category_id"]
           },
           {
+            foreignKeyName: "recurring_transactions_goalid_fkey"
+            columns: ["userid", "goalid"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "recurring_transactions_goalid_fkey"
+            columns: ["userid", "goalid"]
+            isOneToOne: false
+            referencedRelation: "v_goal_hold_inputs"
+            referencedColumns: ["userid", "goalid"]
+          },
+          {
+            foreignKeyName: "recurring_transactions_goalid_fkey"
+            columns: ["userid", "goalid"]
+            isOneToOne: false
+            referencedRelation: "v_goal_monthly_holds"
+            referencedColumns: ["userid", "goalid"]
+          },
+          {
+            foreignKeyName: "recurring_transactions_goalid_fkey"
+            columns: ["userid", "goalid"]
+            isOneToOne: false
+            referencedRelation: "v_goal_progress"
+            referencedColumns: ["userid", "goal_id"]
+          },
+          {
             foreignKeyName: "recurring_transactions_to_accountid_fkey"
             columns: ["userid", "to_accountid"]
             isOneToOne: false
@@ -1217,6 +1252,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "goals"
             referencedColumns: ["userid", "id"]
+          },
+          {
+            foreignKeyName: "transactions_goalid_fkey"
+            columns: ["userid", "goalid"]
+            isOneToOne: false
+            referencedRelation: "v_goal_hold_inputs"
+            referencedColumns: ["userid", "goalid"]
           },
           {
             foreignKeyName: "transactions_goalid_fkey"
@@ -1606,18 +1648,6 @@ export type Database = {
           },
         ]
       }
-      v_goal_money: {
-        Row: {
-          amount: number | null
-          contribution_id: string | null
-          date: string | null
-          goalid: string | null
-          source: string | null
-          transaction_id: string | null
-          userid: string | null
-        }
-        Relationships: []
-      }
       v_goal_hold_inputs: {
         Row: {
           contributed_this_month: number | null
@@ -1636,6 +1666,18 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      v_goal_money: {
+        Row: {
+          amount: number | null
+          contribution_id: string | null
+          date: string | null
+          goalid: string | null
+          source: string | null
+          transaction_id: string | null
+          userid: string | null
+        }
+        Relationships: []
       }
       v_goal_monthly_holds: {
         Row: {

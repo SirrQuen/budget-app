@@ -75,8 +75,11 @@ export const WHATS_NEW_ITEMS: readonly WhatsNewItem[] = [
     action: { kind: "none" },
   },
   {
-    id: "goals",
-    text: "Goals now grow as stems, with leaves at a quarter, halfway and three-quarters.",
+    // Replaced the stems line (the oldest, with the recap's), 2026-11-28:
+    // migration 82 moves Safe to Spend, and this line is how testers hear
+    // of it on deploy day (docs/tester-notes/2026-11-28-goal-schedules.md).
+    id: "goal-schedules",
+    text: "Goals can now be fed by several recurring transfers. Safe to Spend sets aside what a goal still needs this month, so it may be a little lower.",
     action: { kind: "href", href: "/goals" },
   },
   {

@@ -5,7 +5,9 @@ Deployed:  not yet
 
 ---
 
-**Draft. BEFORE-DEPLOY: safe to spend moves for anyone with a goal that
+**Draft. DEPLOY-DAY, announced by the dashboard's What's new card (the
+"goal-schedules" line, lib/whatsNew.ts; ruled 2026-11-28), not before
+deploy. Safe to spend moves for anyone with a goal that
 has a monthly target and a recurring transfer feeding it (on sorrel-dev,
 1 goal: its hold went from $0 to $7.78; production's count comes from
 docs/goal-hold-netting-check.sql, read-only, run before the push). No
@@ -17,8 +19,8 @@ A goal can now be fed by more than one recurring transfer, and by any
 one-time transaction you choose.
 
 Each transfer you confirm now counts toward its goal straight away. Your
-goal page lists the transfers that fund each goal, with "Scheduled this
-month" beside them, and you can unlink one there. If a transfer you
+goal page lists the transfers that fund each goal, with "Still to come
+this month" beside them, and you can unlink one there. If a transfer you
 confirmed earlier isn't counted yet, the goal offers to count it. Nothing
 is counted until you tap.
 

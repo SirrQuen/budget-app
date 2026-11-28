@@ -193,11 +193,13 @@ export function RecurringRow({
                     <span className="sr-only">to</span>
                     {accountLink(recurring.to_accountid, recurring.to_account_name, "…")}
                     {/* The goal it feeds (ruling 9): plain text, like the accounts. */}
+                    {/* The dot travels with its words: wrapping alone, it was
+                        left at the end of the accounts' line. */}
                     {recurring.goal_name ? (
-                      <>
+                      <span className="inline-flex items-center gap-x-1.5">
                         <span aria-hidden="true">·</span>
                         <span>Feeds {recurring.goal_name}</span>
-                      </>
+                      </span>
                     ) : null}
                   </>
                 ) : (

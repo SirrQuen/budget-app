@@ -231,7 +231,7 @@ export type GoalHoldInput = {
 
 /**
  * This month's occurrences of a goal's schedules that the projection
- * subtracts -- the goals page's "Scheduled this month" and the hold's
+ * subtracts -- the goals page's "Still to come this month" and the hold's
  * netting, one set.
  */
 export type GoalScheduled = {

@@ -69,7 +69,7 @@ test("six lines at most, in order, no exclamation marks, each wired to what it n
   assert.ok(WHATS_NEW_ITEMS.length <= 6);
   assert.deepEqual(
     WHATS_NEW_ITEMS.map((i) => i.id),
-    ["recap", "tiles", "goals", "import", "budgets", "plant"],
+    ["recap", "tiles", "goal-schedules", "import", "budgets", "plant"],
   );
   for (const item of WHATS_NEW_ITEMS) assert.doesNotMatch(item.text, /!/, item.text);
   const by = Object.fromEntries(WHATS_NEW_ITEMS.map((i) => [i.id, i.action]));
@@ -78,7 +78,7 @@ test("six lines at most, in order, no exclamation marks, each wired to what it n
   assert.deepEqual(by.recap, { kind: "none" });
   assert.deepEqual(by.tiles, { kind: "none" });
   assert.deepEqual(by.plant, { kind: "none" });
-  assert.deepEqual(by.goals, { kind: "href", href: "/goals" });
+  assert.deepEqual(by["goal-schedules"], { kind: "href", href: "/goals" });
   assert.deepEqual(by.import, { kind: "href", href: "/import?from=transactions" });
   assert.deepEqual(by.budgets, { kind: "href", href: "/budgets" });
 });

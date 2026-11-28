@@ -19,7 +19,7 @@ const TEXT_BUTTON =
 
 // "Funded by" (docs/Goals-and-Import.md Part A, rulings 1 and 4): the
 // recurring transfers that feed this goal, each with its own amount and
-// cadence -- never a monthly figure made from a frequency. The total line
+// cadence -- never a monthly figure made from a frequency. The "Still to come this month" line
 // is what the projection itself subtracts this month for them
 // (GoalScheduled), the same set the goal's hold is netted by. Ended and
 // paused schedules aren't listed; what they already moved stays in the
@@ -54,7 +54,7 @@ export function FundedBy({
         ))}
       </ul>
       {scheduledThisMonth !== null && scheduledThisMonth > 0 ? (
-        <p className="text-ink-secondary">Scheduled this month: {formatCurrency(scheduledThisMonth)}</p>
+        <p className="text-ink-secondary">Still to come this month: {formatCurrency(scheduledThisMonth)}</p>
       ) : null}
     </section>
   );
